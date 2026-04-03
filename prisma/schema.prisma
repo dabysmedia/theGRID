@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model CalorieEntry {
+  id          String   @id @default(cuid())
+  date        DateTime @db.Date
+  mealType    String   // breakfast, lunch, dinner, snack
+  description String?
+  calories    Int
+  protein     Float?
+  carbs       Float?
+  fat         Float?
+  createdAt   DateTime @default(now())
+
+  @@index([date])
+}
+
+model StepEntry {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  count     Int
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+model RunEntry {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  distance  Float    // km
+  duration  Int      // minutes
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+model WorkoutEntry {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  type      String   // strength, cardio, flexibility, other
+  name      String
+  duration  Int?     // minutes
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+model SleepEntry {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  bedtime   DateTime
+  wakeTime  DateTime
+  quality   Int      // 1-5
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+model Goal {
+  id        String   @id @default(cuid())
+  category  String   // calories, steps, running, workouts, sleep, alcohol, bowel
+  target    Float
+  unit      String
+  deadline  DateTime?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([category])
+}
+
+model AlcoholEntry {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  drinkType String
+  quantity  Float
+  units     Float    // standard drink units
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+model BowelEntry {
+  id           String   @id @default(cuid())
+  date         DateTime @db.Date
+  time         DateTime
+  bristolScale Int      // 1-7
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  @@index([date])
+}
