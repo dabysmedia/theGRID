@@ -1,0 +1,4 @@
+{"sessionId":"991111","location":"running/page.tsx:handleSubmit","message":"before fetch","data":{"date":"2026-04-04","distanceKm":2.414016,"duration":13},"timestamp":1775279354249,"hypothesisId":"H5","runId":"post-fix"}
+{"sessionId":"991111","location":"api/running/route.ts:POST","message":"create ok","data":{"id":"cmnjvhok80000kcvdmgimmeff"},"timestamp":1775279354267,"hypothesisId":"H1","runId":"post-fix"}
+{"sessionId":"991111","location":"running/page.tsx:handleSubmit","message":"after fetch","data":{"status":201,"ok":true},"timestamp":1775279354269,"hypothesisId":"H5","runId":"post-fix"}
+{"sessionId":"991111","location":"api/running/route.ts:POST","message":"parsed body","data":{"distance":2.414016,"duration":13,"dateStrLen":10,"dateValid":true,"envType":"string"},"timestamp":1775279354259,"hypothesisId":"H2","runId":"post-fix"}

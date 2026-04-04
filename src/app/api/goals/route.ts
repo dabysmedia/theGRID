@@ -1,0 +1,62 @@
+import { NextRequest, NextResponse } from "next/server"
+import { prisma } from "@/lib/prisma"
+
+export async function GET() {
+  try {
+    const goals = await prisma.goal.findMany({
+      orderBy: { createdAt: "desc" },
+    })
+    return NextResponse.json(goals)
+  } catch {
+    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 })
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const goal = await prisma.goal.create({
+      data: {
+        category: body.category,
+        target: parseFloat(body.target),
+        unit: body.unit,
+        deadline: body.deadline ? new Date(body.deadline) : null,
+        active: body.active ?? true,
+      },
+    })
+    return NextResponse.json(goal, { status: 201 })
+  } catch {
+    return NextResponse.json({ error: "Failed to create" }, { status: 500 })
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const goal = await prisma.goal.update({
+      where: { id: body.id },
+      data: {
+        target: body.target ? parseFloat(body.target) : undefined,
+        unit: body.unit || undefined,
+        deadline: body.deadline ? new Date(body.deadline) : undefined,
+        active: body.active,
+      },
+    })
+    return NextResponse.json(goal)
+  } catch {
+    return NextResponse.json({ error: "Failed to update" }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get("id")
+  if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
+
+  try {
+    await prisma.goal.delete({ where: { id } })
+    return NextResponse.json({ success: true })
+  } catch {
+    return NextResponse.json({ error: "Failed to delete" }, { status: 500 })
+  }
+}

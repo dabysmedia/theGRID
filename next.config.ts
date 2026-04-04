@@ -1,7 +1,20 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: "standalone",
+  serverExternalPackages: [
+    "@prisma/client",
+    "@prisma/adapter-better-sqlite3",
+    "better-sqlite3",
+    "prisma",
+  ],
+  outputFileTracingIncludes: {
+    "/*": [
+      "./prisma/**/*.db",
+      "./prisma/**/*.prisma",
+      "./src/generated/prisma/**/*",
+    ],
+  },
 };
 
 export default nextConfig;

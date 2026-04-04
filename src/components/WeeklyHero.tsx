@@ -1,0 +1,301 @@
+"use client"
+
+import {
+  Flame,
+  Footprints,
+  Moon,
+  PersonStanding,
+  Dumbbell,
+} from "lucide-react"
+import { DailyWeighIn } from "@/components/DailyWeighIn"
+import { useActiveDate } from "@/context/DateContext"
+import { parseLocalDate } from "@/lib/utils"
+
+interface CategorySummary {
+  todayValue: number
+  goal: number | null
+  unit: string
+  last7: number[]
+}
+
+interface DashboardData {
+  calories: CategorySummary
+  steps: CategorySummary
+  running: CategorySummary
+  workouts: CategorySummary
+  sleep: CategorySummary
+  alcohol: CategorySummary
+  bowel: CategorySummary
+}
+
+interface ProgressRingProps {
+  value: number
+  max: number
+  label: string
+  unit: string
+  color: string
+  icon: React.ReactNode
+}
+
+function ProgressRing({ value, max, label, unit, color, icon }: ProgressRingProps) {
+  const radius = 38
+  const stroke = 3
+  const circumference = 2 * Math.PI * radius
+  const pct = max > 0 ? Math.min(value / max, 1) : 0
+  const offset = circumference - pct * circumference
+
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <div className="relative w-[88px] h-[88px] lg:w-[96px] lg:h-[96px]">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 88 88">
+          <circle
+            cx="44"
+            cy="44"
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={stroke}
+            className="text-muted/30"
+          />
+          <circle
+            cx="44"
+            cy="44"
+            r={radius}
+            fill="none"
+            stroke={color}
+            strokeWidth={stroke}
+            strokeLinecap="butt"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            className="transition-all duration-1000 ease-out"
+            style={{ filter: `drop-shadow(0 0 6px ${color}50)` }}
+          />
+          {/* Tick marks */}
+          {[0, 90, 180, 270].map((deg) => (
+            <line
+              key={deg}
+              x1="44"
+              y1="3"
+              x2="44"
+              y2="5"
+              stroke={color}
+              strokeWidth="0.5"
+              opacity="0.3"
+              transform={`rotate(${deg} 44 44)`}
+            />
+          ))}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          {icon}
+          <span className="text-sm font-bold tabular-nums mt-0.5">
+            {value >= 1000 ? `${(value / 1000).toFixed(1)}k` : Math.round(value)}
+          </span>
+        </div>
+      </div>
+      <div className="text-center">
+        <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
+          {label}
+        </p>
+        <p className="text-[10px] text-muted-foreground/60 tracking-wider">
+          / {max >= 1000 ? `${(max / 1000).toFixed(max % 1000 === 0 ? 0 : 1)}k` : max} {unit}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+interface WeeklyHeroProps {
+  data: DashboardData
+  loading: boolean
+}
+
+function weekAvg(last7: number[]): number {
+  if (!last7.length) return 0
+  return last7.reduce((s, v) => s + v, 0) / last7.length
+}
+
+function weekTotal(last7: number[]): number {
+  return last7.reduce((s, v) => s + v, 0)
+}
+
+function daysMet(last7: number[], goal: number): number {
+  return last7.filter((v) => v >= goal).length
+}
+
+export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
+  const { activeDate } = useActiveDate()
+  const calAvg = Math.round(weekAvg(data.calories.last7))
+  const stepsAvg = Math.round(weekAvg(data.steps.last7))
+  const sleepAvg = Math.round(weekAvg(data.sleep.last7) * 10) / 10
+
+  const calGoal = data.calories.goal ?? 2000
+  const stepsGoal = data.steps.goal ?? 10000
+  const sleepGoal = data.sleep.goal ?? 8
+
+  const goalCategories = [
+    { last7: data.calories.last7, goal: calGoal },
+    { last7: data.steps.last7, goal: stepsGoal },
+    { last7: data.sleep.last7, goal: sleepGoal },
+  ]
+
+  const totalGoalDays = goalCategories.reduce(
+    (sum, cat) => sum + daysMet(cat.last7, cat.goal),
+    0
+  )
+  const maxGoalDays = goalCategories.length * 7
+
+  const secondaryStats = [
+    {
+      icon: <PersonStanding className="h-3 w-3" style={{ color: "#3b82f6" }} />,
+      label: "Running",
+      value: `${(weekTotal(data.running.last7)).toFixed(1)} mi`,
+    },
+    {
+      icon: <Dumbbell className="h-3 w-3" style={{ color: "#a855f7" }} />,
+      label: "Workouts",
+      value: `${weekTotal(data.workouts.last7)}`,
+    },
+    {
+      icon: <Moon className="h-3 w-3" style={{ color: "#6366f1" }} />,
+      label: "Sleep",
+      value: `${sleepAvg} hrs avg`,
+    },
+  ]
+
+  const refDate = parseLocalDate(activeDate)
+  const dayOfWeek = refDate.getDay()
+  const weekStart = new Date(refDate)
+  weekStart.setDate(refDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekStart.getDate() + 6)
+
+  const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+  const dateRange = `${monthNames[weekStart.getMonth()]} ${weekStart.getDate()} – ${monthNames[weekEnd.getMonth()]} ${weekEnd.getDate()}`
+
+  const dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
+  const stepsMax = Math.max(...data.steps.last7, 1)
+
+  return (
+    <div
+      className={`glass hud-corners scan-lines p-5 lg:p-6 relative overflow-hidden transition-opacity duration-500 ${
+        loading ? "opacity-50" : "opacity-100"
+      }`}
+      style={{ borderRadius: '4px' }}
+    >
+      {/* Top edge glow */}
+      <div className="absolute top-0 left-3 right-3 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5 relative z-10">
+        <div className="flex items-center gap-2">
+          <div className="status-dot" />
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.25em]">Weekly Overview</h2>
+        </div>
+          <span className="text-[10px] text-muted-foreground/70 font-medium tracking-[0.12em]">{dateRange}</span>
+      </div>
+
+      {/* Progress rings row */}
+      <div className="flex justify-around mb-5 relative z-10">
+        <ProgressRing
+          value={calAvg}
+          max={calGoal}
+          label="Calories"
+          unit="avg"
+          color="#ef4444"
+          icon={<Flame className="h-3.5 w-3.5 text-[#ef4444]" />}
+        />
+        <ProgressRing
+          value={stepsAvg}
+          max={stepsGoal}
+          label="Steps"
+          unit="avg"
+          color="#22c55e"
+          icon={<Footprints className="h-3.5 w-3.5 text-[#22c55e]" />}
+        />
+        <ProgressRing
+          value={sleepAvg}
+          max={sleepGoal}
+          label="Sleep"
+          unit="hrs avg"
+          color="#6366f1"
+          icon={<Moon className="h-3.5 w-3.5 text-[#6366f1]" />}
+        />
+      </div>
+
+      {/* Goal streak bar */}
+      <div className="mb-5 relative z-10">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-[0.15em]">
+            Targets Hit
+          </span>
+          <span className="text-[10px] font-bold tabular-nums text-primary tracking-wider">
+            {totalGoalDays} / {maxGoalDays}
+          </span>
+        </div>
+        <div className="h-1 w-full bg-muted/20 overflow-hidden">
+          <div
+            className="h-full bg-primary transition-all duration-700 ease-out"
+            style={{
+              width: `${maxGoalDays > 0 ? (totalGoalDays / maxGoalDays) * 100 : 0}%`,
+              boxShadow: '0 0 8px oklch(0.82 0.18 110 / 25%)',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Weekly activity bars */}
+      <div className="mb-4 relative z-10">
+        <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-[0.15em] mb-2">
+          Steps Activity
+        </p>
+        <div className="flex items-end justify-between gap-1.5 h-10">
+          {data.steps.last7.map((val, i) => {
+            const pct = stepsMax > 0 ? (val / stepsMax) * 100 : 0
+            const isToday = i === data.steps.last7.length - 1
+            return (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <div className="w-full relative" style={{ height: "32px" }}>
+                  <div
+                    className="absolute bottom-0 w-full transition-all duration-500"
+                    style={{
+                      height: `${Math.max(pct, 4)}%`,
+                      backgroundColor: isToday ? "#22c55e" : "#22c55e50",
+                      boxShadow: isToday ? '0 0 6px #22c55e40' : 'none',
+                      borderRadius: '1px',
+                    }}
+                  />
+                </div>
+                <span className={`text-[10px] tracking-wider ${isToday ? "text-foreground font-semibold" : "text-muted-foreground/50"}`}>
+                  {dayLabels[i]}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Secondary stats pills */}
+      <div className="flex gap-2 relative z-10">
+        {secondaryStats.map((stat) => (
+          <div
+            key={stat.label}
+            className="flex-1 glass-subtle py-2 px-2.5 flex items-center gap-1.5"
+            style={{ borderRadius: '3px' }}
+          >
+            {stat.icon}
+            <div className="min-w-0">
+              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-[0.12em] truncate">
+                {stat.label}
+              </p>
+              <p className="text-[11px] font-semibold tabular-nums">{stat.value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 pt-5 border-t border-glass-border relative z-10">
+        <DailyWeighIn embedded />
+      </div>
+    </div>
+  )
+}

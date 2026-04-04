@@ -1,0 +1,393 @@
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
+import { format, startOfDay, subDays } from "date-fns"
+import { Moon, Trash2, Calendar, Star } from "lucide-react"
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts"
+import { PageHeader } from "@/components/PageHeader"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useActiveDate } from "@/context/DateContext"
+import { formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+
+interface SleepEntry {
+  id: string
+  date: string
+  bedtime: string
+  wakeTime: string
+  quality: number
+  notes: string | null
+}
+
+function durationHours(bed: string, wake: string): number {
+  const b = new Date(bed)
+  const w = new Date(wake)
+  let hours = (w.getTime() - b.getTime()) / 3600000
+  if (hours < 0) hours += 24
+  return Math.round(hours * 10) / 10
+}
+
+function calcDuration(bed: string, wake: string): string {
+  return `${durationHours(bed, wake)}h`
+}
+
+function formatTimeRange(bed: string, wake: string): string {
+  return `${format(new Date(bed), "h:mm a")} → ${format(new Date(wake), "h:mm a")}`
+}
+
+function entryDateKey(entry: SleepEntry): string {
+  return formatDate(new Date(entry.date))
+}
+
+export default function SleepPage() {
+  const { activeDate } = useActiveDate()
+  const [entries, setEntries] = useState<SleepEntry[]>([])
+  const [bedtime, setBedtime] = useState("22:30")
+  const [wakeTime, setWakeTime] = useState("06:30")
+  const [quality, setQuality] = useState(3)
+  const [notes, setNotes] = useState("")
+
+  const today = activeDate
+
+  useEffect(() => {
+    fetch("/api/sleep")
+      .then(async (r) => {
+        const data = await r.json()
+        setEntries(Array.isArray(data) ? data : [])
+      })
+      .catch(() => setEntries([]))
+  }, [])
+
+  const last7DaysEntries = useMemo(() => {
+    const ref = parseLocalDate(activeDate)
+    const from = subDays(ref, 6)
+    return entries.filter((e) => {
+      const d = startOfDay(new Date(e.date))
+      return d >= from && d <= ref
+    })
+  }, [entries])
+
+  const stats = useMemo(() => {
+    const last = entries[0]
+    const lastNight = last ? calcDuration(last.bedtime, last.wakeTime) : "—"
+    const avg7h =
+      last7DaysEntries.length > 0
+        ? (
+            last7DaysEntries.reduce(
+              (s, e) => s + durationHours(e.bedtime, e.wakeTime),
+              0
+            ) / last7DaysEntries.length
+          ).toFixed(1)
+        : null
+    const avgQ =
+      last7DaysEntries.length > 0
+        ? (
+            last7DaysEntries.reduce((s, e) => s + e.quality, 0) /
+            last7DaysEntries.length
+          ).toFixed(1)
+        : null
+    let best = "—"
+    if (entries.length > 0) {
+      const bestEntry = entries.reduce((a, e) =>
+        durationHours(e.bedtime, e.wakeTime) > durationHours(a.bedtime, a.wakeTime)
+          ? e
+          : a
+      )
+      best = calcDuration(bestEntry.bedtime, bestEntry.wakeTime)
+    }
+    return { lastNight, avg7h, avgQ, best }
+  }, [entries, last7DaysEntries])
+
+  const chartData = useMemo(() => {
+    const slice = entries.slice(0, 7)
+    return [...slice].reverse().map((e) => ({
+      label: format(new Date(e.date), "MMM d"),
+      hours: durationHours(e.bedtime, e.wakeTime),
+    }))
+  }, [entries])
+
+  const historyByDate = useMemo(() => {
+    const map = new Map<string, SleepEntry[]>()
+    for (const e of entries) {
+      const key = entryDateKey(e)
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(e)
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([dateKey, items]) => ({
+        dateKey,
+        headerLabel: formatDisplayDate(parseLocalDate(dateKey)),
+        items: [...items].sort(
+          (a, b) => new Date(b.bedtime).getTime() - new Date(a.bedtime).getTime()
+        ),
+      }))
+  }, [entries])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+
+    const bedDatetime = new Date(`${today}T${bedtime}:00`)
+    const wakeDatetime = new Date(`${today}T${wakeTime}:00`)
+
+    const res = await fetch("/api/sleep", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: today,
+        bedtime: bedDatetime.toISOString(),
+        wakeTime: wakeDatetime.toISOString(),
+        quality,
+        notes: notes || null,
+      }),
+    })
+
+    if (res.ok) {
+      const entry = await res.json()
+      setEntries([entry, ...entries])
+      setNotes("")
+    }
+  }
+
+  async function handleDelete(id: string) {
+    const res = await fetch(`/api/sleep?id=${id}`, { method: "DELETE" })
+    if (res.ok) setEntries(entries.filter((e) => e.id !== id))
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Sleep" icon={Moon} iconColor="#6366f1" />
+
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[140px] shrink-0">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
+            Last Night
+          </p>
+          <span className="text-lg lg:text-xl font-bold tabular-nums">{stats.lastNight}</span>
+        </div>
+        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[140px] shrink-0">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
+            7-Day Avg
+          </p>
+          <span className="text-lg lg:text-xl font-bold tabular-nums">
+            {stats.avg7h !== null ? `${stats.avg7h}h` : "—"}
+          </span>
+        </div>
+        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[140px] shrink-0">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
+            Avg Quality
+          </p>
+          <span className="text-lg lg:text-xl font-bold tabular-nums">
+            {stats.avgQ !== null ? `${stats.avgQ}/5` : "—"}
+          </span>
+        </div>
+        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[140px] shrink-0">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
+            Best Night
+          </p>
+          <span className="text-lg lg:text-xl font-bold tabular-nums">{stats.best}</span>
+        </div>
+      </div>
+
+      <div className="glass rounded-2xl p-5">
+        <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
+          Duration trend
+        </h2>
+        {entries.length < 2 ? (
+          <div className="h-40 lg:h-48 flex items-center justify-center rounded-xl border border-dashed border-border/50 bg-muted/20">
+            <p className="text-sm text-muted-foreground text-center px-4">
+              Log at least two nights to see your sleep trend
+            </p>
+          </div>
+        ) : (
+          <div className="h-40 lg:h-48 w-full min-h-[10rem]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="sleepBarFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.95} />
+                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0.2} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "oklch(0.65 0.02 250)" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "oklch(0.65 0.02 250)" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={36}
+                  unit="h"
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "oklch(0.19 0.012 250 / 92%)",
+                    border: "1px solid oklch(1 0 0 / 8%)",
+                    borderRadius: "3px",
+                    fontSize: "12px",
+                    backdropFilter: "blur(8px)",
+                  }}
+                  formatter={(value) => [
+                    `${value}h`,
+                    "Sleep",
+                  ]}
+                />
+                <Bar dataKey="hours" fill="url(#sleepBarFill)" radius={[6, 6, 0, 0]} maxBarSize={48} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="glass rounded-2xl p-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="bedtime" className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <span className="status-dot" style={{ width: 4, height: 4 }} />
+                  Bedtime
+                </Label>
+                <Input
+                  id="bedtime"
+                  type="time"
+                  value={bedtime}
+                  onChange={(e) => setBedtime(e.target.value)}
+                  className="tabular-nums text-lg tracking-widest bg-background/40 border-primary/15 focus-visible:border-primary/40 focus-visible:ring-primary/15"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="wakeTime" className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <span className="status-dot" style={{ width: 4, height: 4 }} />
+                  Wake Time
+                </Label>
+                <Input
+                  id="wakeTime"
+                  type="time"
+                  value={wakeTime}
+                  onChange={(e) => setWakeTime(e.target.value)}
+                  className="tabular-nums text-lg tracking-widest bg-background/40 border-primary/15 focus-visible:border-primary/40 focus-visible:ring-primary/15"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                Quality ({quality}/5)
+              </Label>
+              <div className="flex gap-2 mt-1">
+                {[1, 2, 3, 4, 5].map((q) => (
+                  <Button
+                    key={q}
+                    type="button"
+                    variant={quality === q ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setQuality(q)}
+                    className="w-10"
+                  >
+                    {q}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="notes" className="text-xs uppercase tracking-wider text-muted-foreground">
+                Notes
+              </Label>
+              <Input
+                id="notes"
+                placeholder="How did you sleep?"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
+
+            <Button type="submit" className="w-full" size="lg">
+              Log Sleep
+            </Button>
+          </form>
+        </div>
+
+        <div className="space-y-3">
+          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">
+            History
+          </h2>
+          {entries.length === 0 && (
+            <div className="glass-subtle rounded-2xl p-6 text-center">
+              <p className="text-sm text-muted-foreground">No sleep entries yet</p>
+            </div>
+          )}
+          {historyByDate.map(({ dateKey, headerLabel, items }) => (
+            <div key={dateKey} className="space-y-2">
+              <div className="flex items-center gap-2 px-1 pt-1">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  {headerLabel}
+                </span>
+              </div>
+              {items.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="glass-subtle rounded-xl p-3.5 flex items-center justify-between gap-3 group"
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#6366f1]/10 shrink-0">
+                      <Moon className="h-3.5 w-3.5 text-[#6366f1]" />
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-medium leading-tight">
+                        {formatTimeRange(entry.bedtime, entry.wakeTime)}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                        <span className="font-semibold text-foreground tabular-nums">
+                          {calcDuration(entry.bedtime, entry.wakeTime)}
+                        </span>
+                        <span className="hidden sm:inline text-muted-foreground/50">·</span>
+                        <span className="flex items-center gap-0.5" aria-label={`Quality ${entry.quality} of 5`}>
+                          {Array.from({ length: 5 }, (_, i) => (
+                            <Star
+                              key={i}
+                              className={`h-3 w-3 shrink-0 ${
+                                i < entry.quality
+                                  ? "fill-amber-400 text-amber-400"
+                                  : "fill-transparent text-muted-foreground/35"
+                              }`}
+                            />
+                          ))}
+                        </span>
+                      </div>
+                      {entry.notes && (
+                        <p className="text-xs text-muted-foreground/70 line-clamp-2">{entry.notes}</p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(entry.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-destructive/10 shrink-0"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}

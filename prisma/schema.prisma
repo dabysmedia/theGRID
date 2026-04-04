@@ -4,13 +4,13 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 model CalorieEntry {
   id          String   @id @default(cuid())
-  date        DateTime @db.Date
-  mealType    String   // breakfast, lunch, dinner, snack
+  date        DateTime
+  mealType    String
   description String?
   calories    Int
   protein     Float?
@@ -23,7 +23,7 @@ model CalorieEntry {
 
 model StepEntry {
   id        String   @id @default(cuid())
-  date      DateTime @db.Date
+  date      DateTime
   count     Int
   createdAt DateTime @default(now())
 
@@ -31,22 +31,23 @@ model StepEntry {
 }
 
 model RunEntry {
-  id        String   @id @default(cuid())
-  date      DateTime @db.Date
-  distance  Float    // km
-  duration  Int      // minutes
-  notes     String?
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  date        DateTime
+  distance    Float
+  duration    Int
+  environment String   @default("outdoor")
+  notes       String?
+  createdAt   DateTime @default(now())
 
   @@index([date])
 }
 
 model WorkoutEntry {
   id        String   @id @default(cuid())
-  date      DateTime @db.Date
-  type      String   // strength, cardio, flexibility, other
+  date      DateTime
+  type      String
   name      String
-  duration  Int?     // minutes
+  duration  Int?
   notes     String?
   createdAt DateTime @default(now())
 
@@ -55,10 +56,10 @@ model WorkoutEntry {
 
 model SleepEntry {
   id        String   @id @default(cuid())
-  date      DateTime @db.Date
+  date      DateTime
   bedtime   DateTime
   wakeTime  DateTime
-  quality   Int      // 1-5
+  quality   Int
   notes     String?
   createdAt DateTime @default(now())
 
@@ -66,23 +67,63 @@ model SleepEntry {
 }
 
 model Goal {
-  id        String   @id @default(cuid())
-  category  String   // calories, steps, running, workouts, sleep, alcohol, bowel
+  id        String    @id @default(cuid())
+  category  String
   target    Float
   unit      String
   deadline  DateTime?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
 
   @@index([category])
 }
 
+model LongGoal {
+  id         String          @id @default(cuid())
+  name       String
+  category   String
+  target     Float
+  unit       String
+  direction  String          @default("up")
+  startValue Float?
+  active     Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  entries    LongGoalEntry[]
+}
+
+model LongGoalEntry {
+  id        String   @id @default(cuid())
+  goalId    String
+  goal      LongGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  date      DateTime
+  value     Float
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([goalId])
+  @@index([date])
+}
+
+model SavedMeal {
+  id        String   @id @default(cuid())
+  name      String
+  mealType  String
+  calories  Int
+  protein   Float?
+  carbs     Float?
+  fat       Float?
+  useCount  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([mealType])
+}
+
 model AlcoholEntry {
   id        String   @id @default(cuid())
-  date      DateTime @db.Date
+  date      DateTime
   drinkType String
   quantity  Float
-  units     Float    // standard drink units
+  units     Float
   createdAt DateTime @default(now())
 
   @@index([date])
@@ -90,9 +131,9 @@ model AlcoholEntry {
 
 model BowelEntry {
   id           String   @id @default(cuid())
-  date         DateTime @db.Date
+  date         DateTime
   time         DateTime
-  bristolScale Int      // 1-7
+  bristolScale Int
   notes        String?
   createdAt    DateTime @default(now())
 

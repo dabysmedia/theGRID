@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="64" fill="#0a0a0a"/>
+  <text x="256" y="300" font-family="system-ui, sans-serif" font-size="200" font-weight="bold" fill="#ededed" text-anchor="middle">G</text>
+  <rect x="80" y="380" width="352" height="4" rx="2" fill="#3b82f6"/>
+  <rect x="80" y="400" width="240" height="4" rx="2" fill="#22c55e"/>
+  <rect x="80" y="420" width="300" height="4" rx="2" fill="#a855f7"/>
+</svg>
