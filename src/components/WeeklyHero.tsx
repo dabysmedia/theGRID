@@ -182,10 +182,13 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
 
   return (
     <div
-      className={`glass hud-corners scan-lines p-5 lg:p-6 relative overflow-hidden transition-opacity duration-500 ${
+      className={`glass p-5 lg:p-6 relative overflow-hidden transition-opacity duration-500 ${
         loading ? "opacity-50" : "opacity-100"
       }`}
-      style={{ borderRadius: '4px' }}
+      style={{
+        borderRadius: "4px",
+        background: "oklch(0.19 0.012 250 / 0.94)",
+      }}
     >
       {/* Top edge glow */}
       <div className="absolute top-0 left-3 right-3 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />

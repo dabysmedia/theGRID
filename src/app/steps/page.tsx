@@ -18,11 +18,19 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
 import { formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import { kmToMiles, runKmToStepsFromRun, STEPS_PER_MILE_FROM_RUN } from "@/lib/units"
 
 interface StepEntry {
   id: string
   date: string
   count: number
+  createdAt?: string
+}
+
+interface RunEntry {
+  id: string
+  date: string
+  distance: number
   createdAt?: string
 }
 
@@ -44,21 +52,38 @@ function milesToSteps(miles: number): number {
   return Math.round(miles * STEPS_PER_MILE)
 }
 
+type HistoryRow =
+  | { kind: "logged"; entry: StepEntry }
+  | { kind: "run"; run: RunEntry }
+
 export default function StepsPage() {
   const { activeDate } = useActiveDate()
   const [entries, setEntries] = useState<StepEntry[]>([])
+  const [runEntries, setRunEntries] = useState<RunEntry[]>([])
   const [count, setCount] = useState("")
   const [inputMode, setInputMode] = useState<"steps" | "miles">("steps")
 
   const today = activeDate
 
   useEffect(() => {
-    fetch("/api/steps")
-      .then(async (r) => {
+    Promise.all([
+      fetch("/api/steps").then(async (r) => {
         const data = await r.json()
-        setEntries(Array.isArray(data) ? data : [])
+        return Array.isArray(data) ? data : []
+      }),
+      fetch("/api/running").then(async (r) => {
+        const data = await r.json()
+        return Array.isArray(data) ? data : []
+      }),
+    ])
+      .then(([stepsData, runsData]) => {
+        setEntries(stepsData)
+        setRunEntries(runsData)
       })
-      .catch(() => setEntries([]))
+      .catch(() => {
+        setEntries([])
+        setRunEntries([])
+      })
   }, [])
 
   const byDay = useMemo(() => {
@@ -67,8 +92,20 @@ export default function StepsPage() {
       const k = dayKeyFromEntry(e.date)
       m.set(k, (m.get(k) ?? 0) + e.count)
     }
+    for (const r of runEntries) {
+      const k = dayKeyFromEntry(r.date)
+      m.set(k, (m.get(k) ?? 0) + runKmToStepsFromRun(r.distance))
+    }
     return m
-  }, [entries])
+  }, [entries, runEntries])
+
+  const stepsFromRunsToday = useMemo(() => {
+    let s = 0
+    for (const r of runEntries) {
+      if (dayKeyFromEntry(r.date) === today) s += runKmToStepsFromRun(r.distance)
+    }
+    return s
+  }, [runEntries, today])
 
   const weekDayKeys = useMemo(
     () => Array.from({ length: 7 }, (_, i) => formatDate(subDays(parseLocalDate(activeDate), 6 - i))),
@@ -116,23 +153,32 @@ export default function StepsPage() {
   )
 
   const historyGroups = useMemo(() => {
-    const buckets = new Map<string, StepEntry[]>()
+    const buckets = new Map<string, HistoryRow[]>()
     for (const e of entries) {
       const k = dayKeyFromEntry(e.date)
       if (!buckets.has(k)) buckets.set(k, [])
-      buckets.get(k)!.push(e)
+      buckets.get(k)!.push({ kind: "logged", entry: e })
+    }
+    for (const r of runEntries) {
+      const k = dayKeyFromEntry(r.date)
+      if (!buckets.has(k)) buckets.set(k, [])
+      buckets.get(k)!.push({ kind: "run", run: r })
     }
     const keys = [...buckets.keys()].sort((a, b) => (a > b ? -1 : a < b ? 1 : 0))
     return keys.map((dayKey) => ({
       dayKey,
       header: groupHeaderLabel(dayKey),
-      entries: buckets.get(dayKey)!.sort((a, b) => {
-        const ta = new Date(a.createdAt ?? a.date).getTime()
-        const tb = new Date(b.createdAt ?? b.date).getTime()
-        return tb - ta
+      rows: buckets.get(dayKey)!.sort((a, b) => {
+        const timeOf = (row: HistoryRow) =>
+          new Date(
+            row.kind === "logged"
+              ? row.entry.createdAt ?? row.entry.date
+              : row.run.createdAt ?? row.run.date
+          ).getTime()
+        return timeOf(b) - timeOf(a)
       }),
     }))
-  }, [entries])
+  }, [entries, runEntries])
 
   function switchInputMode(next: "steps" | "miles") {
     if (next === inputMode) return
@@ -209,7 +255,7 @@ export default function StepsPage() {
           <span className="text-lg lg:text-xl font-bold tabular-nums">
             {stats.todayTotal.toLocaleString()}
           </span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">steps logged</p>
+          <p className="text-[10px] text-muted-foreground/60 mt-0.5">steps total</p>
         </div>
         <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
@@ -304,6 +350,12 @@ export default function StepsPage() {
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today&apos;s Total</p>
             <p className="text-4xl font-bold tabular-nums tracking-tight">{todayTotal.toLocaleString()}</p>
             <p className="text-sm text-muted-foreground">steps</p>
+            {stepsFromRunsToday > 0 && (
+              <p className="text-[11px] text-muted-foreground/80 mt-1.5">
+                Includes {stepsFromRunsToday.toLocaleString()} steps from runs (
+                {STEPS_PER_MILE_FROM_RUN.toLocaleString()} / mi)
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -381,7 +433,7 @@ export default function StepsPage() {
 
         <div className="space-y-3">
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">History</h2>
-          {entries.length === 0 && (
+          {entries.length === 0 && runEntries.length === 0 && (
             <div className="glass-subtle rounded-2xl p-6 text-center">
               <p className="text-sm text-muted-foreground">No entries yet</p>
             </div>
@@ -395,37 +447,68 @@ export default function StepsPage() {
                 </span>
               </div>
               <div className="space-y-1.5">
-                {group.entries.map((entry) => {
-                  const dayKey = dayKeyFromEntry(entry.date)
-                  const dateLine = format(parseLocalDate(dayKey), "EEE, MMM d, yyyy")
+                {group.rows.map((row) => {
+                  if (row.kind === "logged") {
+                    const entry = row.entry
+                    const dayKey = dayKeyFromEntry(entry.date)
+                    const dateLine = format(parseLocalDate(dayKey), "EEE, MMM d, yyyy")
+                    const timeLine =
+                      entry.createdAt != null
+                        ? format(new Date(entry.createdAt), "h:mm a")
+                        : null
+                    return (
+                      <div
+                        key={`step-${entry.id}`}
+                        className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#22c55e]/10 shrink-0">
+                            <Footprints className="h-3.5 w-3.5 text-[#22c55e]" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-semibold text-sm">{entry.count.toLocaleString()} steps</span>
+                            <p className="text-xs text-muted-foreground/80 truncate">
+                              {dateLine}
+                              {timeLine != null ? ` · ${timeLine}` : ""}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(entry.id)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-destructive/10 shrink-0"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      </div>
+                    )
+                  }
+                  const run = row.run
+                  const steps = runKmToStepsFromRun(run.distance)
                   const timeLine =
-                    entry.createdAt != null
-                      ? format(new Date(entry.createdAt), "h:mm a")
+                    run.createdAt != null
+                      ? format(new Date(run.createdAt), "h:mm a")
                       : null
+                  const mi = kmToMiles(run.distance)
                   return (
                     <div
-                      key={entry.id}
-                      className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group"
+                      key={`run-${run.id}`}
+                      className="glass-subtle rounded-xl p-3.5 flex items-center justify-between"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#22c55e]/10 shrink-0">
                           <Footprints className="h-3.5 w-3.5 text-[#22c55e]" />
                         </div>
                         <div className="min-w-0">
-                          <span className="font-semibold text-sm">{entry.count.toLocaleString()} steps</span>
+                          <span className="font-semibold text-sm">{steps.toLocaleString()} steps</span>
                           <p className="text-xs text-muted-foreground/80 truncate">
-                            {dateLine}
+                            <span className="text-muted-foreground/90">from run</span>
+                            {" · "}
+                            {mi.toFixed(1)} mi
                             {timeLine != null ? ` · ${timeLine}` : ""}
                           </p>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(entry.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-destructive/10 shrink-0"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
                     </div>
                   )
                 })}

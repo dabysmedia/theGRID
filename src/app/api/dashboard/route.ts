@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { kmToMiles } from "@/lib/units"
+import { kmToMiles, runKmToStepsFromRun } from "@/lib/units"
 import { startOfDay, subDays } from "date-fns"
 
 export async function GET(req: NextRequest) {
@@ -53,9 +53,13 @@ export async function GET(req: NextRequest) {
     const calorieLast7 = dailyTotals(calorieEntries, (items) =>
       items.reduce((s, e) => s + e.calories, 0)
     )
-    const stepsLast7 = dailyTotals(stepEntries, (items) =>
+    const stepsLoggedLast7 = dailyTotals(stepEntries, (items) =>
       items.reduce((s, e) => s + e.count, 0)
     )
+    const stepsFromRunsLast7 = dailyTotals(runEntries, (items) =>
+      items.reduce((s, e) => s + runKmToStepsFromRun(e.distance), 0)
+    )
+    const stepsLast7 = stepsLoggedLast7.map((s, i) => s + stepsFromRunsLast7[i])
     const runLast7Km = dailyTotals(runEntries, (items) =>
       items.reduce((s, e) => s + e.distance, 0)
     )
