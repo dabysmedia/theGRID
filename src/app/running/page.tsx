@@ -194,7 +194,7 @@ export default function RunningPage() {
     <div className="space-y-6">
       <PageHeader title="Running" icon={PersonStanding} iconColor="#3b82f6" />
 
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
         <div className="glass-subtle rounded-xl p-3 lg:p-4 min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Total Distance
@@ -229,7 +229,7 @@ export default function RunningPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
         <div className="glass rounded-2xl p-5">
           <form noValidate onSubmit={handleSubmit} className="space-y-4">
             {/* Environment toggle */}
@@ -328,7 +328,7 @@ export default function RunningPage() {
 
             <button
               type="submit"
-              className={cn(buttonVariants({ variant: "default", size: "lg" }), "w-full")}
+              className={cn(buttonVariants({ variant: "default", size: "lg" }), "w-full press-scale")}
             >
               Log Run
             </button>
@@ -400,7 +400,7 @@ export default function RunningPage() {
         </div>
       </div>
 
-      <div className="glass rounded-2xl p-4 lg:p-5">
+      <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
         <h2 className="text-sm font-semibold uppercase tracking-wider mb-3">
           Distance trend
         </h2>

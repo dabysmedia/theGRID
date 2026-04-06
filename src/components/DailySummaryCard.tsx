@@ -41,7 +41,7 @@ export function DailySummaryCard({
 
   return (
     <Link href={href} className="block group">
-      <div className="glass hud-corners p-4 transition-all duration-200 hover:bg-glass-highlight/40 active:scale-[0.97] cursor-pointer relative overflow-hidden" style={{ borderRadius: '4px' }}>
+      <div className="glass hud-corners p-4 press-scale hover:bg-glass-highlight/40 hover:shadow-lg hover:shadow-black/10 cursor-pointer relative overflow-hidden transition-[background-color,box-shadow] duration-200" style={{ borderRadius: '4px' }}>
         <div
           className="absolute top-0 right-0 w-24 h-24 opacity-[0.03] -translate-y-8 translate-x-8"
           style={{ backgroundColor: color }}

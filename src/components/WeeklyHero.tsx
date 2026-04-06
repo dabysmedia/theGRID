@@ -67,8 +67,13 @@ function ProgressRing({ value, max, label, unit, color, icon }: ProgressRingProp
             strokeLinecap="butt"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
-            className="transition-all duration-1000 ease-out"
-            style={{ filter: `drop-shadow(0 0 6px ${color}50)` }}
+            style={{
+              filter: `drop-shadow(0 0 6px ${color}50)`,
+              animation: `draw-ring 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both`,
+              // @ts-expect-error CSS custom properties
+              "--ring-circumference": circumference,
+              "--ring-offset": offset,
+            }}
           />
           {/* Tick marks */}
           {[0, 90, 180, 270].map((deg) => (
@@ -195,7 +200,7 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
       </div>
 
       {/* Progress rings row */}
-      <div className="flex justify-around mb-5 relative z-10">
+      <div className="flex justify-around mb-5 relative z-10 animate-fade-up stagger-1">
         <ProgressRing
           value={calAvg}
           max={calGoal}
@@ -223,7 +228,7 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
       </div>
 
       {/* Goal streak bar */}
-      <div className="mb-5 relative z-10">
+      <div className="mb-5 relative z-10 animate-fade-up stagger-2">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-[0.15em]">
             Targets Hit
@@ -244,7 +249,7 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
       </div>
 
       {/* Weekly activity bars */}
-      <div className="mb-4 relative z-10">
+      <div className="mb-4 relative z-10 animate-fade-up stagger-3">
         <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-[0.15em] mb-2">
           Steps Activity
         </p>
@@ -256,12 +261,13 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
               <div key={i} className="flex-1 flex flex-col items-center gap-1">
                 <div className="w-full relative" style={{ height: "32px" }}>
                   <div
-                    className="absolute bottom-0 w-full transition-all duration-500"
+                    className="absolute bottom-0 w-full animate-bar-grow"
                     style={{
                       height: `${Math.max(pct, 4)}%`,
                       backgroundColor: isToday ? "#22c55e" : "#22c55e50",
                       boxShadow: isToday ? '0 0 6px #22c55e40' : 'none',
                       borderRadius: '1px',
+                      animationDelay: `${300 + i * 60}ms`,
                     }}
                   />
                 </div>
@@ -275,7 +281,7 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
       </div>
 
       {/* Secondary stats pills */}
-      <div className="flex gap-2 relative z-10">
+      <div className="flex gap-2 relative z-10 animate-fade-up stagger-4">
         {secondaryStats.map((stat) => (
           <div
             key={stat.label}

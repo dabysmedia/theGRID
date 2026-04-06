@@ -76,9 +76,11 @@ export function HubDashboard() {
     return () => { cancelled = true }
   }, [activeDate])
 
+  const staggerClasses = ["stagger-1", "stagger-2", "stagger-3", "stagger-4", "stagger-5", "stagger-6", "stagger-7"]
+
   return (
     <div className="space-y-8">
-      <header className="space-y-2">
+      <header className="space-y-2 animate-fade-up">
         <div className="flex items-center gap-3 lg:hidden">
           <div className="status-dot" />
           <h1 className="text-xl font-bold tracking-[0.2em] uppercase">
@@ -90,9 +92,11 @@ export function HubDashboard() {
         </div>
       </header>
 
-      <WeeklyHero data={data} loading={loading} />
+      <div className="animate-fade-up stagger-2">
+        <WeeklyHero data={data} loading={loading} />
+      </div>
 
-      <div>
+      <div className="animate-fade-up stagger-3">
         <div className="flex items-center gap-2 mb-4">
           <div className="hud-divider flex-1" />
           <span className="text-[10px] tracking-[0.2em] uppercase text-muted-foreground/50 shrink-0">
@@ -106,20 +110,21 @@ export function HubDashboard() {
             loading ? "opacity-50" : "opacity-100"
           }`}
         >
-          {categories.map((cat) => {
+          {categories.map((cat, i) => {
             const summary = data[cat.key]
             return (
-              <DailySummaryCard
-                key={cat.key}
-                title={cat.title}
-                value={summary.todayValue}
-                goal={summary.goal ?? undefined}
-                unit={summary.unit}
-                icon={cat.icon}
-                href={cat.href}
-                chartData={summary.last7.map((v) => ({ value: v }))}
-                color={cat.color}
-              />
+              <div key={cat.key} className={`animate-scale-in ${staggerClasses[i] ?? ""}`}>
+                <DailySummaryCard
+                  title={cat.title}
+                  value={summary.todayValue}
+                  goal={summary.goal ?? undefined}
+                  unit={summary.unit}
+                  icon={cat.icon}
+                  href={cat.href}
+                  chartData={summary.last7.map((v) => ({ value: v }))}
+                  color={cat.color}
+                />
+              </div>
             )
           })}
         </div>

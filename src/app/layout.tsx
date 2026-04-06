@@ -70,11 +70,12 @@ export default function RootLayout({
         <Providers>
           <main className="
             mx-auto px-4 pt-[calc(env(safe-area-inset-top,0px)+2rem)] pb-24
-            max-w-[430px]
-            sm:max-w-[430px]
+            max-w-[440px]
+            sm:max-w-[440px]
             md:max-w-2xl
             lg:ml-[72px] lg:mr-0 lg:max-w-3xl lg:px-8 lg:pb-8
             xl:ml-[200px] xl:max-w-5xl xl:px-10
+            animate-fade-in
           ">
             {children}
           </main>

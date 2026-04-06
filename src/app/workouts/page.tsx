@@ -180,7 +180,7 @@ export default function WorkoutsPage() {
     <div className="space-y-6">
       <PageHeader title="Workouts" icon={Dumbbell} iconColor="#a855f7" />
 
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
         <StatCard label="This Week" value={String(thisWeekCount)} />
         <StatCard label="Total Workouts" value={String(entries.length)} />
         <StatCard
@@ -198,7 +198,7 @@ export default function WorkoutsPage() {
         />
       </div>
 
-      <div className="glass rounded-2xl p-4 lg:p-5">
+      <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
           Last 14 days
         </h2>
@@ -250,7 +250,7 @@ export default function WorkoutsPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
         <div className="glass rounded-2xl p-5">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex gap-2 flex-wrap">
@@ -306,7 +306,7 @@ export default function WorkoutsPage() {
               />
             </div>
 
-            <Button type="submit" className="w-full" size="lg">
+            <Button type="submit" className="w-full press-scale" size="lg">
               Log Workout
             </Button>
           </form>

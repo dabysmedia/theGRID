@@ -370,3 +370,129 @@
   0%, 100% { opacity: 0.5; box-shadow: 0 0 4px oklch(0.75 0.17 70 / 20%); }
   50% { opacity: 1; box-shadow: 0 0 8px oklch(0.75 0.17 70 / 55%); }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   SLEEK ANIMATIONS
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes draw-ring {
+  from { stroke-dashoffset: var(--ring-circumference); }
+  to   { stroke-dashoffset: var(--ring-offset); }
+}
+
+@keyframes glow-sweep {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes bar-grow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes nav-indicator {
+  from { opacity: 0; transform: scaleX(0); }
+  to   { opacity: 1; transform: scaleX(1); }
+}
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out both;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-bar-grow {
+    animation: bar-grow 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    transform-origin: bottom;
+  }
+
+  .animate-count-up {
+    animation: count-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-nav-indicator {
+    animation: nav-indicator 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Stagger delay utilities */
+  .stagger-1 { animation-delay: 50ms; }
+  .stagger-2 { animation-delay: 100ms; }
+  .stagger-3 { animation-delay: 150ms; }
+  .stagger-4 { animation-delay: 200ms; }
+  .stagger-5 { animation-delay: 250ms; }
+  .stagger-6 { animation-delay: 300ms; }
+  .stagger-7 { animation-delay: 350ms; }
+
+  /* Smooth interactive feedback */
+  .press-scale {
+    transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.2s ease;
+    will-change: transform;
+  }
+  .press-scale:active {
+    transform: scale(0.96);
+  }
+
+  /* Glow sweep shimmer for loading states */
+  .glow-sweep {
+    background: linear-gradient(
+      90deg,
+      transparent 30%,
+      oklch(0.82 0.18 110 / 6%) 50%,
+      transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: glow-sweep 2s ease-in-out infinite;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   iPHONE 17 PRO MAX — 440 × 956 viewport
+   ═══════════════════════════════════════════════════════════ */
+@media (width: 440px) {
+  :root {
+    --grid-card-gap: 10px;
+  }
+}
+
+@media (min-width: 414px) and (max-width: 440px) {
+  .glass, .glass-subtle, .glass-strong {
+    border-radius: 6px;
+  }
+}

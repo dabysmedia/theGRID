@@ -202,7 +202,7 @@ export default function WeightPage() {
       <PageHeader title="Weight" icon={Weight} iconColor="#22c55e" />
 
       {/* Stats row */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
         <StatCard
           label="Current"
           value={stats?.current != null ? `${stats.current}` : "—"}
@@ -239,7 +239,7 @@ export default function WeightPage() {
       </div>
 
       {/* Trend chart */}
-      <div className="glass rounded-2xl p-4 lg:p-5">
+      <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-1.5">
             {data?.direction === "down" ? (
@@ -346,7 +346,7 @@ export default function WeightPage() {
       </div>
 
       {/* Form + History grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
         {/* Log form */}
         <div className="glass rounded-2xl p-5">
           <h2 className="text-sm font-semibold uppercase tracking-wider mb-4">
@@ -378,7 +378,7 @@ export default function WeightPage() {
             </div>
             <Button
               type="submit"
-              className="w-full"
+              className="w-full press-scale"
               size="lg"
               disabled={submitting}
             >

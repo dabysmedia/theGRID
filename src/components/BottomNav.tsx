@@ -25,8 +25,8 @@ export function BottomNav() {
   return (
     <>
       {/* Mobile: bottom bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden">
-        <div className="mx-auto max-w-lg px-3 pb-[env(safe-area-inset-bottom,0px)]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden animate-slide-up">
+        <div className="mx-auto max-w-[440px] px-3 pb-[env(safe-area-inset-bottom,0px)]">
           <div className="glass-frost mb-2 shadow-lg shadow-black/40 hud-corners" style={{ borderRadius: '4px' }}>
             {/* Top edge glow */}
             <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-primary/25 to-transparent" />
@@ -48,9 +48,9 @@ export function BottomNav() {
                     )}
                   >
                     {isActive && (
-                      <span className="pointer-events-none absolute inset-1 bg-grid-accent-dim" style={{ borderRadius: '2px' }} />
+                      <span className="pointer-events-none absolute inset-1 bg-grid-accent-dim animate-nav-indicator" style={{ borderRadius: '2px' }} />
                     )}
-                    <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+                    <span className={`relative flex h-5 w-5 shrink-0 items-center justify-center transition-transform duration-200 ${isActive ? "scale-110" : ""}`}>
                       <item.icon
                         className="h-5 w-5"
                         strokeWidth={isActive ? 2.2 : 1.6}
@@ -59,7 +59,7 @@ export function BottomNav() {
                     </span>
                     <span className="relative max-w-full truncate">{item.label}</span>
                     {isActive && (
-                      <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-px bg-primary/50" />
+                      <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-px bg-primary/50 animate-nav-indicator" />
                     )}
                   </Link>
                 )
@@ -101,11 +101,11 @@ export function BottomNav() {
               >
                 {isActive && (
                   <>
-                    <span className="pointer-events-none absolute inset-0 bg-grid-accent-dim" style={{ borderRadius: '3px' }} />
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary/60" style={{ borderRadius: '0 2px 2px 0' }} />
+                    <span className="pointer-events-none absolute inset-0 bg-grid-accent-dim animate-nav-indicator" style={{ borderRadius: '3px' }} />
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary/60 animate-fade-in" style={{ borderRadius: '0 2px 2px 0' }} />
                   </>
                 )}
-                <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
+                <span className={`relative flex h-5 w-5 shrink-0 items-center justify-center transition-transform duration-200 ${isActive ? "scale-110" : ""}`}>
                   <item.icon className="h-5 w-5" strokeWidth={isActive ? 2.2 : 1.6} aria-hidden />
                 </span>
                 <span className="relative hidden min-w-0 flex-1 truncate xl:block">

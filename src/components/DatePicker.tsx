@@ -27,7 +27,7 @@ export function DatePicker() {
       {/* Prev day */}
       <button
         onClick={goPrev}
-        className="flex items-center justify-center w-8 h-8 text-muted-foreground/50 hover:text-primary hover:bg-grid-accent-dim transition-colors active:scale-90"
+        className="flex items-center justify-center w-8 h-8 text-muted-foreground/50 hover:text-primary hover:bg-grid-accent-dim press-scale transition-colors"
         style={{ borderRadius: "3px" }}
         aria-label="Previous day"
       >
@@ -65,7 +65,7 @@ export function DatePicker() {
       <button
         onClick={goNext}
         disabled={isToday}
-        className={`flex items-center justify-center w-8 h-8 transition-colors active:scale-90 ${
+        className={`flex items-center justify-center w-8 h-8 press-scale transition-colors ${
           isToday
             ? "text-muted-foreground/15 cursor-not-allowed"
             : "text-muted-foreground/50 hover:text-primary hover:bg-grid-accent-dim"
