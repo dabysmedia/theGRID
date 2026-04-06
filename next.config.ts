@@ -10,7 +10,6 @@ const nextConfig: NextConfig = {
   ],
   outputFileTracingIncludes: {
     "/*": [
-      "./prisma/**/*.db",
       "./prisma/**/*.prisma",
       "./src/generated/prisma/**/*",
     ],
