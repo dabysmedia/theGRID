@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { format, startOfDay, subDays } from "date-fns"
-import { Moon, Trash2, Calendar, Star } from "lucide-react"
+import { Moon, Trash2, Calendar, Star, TrendingUp } from "lucide-react"
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -54,6 +56,26 @@ function entryDateKey(entry: SleepEntry): string {
   return formatDate(new Date(entry.date))
 }
 
+function StatCard({
+  label,
+  value,
+  sub,
+}: {
+  label: string
+  value: string
+  sub?: string
+}) {
+  return (
+    <div className="glass-subtle p-3 lg:p-4 min-w-0" style={{ borderRadius: "3px" }}>
+      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
+        {label}
+      </p>
+      <span className="text-lg lg:text-xl font-bold tabular-nums">{value}</span>
+      {sub && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{sub}</p>}
+    </div>
+  )
+}
+
 export default function SleepPage() {
   const { activeDate } = useActiveDate()
   const [entries, setEntries] = useState<SleepEntry[]>([])
@@ -61,6 +83,7 @@ export default function SleepPage() {
   const [wakeTime, setWakeTime] = useState("06:30")
   const [quality, setQuality] = useState(3)
   const [notes, setNotes] = useState("")
+  const [chartRange, setChartRange] = useState<"7d" | "30d" | "all">("30d")
 
   const today = activeDate
 
@@ -73,6 +96,8 @@ export default function SleepPage() {
       .catch(() => setEntries([]))
   }, [])
 
+  const refDate = parseLocalDate(activeDate)
+
   const last7DaysEntries = useMemo(() => {
     const ref = parseLocalDate(activeDate)
     const from = subDays(ref, 6)
@@ -80,7 +105,7 @@ export default function SleepPage() {
       const d = startOfDay(new Date(e.date))
       return d >= from && d <= ref
     })
-  }, [entries])
+  }, [entries, activeDate])
 
   const stats = useMemo(() => {
     const last = entries[0]
@@ -110,7 +135,10 @@ export default function SleepPage() {
       )
       best = calcDuration(bestEntry.bedtime, bestEntry.wakeTime)
     }
-    return { lastNight, avg7h, avgQ, best }
+    const consistency = Math.round((last7DaysEntries.length / 7) * 100)
+    const bestQuality =
+      entries.length > 0 ? Math.max(...entries.map((e) => e.quality)) : null
+    return { lastNight, avg7h, avgQ, best, consistency, bestQuality }
   }, [entries, last7DaysEntries])
 
   const todayHours = useMemo(() => {
@@ -119,13 +147,26 @@ export default function SleepPage() {
     return durationHours(todayEntry.bedtime, todayEntry.wakeTime)
   }, [entries, today])
 
+  const cutoff =
+    chartRange === "7d"
+      ? subDays(refDate, 6)
+      : chartRange === "30d"
+        ? subDays(refDate, 29)
+        : null
+
+  const chartEntries = useMemo(() => {
+    const chronological = [...entries].reverse()
+    if (!cutoff) return chronological
+    return chronological.filter((e) => startOfDay(new Date(e.date)) >= cutoff)
+  }, [entries, cutoff])
+
   const chartData = useMemo(() => {
-    const slice = entries.slice(0, 7)
-    return [...slice].reverse().map((e) => ({
+    return chartEntries.map((e) => ({
       label: format(new Date(e.date), "MMM d"),
       hours: durationHours(e.bedtime, e.wakeTime),
+      quality: e.quality,
     }))
-  }, [entries])
+  }, [chartEntries])
 
   const historyByDate = useMemo(() => {
     const map = new Map<string, SleepEntry[]>()
@@ -179,35 +220,12 @@ export default function SleepPage() {
     <div className="space-y-6">
       <PageHeader title="Sleep" icon={Moon} iconColor="#6366f1" />
 
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[140px] shrink-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Last Night
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">{stats.lastNight}</span>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[140px] shrink-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            7-Day Avg
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {stats.avg7h !== null ? `${stats.avg7h}h` : "—"}
-          </span>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[140px] shrink-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Avg Quality
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {stats.avgQ !== null ? `${stats.avgQ}/5` : "—"}
-          </span>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[140px] shrink-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Best Night
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">{stats.best}</span>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 animate-fade-up min-w-0">
+        <StatCard label="Last Night" value={stats.lastNight} />
+        <StatCard label="7-Day Avg" value={stats.avg7h !== null ? `${stats.avg7h}h` : "—"} />
+        <StatCard label="Avg Quality" value={stats.avgQ !== null ? `${stats.avgQ}/5` : "—"} />
+        <StatCard label="Best Night" value={stats.best} />
+        <StatCard label="Consistency" value={`${stats.consistency}%`} sub="last 7 days" />
       </div>
 
       <CategoryGoal
@@ -217,62 +235,96 @@ export default function SleepPage() {
         color="#6366f1"
       />
 
-      <div className="glass rounded-2xl p-5 animate-fade-up stagger-1">
-        <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">
-          Duration trend
-        </h2>
-        {entries.length < 2 ? (
-          <div className="h-40 lg:h-48 flex items-center justify-center rounded-xl border border-dashed border-border/50 bg-muted/20">
+      <div className="glass p-4 lg:p-5 animate-fade-up stagger-1 min-w-0" style={{ borderRadius: "4px" }}>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <TrendingUp className="h-4 w-4 text-[#6366f1]" />
+            Trends
+          </h2>
+          <div className="flex gap-1 shrink-0">
+            {(["7d", "30d", "all"] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setChartRange(r)}
+                className={`px-2 py-1 text-[10px] font-medium uppercase tracking-wider transition-colors ${
+                  chartRange === r
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                style={{ borderRadius: "3px" }}
+              >
+                {r === "all" ? "All" : r}
+              </button>
+            ))}
+          </div>
+        </div>
+        {chartData.length < 2 ? (
+          <div className="h-44 lg:h-52 flex items-center justify-center border border-dashed border-border/50 bg-muted/20" style={{ borderRadius: "4px" }}>
             <p className="text-sm text-muted-foreground text-center px-4">
-              Log at least two nights to see your sleep trend
+              Log at least two nights to see trends
             </p>
           </div>
         ) : (
-          <div className="h-40 lg:h-48 w-full min-h-[10rem]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="sleepBarFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.95} />
-                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0.2} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 11, fill: "oklch(0.65 0.02 250)" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: "oklch(0.65 0.02 250)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={36}
-                  unit="h"
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "oklch(0.19 0.012 250 / 92%)",
-                    border: "1px solid oklch(1 0 0 / 8%)",
-                    borderRadius: "3px",
-                    fontSize: "12px",
-                    backdropFilter: "blur(8px)",
-                  }}
-                  formatter={(value) => [
-                    `${value}h`,
-                    "Sleep",
-                  ]}
-                />
-                <Bar dataKey="hours" fill="url(#sleepBarFill)" radius={[6, 6, 0, 0]} maxBarSize={48} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 min-w-0">
+            <div className="glass-subtle p-3 min-w-0" style={{ borderRadius: "3px" }}>
+              <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Duration (hours)</h3>
+              <div className="h-40 lg:h-44 min-w-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="sleepAreaFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 5%)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }} axisLine={false} tickLine={false} width={30} domain={[0, "dataMax + 1"]} />
+                    <Tooltip
+                      contentStyle={{
+                        background: "oklch(0.19 0.012 250 / 92%)",
+                        border: "1px solid oklch(1 0 0 / 8%)",
+                        borderRadius: "3px",
+                        fontSize: "12px",
+                        backdropFilter: "blur(8px)",
+                      }}
+                      formatter={(value) => [`${value}h`, "Duration"]}
+                    />
+                    <Area type="monotone" dataKey="hours" stroke="#6366f1" strokeWidth={2} fill="url(#sleepAreaFill)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="glass-subtle p-3 min-w-0" style={{ borderRadius: "3px" }}>
+              <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Sleep quality</h3>
+              <div className="h-40 lg:h-44 min-w-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 5%)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }} axisLine={false} tickLine={false} width={26} domain={[1, 5]} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{
+                        background: "oklch(0.19 0.012 250 / 92%)",
+                        border: "1px solid oklch(1 0 0 / 8%)",
+                        borderRadius: "3px",
+                        fontSize: "12px",
+                        backdropFilter: "blur(8px)",
+                      }}
+                      formatter={(value) => [`${value}/5`, "Quality"]}
+                    />
+                    <Line type="monotone" dataKey="quality" stroke="oklch(0.82 0.18 110)" strokeWidth={2} dot={{ r: 2.5 }} activeDot={{ r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
-        <div className="glass rounded-2xl p-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2 min-w-0">
+        <div className="glass p-5 min-w-0" style={{ borderRadius: "4px" }}>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -341,12 +393,12 @@ export default function SleepPage() {
           </form>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-3 min-w-0">
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">
             History
           </h2>
           {entries.length === 0 && (
-            <div className="glass-subtle rounded-2xl p-6 text-center">
+            <div className="glass-subtle p-6 text-center" style={{ borderRadius: "3px" }}>
               <p className="text-sm text-muted-foreground">No sleep entries yet</p>
             </div>
           )}
@@ -361,10 +413,11 @@ export default function SleepPage() {
               {items.map((entry) => (
                 <div
                   key={entry.id}
-                  className="glass-subtle rounded-xl p-3.5 flex items-center justify-between gap-3 group"
+                  className="glass-subtle p-3.5 flex items-center justify-between gap-3 group min-w-0"
+                  style={{ borderRadius: "3px" }}
                 >
                   <div className="flex items-start gap-3 min-w-0">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#6366f1]/10 shrink-0">
+                    <div className="flex items-center justify-center w-8 h-8 bg-[#6366f1]/10 shrink-0" style={{ borderRadius: "3px" }}>
                       <Moon className="h-3.5 w-3.5 text-[#6366f1]" />
                     </div>
                     <div className="min-w-0 space-y-1">
@@ -397,7 +450,8 @@ export default function SleepPage() {
                   <button
                     type="button"
                     onClick={() => handleDelete(entry.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-destructive/10 shrink-0"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-destructive/10 shrink-0"
+                    style={{ borderRadius: "3px" }}
                   >
                     <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>

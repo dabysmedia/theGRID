@@ -11,6 +11,8 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  LineChart,
+  Line,
 } from "recharts"
 import { PageHeader } from "@/components/PageHeader"
 import { useActiveDate } from "@/context/DateContext"
@@ -119,6 +121,22 @@ export default function RunningPage() {
     })
   }, [entries])
 
+  /** Pace in minutes per mile (one point per run, chronological oldest→newest). */
+  const paceChartData = useMemo(() => {
+    const chronological = [...entries].reverse()
+    return chronological.map((e) => {
+      const dateKey = e.date.split("T")[0]
+      const mi = kmToMiles(e.distance)
+      const paceMinPerMi =
+        mi > 0 && e.duration > 0 ? e.duration / mi : null
+      return {
+        id: e.id,
+        label: format(parseLocalDate(dateKey), "MMM d"),
+        paceMin: paceMinPerMi,
+      }
+    })
+  }, [entries])
+
   const groupedByDate = useMemo(() => {
     const map = new Map<string, RunEntry[]>()
     for (const e of entries) {
@@ -214,9 +232,13 @@ export default function RunningPage() {
     const mi = kmToMiles(distanceKm)
     if (mi === 0) return "-"
     const paceMin = durationMin / mi
+    return formatPaceMinutes(paceMin) + " /mi"
+  }
+
+  function formatPaceMinutes(paceMin: number): string {
     const mins = Math.floor(paceMin)
     const secs = Math.round((paceMin - mins) * 60)
-    return `${mins}:${secs.toString().padStart(2, "0")} /mi`
+    return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
   const livePace = useMemo(() => {
@@ -276,6 +298,145 @@ export default function RunningPage() {
         presets={runGoalPresets}
         color="#3b82f6"
       />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-up stagger-1">
+        <div className="glass rounded-2xl p-4 lg:p-5 min-h-[12rem] min-w-0">
+          <h2 className="text-sm font-semibold uppercase tracking-wider mb-3">
+            Distance trend
+          </h2>
+          {chartData.length >= 2 ? (
+            <div className="h-40 lg:h-48 w-full min-h-[10rem] min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={chartData}
+                  margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="runningDistGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.28} />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="oklch(1 0 0 / 5%)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    domain={["dataMin - 0.5", "dataMax + 0.5"]}
+                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "oklch(0.19 0.012 250 / 92%)",
+                      border: "1px solid oklch(1 0 0 / 8%)",
+                      borderRadius: "3px",
+                      fontSize: "12px",
+                      backdropFilter: "blur(8px)",
+                    }}
+                    labelStyle={{ color: "oklch(0.60 0.01 250)" }}
+                    formatter={(val) => [`${Number(val).toFixed(1)} mi`, "Distance"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="distance"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    fill="url(#runningDistGrad)"
+                    dot={{ r: 3, fill: "#3b82f6", strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: "#3b82f6", strokeWidth: 2, stroke: "#fff" }}
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-40 lg:h-48 min-h-[10rem] flex items-center justify-center">
+              <p className="text-sm text-muted-foreground">
+                Log at least 2 runs to see distance over time
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="glass rounded-2xl p-4 lg:p-5 min-h-[12rem] min-w-0">
+          <h2 className="text-sm font-semibold uppercase tracking-wider mb-3">
+            Pace trend
+          </h2>
+          {paceChartData.filter((d) => d.paceMin != null).length >= 2 ? (
+            <div className="h-40 lg:h-48 w-full min-h-[10rem] min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={paceChartData}
+                  margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="oklch(1 0 0 / 5%)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    domain={["auto", "auto"]}
+                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `${Number(v).toFixed(1)}`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "oklch(0.19 0.012 250 / 92%)",
+                      border: "1px solid oklch(1 0 0 / 8%)",
+                      borderRadius: "3px",
+                      fontSize: "12px",
+                      backdropFilter: "blur(8px)",
+                    }}
+                    labelStyle={{ color: "oklch(0.60 0.01 250)" }}
+                    formatter={(val) => {
+                      if (val == null || Number.isNaN(Number(val))) return ["—", "Pace"]
+                      return [
+                        `${formatPaceMinutes(Number(val))} /mi`,
+                        "Pace",
+                      ]
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="paceMin"
+                    stroke="oklch(0.82 0.18 110)"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: "oklch(0.82 0.18 110)", strokeWidth: 0 }}
+                    activeDot={{ r: 5 }}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-40 lg:h-48 min-h-[10rem] flex items-center justify-center">
+              <p className="text-sm text-muted-foreground">
+                Log at least 2 runs with distance and duration to see pace over time
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
         <div className="glass rounded-2xl p-5">
@@ -446,74 +607,6 @@ export default function RunningPage() {
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
-        <h2 className="text-sm font-semibold uppercase tracking-wider mb-3">
-          Distance trend
-        </h2>
-        {chartData.length >= 2 ? (
-          <div className="h-40 lg:h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={chartData}
-                margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="runningDistGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.28} />
-                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="oklch(1 0 0 / 5%)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  domain={["dataMin - 0.5", "dataMax + 0.5"]}
-                  tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "oklch(0.19 0.012 250 / 92%)",
-                    border: "1px solid oklch(1 0 0 / 8%)",
-                    borderRadius: "3px",
-                    fontSize: "12px",
-                    backdropFilter: "blur(8px)",
-                  }}
-                  labelStyle={{ color: "oklch(0.60 0.01 250)" }}
-                  formatter={(val) => [`${Number(val).toFixed(1)} mi`, "Distance"]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="distance"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  fill="url(#runningDistGrad)"
-                  dot={{ r: 3, fill: "#3b82f6", strokeWidth: 0 }}
-                  activeDot={{ r: 5, fill: "#3b82f6", strokeWidth: 2, stroke: "#fff" }}
-                  isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div className="h-40 lg:h-48 flex items-center justify-center">
-            <p className="text-sm text-muted-foreground">
-              Log at least 2 runs to see distance over time
-            </p>
-          </div>
-        )}
       </div>
     </div>
   )

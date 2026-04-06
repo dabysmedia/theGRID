@@ -123,8 +123,33 @@ function weekTotal(last7: number[]): number {
   return last7.reduce((s, v) => s + v, 0)
 }
 
-function daysMet(last7: number[], goal: number): number {
-  return last7.filter((v) => v >= goal).length
+/** 0–1, caps over-performance at 100% for scoring */
+function clamp01(n: number): number {
+  if (!Number.isFinite(n) || n < 0) return 0
+  return Math.min(n, 1)
+}
+
+/** Weekly score 0–100: equal weight on calories avg vs goal, steps avg vs goal, and avg of running + workout vs goals */
+function computeWeeklyScore(d: DashboardData): number {
+  const calGoal = d.calories.goal ?? 2000
+  const stepsGoal = d.steps.goal ?? 10000
+  const calAvg = weekAvg(d.calories.last7)
+  const stepsAvg = weekAvg(d.steps.last7)
+
+  const calScore = calGoal > 0 ? clamp01(calAvg / calGoal) : 0
+  const stepsScore = stepsGoal > 0 ? clamp01(stepsAvg / stepsGoal) : 0
+
+  const runGoalDaily = d.running.goal ?? 3
+  const runAvg = weekAvg(d.running.last7)
+  const runScore = runGoalDaily > 0 ? clamp01(runAvg / runGoalDaily) : 0
+
+  const workoutGoalDaily = d.workouts.goal ?? 1
+  const workoutAvg = weekAvg(d.workouts.last7)
+  const workoutScore =
+    workoutGoalDaily > 0 ? clamp01(workoutAvg / workoutGoalDaily) : 0
+
+  const activityScore = (runScore + workoutScore) / 2
+  return Math.round(((calScore + stepsScore + activityScore) / 3) * 100)
 }
 
 export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
@@ -137,17 +162,7 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
   const stepsGoal = data.steps.goal ?? 10000
   const sleepGoal = data.sleep.goal ?? 8
 
-  const goalCategories = [
-    { last7: data.calories.last7, goal: calGoal },
-    { last7: data.steps.last7, goal: stepsGoal },
-    { last7: data.sleep.last7, goal: sleepGoal },
-  ]
-
-  const totalGoalDays = goalCategories.reduce(
-    (sum, cat) => sum + daysMet(cat.last7, cat.goal),
-    0
-  )
-  const maxGoalDays = goalCategories.length * 7
+  const weeklyScore = computeWeeklyScore(data)
 
   const secondaryStats = [
     {
@@ -187,7 +202,7 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
       }`}
       style={{
         borderRadius: "4px",
-        background: "oklch(0.19 0.012 250 / 0.94)",
+        background: "oklch(0.19 0.012 250 / 0.58)",
       }}
     >
       {/* Top edge glow */}
@@ -230,21 +245,21 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
         />
       </div>
 
-      {/* Goal streak bar */}
+      {/* Weekly score */}
       <div className="mb-5 relative z-10 animate-fade-up stagger-2">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-[0.15em]">
-            Targets Hit
+            Weekly score
           </span>
           <span className="text-[10px] font-bold tabular-nums text-primary tracking-wider">
-            {totalGoalDays} / {maxGoalDays}
+            {weeklyScore}%
           </span>
         </div>
         <div className="h-1 w-full bg-muted/20 overflow-hidden">
           <div
             className="h-full bg-primary transition-all duration-700 ease-out"
             style={{
-              width: `${maxGoalDays > 0 ? (totalGoalDays / maxGoalDays) * 100 : 0}%`,
+              width: `${weeklyScore}%`,
               boxShadow: '0 0 8px oklch(0.82 0.18 110 / 25%)',
             }}
           />

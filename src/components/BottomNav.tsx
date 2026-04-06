@@ -6,7 +6,7 @@ import {
   Home,
   PlusCircle,
   BarChart3,
-  Target,
+  CheckSquare,
   MoreHorizontal,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -15,7 +15,7 @@ const navItems = [
   { href: "/", label: "Home", icon: Home },
   { href: "/log", label: "Log", icon: PlusCircle },
   { href: "/stats", label: "Stats", icon: BarChart3 },
-  { href: "/goals", label: "Goals", icon: Target },
+  { href: "/habits", label: "Habits", icon: CheckSquare },
   { href: "/more", label: "More", icon: MoreHorizontal },
 ]
 

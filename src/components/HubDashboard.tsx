@@ -106,14 +106,17 @@ export function HubDashboard() {
         </div>
 
         <div
-          className={`grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4 transition-opacity duration-500 ${
+          className={`grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4 items-stretch transition-opacity duration-500 ${
             loading ? "opacity-50" : "opacity-100"
           }`}
         >
           {categories.map((cat, i) => {
             const summary = data[cat.key]
             return (
-              <div key={cat.key} className={`animate-scale-in ${staggerClasses[i] ?? ""}`}>
+              <div
+                key={cat.key}
+                className={`animate-scale-in aspect-square min-h-0 w-full max-w-full ${staggerClasses[i] ?? ""}`}
+              >
                 <DailySummaryCard
                   title={cat.title}
                   value={summary.todayValue}

@@ -114,6 +114,30 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS "LongGoalEntry_goalId_idx" ON "LongGoalEntry"("goalId");
   CREATE INDEX IF NOT EXISTS "LongGoalEntry_date_idx"   ON "LongGoalEntry"("date");
 
+  CREATE TABLE IF NOT EXISTS "Habit" (
+    "id"        TEXT NOT NULL PRIMARY KEY,
+    "name"      TEXT NOT NULL,
+    "icon"      TEXT NOT NULL DEFAULT 'check',
+    "color"     TEXT NOT NULL DEFAULT '#22c55e',
+    "frequency" TEXT NOT NULL DEFAULT 'daily',
+    "archived"  BOOLEAN NOT NULL DEFAULT 0,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS "HabitCompletion" (
+    "id"        TEXT NOT NULL PRIMARY KEY,
+    "habitId"   TEXT NOT NULL,
+    "date"      DATETIME NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "HabitCompletion_habitId_fkey"
+      FOREIGN KEY ("habitId") REFERENCES "Habit"("id")
+      ON DELETE CASCADE ON UPDATE CASCADE
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS "HabitCompletion_habitId_date_key" ON "HabitCompletion"("habitId", "date");
+  CREATE INDEX IF NOT EXISTS "HabitCompletion_habitId_idx" ON "HabitCompletion"("habitId");
+  CREATE INDEX IF NOT EXISTS "HabitCompletion_date_idx"    ON "HabitCompletion"("date");
+
   CREATE TABLE IF NOT EXISTS "SavedMeal" (
     "id"        TEXT NOT NULL PRIMARY KEY,
     "name"      TEXT NOT NULL,

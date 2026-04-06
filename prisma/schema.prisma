@@ -106,6 +106,30 @@ model LongGoalEntry {
   @@index([date])
 }
 
+model Habit {
+  id          String            @id @default(cuid())
+  name        String
+  icon        String            @default("check")
+  color       String            @default("#22c55e")
+  frequency   String            @default("daily")
+  archived    Boolean           @default(false)
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  completions HabitCompletion[]
+}
+
+model HabitCompletion {
+  id        String   @id @default(cuid())
+  habitId   String
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  date      DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([habitId, date])
+  @@index([habitId])
+  @@index([date])
+}
+
 model SavedMeal {
   id        String   @id @default(cuid())
   name      String
