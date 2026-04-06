@@ -7,13 +7,13 @@
 import Database from "better-sqlite3"
 import path from "node:path"
 import fs from "node:fs"
+import { resolveSqliteFilePath } from "./resolve-db-path.mjs"
 
-const dbPath = process.env.DATABASE_PATH
-  ? path.resolve(process.env.DATABASE_PATH)
-  : path.resolve("prisma", "dev.db")
-
+const dbPath = resolveSqliteFilePath()
 const dir = path.dirname(dbPath)
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+
+console.log(`[init-db] Opening database at ${dbPath}`)
 
 const db = new Database(dbPath)
 
