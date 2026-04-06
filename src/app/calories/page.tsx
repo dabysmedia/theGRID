@@ -19,6 +19,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formatDate, last7Days, parseLocalDate } from "@/lib/utils"
+import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+
+const calorieGoalPresets: GoalPreset[] = [
+  { type: "daily", label: "Daily Total", unit: "cal", placeholder: "2000" },
+  { type: "weekly_avg", label: "Weekly Average", unit: "cal/day", placeholder: "1800" },
+]
 
 interface CalorieEntry {
   id: string
@@ -345,6 +351,13 @@ export default function CaloriesPage() {
           )}
         </div>
       </div>
+
+      <CategoryGoal
+        category="calories"
+        values={{ daily: todayTotal, weekly_avg: Math.round(avg7) }}
+        presets={calorieGoalPresets}
+        color="#ef4444"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
         <div className="space-y-6 min-w-0">

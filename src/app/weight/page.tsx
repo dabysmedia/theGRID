@@ -27,6 +27,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
 import { parseLocalDate } from "@/lib/utils"
+import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+
+const weightGoalPresets: GoalPreset[] = [
+  { type: "target", label: "Target Weight", unit: "lbs", placeholder: "180", direction: "down" },
+]
 
 interface WeightEntry {
   id: string
@@ -237,6 +242,13 @@ export default function WeightPage() {
           sub={unit}
         />
       </div>
+
+      <CategoryGoal
+        category="weight"
+        values={{ target: stats?.current ?? 0 }}
+        presets={weightGoalPresets}
+        color="#14b8a6"
+      />
 
       {/* Trend chart */}
       <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">

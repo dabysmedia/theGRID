@@ -43,18 +43,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} dark h-full min-h-dvh antialiased`}
     >
-      <body className="min-h-full bg-background text-foreground relative overflow-x-hidden">
-        {/* Ambient accent glow */}
-        <div
-          aria-hidden
-          className="pointer-events-none fixed inset-0 -z-10"
-          style={{
-            backgroundImage:
-              "radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.82 0.18 110 / 5%), transparent)",
-          }}
-        />
+      <body className="flex min-h-dvh flex-col bg-background text-foreground relative overflow-x-hidden">
+        <div className="page-bg" aria-hidden />
 
         {/* Subtle scan-line overlay */}
         <div
@@ -67,21 +59,27 @@ export default function RootLayout({
           }}
         />
 
-        <Providers>
-          <main className="
-            mx-auto px-4 pt-[calc(env(safe-area-inset-top,0px)+2rem)] pb-24
-            max-w-[440px]
-            sm:max-w-[440px]
-            md:max-w-2xl
-            lg:ml-[72px] lg:mr-0 lg:max-w-3xl lg:px-8 lg:pb-8
-            xl:ml-[200px] xl:max-w-5xl xl:px-10
-            animate-fade-in
-          ">
-            {children}
-          </main>
+        <div className="relative z-0 flex min-h-dvh flex-1 flex-col">
+          <Providers>
+            <div className="flex min-h-dvh flex-1 flex-col">
+              <main
+                className="
+              mx-auto flex w-full flex-1 flex-col px-4 pt-[calc(env(safe-area-inset-top,0px)+2rem)] pb-[calc(6rem+env(safe-area-inset-bottom,0px))]
+              max-w-[440px]
+              sm:max-w-[440px]
+              md:max-w-2xl
+              lg:ml-[72px] lg:mr-0 lg:max-w-3xl lg:px-8 lg:pb-8
+              xl:ml-[200px] xl:max-w-5xl xl:px-10
+              animate-fade-in
+            "
+              >
+                {children}
+              </main>
 
-          <BottomNav />
-        </Providers>
+              <BottomNav />
+            </div>
+          </Providers>
+        </div>
         <ServiceWorkerRegister />
       </body>
     </html>

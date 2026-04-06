@@ -19,6 +19,12 @@ import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
 import { formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { kmToMiles, runKmToStepsFromRun, STEPS_PER_MILE_FROM_RUN } from "@/lib/units"
+import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+
+const stepsGoalPresets: GoalPreset[] = [
+  { type: "daily", label: "Daily Total", unit: "steps", placeholder: "10000" },
+  { type: "weekly", label: "Weekly Total", unit: "steps", placeholder: "70000" },
+]
 
 interface StepEntry {
   id: string
@@ -287,6 +293,13 @@ export default function StepsPage() {
           </p>
         </div>
       </div>
+
+      <CategoryGoal
+        category="steps"
+        values={{ daily: stats.todayTotal, weekly: stats.weekTotal }}
+        presets={stepsGoalPresets}
+        color="#22c55e"
+      />
 
       <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">

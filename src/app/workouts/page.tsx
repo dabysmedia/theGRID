@@ -17,6 +17,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
 import { formatDate, parseLocalDate } from "@/lib/utils"
+import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+
+const workoutGoalPresets: GoalPreset[] = [
+  { type: "weekly", label: "Weekly Sessions", unit: "sessions", placeholder: "5" },
+  { type: "per_session", label: "Per-Session Duration", unit: "min", placeholder: "45" },
+]
 
 interface WorkoutEntry {
   id: string
@@ -139,6 +145,10 @@ export default function WorkoutsPage() {
       }
     }, [entries, today, weekStart])
 
+  const todaySessions = useMemo(() => {
+    return entries.filter((e) => normalizeDateKey(e.date) === today).length
+  }, [entries, today])
+
   function sectionDateLabel(dateKey: string): string {
     if (dateKey === today) return "Today"
     if (dateKey === yesterday) return "Yesterday"
@@ -197,6 +207,13 @@ export default function WorkoutsPage() {
           }
         />
       </div>
+
+      <CategoryGoal
+        category="workouts"
+        values={{ weekly: thisWeekCount, per_session: avgDurationMin ?? 0 }}
+        presets={workoutGoalPresets}
+        color="#a855f7"
+      />
 
       <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">

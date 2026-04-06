@@ -10,11 +10,18 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
+function resolveDbUrl(): string {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL
+  return `file:${resolveSqliteFilePath()}`
+}
+
 function createPrismaClient() {
-  const dbPath = resolveSqliteFilePath()
-  const dir = path.dirname(dbPath)
+  const url = resolveDbUrl()
+  const filePath = url.startsWith("file:") ? url.slice(5) : url
+  const resolved = path.resolve(filePath)
+  const dir = path.dirname(resolved)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` })
+  const adapter = new PrismaBetterSqlite3({ url })
   return new PrismaClient({ adapter })
 }
 

@@ -91,6 +91,8 @@
   --sidebar-accent-foreground: oklch(0.20 0.01 250);
   --sidebar-border: oklch(0.80 0.008 250 / 40%);
   --sidebar-ring: oklch(0.78 0.17 110);
+
+  --grid-line: oklch(0 0 0 / 4.5%);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -141,6 +143,13 @@
   --hud-accent: oklch(0.82 0.18 110);
 }
 
+/* Mobile / OLED: default dark grid is too faint on deep blacks */
+@media (max-width: 768px) {
+  .dark {
+    --grid-line: oklch(1 0 0 / 6.5%);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -150,11 +159,6 @@
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
     -webkit-tap-highlight-color: transparent;
-    background-image:
-      linear-gradient(var(--grid-line, transparent) 1px, transparent 1px),
-      linear-gradient(90deg, var(--grid-line, transparent) 1px, transparent 1px);
-    background-size: 32px 32px;
-    background-attachment: fixed;
   }
   html {
     @apply font-mono;
@@ -201,6 +205,23 @@
 }
 
 @layer utilities {
+  /* Full-viewport background: grid + ambient — fixed layer so every route shows the same pattern */
+  .page-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    pointer-events: none;
+    background-color: var(--background);
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.82 0.18 110 / 5%), transparent),
+      linear-gradient(var(--grid-line, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line, transparent) 1px, transparent 1px);
+    background-size: auto, 32px 32px, 32px 32px;
+    background-position: center top, 0 0, 0 0;
+    background-repeat: no-repeat, repeat, repeat;
+    background-attachment: scroll;
+  }
+
   /* ── Glass panels — translucent steel with frosted blur ─── */
   .glass {
     background: var(--glass);

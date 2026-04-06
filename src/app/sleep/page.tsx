@@ -18,6 +18,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
 import { formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+
+const sleepGoalPresets: GoalPreset[] = [
+  { type: "daily", label: "Nightly Hours", unit: "hrs", placeholder: "8" },
+  { type: "weekly_avg", label: "Weekly Average", unit: "hrs", placeholder: "7.5" },
+]
 
 interface SleepEntry {
   id: string
@@ -106,6 +112,12 @@ export default function SleepPage() {
     }
     return { lastNight, avg7h, avgQ, best }
   }, [entries, last7DaysEntries])
+
+  const todayHours = useMemo(() => {
+    const todayEntry = entries.find((e) => entryDateKey(e) === today)
+    if (!todayEntry) return 0
+    return durationHours(todayEntry.bedtime, todayEntry.wakeTime)
+  }, [entries, today])
 
   const chartData = useMemo(() => {
     const slice = entries.slice(0, 7)
@@ -197,6 +209,13 @@ export default function SleepPage() {
           <span className="text-lg lg:text-xl font-bold tabular-nums">{stats.best}</span>
         </div>
       </div>
+
+      <CategoryGoal
+        category="sleep"
+        values={{ daily: todayHours, weekly_avg: stats.avg7h ? parseFloat(stats.avg7h) : 0 }}
+        presets={sleepGoalPresets}
+        color="#6366f1"
+      />
 
       <div className="glass rounded-2xl p-5 animate-fade-up stagger-1">
         <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-3">

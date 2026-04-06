@@ -78,6 +78,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS "Goal" (
     "id"        TEXT NOT NULL PRIMARY KEY,
     "category"  TEXT NOT NULL,
+    "goalType"  TEXT NOT NULL DEFAULT 'daily',
+    "direction" TEXT NOT NULL DEFAULT 'up',
     "target"    REAL NOT NULL,
     "unit"      TEXT NOT NULL,
     "deadline"  DATETIME,
@@ -158,6 +160,8 @@ const safeAddColumn = (table, column, type, dflt) => {
 }
 
 safeAddColumn("RunEntry", "environment", "TEXT NOT NULL", "'outdoor'")
+safeAddColumn("Goal", "goalType", "TEXT NOT NULL", "'daily'")
+safeAddColumn("Goal", "direction", "TEXT NOT NULL", "'up'")
 
 db.close()
 console.log(`[init-db] Database ready at ${dbPath}`)

@@ -18,6 +18,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formatDate, last7Days, parseLocalDate } from "@/lib/utils"
+import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+
+const alcoholGoalPresets: GoalPreset[] = [
+  { type: "daily", label: "Daily Max", unit: "units", placeholder: "2", direction: "down" },
+  { type: "weekly", label: "Weekly Max", unit: "units", placeholder: "10", direction: "down" },
+]
 
 interface AlcoholEntry {
   id: string
@@ -167,6 +173,13 @@ export default function AlcoholPage() {
           <p className="text-lg lg:text-xl font-bold tabular-nums">{dryDays}</p>
         </div>
       </div>
+
+      <CategoryGoal
+        category="alcohol"
+        values={{ daily: todayUnits, weekly: weekTotal }}
+        presets={alcoholGoalPresets}
+        color="#f59e0b"
+      />
 
       <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">

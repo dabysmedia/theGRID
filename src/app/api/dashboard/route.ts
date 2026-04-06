@@ -33,7 +33,12 @@ export async function GET(req: NextRequest) {
       prisma.goal.findMany({ where: { active: true } }),
     ])
 
-    const goalMap = new Map(goals.map((g) => [g.category, g.target]))
+    const dailyGoalMap = new Map<string, { target: number; direction: string }>()
+    for (const g of goals) {
+      if (g.goalType === "daily" || g.goalType === "target") {
+        dailyGoalMap.set(g.category, { target: g.target, direction: g.direction })
+      }
+    }
 
     function dailyTotals<T extends { date: Date }>(
       entries: T[],
@@ -82,46 +87,52 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       calories: {
         todayValue: calorieLast7[6],
-        goal: goalMap.get("calories") ?? 2000,
+        goal: dailyGoalMap.get("calories")?.target ?? 2000,
+        direction: dailyGoalMap.get("calories")?.direction ?? "up",
         unit: "cal",
         last7: calorieLast7,
       },
       steps: {
         todayValue: stepsLast7[6],
-        goal: goalMap.get("steps") ?? 10000,
+        goal: dailyGoalMap.get("steps")?.target ?? 10000,
+        direction: dailyGoalMap.get("steps")?.direction ?? "up",
         unit: "steps",
         last7: stepsLast7,
       },
       running: {
         todayValue: Math.round(runLast7[6] * 10) / 10,
-        goal:
-          goalMap.get("running") != null
-            ? Math.round(kmToMiles(goalMap.get("running")!) * 10) / 10
-            : null,
+        goal: dailyGoalMap.get("running")
+          ? Math.round(kmToMiles(dailyGoalMap.get("running")!.target) * 10) / 10
+          : null,
+        direction: dailyGoalMap.get("running")?.direction ?? "up",
         unit: "mi",
         last7: runLast7,
       },
       workouts: {
         todayValue: workoutLast7[6],
-        goal: goalMap.get("workouts") ?? null,
+        goal: dailyGoalMap.get("workouts")?.target ?? null,
+        direction: dailyGoalMap.get("workouts")?.direction ?? "up",
         unit: "sessions",
         last7: workoutLast7,
       },
       sleep: {
         todayValue: Math.round(sleepLast7[6] * 10) / 10,
-        goal: goalMap.get("sleep") ?? 8,
+        goal: dailyGoalMap.get("sleep")?.target ?? 8,
+        direction: dailyGoalMap.get("sleep")?.direction ?? "up",
         unit: "hrs",
         last7: sleepLast7,
       },
       alcohol: {
         todayValue: alcoholLast7[6],
-        goal: goalMap.get("alcohol") ?? null,
+        goal: dailyGoalMap.get("alcohol")?.target ?? null,
+        direction: dailyGoalMap.get("alcohol")?.direction ?? "down",
         unit: "units",
         last7: alcoholLast7,
       },
       bowel: {
         todayValue: bowelLast7[6],
         goal: null,
+        direction: "up",
         unit: "",
         last7: bowelLast7,
       },

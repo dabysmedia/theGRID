@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { DatePicker } from "@/components/DatePicker"
 import {
   Flame,
   Footprints,
@@ -27,11 +28,16 @@ const statCategories = [
 export default function StatsPage() {
   return (
     <div className="space-y-8">
-      <header className="flex items-center gap-3">
-        <div className="status-dot" />
-        <div>
-          <h1 className="text-lg font-bold tracking-[0.15em] uppercase">Statistics</h1>
-          <p className="text-[10px] text-muted-foreground/65 tracking-[0.08em] uppercase mt-0.5">Detailed analytics per system</p>
+      <header className="space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="status-dot" />
+          <div>
+            <h1 className="text-lg font-bold tracking-[0.15em] uppercase">Statistics</h1>
+            <p className="text-[10px] text-muted-foreground/65 tracking-[0.08em] uppercase mt-0.5">Detailed analytics per system</p>
+          </div>
+        </div>
+        <div className="pl-5 lg:pl-0">
+          <DatePicker />
         </div>
       </header>
 

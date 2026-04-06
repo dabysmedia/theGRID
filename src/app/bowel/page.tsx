@@ -18,6 +18,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formatDate, last7Days, parseLocalDate } from "@/lib/utils"
+import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+
+const bowelGoalPresets: GoalPreset[] = [
+  { type: "daily", label: "Daily Regularity", unit: "entries", placeholder: "2" },
+]
 
 interface BowelEntry {
   id: string
@@ -179,6 +184,13 @@ export default function BowelPage() {
           <span className="text-sm lg:text-base font-bold leading-tight line-clamp-2">{mostCommonStr}</span>
         </div>
       </div>
+
+      <CategoryGoal
+        category="bowel"
+        values={{ daily: todayCount }}
+        presets={bowelGoalPresets}
+        color="#78716c"
+      />
 
       <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
         <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-3">

@@ -1,13 +1,21 @@
+"use client"
+
 import { Settings } from "lucide-react"
+import { DatePicker } from "@/components/DatePicker"
 
 export default function MorePage() {
   return (
     <div className="space-y-8">
-      <header className="flex items-center gap-3">
-        <div className="status-dot" />
-        <div>
-          <h1 className="text-lg font-bold tracking-[0.15em] uppercase">System</h1>
-          <p className="text-[10px] text-muted-foreground/65 tracking-[0.08em] uppercase mt-0.5">Configuration & info</p>
+      <header className="space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="status-dot" />
+          <div>
+            <h1 className="text-lg font-bold tracking-[0.15em] uppercase">System</h1>
+            <p className="text-[10px] text-muted-foreground/65 tracking-[0.08em] uppercase mt-0.5">Configuration & info</p>
+          </div>
+        </div>
+        <div className="pl-5 lg:pl-0">
+          <DatePicker />
         </div>
       </header>
 

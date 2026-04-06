@@ -69,6 +69,8 @@ model SleepEntry {
 model Goal {
   id        String    @id @default(cuid())
   category  String
+  goalType  String    @default("daily")
+  direction String    @default("up")
   target    Float
   unit      String
   deadline  DateTime?

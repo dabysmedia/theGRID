@@ -5,10 +5,13 @@ import {
   useContext,
   useCallback,
   useMemo,
+  useState,
+  useEffect,
   type ReactNode,
 } from "react"
-import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { formatDate } from "@/lib/utils"
+
+const STORAGE_KEY = "theGRID_activeDate"
 
 interface DateContextValue {
   activeDate: string
@@ -21,55 +24,61 @@ interface DateContextValue {
 
 const DateContext = createContext<DateContextValue | null>(null)
 
-export function DateProvider({ children }: { children: ReactNode }) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
+function readStoredDate(): string | null {
+  if (typeof window === "undefined") return null
+  try {
+    const v = sessionStorage.getItem(STORAGE_KEY)
+    if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v
+  } catch {}
+  return null
+}
 
+export function DateProvider({ children }: { children: ReactNode }) {
   const todayStr = formatDate(new Date())
-  const paramDate = searchParams.get("d")
-  const activeDate = paramDate && /^\d{4}-\d{2}-\d{2}$/.test(paramDate) ? paramDate : todayStr
+
+  const [activeDate, setActiveDateRaw] = useState(() => {
+    const stored = readStoredDate()
+    return stored ?? todayStr
+  })
+
   const isToday = activeDate === todayStr
 
-  const navigate = useCallback(
-    (date: string) => {
-      const today = formatDate(new Date())
-      const params = new URLSearchParams(searchParams.toString())
-      if (date === today) {
-        params.delete("d")
+  useEffect(() => {
+    try {
+      if (activeDate === todayStr) {
+        sessionStorage.removeItem(STORAGE_KEY)
       } else {
-        params.set("d", date)
+        sessionStorage.setItem(STORAGE_KEY, activeDate)
       }
-      const qs = params.toString()
-      router.push(qs ? `${pathname}?${qs}` : pathname)
-    },
-    [router, pathname, searchParams]
-  )
+    } catch {}
+  }, [activeDate, todayStr])
 
-  const setActiveDate = useCallback(
-    (date: string) => navigate(date),
-    [navigate]
-  )
+  const setActiveDate = useCallback((date: string) => {
+    setActiveDateRaw(date)
+  }, [])
 
-  const goToday = useCallback(
-    () => navigate(formatDate(new Date())),
-    [navigate]
-  )
+  const goToday = useCallback(() => {
+    setActiveDateRaw(formatDate(new Date()))
+  }, [])
 
   const goPrev = useCallback(() => {
-    const d = new Date(activeDate + "T12:00:00")
-    d.setDate(d.getDate() - 1)
-    navigate(formatDate(d))
-  }, [activeDate, navigate])
+    setActiveDateRaw((prev) => {
+      const d = new Date(prev + "T12:00:00")
+      d.setDate(d.getDate() - 1)
+      return formatDate(d)
+    })
+  }, [])
 
   const goNext = useCallback(() => {
-    const d = new Date(activeDate + "T12:00:00")
-    d.setDate(d.getDate() + 1)
-    const tomorrow = formatDate(d)
-    const today = formatDate(new Date())
-    if (tomorrow > today) return
-    navigate(tomorrow)
-  }, [activeDate, navigate])
+    setActiveDateRaw((prev) => {
+      const d = new Date(prev + "T12:00:00")
+      d.setDate(d.getDate() + 1)
+      const next = formatDate(d)
+      const today = formatDate(new Date())
+      if (next > today) return prev
+      return next
+    })
+  }, [])
 
   const value = useMemo<DateContextValue>(
     () => ({ activeDate, setActiveDate, isToday, goToday, goPrev, goNext }),

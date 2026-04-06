@@ -11,8 +11,8 @@ import {
   CircleDot,
 } from "lucide-react"
 import { DailySummaryCard } from "./DailySummaryCard"
-import { WeeklyHero } from "./WeeklyHero"
 import { DatePicker } from "./DatePicker"
+import { WeeklyHero } from "./WeeklyHero"
 import { useActiveDate } from "@/context/DateContext"
 
 interface CategorySummary {

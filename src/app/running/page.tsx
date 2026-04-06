@@ -19,6 +19,13 @@ import { buttonVariants } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { parseLocalDate, cn } from "@/lib/utils"
 import { kmToMiles, milesToKm } from "@/lib/units"
+import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+
+const runGoalPresets: GoalPreset[] = [
+  { type: "weekly", label: "Weekly Distance", unit: "mi", placeholder: "15" },
+  { type: "per_session", label: "Per-Run Distance", unit: "mi", placeholder: "3" },
+  { type: "pace", label: "Target Pace", unit: "min/mi", placeholder: "8:30", direction: "down" },
+]
 
 interface RunEntry {
   id: string
@@ -47,6 +54,40 @@ export default function RunningPage() {
   const submitLockRef = useRef(false)
 
   const today = activeDate
+
+  const todayMiles = useMemo(() => {
+    return entries
+      .filter((e) => e.date.split("T")[0] === today)
+      .reduce((s, e) => s + kmToMiles(e.distance), 0)
+  }, [entries, today])
+
+  const goalValues = useMemo(() => {
+    const now = new Date()
+    const dayOfWeek = now.getDay()
+    const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+    const weekStart = new Date(now)
+    weekStart.setDate(now.getDate() - mondayOffset)
+    const weekKey = format(weekStart, "yyyy-MM-dd")
+    const weekMiles = entries
+      .filter((e) => e.date.split("T")[0] >= weekKey)
+      .reduce((s, e) => s + kmToMiles(e.distance), 0)
+
+    const todayRuns = entries.filter((e) => e.date.split("T")[0] === today)
+    const bestTodayRun = todayRuns.length > 0
+      ? Math.max(...todayRuns.map((e) => kmToMiles(e.distance)))
+      : 0
+
+    const paces = todayRuns
+      .filter((e) => e.distance > 0 && e.duration > 0)
+      .map((e) => e.duration / kmToMiles(e.distance))
+    const bestPace = paces.length > 0 ? Math.min(...paces) : 0
+
+    return {
+      weekly: Math.round(weekMiles * 10) / 10,
+      per_session: Math.round(bestTodayRun * 10) / 10,
+      pace: Math.round(bestPace * 100) / 100,
+    }
+  }, [entries, today])
 
   const nativeInputClass =
     "h-10 w-full min-w-0 rounded-[3px] border border-glass-border bg-glass-highlight/30 px-3 py-2 text-base font-mono tracking-wide backdrop-blur-sm transition-all outline-none placeholder:text-muted-foreground/60 focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:bg-glass-highlight/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
@@ -228,6 +269,13 @@ export default function RunningPage() {
           </span>
         </div>
       </div>
+
+      <CategoryGoal
+        category="running"
+        values={goalValues}
+        presets={runGoalPresets}
+        color="#3b82f6"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
         <div className="glass rounded-2xl p-5">
