@@ -42,11 +42,11 @@ function normalizeDateKey(d: string): string {
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="glass-subtle rounded-xl p-3 lg:p-4 shrink-0 min-w-[7.25rem] flex-1">
+    <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
       <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
         {label}
       </p>
-      <p className="text-lg lg:text-xl font-bold tabular-nums leading-tight">{value}</p>
+      <span className="text-lg lg:text-xl font-bold tabular-nums">{value}</span>
       {sub && <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">{sub}</p>}
     </div>
   )
