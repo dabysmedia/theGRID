@@ -204,7 +204,7 @@ export default function AlcoholPage() {
               />
               <Tooltip
                 contentStyle={{
-                  background: "oklch(0.19 0.012 250 / 92%)",
+                  background: "oklch(0.19 0.012 250 / 98%)",
                   border: "1px solid oklch(1 0 0 / 8%)",
                   borderRadius: "3px",
                   fontSize: "12px",

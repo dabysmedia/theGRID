@@ -9,11 +9,13 @@ import {
   Moon,
   Beer,
   CircleDot,
+  ChevronDown,
 } from "lucide-react"
 import { DailySummaryCard } from "./DailySummaryCard"
 import { DatePicker } from "./DatePicker"
 import { WeeklyHero } from "./WeeklyHero"
 import { useActiveDate } from "@/context/DateContext"
+import { cn } from "@/lib/utils"
 
 interface CategorySummary {
   todayValue: number
@@ -50,12 +52,16 @@ const categories = [
   { key: "sleep" as const, title: "Sleep", icon: Moon, href: "/sleep", color: "#6366f1" },
   { key: "bowel" as const, title: "Bowel", icon: CircleDot, href: "/bowel", color: "#78716c" },
   { key: "alcohol" as const, title: "Alcohol", icon: Beer, href: "/alcohol", color: "#f59e0b" },
-]
+] as const
+
+const mainCategories = categories.filter((c) => c.key !== "alcohol")
+const alcoholCategory = categories.find((c) => c.key === "alcohol")!
 
 export function HubDashboard() {
   const { activeDate } = useActiveDate()
   const [data, setData] = useState<DashboardData>(defaultData)
   const [loading, setLoading] = useState(true)
+  const [othersOpen, setOthersOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -110,7 +116,7 @@ export function HubDashboard() {
             loading ? "opacity-50" : "opacity-100"
           }`}
         >
-          {categories.map((cat, i) => {
+          {mainCategories.map((cat, i) => {
             const summary = data[cat.key]
             return (
               <div
@@ -130,6 +136,43 @@ export function HubDashboard() {
               </div>
             )
           })}
+        </div>
+
+        <div className="mt-3 space-y-2">
+          <button
+            type="button"
+            onClick={() => setOthersOpen((o) => !o)}
+            aria-expanded={othersOpen}
+            className="glass-subtle flex w-full items-center justify-center gap-2 py-2.5 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/80 transition-colors hover:text-foreground hover:bg-glass-highlight/25"
+            style={{ borderRadius: "4px" }}
+          >
+            <ChevronDown
+              className={cn("h-3.5 w-3.5 shrink-0 transition-transform duration-200", othersOpen && "rotate-180")}
+              aria-hidden
+            />
+            Others
+          </button>
+
+          {othersOpen && (
+            <div
+              className={`grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4 animate-fade-up ${
+                loading ? "opacity-50" : "opacity-100"
+              }`}
+            >
+              <div className="animate-scale-in aspect-square min-h-0 w-full max-w-full stagger-6">
+                <DailySummaryCard
+                  title={alcoholCategory.title}
+                  value={data.alcohol.todayValue}
+                  goal={data.alcohol.goal ?? undefined}
+                  unit={data.alcohol.unit}
+                  icon={alcoholCategory.icon}
+                  href={alcoholCategory.href}
+                  chartData={data.alcohol.last7.map((v) => ({ value: v }))}
+                  color={alcoholCategory.color}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -266,7 +266,7 @@ export default function HabitsPage() {
   }
 
   return (
-    <div className="space-y-3 pb-20">
+    <div className="space-y-3">
       <PageHeader title="Habits" icon={CheckSquare} iconColor="#22c55e" />
 
       {/* Progress bar */}
@@ -294,7 +294,18 @@ export default function HabitsPage() {
       ) : habits.length === 0 ? (
         <div className="glass p-6 text-center animate-fade-up" style={{ borderRadius: "4px" }}>
           <CheckSquare className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
-          <p className="text-xs text-muted-foreground">No habits yet. Tap + below to start.</p>
+          <p className="text-xs text-muted-foreground mb-4">No habits yet. Add your first one to get started.</p>
+          {!showForm && (
+            <button
+              type="button"
+              onClick={openCreate}
+              className="w-full glass-frost py-2.5 flex items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-primary hover:bg-glass-highlight/30 active:scale-[0.98] transition-all shadow-lg shadow-black/20"
+              style={{ borderRadius: "4px" }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Habit
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -398,6 +409,17 @@ export default function HabitsPage() {
               </div>
             )
           })}
+          {!showForm && (
+            <button
+              type="button"
+              onClick={openCreate}
+              className="w-full glass-frost py-2.5 flex items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-primary hover:bg-glass-highlight/30 active:scale-[0.98] transition-all shadow-lg shadow-black/20 mt-1"
+              style={{ borderRadius: "4px" }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Habit
+            </button>
+          )}
         </div>
       )}
 
@@ -515,22 +537,6 @@ export default function HabitsPage() {
                 )}
               </form>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Sticky add button */}
-      {!showForm && (
-        <div className="fixed bottom-20 left-0 right-0 z-40 flex justify-center pointer-events-none">
-          <div className="w-full max-w-[440px] px-4 pointer-events-auto">
-            <button
-              onClick={openCreate}
-              className="w-full glass-frost py-2 flex items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-primary hover:bg-glass-highlight/30 active:scale-[0.98] transition-all shadow-lg shadow-black/20"
-              style={{ borderRadius: "4px" }}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              New Habit
-            </button>
           </div>
         </div>
       )}

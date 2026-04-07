@@ -241,7 +241,7 @@ export default function WorkoutsPage() {
                       <div
                         className="rounded-[10px] border px-2.5 py-1.5 text-xs shadow-lg"
                         style={{
-                          background: "oklch(0.2 0.02 280 / 95%)",
+                          background: "oklch(0.19 0.012 250 / 98%)",
                           borderColor: "oklch(1 0 0 / 8%)",
                         }}
                       >

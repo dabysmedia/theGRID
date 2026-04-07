@@ -56,9 +56,9 @@
 :root {
   --background: oklch(0.96 0.005 250);
   --foreground: oklch(0.18 0.01 250);
-  --card: oklch(0.97 0.003 250 / 70%);
+  --card: oklch(0.97 0.003 250 / 88%);
   --card-foreground: oklch(0.18 0.01 250);
-  --popover: oklch(0.97 0.003 250 / 80%);
+  --popover: oklch(0.97 0.003 250 / 95%);
   --popover-foreground: oklch(0.18 0.01 250);
   --primary: oklch(0.78 0.17 110);
   --primary-foreground: oklch(0.15 0.02 110);
@@ -66,7 +66,7 @@
   --secondary-foreground: oklch(0.25 0.01 250);
   --muted: oklch(0.92 0.005 250);
   --muted-foreground: oklch(0.50 0.01 250);
-  --accent: oklch(0.93 0.005 250 / 60%);
+  --accent: oklch(0.93 0.005 250 / 68%);
   --accent-foreground: oklch(0.20 0.01 250);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.80 0.008 250 / 40%);
@@ -80,9 +80,9 @@
   --radius: 0.875rem;
   --grid-accent: oklch(0.78 0.17 110);
   --grid-accent-dim: oklch(0.78 0.17 110 / 15%);
-  --glass: oklch(0.97 0.003 250 / 50%);
+  --glass: oklch(0.97 0.003 250 / 72%);
   --glass-border: oklch(1 0 0 / 40%);
-  --glass-highlight: oklch(1 0 0 / 60%);
+  --glass-highlight: oklch(1 0 0 / 75%);
   --sidebar: oklch(0.95 0.005 250);
   --sidebar-foreground: oklch(0.18 0.01 250);
   --sidebar-primary: oklch(0.78 0.17 110);
@@ -101,9 +101,9 @@
 .dark {
   --background: oklch(0.145 0.01 250);
   --foreground: oklch(0.92 0.008 250);
-  --card: oklch(0.19 0.012 250 / 55%);
+  --card: oklch(0.19 0.012 250 / 78%);
   --card-foreground: oklch(0.92 0.008 250);
-  --popover: oklch(0.21 0.012 250 / 90%);
+  --popover: oklch(0.21 0.012 250 / 97%);
   --popover-foreground: oklch(0.92 0.008 250);
   --primary: oklch(0.82 0.18 110);
   --primary-foreground: oklch(0.13 0.02 110);
@@ -111,7 +111,7 @@
   --secondary-foreground: oklch(0.90 0.008 250);
   --muted: oklch(0.22 0.012 250);
   --muted-foreground: oklch(0.65 0.012 250);
-  --accent: oklch(0.22 0.012 250 / 55%);
+  --accent: oklch(0.22 0.012 250 / 72%);
   --accent-foreground: oklch(0.92 0.008 250);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 8%);
@@ -126,9 +126,9 @@
 
   --grid-accent: oklch(0.82 0.18 110);
   --grid-accent-dim: oklch(0.82 0.18 110 / 10%);
-  --glass: oklch(0.19 0.012 250 / 42%);
-  --glass-border: oklch(1 0 0 / 8%);
-  --glass-highlight: oklch(1 0 0 / 5%);
+  --glass: oklch(0.19 0.012 250 / 68%);
+  --glass-border: oklch(1 0 0 / 12%);
+  --glass-highlight: oklch(1 0 0 / 10%);
 
   --sidebar: oklch(0.13 0.01 250);
   --sidebar-foreground: oklch(0.92 0.008 250);
@@ -225,8 +225,8 @@
   /* ── Glass panels — translucent steel with frosted blur ─── */
   .glass {
     background: var(--glass);
-    backdrop-filter: blur(16px) saturate(1.4);
-    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    backdrop-filter: blur(40px) saturate(1.5);
+    -webkit-backdrop-filter: blur(40px) saturate(1.5);
     border: 1px solid var(--glass-border);
     box-shadow:
       inset 0 1px 0 oklch(1 0 0 / 4%),
@@ -235,9 +235,9 @@
 
   .glass-strong {
     background: var(--glass);
-    backdrop-filter: blur(24px) saturate(1.6);
-    -webkit-backdrop-filter: blur(24px) saturate(1.6);
-    border: 1px solid oklch(1 0 0 / 10%);
+    backdrop-filter: blur(48px) saturate(1.65);
+    -webkit-backdrop-filter: blur(48px) saturate(1.65);
+    border: 1px solid oklch(1 0 0 / 12%);
     box-shadow:
       inset 0 1px 0 oklch(1 0 0 / 5%),
       0 0 20px oklch(0.82 0.18 110 / 3%);
@@ -246,11 +246,11 @@
   .glass-frost {
     background: linear-gradient(
       180deg,
-      oklch(1 0 0 / 78%) 0%,
-      oklch(0.96 0.006 250 / 68%) 100%
+      oklch(1 0 0 / 92%) 0%,
+      oklch(0.96 0.006 250 / 86%) 100%
     );
-    backdrop-filter: blur(40px) saturate(1.75);
-    -webkit-backdrop-filter: blur(40px) saturate(1.75);
+    backdrop-filter: blur(68px) saturate(1.8);
+    -webkit-backdrop-filter: blur(68px) saturate(1.8);
     border: 1px solid oklch(1 0 0 / 48%);
     box-shadow:
       inset 0 1px 0 0 oklch(1 0 0 / 38%),
@@ -261,10 +261,12 @@
   .dark .glass-frost {
     background: linear-gradient(
       180deg,
-      oklch(0.22 0.014 250 / 82%) 0%,
-      oklch(0.13 0.01 250 / 78%) 100%
+      oklch(0.22 0.014 250 / 88%) 0%,
+      oklch(0.13 0.01 250 / 84%) 100%
     );
-    border: 1px solid oklch(1 0 0 / 10%);
+    backdrop-filter: blur(72px) saturate(1.85);
+    -webkit-backdrop-filter: blur(72px) saturate(1.85);
+    border: 1px solid oklch(1 0 0 / 14%);
     box-shadow:
       inset 0 1px 0 0 oklch(1 0 0 / 6%),
       0 0 24px oklch(0.82 0.18 110 / 3%),
@@ -272,10 +274,10 @@
   }
 
   .glass-subtle {
-    background: oklch(0.19 0.012 250 / 30%);
-    backdrop-filter: blur(12px) saturate(1.2);
-    -webkit-backdrop-filter: blur(12px) saturate(1.2);
-    border: 1px solid oklch(1 0 0 / 7%);
+    background: oklch(0.19 0.012 250 / 54%);
+    backdrop-filter: blur(32px) saturate(1.4);
+    -webkit-backdrop-filter: blur(32px) saturate(1.4);
+    border: 1px solid oklch(1 0 0 / 11%);
   }
 
   /* ── Accent glows — ladder yellow ──────────────────────── */

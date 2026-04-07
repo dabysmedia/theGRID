@@ -282,7 +282,7 @@ export default function SleepPage() {
                     <YAxis tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }} axisLine={false} tickLine={false} width={30} domain={[0, "dataMax + 1"]} />
                     <Tooltip
                       contentStyle={{
-                        background: "oklch(0.19 0.012 250 / 92%)",
+                        background: "oklch(0.19 0.012 250 / 98%)",
                         border: "1px solid oklch(1 0 0 / 8%)",
                         borderRadius: "3px",
                         fontSize: "12px",
@@ -306,7 +306,7 @@ export default function SleepPage() {
                     <YAxis tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }} axisLine={false} tickLine={false} width={26} domain={[1, 5]} allowDecimals={false} />
                     <Tooltip
                       contentStyle={{
-                        background: "oklch(0.19 0.012 250 / 92%)",
+                        background: "oklch(0.19 0.012 250 / 98%)",
                         border: "1px solid oklch(1 0 0 / 8%)",
                         borderRadius: "3px",
                         fontSize: "12px",
