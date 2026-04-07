@@ -14,6 +14,7 @@ import {
 import { DailySummaryCard } from "./DailySummaryCard"
 import { DatePicker } from "./DatePicker"
 import { WeeklyHero } from "./WeeklyHero"
+import { FastingTimer } from "./FastingTimer"
 import { useActiveDate } from "@/context/DateContext"
 import { cn } from "@/lib/utils"
 
@@ -103,6 +104,10 @@ export function HubDashboard() {
       </div>
 
       <div className="animate-fade-up stagger-3">
+        <FastingTimer />
+      </div>
+
+      <div className="animate-fade-up stagger-4">
         <div className="flex items-center gap-2 mb-4">
           <div className="hud-divider flex-1" />
           <span className="text-[10px] tracking-[0.2em] uppercase text-muted-foreground/50 shrink-0">
