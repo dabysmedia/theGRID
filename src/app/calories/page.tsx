@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
-import { format, subDays } from "date-fns"
-import { Calendar, ChevronDown, Flame, Trash2, Plus, Star, X, Pencil } from "lucide-react"
+import { addDays, differenceInCalendarDays, endOfWeek, format, startOfWeek, subDays } from "date-fns"
+import { Calendar, ChevronDown, Flame, Trash2, Plus, Star, X, Pencil, Target, Check } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -19,12 +19,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formatDate, last7Days, parseLocalDate } from "@/lib/utils"
-import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
-
-const calorieGoalPresets: GoalPreset[] = [
-  { type: "daily", label: "Daily Total", unit: "cal", placeholder: "2000" },
-  { type: "weekly_avg", label: "Weekly Average", unit: "cal/day", placeholder: "1800" },
-]
 
 interface CalorieEntry {
   id: string
@@ -48,11 +42,32 @@ interface SavedMeal {
   useCount: number
 }
 
+interface CalorieBudget {
+  id: string
+  dailyBudget: number
+}
+
+interface DraftMealItem {
+  id: string
+  mealType: string
+  description: string | null
+  calories: number
+  protein: number | null
+  carbs: number | null
+  fat: number | null
+}
+
 const mealTypes = ["breakfast", "lunch", "dinner", "snack"]
 
-function dateGroupLabel(dateKey: string, todayStr: string, yesterdayStr: string) {
+function dateGroupLabel(
+  dateKey: string,
+  todayStr: string,
+  yesterdayStr: string,
+  realTodayStr: string
+) {
   if (dateKey === todayStr) return "Today"
   if (dateKey === yesterdayStr) return "Yesterday"
+  if (dateKey > realTodayStr) return `Planned · ${format(parseLocalDate(dateKey), "EEE, MMM d")}`
   return format(parseLocalDate(dateKey), "EEE, MMM d")
 }
 
@@ -75,11 +90,17 @@ export default function CaloriesPage() {
   const [showSavePrompt, setShowSavePrompt] = useState(false)
   const [saveMealError, setSaveMealError] = useState<string | null>(null)
   const [editingEntry, setEditingEntry] = useState<CalorieEntry | null>(null)
+  const [draftMealItems, setDraftMealItems] = useState<DraftMealItem[]>([])
+  const [postingMeal, setPostingMeal] = useState(false)
+  const [budget, setBudget] = useState<CalorieBudget | null>(null)
+  const [editingBudget, setEditingBudget] = useState(false)
+  const [budgetInput, setBudgetInput] = useState("")
   const frequentlyAddedDetailsRef = useRef<HTMLDetailsElement>(null)
 
   const { activeDate } = useActiveDate()
   const today = activeDate
   const yesterday = formatDate(subDays(parseLocalDate(activeDate), 1))
+  const realToday = formatDate(new Date())
 
   const fetchSavedMeals = useCallback(async () => {
     try {
@@ -100,6 +121,20 @@ export default function CaloriesPage() {
       .catch(() => setEntries([]))
     fetchSavedMeals()
   }, [fetchSavedMeals])
+
+  useEffect(() => {
+    fetch("/api/goals?category=calories")
+      .then(async (r) => {
+        const data = await r.json()
+        if (data && typeof data.target === "number") {
+          setBudget({ id: data.id, dailyBudget: data.target })
+          setBudgetInput(String(Math.round(data.target)))
+        } else {
+          setBudget(null)
+        }
+      })
+      .catch(() => setBudget(null))
+  }, [])
 
   const filteredSavedMeals = useMemo(
     () => savedMeals.filter((m) => m.mealType === mealType),
@@ -169,15 +204,41 @@ export default function CaloriesPage() {
     setCalories(String(Math.round(base + n)))
   }
 
-  function cancelEdit() {
-    setEditingEntry(null)
+  function resetCurrentItemFields() {
     setDescription("")
     setCalories("")
     setProtein("")
     setCarbs("")
     setFat("")
-    setMealType("lunch")
     setShowSavePrompt(false)
+  }
+
+  function addCurrentItemToMeal() {
+    const cal = parseFloat(calories)
+    if (!Number.isFinite(cal) || cal <= 0) return
+
+    const p = protein.trim() === "" ? null : parseFloat(protein)
+    const c = carbs.trim() === "" ? null : parseFloat(carbs)
+    const f = fat.trim() === "" ? null : parseFloat(fat)
+
+    const item: DraftMealItem = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      mealType,
+      description: description.trim() || null,
+      calories: Math.round(cal),
+      protein: Number.isFinite(p) ? p : null,
+      carbs: Number.isFinite(c) ? c : null,
+      fat: Number.isFinite(f) ? f : null,
+    }
+
+    setDraftMealItems((prev) => [...prev, item])
+    resetCurrentItemFields()
+  }
+
+  function cancelEdit() {
+    setEditingEntry(null)
+    resetCurrentItemFields()
+    setMealType("lunch")
   }
 
   function startEdit(entry: CalorieEntry) {
@@ -218,31 +279,7 @@ export default function CaloriesPage() {
       }
       return
     }
-
-    const res = await fetch("/api/calories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        date: today,
-        mealType,
-        description: description || null,
-        calories,
-        protein: protein || null,
-        carbs: carbs || null,
-        fat: fat || null,
-      }),
-    })
-
-    if (res.ok) {
-      const entry = await res.json()
-      setEntries([entry, ...entries])
-      setDescription("")
-      setCalories("")
-      setProtein("")
-      setCarbs("")
-      setFat("")
-      setShowSavePrompt(false)
-    }
+    addCurrentItemToMeal()
   }
 
   async function handleDelete(id: string) {
@@ -259,26 +296,50 @@ export default function CaloriesPage() {
   }
 
   async function handleUseSavedMeal(meal: SavedMeal) {
-    const res = await fetch("/api/calories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        date: today,
-        mealType: meal.mealType,
-        description: meal.name,
-        calories: String(meal.calories),
-        protein: meal.protein != null ? String(meal.protein) : null,
-        carbs: meal.carbs != null ? String(meal.carbs) : null,
-        fat: meal.fat != null ? String(meal.fat) : null,
-      }),
-    })
+    const item: DraftMealItem = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      mealType: meal.mealType,
+      description: meal.name,
+      calories: meal.calories,
+      protein: meal.protein,
+      carbs: meal.carbs,
+      fat: meal.fat,
+    }
+    setDraftMealItems((prev) => [...prev, item])
+    fetch(`/api/saved-meals?id=${meal.id}`, { method: "PATCH" })
+      .then(() => fetchSavedMeals())
+      .catch(() => {})
+  }
 
-    if (res.ok) {
-      const entry = await res.json()
-      setEntries([entry, ...entries])
-      fetch(`/api/saved-meals?id=${meal.id}`, { method: "PATCH" })
-        .then(() => fetchSavedMeals())
-        .catch(() => {})
+  async function handlePostMealToDay() {
+    if (draftMealItems.length === 0 || postingMeal) return
+    setPostingMeal(true)
+    try {
+      const created: CalorieEntry[] = []
+      for (const item of draftMealItems) {
+        const res = await fetch("/api/calories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: today,
+            mealType: item.mealType,
+            description: item.description,
+            calories: String(item.calories),
+            protein: item.protein != null ? String(item.protein) : null,
+            carbs: item.carbs != null ? String(item.carbs) : null,
+            fat: item.fat != null ? String(item.fat) : null,
+          }),
+        })
+        if (res.ok) {
+          created.push(await res.json())
+        }
+      }
+      if (created.length > 0) {
+        setEntries((prev) => [...created.reverse(), ...prev])
+      }
+      setDraftMealItems([])
+    } finally {
+      setPostingMeal(false)
     }
   }
 
@@ -362,6 +423,84 @@ export default function CaloriesPage() {
           return Math.round(c)
         })()
 
+  const draftTotals = useMemo(() => {
+    return draftMealItems.reduce(
+      (acc, item) => {
+        acc.calories += item.calories
+        if (item.protein != null) acc.protein += item.protein
+        if (item.carbs != null) acc.carbs += item.carbs
+        if (item.fat != null) acc.fat += item.fat
+        return acc
+      },
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    )
+  }, [draftMealItems])
+
+  const weeklyAdjustment = useMemo(() => {
+    const perDayGoal = budget ? budget.dailyBudget : 0
+
+    const ref = parseLocalDate(today)
+    const weekStart = startOfWeek(ref, { weekStartsOn: 1 })
+    const weekEnd = endOfWeek(ref, { weekStartsOn: 1 })
+    const weeklyBudget = perDayGoal * 7
+
+    let consumedToDate = 0
+    for (let i = 0; i <= differenceInCalendarDays(ref, weekStart); i++) {
+      const dayKey = formatDate(addDays(weekStart, i))
+      consumedToDate += dailyTotals.get(dayKey) ?? 0
+    }
+
+    const remainingDays = differenceInCalendarDays(weekEnd, ref)
+    const remainingBudget = Math.round(weeklyBudget - consumedToDate)
+    const recommendedPerDay =
+      remainingDays > 0 ? Math.max(0, Math.round(remainingBudget / remainingDays)) : null
+
+    const pct = weeklyBudget > 0 ? Math.min(100, (consumedToDate / weeklyBudget) * 100) : 0
+
+    return {
+      perDayGoal: Math.round(perDayGoal),
+      weeklyBudget: Math.round(weeklyBudget),
+      consumedToDate,
+      remainingDays,
+      remainingBudget,
+      recommendedPerDay,
+      todayOverBy: Math.max(0, todayTotal - perDayGoal),
+      pct,
+    }
+  }, [budget, dailyTotals, today, todayTotal])
+
+  async function saveBudget() {
+    const val = parseFloat(budgetInput)
+    if (Number.isNaN(val) || val <= 0) return
+
+    const method = budget ? "PUT" : "POST"
+    const payload = budget
+      ? { id: budget.id, target: val, unit: "cal", goalType: "daily", direction: "down" }
+      : { category: "calories", goalType: "daily", direction: "down", target: val, unit: "cal", active: true }
+
+    const res = await fetch("/api/goals", {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+    if (res.ok) {
+      const saved = await res.json()
+      setBudget({ id: saved.id, dailyBudget: saved.target })
+      setBudgetInput(String(Math.round(saved.target)))
+      setEditingBudget(false)
+    }
+  }
+
+  async function deleteBudget() {
+    if (!budget) return
+    const res = await fetch(`/api/goals?id=${budget.id}`, { method: "DELETE" })
+    if (res.ok) {
+      setBudget(null)
+      setBudgetInput("")
+      setEditingBudget(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Calories" icon={Flame} iconColor="#ef4444" />
@@ -407,12 +546,98 @@ export default function CaloriesPage() {
         </div>
       </div>
 
-      <CategoryGoal
-        category="calories"
-        values={{ daily: todayTotal, weekly_avg: Math.round(avg7) }}
-        presets={calorieGoalPresets}
-        color="#ef4444"
-      />
+      <div className="glass-subtle px-3.5 py-2.5 animate-fade-up space-y-2" style={{ borderRadius: "3px" }}>
+        {editingBudget ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Target className="h-3.5 w-3.5 text-red-400 shrink-0" />
+              <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Daily Budget</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min="0"
+                step="50"
+                value={budgetInput}
+                onChange={(e) => setBudgetInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveBudget() }}
+                placeholder="2000"
+                className="h-7 w-28 text-xs bg-background/40 border-primary/15"
+                autoFocus
+              />
+              <span className="text-[10px] text-muted-foreground/50">cal / day</span>
+              {budgetInput && parseFloat(budgetInput) > 0 && (
+                <span className="text-[10px] text-muted-foreground/40 tabular-nums">= {(parseFloat(budgetInput) * 7).toLocaleString()} / wk</span>
+              )}
+              <div className="flex items-center gap-0.5 ml-auto">
+                <button onClick={saveBudget} className="p-1 text-primary hover:bg-primary/10 rounded-[2px] transition-colors">
+                  <Check className="h-3.5 w-3.5" />
+                </button>
+                <button onClick={() => { setEditingBudget(false); if (budget) setBudgetInput(String(Math.round(budget.dailyBudget))) }} className="p-1 text-muted-foreground/50 hover:text-muted-foreground rounded-[2px] transition-colors">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+                {budget && (
+                  <button onClick={deleteBudget} className="p-1 text-muted-foreground/30 hover:text-destructive rounded-[2px] transition-colors">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : budget ? (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Target className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Budget</span>
+                <span className="text-xs font-semibold tabular-nums">{weeklyAdjustment.perDayGoal.toLocaleString()}<span className="text-muted-foreground/40 font-normal text-[10px]"> /day</span></span>
+                <span className="text-[10px] text-muted-foreground/30">·</span>
+                <span className="text-[10px] tabular-nums text-muted-foreground/50">{weeklyAdjustment.weeklyBudget.toLocaleString()} /wk</span>
+              </div>
+              <button onClick={() => setEditingBudget(true)} className="p-1 text-muted-foreground/30 hover:text-muted-foreground transition-colors">
+                <Pencil className="h-3 w-3" />
+              </button>
+            </div>
+            <div className="h-1.5 w-full bg-muted/20 rounded-full overflow-hidden">
+              <div
+                className="h-full transition-all duration-700 ease-out rounded-full"
+                style={{
+                  width: `${Math.min(weeklyAdjustment.pct, 100)}%`,
+                  backgroundColor: weeklyAdjustment.pct > 100 ? "#f87171" : "#ef4444",
+                  boxShadow: weeklyAdjustment.pct > 0 ? "0 0 8px oklch(0.6 0.2 25 / 30%)" : "none",
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[10px] tabular-nums">
+              <span className="text-muted-foreground/60">{weeklyAdjustment.consumedToDate.toLocaleString()} consumed</span>
+              <span className={`font-semibold ${weeklyAdjustment.remainingBudget < 0 ? "text-red-400" : "text-primary/85"}`}>
+                {weeklyAdjustment.remainingBudget.toLocaleString()} left
+              </span>
+              <span className="text-muted-foreground/40">{weeklyAdjustment.remainingDays}d remain</span>
+            </div>
+            {weeklyAdjustment.remainingDays > 0 && weeklyAdjustment.recommendedPerDay != null && (
+              <p className={`text-[10px] ${weeklyAdjustment.remainingBudget >= 0 ? "text-primary/70" : "text-red-400/80"}`}>
+                {weeklyAdjustment.remainingBudget >= 0
+                  ? <>Aim for <span className="font-semibold tabular-nums">{weeklyAdjustment.recommendedPerDay.toLocaleString()} cal</span> / day remaining</>
+                  : <>Over budget by <span className="font-semibold tabular-nums">{Math.abs(weeklyAdjustment.remainingBudget).toLocaleString()}</span> — keep low</>}
+              </p>
+            )}
+            {weeklyAdjustment.remainingDays === 0 && (
+              <p className="text-[10px] text-muted-foreground/60">
+                Week avg: <span className="tabular-nums font-medium">{Math.round(weeklyAdjustment.consumedToDate / 7).toLocaleString()} cal/day</span>
+              </p>
+            )}
+          </>
+        ) : (
+          <button
+            onClick={() => setEditingBudget(true)}
+            className="w-full flex items-center justify-center gap-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+          >
+            <Target className="h-3 w-3" />
+            Set calorie budget
+          </button>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
         <div className="space-y-6 min-w-0">
@@ -421,6 +646,11 @@ export default function CaloriesPage() {
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today&apos;s Total</p>
             <p className="text-4xl font-bold tabular-nums tracking-tight">{todayTotal.toLocaleString()}</p>
             <p className="text-sm text-muted-foreground">calories</p>
+            {today > realToday && (
+              <p className="text-[10px] uppercase tracking-wider text-primary/80 mt-1">
+                Planning mode (using top date selector)
+              </p>
+            )}
           </div>
 
           <FoodSearch onSelect={handleFoodSelect} />
@@ -446,22 +676,70 @@ export default function CaloriesPage() {
 
           <div className="hud-divider my-4" />
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex gap-2 flex-wrap">
-              {mealTypes.map((m) => (
-                <Button
-                  key={m}
-                  type="button"
-                  variant={mealType === m ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setMealType(m)}
-                  className="capitalize"
-                >
-                  {m}
-                </Button>
-              ))}
-            </div>
+          <div className="flex gap-2 flex-wrap">
+            {mealTypes.map((m) => (
+              <Button
+                key={m}
+                type="button"
+                variant={mealType === m ? "default" : "outline"}
+                size="sm"
+                onClick={() => setMealType(m)}
+                className="capitalize"
+              >
+                {m}
+              </Button>
+            ))}
+          </div>
 
+          {!editingEntry && (
+            <div className="glass-subtle rounded-[3px] p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Meal Builder
+                </p>
+                <span className="text-[10px] tabular-nums text-muted-foreground/70">
+                  {draftMealItems.length} item{draftMealItems.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              {draftMealItems.length === 0 ? (
+                <p className="text-xs text-muted-foreground/60">
+                  Add foods below. Nothing posts until you press <span className="font-medium">Post Meal</span>.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {draftMealItems.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-2 text-xs">
+                      <div className="min-w-0">
+                        <p className="truncate">
+                          {item.description || "Quick add"} · <span className="capitalize">{item.mealType}</span>
+                        </p>
+                        <p className="text-muted-foreground/65 tabular-nums">
+                          {item.calories} cal
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraftMealItems((prev) => prev.filter((x) => x.id !== item.id))
+                        }
+                        className="p-1 rounded-[3px] hover:bg-destructive/10 shrink-0"
+                      >
+                        <X className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="pt-1 border-t border-glass-border/60 text-[10px] text-muted-foreground/80 tabular-nums">
+                    Total: {draftTotals.calories.toLocaleString()} cal
+                    {(draftTotals.protein > 0 || draftTotals.carbs > 0 || draftTotals.fat > 0) && (
+                      <span> · P {Math.round(draftTotals.protein)}g · C {Math.round(draftTotals.carbs)}g · F {Math.round(draftTotals.fat)}g</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
             <details className="group rounded-xl border border-glass-border bg-glass-highlight/10 px-3 py-2 open:pb-3">
               <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground [&::-webkit-details-marker]:hidden">
                 <span className="flex items-center gap-2 min-w-0">
@@ -516,6 +794,9 @@ export default function CaloriesPage() {
                 <p className="text-[11px] text-muted-foreground/80">
                   Type a total or tap quick adds. Calories from food search also count — adjust here if needed.
                 </p>
+                <Button type="submit" className="w-full" size="sm">
+                  {editingEntry ? "Save changes" : "Add item to meal"}
+                </Button>
               </div>
             </details>
 
@@ -713,9 +994,20 @@ export default function CaloriesPage() {
                   Cancel edit
                 </Button>
               )}
-              <Button type="submit" className="w-full press-scale" size="lg">
-                {editingEntry ? "Save changes" : "Log Calories"}
-              </Button>
+              {!editingEntry && (
+                <Button
+                  type="button"
+                  className="w-full press-scale"
+                  size="lg"
+                  variant="default"
+                  disabled={draftMealItems.length === 0 || postingMeal}
+                  onClick={handlePostMealToDay}
+                >
+                  {postingMeal
+                    ? "Posting..."
+                    : `Post meal to ${today > realToday ? "planned day" : "day"}`}
+                </Button>
+              )}
             </div>
           </form>
           </div>
@@ -752,7 +1044,8 @@ export default function CaloriesPage() {
                         background: "oklch(0.19 0.012 250 / 98%)",
                         border: "1px solid oklch(1 0 0 / 8%)",
                         borderRadius: "3px",
-                        fontSize: "12px",
+                        fontSize: "10px",
+                        padding: "4px 6px",
                         backdropFilter: "blur(8px)",
                         color: "var(--muted-foreground)",
                       }}
@@ -786,7 +1079,7 @@ export default function CaloriesPage() {
               <div className="flex items-center gap-2 mb-1.5 px-1">
                 <Calendar className="h-3 w-3 text-muted-foreground/40" />
                 <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  {dateGroupLabel(dateKey, today, yesterday)}
+                  {dateGroupLabel(dateKey, today, yesterday, realToday)}
                 </span>
               </div>
               <div className="space-y-2">

@@ -55,7 +55,6 @@ export function DatePicker() {
           type="date"
           value={activeDate}
           onChange={handleChange}
-          max={format(new Date(), "yyyy-MM-dd")}
           className="absolute inset-0 opacity-0 cursor-pointer w-full h-full pointer-events-none"
           tabIndex={-1}
         />
@@ -64,12 +63,7 @@ export function DatePicker() {
       {/* Next day */}
       <button
         onClick={goNext}
-        disabled={isToday}
-        className={`flex items-center justify-center w-8 h-8 press-scale transition-colors ${
-          isToday
-            ? "text-muted-foreground/15 cursor-not-allowed"
-            : "text-muted-foreground/50 hover:text-primary hover:bg-grid-accent-dim"
-        }`}
+        className="flex items-center justify-center w-8 h-8 text-muted-foreground/50 hover:text-primary hover:bg-grid-accent-dim press-scale transition-colors"
         style={{ borderRadius: "3px" }}
         aria-label="Next day"
       >

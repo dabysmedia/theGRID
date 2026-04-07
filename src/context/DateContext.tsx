@@ -73,10 +73,7 @@ export function DateProvider({ children }: { children: ReactNode }) {
     setActiveDateRaw((prev) => {
       const d = new Date(prev + "T12:00:00")
       d.setDate(d.getDate() + 1)
-      const next = formatDate(d)
-      const today = formatDate(new Date())
-      if (next > today) return prev
-      return next
+      return formatDate(d)
     })
   }, [])
 

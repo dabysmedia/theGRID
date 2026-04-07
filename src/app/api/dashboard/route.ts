@@ -173,7 +173,7 @@ export async function GET(req: NextRequest) {
       calories: {
         todayValue: calorieLast7[6],
         goal: calGoal ?? 2000,
-        direction: calG?.direction ?? "up",
+        direction: calG?.direction ?? "down",
         unit: "cal",
         last7: calorieLast7,
       },
