@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
-import { Timer, Settings2, Play, Square, Utensils, RotateCcw } from "lucide-react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import Link from "next/link"
+import { Timer, Settings2, Utensils, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,68 +14,30 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-
-/* ─── Constants ─────────────────────────────────────── */
-
-const LS_CONFIG_KEY = "theGRID_fasting_config"
-const LS_STATE_KEY = "theGRID_fasting_state"
+import {
+  type FastingConfig,
+  type FastingPhase,
+  appendFastLog,
+  getScheduleSnapshot,
+  loadFastingConfig,
+  saveFastingConfig,
+  minutesToTimeInputValue,
+  timeInputValueToMinutes,
+  formatShortTime,
+} from "@/lib/fasting"
 
 const PRESETS = [
-  { name: "16:8", fastHours: 16, eatHours: 8 },
-  { name: "18:6", fastHours: 18, eatHours: 6 },
-  { name: "20:4", fastHours: 20, eatHours: 4 },
-  { name: "14:10", fastHours: 14, eatHours: 10 },
-  { name: "OMAD", fastHours: 23, eatHours: 1 },
+  { name: "16:8", fastHours: 16, eatHours: 8, eatStartMinutes: 12 * 60 },
+  { name: "18:6", fastHours: 18, eatHours: 6, eatStartMinutes: 14 * 60 },
+  { name: "20:4", fastHours: 20, eatHours: 4, eatStartMinutes: 14 * 60 },
+  { name: "14:10", fastHours: 14, eatHours: 10, eatStartMinutes: 10 * 60 },
+  { name: "OMAD", fastHours: 23, eatHours: 1, eatStartMinutes: 10 * 60 },
 ] as const
 
 const COLORS = {
   fasting: "#f97316",
   eating: "#22c55e",
-  idle: "oklch(0.82 0.18 110)",
 } as const
-
-/* ─── Types ─────────────────────────────────────────── */
-
-interface FastingConfig {
-  fastHours: number
-  eatHours: number
-  presetName: string
-}
-
-interface FastingState {
-  startTime: string | null
-  isActive: boolean
-}
-
-type Phase = "idle" | "fasting" | "eating" | "completed"
-
-/* ─── Helpers ───────────────────────────────────────── */
-
-function loadConfig(): FastingConfig {
-  if (typeof window === "undefined") return { fastHours: 16, eatHours: 8, presetName: "16:8" }
-  try {
-    const raw = localStorage.getItem(LS_CONFIG_KEY)
-    if (raw) return JSON.parse(raw)
-  } catch { /* noop */ }
-  return { fastHours: 16, eatHours: 8, presetName: "16:8" }
-}
-
-function saveConfig(c: FastingConfig) {
-  localStorage.setItem(LS_CONFIG_KEY, JSON.stringify(c))
-}
-
-function loadState(): FastingState {
-  if (typeof window === "undefined") return { startTime: null, isActive: false }
-  try {
-    const raw = localStorage.getItem(LS_STATE_KEY)
-    if (raw) return JSON.parse(raw)
-  } catch { /* noop */ }
-  return { startTime: null, isActive: false }
-}
-
-function saveState(s: FastingState) {
-  localStorage.setItem(LS_STATE_KEY, JSON.stringify(s))
-}
 
 function padTwo(n: number) {
   return String(Math.floor(n)).padStart(2, "0")
@@ -89,12 +52,6 @@ function formatDuration(ms: number): string {
   return `${padTwo(h)}:${padTwo(m)}:${padTwo(s)}`
 }
 
-function formatTimeShort(date: Date): string {
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-}
-
-/* ─── Ring Component ────────────────────────────────── */
-
 function FastingRing({
   progress,
   phase,
@@ -102,24 +59,25 @@ function FastingRing({
   remaining,
 }: {
   progress: number
-  phase: Phase
+  phase: FastingPhase
   elapsed: string
   remaining: string
 }) {
-  const radius = 62
+  const size = 200
   const stroke = 4
-  const size = 160
   const center = size / 2
+  const radius = center - stroke * 0.5 - 6
   const circumference = 2 * Math.PI * radius
   const offset = circumference - Math.min(progress, 1) * circumference
 
-  const color = phase === "fasting" ? COLORS.fasting : phase === "eating" ? COLORS.eating : COLORS.idle
-  const phaseLabel = phase === "fasting" ? "FASTING" : phase === "eating" ? "EATING" : phase === "completed" ? "COMPLETE" : "READY"
+  const color = phase === "fasting" ? COLORS.fasting : COLORS.eating
+  const phaseLabel = phase === "fasting" ? "Fast" : "Eat"
   const PhaseIcon = phase === "eating" ? Utensils : Timer
 
   return (
-    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg className="w-full h-full -rotate-90" viewBox={`0 0 ${size} ${size}`}>
+    <div className="mx-auto flex shrink-0 justify-center py-2 sm:py-3 sm:pl-1 sm:pr-4">
+      <div className="relative" style={{ width: size, height: size }}>
+      <svg className="h-full w-full -rotate-90" viewBox={`0 0 ${size} ${size}`}>
         <circle
           cx={center}
           cy={center}
@@ -129,120 +87,100 @@ function FastingRing({
           strokeWidth={stroke}
           className="text-muted/20"
         />
-        {phase !== "idle" && (
-          <circle
-            cx={center}
-            cy={center}
-            r={radius}
-            fill="none"
-            stroke={color}
-            strokeWidth={stroke}
-            strokeLinecap="butt"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            className="transition-[stroke-dashoffset] duration-1000 ease-linear"
-            style={{ filter: `drop-shadow(0 0 8px ${color}50)` }}
-          />
-        )}
-        {[0, 90, 180, 270].map((deg) => (
-          <line
-            key={deg}
-            x1={center}
-            y1="4"
-            x2={center}
-            y2="8"
-            stroke={color}
-            strokeWidth="0.5"
-            opacity="0.3"
-            transform={`rotate(${deg} ${center} ${center})`}
-          />
-        ))}
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="butt"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          className="transition-[stroke-dashoffset] duration-1000 ease-linear"
+          style={{ filter: `drop-shadow(0 0 8px ${color}45)` }}
+        />
       </svg>
 
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-        <PhaseIcon className="h-4 w-4" style={{ color }} />
-        <span
-          className="text-[10px] font-semibold uppercase tracking-[0.2em]"
-          style={{ color }}
-        >
-          {phaseLabel}
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-4 py-px">
+        <div className="flex items-center gap-1.5" style={{ color }}>
+          <PhaseIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em]">{phaseLabel}</span>
+        </div>
+        <span className="mt-1.5 text-3xl font-bold tabular-nums leading-none tracking-tight sm:text-4xl">{remaining}</span>
+        <span className="mt-2 max-w-[12rem] truncate text-center text-[10px] tabular-nums leading-tight text-muted-foreground/55">
+          {elapsed} in phase
         </span>
-        {phase !== "idle" && phase !== "completed" && (
-          <>
-            <span className="text-2xl font-bold tabular-nums tracking-tight">
-              {remaining}
-            </span>
-            <span className="text-[10px] text-muted-foreground/60 tracking-wider">
-              {elapsed} elapsed
-            </span>
-          </>
-        )}
+      </div>
       </div>
     </div>
   )
 }
 
-/* ─── Settings Dialog ───────────────────────────────── */
-
 function FastingSettingsDialog({
   config,
   onSave,
-  disabled,
 }: {
   config: FastingConfig
   onSave: (c: FastingConfig) => void
-  disabled: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [customFast, setCustomFast] = useState(String(config.fastHours))
   const [customEat, setCustomEat] = useState(String(config.eatHours))
+  const [eatStartMinutes, setEatStartMinutes] = useState(config.eatWindowStartMinutes)
   const [selected, setSelected] = useState(config.presetName)
 
-  useEffect(() => {
-    if (open) {
+  function handleOpenChange(next: boolean) {
+    setOpen(next)
+    if (next) {
       setCustomFast(String(config.fastHours))
       setCustomEat(String(config.eatHours))
+      setEatStartMinutes(config.eatWindowStartMinutes)
       setSelected(config.presetName)
     }
-  }, [open, config])
+  }
 
-  function handlePreset(p: typeof PRESETS[number]) {
+  function handlePreset(p: (typeof PRESETS)[number]) {
     setSelected(p.name)
     setCustomFast(String(p.fastHours))
     setCustomEat(String(p.eatHours))
+    setEatStartMinutes(p.eatStartMinutes)
   }
 
   function handleSave() {
     const fh = Math.max(1, Math.min(23, Number(customFast) || 16))
-    const eh = Math.max(1, Math.min(23, Number(customEat) || 8))
-    const preset = PRESETS.find((p) => p.fastHours === fh && p.eatHours === eh)
-    onSave({ fastHours: fh, eatHours: eh, presetName: preset?.name ?? "Custom" })
+    let eh = Math.max(1, Math.min(23, Number(customEat) || 8))
+    if (fh + eh !== 24) eh = 24 - fh
+    const presetHit = PRESETS.find((p) => p.fastHours === fh && p.eatHours === eh)
+    onSave({
+      fastHours: fh,
+      eatHours: eh,
+      eatWindowStartMinutes: eatStartMinutes,
+      presetName: presetHit?.name ?? "Custom",
+    })
     setOpen(false)
   }
 
+  const timeValue = minutesToTimeInputValue(eatStartMinutes)
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            disabled={disabled}
-            className="text-muted-foreground/50 hover:text-foreground"
-          />
+          <Button variant="ghost" size="icon-xs" className="text-muted-foreground/50 hover:text-foreground" />
         }
       >
         <Settings2 className="h-3.5 w-3.5" />
       </DialogTrigger>
-      <DialogContent className="glass-frost">
+      <DialogContent className="glass-frost max-h-[90vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Fasting Window</DialogTitle>
+          <DialogTitle>Schedule & ratio</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div>
             <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground mb-2">
-              Presets
+              Ratio presets
             </p>
             <div className="grid grid-cols-3 gap-2">
               {PRESETS.map((p) => (
@@ -258,7 +196,7 @@ function FastingSettingsDialog({
                 >
                   <span className="block text-sm font-bold tabular-nums">{p.name}</span>
                   <span className="block text-[10px] text-muted-foreground/60 tracking-wider">
-                    {p.fastHours}h fast
+                    {p.fastHours}h / {p.eatHours}h
                   </span>
                 </button>
               ))}
@@ -273,7 +211,7 @@ function FastingSettingsDialog({
               >
                 <span className="block text-sm font-bold">Custom</span>
                 <span className="block text-[10px] text-muted-foreground/60 tracking-wider">
-                  set hours
+                  hours
                 </span>
               </button>
             </div>
@@ -282,7 +220,7 @@ function FastingSettingsDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-                Fast (hours)
+                Fast (h)
               </Label>
               <Input
                 type="number"
@@ -298,7 +236,7 @@ function FastingSettingsDialog({
             </div>
             <div className="space-y-1.5">
               <Label className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-                Eat (hours)
+                Eat (h)
               </Label>
               <Input
                 type="number"
@@ -314,8 +252,50 @@ function FastingSettingsDialog({
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <Label className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              Eating window opens (local time)
+            </Label>
+            <Input
+              type="time"
+              value={timeValue}
+              onChange={(e) => {
+                setEatStartMinutes(timeInputValueToMinutes(e.target.value))
+                setSelected("Custom")
+              }}
+              className="tabular-nums font-mono"
+            />
+          </div>
+
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground mb-2">
+              Quick starts
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: "10am", m: 10 * 60 },
+                { label: "12pm", m: 12 * 60 },
+                { label: "2pm", m: 14 * 60 },
+                { label: "6pm", m: 18 * 60 },
+              ].map((q) => (
+                <button
+                  key={q.label}
+                  type="button"
+                  onClick={() => {
+                    setEatStartMinutes(q.m)
+                    setSelected("Custom")
+                  }}
+                  className="glass-subtle px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider hover:bg-glass-highlight/30"
+                  style={{ borderRadius: "3px" }}
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <Button onClick={handleSave} className="w-full">
-            Save Window
+            Save schedule
           </Button>
         </div>
       </DialogContent>
@@ -323,108 +303,80 @@ function FastingSettingsDialog({
   )
 }
 
-/* ─── Main Component ────────────────────────────────── */
-
 export function FastingTimer() {
-  const [config, setConfig] = useState<FastingConfig>(loadConfig)
-  const [state, setState] = useState<FastingState>(loadState)
+  const [config, setConfig] = useState<FastingConfig>(loadFastingConfig)
   const [now, setNow] = useState(() => Date.now())
   const [mounted, setMounted] = useState(false)
+  const prevPhase = useRef<FastingPhase | null>(null)
+  const skipTransitionLog = useRef(false)
 
-  useEffect(() => setMounted(true), [])
-
-  // Tick every second while a fast is active
+  // Client-only: avoid SSR/localStorage mismatch for timer shell + config
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional mount gate */
   useEffect(() => {
-    if (!state.isActive) return
+    setConfig(loadFastingConfig())
+    setMounted(true)
+  }, [])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
-  }, [state.isActive])
-
-  const { phase, progress, elapsedMs, remainingMs, fastEndTime, eatEndTime } = useMemo(() => {
-    if (!state.isActive || !state.startTime) {
-      return { phase: "idle" as Phase, progress: 0, elapsedMs: 0, remainingMs: 0, fastEndTime: null, eatEndTime: null }
-    }
-
-    const start = new Date(state.startTime).getTime()
-    const fastMs = config.fastHours * 3600_000
-    const eatMs = config.eatHours * 3600_000
-    const totalMs = fastMs + eatMs
-    const elapsed = now - start
-
-    const fEnd = new Date(start + fastMs)
-    const eEnd = new Date(start + totalMs)
-
-    if (elapsed < 0) {
-      return { phase: "fasting" as Phase, progress: 0, elapsedMs: 0, remainingMs: fastMs, fastEndTime: fEnd, eatEndTime: eEnd }
-    }
-
-    if (elapsed < fastMs) {
-      return {
-        phase: "fasting" as Phase,
-        progress: elapsed / fastMs,
-        elapsedMs: elapsed,
-        remainingMs: fastMs - elapsed,
-        fastEndTime: fEnd,
-        eatEndTime: eEnd,
-      }
-    }
-
-    if (elapsed < totalMs) {
-      return {
-        phase: "eating" as Phase,
-        progress: (elapsed - fastMs) / eatMs,
-        elapsedMs: elapsed,
-        remainingMs: totalMs - elapsed,
-        fastEndTime: fEnd,
-        eatEndTime: eEnd,
-      }
-    }
-
-    return { phase: "completed" as Phase, progress: 1, elapsedMs: elapsed, remainingMs: 0, fastEndTime: fEnd, eatEndTime: eEnd }
-  }, [state, config, now])
-
-  const startFast = useCallback(() => {
-    const next: FastingState = { startTime: new Date().toISOString(), isActive: true }
-    setState(next)
-    saveState(next)
-    setNow(Date.now())
   }, [])
 
-  const stopFast = useCallback(() => {
-    const next: FastingState = { startTime: null, isActive: false }
-    setState(next)
-    saveState(next)
-  }, [])
+  const snapshot = useMemo(
+    () => getScheduleSnapshot(new Date(now), config),
+    [now, config]
+  )
+
+  useEffect(() => {
+    if (!mounted) return
+    const p = snapshot.phase
+    if (skipTransitionLog.current) {
+      skipTransitionLog.current = false
+      prevPhase.current = p
+      return
+    }
+    const was = prevPhase.current
+    if (was !== null && was === "fasting" && p === "eating") {
+      const eatStart = snapshot.eatingWindowStart
+      const fastStart = new Date(eatStart.getTime() - config.fastHours * 3600000)
+      const dm = (eatStart.getTime() - fastStart.getTime()) / 60000
+      appendFastLog({
+        fastStartedAt: fastStart.toISOString(),
+        fastEndedAt: eatStart.toISOString(),
+        durationMinutes: dm,
+        plannedFastHours: config.fastHours,
+      })
+    }
+    prevPhase.current = p
+  }, [mounted, snapshot, config.fastHours])
 
   const handleConfigSave = useCallback((c: FastingConfig) => {
-    setConfig(c)
-    saveConfig(c)
+    skipTransitionLog.current = true
+    saveFastingConfig(c)
+    setConfig(loadFastingConfig())
   }, [])
 
-  const phaseColor = phase === "fasting" ? COLORS.fasting : phase === "eating" ? COLORS.eating : COLORS.idle
+  const phaseColor = snapshot.phase === "fasting" ? COLORS.fasting : COLORS.eating
 
   if (!mounted) {
     return (
-      <div className="glass p-5 lg:p-6 relative overflow-hidden" style={{ borderRadius: "4px" }}>
+      <div className="glass relative p-5 sm:p-6" style={{ borderRadius: "4px" }}>
         <div className="flex items-center gap-2">
           <Timer className="h-3.5 w-3.5 text-muted-foreground/50" />
           <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground/50">
-            Fasting Timer
+            Fasting
           </span>
         </div>
-        <div className="flex items-center justify-center py-8">
-          <div className="h-[160px] w-[160px] rounded-full bg-muted/10 animate-pulse" />
+        <div className="flex justify-center py-8">
+          <div className="h-[200px] w-[200px] rounded-full bg-muted/10 animate-pulse" />
         </div>
       </div>
     )
   }
 
   return (
-    <div
-      className="glass p-5 lg:p-6 relative overflow-hidden"
-      style={{ borderRadius: "4px" }}
-    >
-      {/* Top edge glow */}
+    <div className="glass relative p-5 sm:p-6" style={{ borderRadius: "4px" }}>
       <div
         className="absolute top-0 left-3 right-3 h-px transition-colors duration-700"
         style={{
@@ -432,97 +384,62 @@ export function FastingTimer() {
         }}
       />
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4 relative z-10">
-        <div className="flex items-center gap-2">
+      <div className="relative z-10 mb-4 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <div
-            className="w-1.5 h-1.5 rounded-full"
+            className="h-1.5 w-1.5 shrink-0 rounded-full"
             style={{
               backgroundColor: phaseColor,
               boxShadow: `0 0 6px ${phaseColor}60`,
-              animation: state.isActive ? "pulse-glow 2.5s ease-in-out infinite" : "none",
+              animation: "pulse-glow 2.5s ease-in-out infinite",
             }}
           />
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.25em]">
-            Fasting Timer
-          </h2>
+          <h2 className="truncate text-[11px] font-semibold uppercase tracking-[0.2em]">Fasting</h2>
+          <span className="hidden text-[10px] text-muted-foreground/55 sm:inline">· {config.presetName}</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground/60 font-medium tracking-[0.12em]">
-            {config.presetName}
-          </span>
-          <FastingSettingsDialog
-            config={config}
-            onSave={handleConfigSave}
-            disabled={state.isActive}
-          />
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Link
+            href="/fasting"
+            className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-glass-highlight/30 hover:text-foreground sm:h-8 sm:w-8"
+            aria-label="Fasting history and trends"
+          >
+            <TrendingUp className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+          </Link>
+          <FastingSettingsDialog config={config} onSave={handleConfigSave} />
         </div>
       </div>
 
-      {/* Ring + Controls */}
-      <div className="flex flex-col items-center gap-4 relative z-10">
+      <div className="relative z-10 flex flex-col items-stretch gap-5 sm:flex-row sm:items-center sm:gap-8 lg:gap-10">
         <FastingRing
-          progress={progress}
-          phase={phase}
-          elapsed={formatDuration(elapsedMs)}
-          remaining={formatDuration(remainingMs)}
+          progress={snapshot.progress}
+          phase={snapshot.phase}
+          elapsed={formatDuration(snapshot.elapsedMs)}
+          remaining={formatDuration(snapshot.remainingMs)}
         />
 
-        {/* Schedule info */}
-        {state.isActive && fastEndTime && eatEndTime && (
-          <div className="flex gap-3 animate-fade-up">
-            <div className="glass-subtle py-1.5 px-3 flex items-center gap-1.5" style={{ borderRadius: "3px" }}>
-              <Timer className="h-3 w-3" style={{ color: COLORS.fasting }} />
-              <div className="text-center">
-                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-[0.1em]">
-                  {phase === "fasting" ? "Eat at" : "Started"}
-                </p>
-                <p className="text-[11px] font-semibold tabular-nums">
-                  {phase === "fasting"
-                    ? formatTimeShort(fastEndTime)
-                    : formatTimeShort(new Date(state.startTime!))}
+        <div className="min-w-0 flex-1 sm:py-1">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+            <div className="flex min-w-0 items-start gap-2 rounded-sm border border-border/35 bg-muted/15 px-2 py-2 sm:px-2.5">
+              <Utensils className="mt-0.5 h-3 w-3 shrink-0" style={{ color: COLORS.eating }} />
+              <div className="min-w-0">
+                <p className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground/65">Eat window</p>
+                <p className="text-[10px] font-semibold tabular-nums leading-snug text-foreground sm:text-[11px]">
+                  {formatShortTime(snapshot.eatingWindowStart)} – {formatShortTime(snapshot.eatingWindowEnd)}
                 </p>
               </div>
             </div>
-            <div className="glass-subtle py-1.5 px-3 flex items-center gap-1.5" style={{ borderRadius: "3px" }}>
-              <Utensils className="h-3 w-3" style={{ color: COLORS.eating }} />
-              <div className="text-center">
-                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-[0.1em]">
-                  {phase === "eating" ? "Fast at" : "Eat end"}
+            <div className="flex min-w-0 items-start gap-2 rounded-sm border border-border/35 bg-muted/15 px-2 py-2 sm:px-2.5">
+              <Timer className="mt-0.5 h-3 w-3 shrink-0" style={{ color: COLORS.fasting }} />
+              <div className="min-w-0">
+                <p className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground/65">
+                  {snapshot.phase === "fasting" ? "Next eat" : "Next fast"}
                 </p>
-                <p className="text-[11px] font-semibold tabular-nums">
-                  {formatTimeShort(eatEndTime)}
+                <p className="text-[10px] font-semibold tabular-nums text-foreground sm:text-[11px]">
+                  {formatShortTime(snapshot.phaseEnd)}
                 </p>
               </div>
             </div>
           </div>
-        )}
-
-        {/* Action buttons */}
-        <div className="flex gap-2">
-          {phase === "idle" && (
-            <Button onClick={startFast} size="sm" className="gap-1.5">
-              <Play className="h-3.5 w-3.5" />
-              Start Fast
-            </Button>
-          )}
-          {(phase === "fasting" || phase === "eating") && (
-            <Button onClick={stopFast} variant="outline" size="sm" className="gap-1.5">
-              <Square className="h-3 w-3" />
-              End Fast
-            </Button>
-          )}
-          {phase === "completed" && (
-            <>
-              <Button onClick={startFast} size="sm" className="gap-1.5">
-                <RotateCcw className="h-3.5 w-3.5" />
-                Start New Fast
-              </Button>
-              <Button onClick={stopFast} variant="outline" size="sm" className="gap-1.5">
-                Reset
-              </Button>
-            </>
-          )}
         </div>
       </div>
     </div>

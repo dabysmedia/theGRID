@@ -21,6 +21,8 @@ interface FoodResult {
 
 interface FoodSearchProps {
   onSelect: (food: FoodResult) => void
+  /** Less chrome (e.g. in modals) */
+  compact?: boolean
 }
 
 type PortionMode = "servings" | "grams"
@@ -30,7 +32,7 @@ function scaleVal(value: number | null, multiplier: number): number | null {
   return Math.round(value * multiplier * 10) / 10
 }
 
-export function FoodSearch({ onSelect }: FoodSearchProps) {
+export function FoodSearch({ onSelect, compact = false }: FoodSearchProps) {
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<FoodResult[]>([])
   const [source, setSource] = useState<string | null>(null)
@@ -144,13 +146,14 @@ export function FoodSearch({ onSelect }: FoodSearchProps) {
 
   return (
     <div ref={containerRef} className="relative">
-      {/* Search header */}
-      <div className="flex items-center gap-2 mb-2">
-        <div className="status-dot" style={{ width: 4, height: 4 }} />
-        <span className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
-          Food Database
-        </span>
-      </div>
+      {!compact && (
+        <div className="flex items-center gap-2 mb-2">
+          <div className="status-dot" style={{ width: 4, height: 4 }} />
+          <span className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
+            Food Database
+          </span>
+        </div>
+      )}
 
       {/* Portion editor */}
       {selected ? (
@@ -213,9 +216,9 @@ export function FoodSearch({ onSelect }: FoodSearchProps) {
                   type="button"
                   onClick={() => adjustServings(-0.25)}
                   disabled={parseFloat(servings) <= 0.25}
-                  className="w-8 h-8 flex items-center justify-center rounded-[3px] border border-glass-border hover:bg-grid-accent-dim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-[3px] border border-glass-border transition-colors hover:bg-grid-accent-dim disabled:cursor-not-allowed disabled:opacity-30 sm:h-8 sm:w-8"
                 >
-                  <Minus className="h-3.5 w-3.5" />
+                  <Minus className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                 </button>
                 <Input
                   type="number"
@@ -228,9 +231,9 @@ export function FoodSearch({ onSelect }: FoodSearchProps) {
                 <button
                   type="button"
                   onClick={() => adjustServings(0.25)}
-                  className="w-8 h-8 flex items-center justify-center rounded-[3px] border border-glass-border hover:bg-grid-accent-dim transition-colors"
+                  className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-[3px] border border-glass-border transition-colors hover:bg-grid-accent-dim sm:h-8 sm:w-8"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                 </button>
                 <div className="flex gap-1 ml-1">
                   {[0.5, 1, 1.5, 2].map((v) => (
@@ -257,9 +260,9 @@ export function FoodSearch({ onSelect }: FoodSearchProps) {
                   type="button"
                   onClick={() => adjustGrams(-10)}
                   disabled={parseFloat(grams) <= 10}
-                  className="w-8 h-8 flex items-center justify-center rounded-[3px] border border-glass-border hover:bg-grid-accent-dim disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-[3px] border border-glass-border transition-colors hover:bg-grid-accent-dim disabled:cursor-not-allowed disabled:opacity-30 sm:h-8 sm:w-8"
                 >
-                  <Minus className="h-3.5 w-3.5" />
+                  <Minus className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                 </button>
                 <div className="relative">
                   <Input
@@ -275,9 +278,9 @@ export function FoodSearch({ onSelect }: FoodSearchProps) {
                 <button
                   type="button"
                   onClick={() => adjustGrams(10)}
-                  className="w-8 h-8 flex items-center justify-center rounded-[3px] border border-glass-border hover:bg-grid-accent-dim transition-colors"
+                  className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-[3px] border border-glass-border transition-colors hover:bg-grid-accent-dim sm:h-8 sm:w-8"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                 </button>
                 <div className="flex gap-1 ml-1">
                   {[50, 100, 150, 200].map((v) => (
@@ -367,7 +370,7 @@ export function FoodSearch({ onSelect }: FoodSearchProps) {
           {/* Results dropdown */}
           {open && (
             <div
-              className="absolute z-50 left-0 right-0 mt-1.5 max-h-[340px] overflow-y-auto glass-strong rounded-[3px] border border-glass-border shadow-lg"
+              className="absolute z-[100] left-0 right-0 mt-1.5 max-h-[340px] overflow-y-auto glass-strong rounded-[3px] border border-glass-border shadow-lg"
               style={{ backdropFilter: "blur(24px)" }}
             >
               {source && results.length > 0 && (

@@ -41,7 +41,7 @@ export function BottomNav() {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "relative flex min-h-0 min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-[10px] font-medium tracking-[0.15em] uppercase transition-colors duration-150",
+                      "relative flex min-h-0 min-w-0 touch-manipulation flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-[10px] font-medium tracking-[0.15em] uppercase transition-colors duration-150",
                       isActive
                         ? "text-primary"
                         : "text-muted-foreground hover:text-foreground"
@@ -50,9 +50,9 @@ export function BottomNav() {
                     {isActive && (
                       <span className="pointer-events-none absolute inset-1 bg-grid-accent-dim animate-nav-indicator" style={{ borderRadius: '2px' }} />
                     )}
-                    <span className={`relative flex h-5 w-5 shrink-0 items-center justify-center transition-transform duration-200 ${isActive ? "scale-110" : ""}`}>
+                    <span className={`relative flex h-6 w-6 shrink-0 items-center justify-center transition-transform duration-200 sm:h-5 sm:w-5 ${isActive ? "scale-110" : ""}`}>
                       <item.icon
-                        className="h-5 w-5"
+                        className="h-6 w-6 sm:h-5 sm:w-5"
                         strokeWidth={isActive ? 2.2 : 1.6}
                         aria-hidden
                       />
@@ -92,7 +92,7 @@ export function BottomNav() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "relative flex min-h-[2.75rem] items-center justify-center xl:justify-start gap-3 px-3 py-2.5 text-xs font-medium tracking-[0.15em] uppercase transition-colors duration-150",
+                  "relative flex min-h-[2.75rem] touch-manipulation items-center justify-center xl:justify-start gap-3 px-3 py-2.5 text-xs font-medium tracking-[0.15em] uppercase transition-colors duration-150",
                   isActive
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground hover:bg-glass-highlight/30"

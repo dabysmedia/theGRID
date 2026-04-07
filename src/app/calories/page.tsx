@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useState, useCallback, useRef } from "react"
+import { useEffect, useMemo, useState, useCallback } from "react"
 import { addDays, differenceInCalendarDays, endOfWeek, format, startOfWeek, subDays } from "date-fns"
-import { Calendar, ChevronDown, Flame, Trash2, Plus, Star, X, Pencil, Target, Check } from "lucide-react"
+import { Calendar, ChevronDown, Flame, Lock, Search, Trash2, Plus, Star, Unlock, X, Pencil, Target, Check } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -18,7 +18,14 @@ import { FoodSearch } from "@/components/FoodSearch"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { formatDate, last7Days, parseLocalDate } from "@/lib/utils"
+import { cn, formatDate, last7Days, parseLocalDate } from "@/lib/utils"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface CalorieEntry {
   id: string
@@ -95,7 +102,11 @@ export default function CaloriesPage() {
   const [budget, setBudget] = useState<CalorieBudget | null>(null)
   const [editingBudget, setEditingBudget] = useState(false)
   const [budgetInput, setBudgetInput] = useState("")
-  const frequentlyAddedDetailsRef = useRef<HTMLDetailsElement>(null)
+  const [dayLocked, setDayLocked] = useState(false)
+  const [adjustedDailyTarget, setAdjustedDailyTarget] = useState<number | null>(null)
+  
+  const [logFoodOpen, setLogFoodOpen] = useState(false)
+  const [logFoodSearchOpen, setLogFoodSearchOpen] = useState(false)
 
   const { activeDate } = useActiveDate()
   const today = activeDate
@@ -111,6 +122,10 @@ export default function CaloriesPage() {
       setSavedMeals([])
     }
   }, [])
+
+  useEffect(() => {
+    if (!logFoodOpen) setLogFoodSearchOpen(false)
+  }, [logFoodOpen])
 
   useEffect(() => {
     fetch("/api/calories")
@@ -250,6 +265,7 @@ export default function CaloriesPage() {
     setCarbs(entry.carbs != null ? String(entry.carbs) : "")
     setFat(entry.fat != null ? String(entry.fat) : "")
     setShowSavePrompt(false)
+    setLogFoodOpen(true)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -276,6 +292,7 @@ export default function CaloriesPage() {
         const updated = (await res.json()) as CalorieEntry
         setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
         cancelEdit()
+        setLogFoodOpen(false)
       }
       return
     }
@@ -336,6 +353,7 @@ export default function CaloriesPage() {
       }
       if (created.length > 0) {
         setEntries((prev) => [...created.reverse(), ...prev])
+        setLogFoodOpen(false)
       }
       setDraftMealItems([])
     } finally {
@@ -452,8 +470,6 @@ export default function CaloriesPage() {
 
     const remainingDays = differenceInCalendarDays(weekEnd, ref)
     const remainingBudget = Math.round(weeklyBudget - consumedToDate)
-    const recommendedPerDay =
-      remainingDays > 0 ? Math.max(0, Math.round(remainingBudget / remainingDays)) : null
 
     const pct = weeklyBudget > 0 ? Math.min(100, (consumedToDate / weeklyBudget) * 100) : 0
 
@@ -463,11 +479,36 @@ export default function CaloriesPage() {
       consumedToDate,
       remainingDays,
       remainingBudget,
-      recommendedPerDay,
-      todayOverBy: Math.max(0, todayTotal - perDayGoal),
       pct,
     }
-  }, [budget, dailyTotals, today, todayTotal])
+  }, [budget, dailyTotals, today])
+
+  function handleLockDay() {
+    if (!budget) return
+    const perDayGoal = budget.dailyBudget
+    const ref = parseLocalDate(today)
+    const weekEnd = endOfWeek(ref, { weekStartsOn: 1 })
+    const weekStart = startOfWeek(ref, { weekStartsOn: 1 })
+    const weeklyBudget = perDayGoal * 7
+
+    let consumedThrough = 0
+    for (let i = 0; i <= differenceInCalendarDays(ref, weekStart); i++) {
+      const dayKey = formatDate(addDays(weekStart, i))
+      consumedThrough += dailyTotals.get(dayKey) ?? 0
+    }
+
+    const remaining = differenceInCalendarDays(weekEnd, ref)
+    const leftover = Math.round(weeklyBudget - consumedThrough)
+    const perDay = remaining > 0 ? Math.max(0, Math.round(leftover / remaining)) : null
+
+    setAdjustedDailyTarget(perDay)
+    setDayLocked(true)
+  }
+
+  function handleUnlockDay() {
+    setDayLocked(false)
+    setAdjustedDailyTarget(null)
+  }
 
   async function saveBudget() {
     const val = parseFloat(budgetInput)
@@ -546,13 +587,13 @@ export default function CaloriesPage() {
         </div>
       </div>
 
-      <div className="glass-subtle px-3.5 py-2.5 animate-fade-up space-y-2" style={{ borderRadius: "3px" }}>
+      {/* Budget bar */}
+      <div className="animate-fade-up">
         {editingBudget ? (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Target className="h-3.5 w-3.5 text-red-400 shrink-0" />
-              <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Daily Budget</span>
-            </div>
+          <div className="glass-subtle rounded-xl px-4 py-3 space-y-2.5">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Daily budget
+            </p>
             <div className="flex items-center gap-2">
               <Input
                 type="number"
@@ -562,22 +603,19 @@ export default function CaloriesPage() {
                 onChange={(e) => setBudgetInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") saveBudget() }}
                 placeholder="2000"
-                className="h-7 w-28 text-xs bg-background/40 border-primary/15"
+                className="h-8 w-28 text-sm bg-background/40 border-primary/15"
                 autoFocus
               />
-              <span className="text-[10px] text-muted-foreground/50">cal / day</span>
-              {budgetInput && parseFloat(budgetInput) > 0 && (
-                <span className="text-[10px] text-muted-foreground/40 tabular-nums">= {(parseFloat(budgetInput) * 7).toLocaleString()} / wk</span>
-              )}
-              <div className="flex items-center gap-0.5 ml-auto">
-                <button onClick={saveBudget} className="p-1 text-primary hover:bg-primary/10 rounded-[2px] transition-colors">
+              <span className="text-[10px] text-muted-foreground/40">cal / day</span>
+              <div className="flex items-center gap-1 ml-auto">
+                <button onClick={saveBudget} className="p-1.5 rounded-md text-primary hover:bg-primary/10 transition-colors">
                   <Check className="h-3.5 w-3.5" />
                 </button>
-                <button onClick={() => { setEditingBudget(false); if (budget) setBudgetInput(String(Math.round(budget.dailyBudget))) }} className="p-1 text-muted-foreground/50 hover:text-muted-foreground rounded-[2px] transition-colors">
+                <button onClick={() => { setEditingBudget(false); if (budget) setBudgetInput(String(Math.round(budget.dailyBudget))) }} className="p-1.5 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors">
                   <X className="h-3.5 w-3.5" />
                 </button>
                 {budget && (
-                  <button onClick={deleteBudget} className="p-1 text-muted-foreground/30 hover:text-destructive rounded-[2px] transition-colors">
+                  <button onClick={deleteBudget} className="p-1.5 rounded-md text-muted-foreground/20 hover:text-destructive transition-colors">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 )}
@@ -585,53 +623,90 @@ export default function CaloriesPage() {
             </div>
           </div>
         ) : budget ? (
-          <>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <Target className="h-3.5 w-3.5 text-red-400 shrink-0" />
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Budget</span>
-                <span className="text-xs font-semibold tabular-nums">{weeklyAdjustment.perDayGoal.toLocaleString()}<span className="text-muted-foreground/40 font-normal text-[10px]"> /day</span></span>
-                <span className="text-[10px] text-muted-foreground/30">·</span>
-                <span className="text-[10px] tabular-nums text-muted-foreground/50">{weeklyAdjustment.weeklyBudget.toLocaleString()} /wk</span>
+          <div className="glass-subtle rounded-xl overflow-hidden">
+            <div className="px-4 py-3 space-y-2.5">
+              {/* Top row — base budget + edit */}
+              {!dayLocked && (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Target className="h-3.5 w-3.5 text-red-400/70 shrink-0" />
+                    <span className="text-sm font-semibold tabular-nums">
+                      {weeklyAdjustment.perDayGoal.toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/40">cal / day</span>
+                  </div>
+                  <button onClick={() => setEditingBudget(true)} className="p-1 text-muted-foreground/25 hover:text-muted-foreground transition-colors">
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+
+              {/* Locked state — adjusted target is hero */}
+              {dayLocked && adjustedDailyTarget != null && (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Target className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+                    <span className="text-sm font-semibold tabular-nums text-primary">
+                      {adjustedDailyTarget.toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/40">cal / day remaining</span>
+                  </div>
+                  <button onClick={() => setEditingBudget(true)} className="p-1 text-muted-foreground/25 hover:text-muted-foreground transition-colors">
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+
+              {/* Progress bar */}
+              <div className="h-1 w-full rounded-full bg-muted/15 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700 ease-out"
+                  style={{
+                    width: `${Math.min(weeklyAdjustment.pct, 100)}%`,
+                    backgroundColor: weeklyAdjustment.pct > 100 ? "#f87171" : "#ef4444",
+                    boxShadow: weeklyAdjustment.pct > 0 ? "0 0 6px oklch(0.6 0.2 25 / 25%)" : "none",
+                  }}
+                />
               </div>
-              <button onClick={() => setEditingBudget(true)} className="p-1 text-muted-foreground/30 hover:text-muted-foreground transition-colors">
-                <Pencil className="h-3 w-3" />
-              </button>
+
+              {/* Stats row */}
+              <div className="flex items-center justify-between text-[10px] tabular-nums text-muted-foreground/40">
+                <span>{weeklyAdjustment.consumedToDate.toLocaleString()} used</span>
+                <span className={weeklyAdjustment.remainingBudget < 0 ? "text-red-400/80 font-medium" : ""}>
+                  {weeklyAdjustment.remainingBudget.toLocaleString()} left
+                </span>
+                <span>{weeklyAdjustment.remainingDays}d left</span>
+              </div>
             </div>
-            <div className="h-1.5 w-full bg-muted/20 rounded-full overflow-hidden">
-              <div
-                className="h-full transition-all duration-700 ease-out rounded-full"
-                style={{
-                  width: `${Math.min(weeklyAdjustment.pct, 100)}%`,
-                  backgroundColor: weeklyAdjustment.pct > 100 ? "#f87171" : "#ef4444",
-                  boxShadow: weeklyAdjustment.pct > 0 ? "0 0 8px oklch(0.6 0.2 25 / 30%)" : "none",
-                }}
-              />
-            </div>
-            <div className="flex items-center justify-between text-[10px] tabular-nums">
-              <span className="text-muted-foreground/60">{weeklyAdjustment.consumedToDate.toLocaleString()} consumed</span>
-              <span className={`font-semibold ${weeklyAdjustment.remainingBudget < 0 ? "text-red-400" : "text-primary/85"}`}>
-                {weeklyAdjustment.remainingBudget.toLocaleString()} left
-              </span>
-              <span className="text-muted-foreground/40">{weeklyAdjustment.remainingDays}d remain</span>
-            </div>
-            {weeklyAdjustment.remainingDays > 0 && weeklyAdjustment.recommendedPerDay != null && (
-              <p className={`text-[10px] ${weeklyAdjustment.remainingBudget >= 0 ? "text-primary/70" : "text-red-400/80"}`}>
-                {weeklyAdjustment.remainingBudget >= 0
-                  ? <>Aim for <span className="font-semibold tabular-nums">{weeklyAdjustment.recommendedPerDay.toLocaleString()} cal</span> / day remaining</>
-                  : <>Over budget by <span className="font-semibold tabular-nums">{Math.abs(weeklyAdjustment.remainingBudget).toLocaleString()}</span> — keep low</>}
-              </p>
-            )}
-            {weeklyAdjustment.remainingDays === 0 && (
-              <p className="text-[10px] text-muted-foreground/60">
-                Week avg: <span className="tabular-nums font-medium">{Math.round(weeklyAdjustment.consumedToDate / 7).toLocaleString()} cal/day</span>
-              </p>
-            )}
-          </>
+
+            {/* Lock / Unlock strip */}
+            <button
+              type="button"
+              onClick={dayLocked ? handleUnlockDay : handleLockDay}
+              className={cn(
+                "w-full flex items-center justify-center gap-1.5 py-2 text-[10px] font-medium uppercase tracking-wider transition-colors border-t",
+                dayLocked
+                  ? "bg-primary/5 border-primary/10 text-primary/70 hover:bg-primary/10"
+                  : "border-border/20 text-muted-foreground/30 hover:text-muted-foreground/60 hover:bg-glass-highlight/10"
+              )}
+            >
+              {dayLocked ? (
+                <>
+                  <Lock className="h-3 w-3" />
+                  Day closed — unlock to edit
+                </>
+              ) : (
+                <>
+                  <Unlock className="h-3 w-3" />
+                  Close day &amp; recalculate
+                </>
+              )}
+            </button>
+          </div>
         ) : (
           <button
             onClick={() => setEditingBudget(true)}
-            className="w-full flex items-center justify-center gap-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+            className="glass-subtle rounded-xl w-full flex items-center justify-center gap-1.5 py-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/30 hover:text-muted-foreground transition-colors"
           >
             <Target className="h-3 w-3" />
             Set calorie budget
@@ -642,375 +717,321 @@ export default function CaloriesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
         <div className="space-y-6 min-w-0">
           <div className="glass rounded-2xl p-5">
-          <div className="text-center lg:text-left mb-5">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today&apos;s Total</p>
-            <p className="text-4xl font-bold tabular-nums tracking-tight">{todayTotal.toLocaleString()}</p>
-            <p className="text-sm text-muted-foreground">calories</p>
-            {today > realToday && (
-              <p className="text-[10px] uppercase tracking-wider text-primary/80 mt-1">
-                Planning mode (using top date selector)
+            <div className="text-center lg:text-left mb-5">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today&apos;s Total</p>
+              <p className="text-4xl font-bold tabular-nums tracking-tight">{todayTotal.toLocaleString()}</p>
+              <p className="text-sm text-muted-foreground">calories</p>
+              {today > realToday && (
+                <p className="text-[10px] uppercase tracking-wider text-primary/80 mt-1">
+                  Planning mode (using top date selector)
+                </p>
+              )}
+            </div>
+
+            <Button
+              type="button"
+              size="lg"
+              className="w-full gap-2"
+              onClick={() => setLogFoodOpen(true)}
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              Log food
+            </Button>
+            {draftMealItems.length > 0 && (
+              <p className="mt-3 text-center text-[11px] text-muted-foreground lg:text-left">
+                <span className="font-semibold tabular-nums text-foreground">{draftMealItems.length}</span> item
+                {draftMealItems.length === 1 ? "" : "s"} in draft — tap Log food to continue
               </p>
             )}
           </div>
 
-          <FoodSearch onSelect={handleFoodSelect} />
-
-          {editingEntry && (
-            <div
-              className="glass-subtle flex items-center justify-between gap-3 px-3 py-2.5 mb-1"
-              style={{ borderRadius: "4px" }}
-            >
-              <p className="text-xs text-muted-foreground leading-snug">
-                Editing{" "}
-                <span className="text-foreground font-medium">
-                  {format(parseLocalDate(editingEntry.date.split("T")[0]), "MMM d, yyyy")}
-                </span>
-                <span className="capitalize"> · {editingEntry.mealType}</span>
-              </p>
-              <Button type="button" variant="ghost" size="sm" className="shrink-0 h-8 px-2" onClick={cancelEdit}>
-                <X className="h-4 w-4" />
-                <span className="sr-only">Cancel edit</span>
-              </Button>
-            </div>
-          )}
-
-          <div className="hud-divider my-4" />
-
-          <div className="flex gap-2 flex-wrap">
-            {mealTypes.map((m) => (
-              <Button
-                key={m}
-                type="button"
-                variant={mealType === m ? "default" : "outline"}
-                size="sm"
-                onClick={() => setMealType(m)}
-                className="capitalize"
-              >
-                {m}
-              </Button>
-            ))}
-          </div>
-
-          {!editingEntry && (
-            <div className="glass-subtle rounded-[3px] p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Meal Builder
-                </p>
-                <span className="text-[10px] tabular-nums text-muted-foreground/70">
-                  {draftMealItems.length} item{draftMealItems.length === 1 ? "" : "s"}
-                </span>
-              </div>
-              {draftMealItems.length === 0 ? (
-                <p className="text-xs text-muted-foreground/60">
-                  Add foods below. Nothing posts until you press <span className="font-medium">Post Meal</span>.
-                </p>
-              ) : (
-                <div className="space-y-1.5">
-                  {draftMealItems.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between gap-2 text-xs">
-                      <div className="min-w-0">
-                        <p className="truncate">
-                          {item.description || "Quick add"} · <span className="capitalize">{item.mealType}</span>
-                        </p>
-                        <p className="text-muted-foreground/65 tabular-nums">
-                          {item.calories} cal
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDraftMealItems((prev) => prev.filter((x) => x.id !== item.id))
-                        }
-                        className="p-1 rounded-[3px] hover:bg-destructive/10 shrink-0"
-                      >
-                        <X className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                    </div>
-                  ))}
-                  <div className="pt-1 border-t border-glass-border/60 text-[10px] text-muted-foreground/80 tabular-nums">
-                    Total: {draftTotals.calories.toLocaleString()} cal
-                    {(draftTotals.protein > 0 || draftTotals.carbs > 0 || draftTotals.fat > 0) && (
-                      <span> · P {Math.round(draftTotals.protein)}g · C {Math.round(draftTotals.carbs)}g · F {Math.round(draftTotals.fat)}g</span>
-                    )}
-                  </div>
-                </div>
+          <Dialog open={logFoodOpen} onOpenChange={setLogFoodOpen}>
+            <DialogContent
+              showCloseButton
+              className={cn(
+                "glass-frost flex max-h-[min(88vh,760px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md",
+                "[&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3"
               )}
-            </div>
-          )}
+            >
+              {/* Header */}
+              <div className="shrink-0 px-4 pt-4 pb-3 pr-12">
+                <DialogHeader className="space-y-0">
+                  <DialogTitle>{editingEntry ? "Edit entry" : "Log food"}</DialogTitle>
+                  <DialogDescription className="sr-only">
+                    {editingEntry ? "Edit a calorie entry" : "Add food to your daily log"}
+                  </DialogDescription>
+                </DialogHeader>
+                {editingEntry && (
+                  <p className="mt-1 truncate text-[10px] capitalize text-muted-foreground/60">
+                    {format(parseLocalDate(editingEntry.date.split("T")[0]), "MMM d")} · {editingEntry.mealType}
+                    {editingEntry.description && <> · {editingEntry.description}</>}
+                  </p>
+                )}
+                <div className="mt-3 flex rounded-lg bg-muted/20 p-0.5">
+                  {mealTypes.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMealType(m)}
+                      className={cn(
+                        "flex-1 rounded-md py-1.5 text-[11px] font-medium capitalize transition-all duration-150",
+                        mealType === m
+                          ? "bg-background text-foreground shadow-sm shadow-black/10"
+                          : "text-muted-foreground/50 hover:text-muted-foreground"
+                      )}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <details className="group rounded-xl border border-glass-border bg-glass-highlight/10 px-3 py-2 open:pb-3">
-              <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground [&::-webkit-details-marker]:hidden">
-                <span className="flex items-center gap-2 min-w-0">
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60 transition-transform duration-200 group-open:rotate-180" />
-                  <span>Estimate</span>
-                  {estimateCalDisplay != null && (
-                    <span className="font-semibold normal-case tabular-nums text-foreground truncate">
-                      · {estimateCalDisplay.toLocaleString()} cal
-                    </span>
-                  )}
-                </span>
-              </summary>
-              <div className="space-y-2 pt-3 mt-1 border-t border-glass-border/60">
-                <Label htmlFor="calories" className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Calories *
-                </Label>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                  <Input
-                    id="calories"
-                    type="number"
-                    min="0"
-                    step="1"
-                    inputMode="numeric"
-                    placeholder="e.g. 450"
-                    value={calories}
-                    onChange={(e) => setCalories(e.target.value)}
-                    className="flex-1 min-w-0 sm:min-h-[2.5rem]"
-                    required
+              {/* Search — collapsed by default */}
+              <div className="relative z-20 shrink-0 border-y border-border/20 px-4 py-2">
+                <button
+                  type="button"
+                  onClick={() => setLogFoodSearchOpen((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 rounded-lg py-1.5 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <Search className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                    <span className="truncate">Search foods</span>
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0 opacity-50 transition-transform duration-200",
+                      logFoodSearchOpen && "rotate-180"
+                    )}
                   />
-                  <div className="flex gap-1.5 shrink-0 flex-wrap sm:flex-nowrap">
-                    {(
-                      [
+                </button>
+                {logFoodSearchOpen && (
+                  <div className="overflow-visible pt-2.5">
+                    <FoodSearch onSelect={handleFoodSelect} compact />
+                  </div>
+                )}
+              </div>
+
+              {/* Body */}
+              <div className="relative z-0 min-h-0 flex-1 overflow-y-auto px-4 py-3">
+                <div className="space-y-3">
+
+                  {/* Saved meals — flat list, add mode only */}
+                  {!editingEntry && (
+                    <div>
+                      {(filteredSavedMeals.length > 0 || showCreateMeal) && (
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
+                            Saved
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => { setShowCreateMeal(!showCreateMeal); setSaveMealError(null) }}
+                            className="text-[10px] font-medium text-primary/50 hover:text-primary transition-colors"
+                          >
+                            {showCreateMeal ? "Cancel" : "+ New"}
+                          </button>
+                        </div>
+                      )}
+
+                      {showCreateMeal && (
+                        <div
+                          data-create-meal
+                          className="glass-subtle rounded-lg p-3 mb-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200"
+                          onKeyDownCapture={(e) => {
+                            if (e.key === "Enter" && (e.target as HTMLElement).closest("[data-create-meal]")) {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              void handleCreateMeal()
+                            }
+                          }}
+                        >
+                          <Input
+                            placeholder="Meal name"
+                            value={newMealName}
+                            onChange={(e) => setNewMealName(e.target.value)}
+                            className="h-8 bg-background/40 border-primary/15 text-xs"
+                          />
+                          <div className="grid grid-cols-4 gap-1.5">
+                            <div className="space-y-0.5">
+                              <Label className="text-[8px] uppercase tracking-wider text-muted-foreground/50">Cal *</Label>
+                              <Input type="number" min="0" placeholder="0" value={newMealCal} onChange={(e) => setNewMealCal(e.target.value)} className="h-7 bg-background/40 border-primary/15 text-xs" />
+                            </div>
+                            <div className="space-y-0.5">
+                              <Label className="text-[8px] uppercase tracking-wider text-muted-foreground/50">P</Label>
+                              <Input type="number" min="0" placeholder="g" value={newMealProtein} onChange={(e) => setNewMealProtein(e.target.value)} className="h-7 bg-background/40 border-primary/15 text-xs" />
+                            </div>
+                            <div className="space-y-0.5">
+                              <Label className="text-[8px] uppercase tracking-wider text-muted-foreground/50">C</Label>
+                              <Input type="number" min="0" placeholder="g" value={newMealCarbs} onChange={(e) => setNewMealCarbs(e.target.value)} className="h-7 bg-background/40 border-primary/15 text-xs" />
+                            </div>
+                            <div className="space-y-0.5">
+                              <Label className="text-[8px] uppercase tracking-wider text-muted-foreground/50">F</Label>
+                              <Input type="number" min="0" placeholder="g" value={newMealFat} onChange={(e) => setNewMealFat(e.target.value)} className="h-7 bg-background/40 border-primary/15 text-xs" />
+                            </div>
+                          </div>
+                          {saveMealError && <p className="text-[10px] text-destructive" role="alert">{saveMealError}</p>}
+                          <Button type="button" size="sm" className="w-full h-7 text-xs" onClick={() => void handleCreateMeal()}>
+                            Save
+                          </Button>
+                        </div>
+                      )}
+
+                      {filteredSavedMeals.length > 0 && (
+                        <div className="space-y-0.5">
+                          {filteredSavedMeals.map((meal) => (
+                            <div
+                              key={meal.id}
+                              className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-glass-highlight/15"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleUseSavedMeal(meal)}
+                                className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
+                              >
+                                <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 shrink-0">
+                                  <Plus className="h-2.5 w-2.5 text-primary/60" />
+                                </div>
+                                <span className="text-xs font-medium truncate">{meal.name}</span>
+                              </button>
+                              <span className="text-[10px] tabular-nums text-muted-foreground/40 shrink-0">
+                                {meal.calories}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSavedMeal(meal.id)}
+                                className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-destructive/10 shrink-0 transition-opacity"
+                              >
+                                <Trash2 className="h-2.5 w-2.5 text-muted-foreground/30" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Calorie input */}
+                  <form id="log-food-form" onSubmit={handleSubmit} className="space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        id="calories"
+                        type="number"
+                        min="0"
+                        step="1"
+                        inputMode="numeric"
+                        placeholder="Calories"
+                        value={calories}
+                        onChange={(e) => setCalories(e.target.value)}
+                        className="flex-1 min-w-0"
+                        required
+                      />
+                      {([
                         { n: 250, label: "+250" },
                         { n: 500, label: "+500" },
                         { n: 1000, label: "+1k" },
-                      ] as const
-                    ).map(({ n, label }) => (
-                      <Button
-                        key={n}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 sm:flex-none min-w-[4.25rem]"
-                        onClick={() => addCalories(n)}
-                        title={`Add ${n.toLocaleString()} cal`}
-                      >
-                        {label}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-[11px] text-muted-foreground/80">
-                  Type a total or tap quick adds. Calories from food search also count — adjust here if needed.
-                </p>
-                <Button type="submit" className="w-full" size="sm">
-                  {editingEntry ? "Save changes" : "Add item to meal"}
-                </Button>
-              </div>
-            </details>
+                      ] as const).map(({ n, label }) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => addCalories(n)}
+                          className="h-9 rounded-md border border-glass-border px-2 text-[10px] font-medium tabular-nums text-muted-foreground/50 hover:bg-glass-highlight/15 hover:text-foreground transition-colors sm:h-8"
+                          title={`Add ${n.toLocaleString()} cal`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {showSavePrompt && description && calories && (
+                        <button
+                          type="button"
+                          onClick={handleSaveCurrentAsFrequent}
+                          className="flex items-center gap-1 rounded-md border border-dashed border-primary/20 px-2 py-1.5 text-[10px] font-medium text-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
+                        >
+                          <Star className="h-3 w-3" />
+                          Save
+                        </button>
+                      )}
+                      {!editingEntry && (
+                        <Button type="submit" size="sm" className="flex-1 h-8">
+                          {estimateCalDisplay != null
+                            ? `Add ${estimateCalDisplay.toLocaleString()} cal`
+                            : "Add to meal"}
+                        </Button>
+                      )}
+                    </div>
+                  </form>
 
-            {showSavePrompt && description && calories && (
-              <button
-                type="button"
-                onClick={handleSaveCurrentAsFrequent}
-                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-[3px] border border-dashed border-primary/25 text-[11px] font-medium uppercase tracking-wider text-primary/70 hover:bg-primary/5 hover:text-primary transition-colors"
-              >
-                <Star className="h-3 w-3" />
-                Save to Frequently Added
-              </button>
-            )}
-
-            {/* Frequently Added */}
-            <details
-              ref={frequentlyAddedDetailsRef}
-              className="group rounded-xl border border-glass-border bg-glass-highlight/10 px-3 py-2 open:pb-3"
-            >
-              <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground [&::-webkit-details-marker]:hidden">
-                <span className="flex items-center gap-2 min-w-0">
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60 transition-transform duration-200 group-open:rotate-180" />
-                  <Star className="h-3.5 w-3.5 shrink-0 text-primary/60" />
-                  <span>Frequently Added</span>
-                  <span className="text-[9px] tabular-nums text-muted-foreground/40 capitalize">
-                    · {mealType}
-                  </span>
-                  {filteredSavedMeals.length > 0 && (
-                    <span className="font-semibold normal-case tabular-nums text-foreground truncate">
-                      · {filteredSavedMeals.length}
-                    </span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    if (frequentlyAddedDetailsRef.current) {
-                      frequentlyAddedDetailsRef.current.open = true
-                    }
-                    setShowCreateMeal(!showCreateMeal)
-                    setSaveMealError(null)
-                  }}
-                  className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-primary/60 hover:text-primary transition-colors shrink-0"
-                >
-                  {showCreateMeal ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
-                  {showCreateMeal ? "Cancel" : "Create"}
-                </button>
-              </summary>
-
-              <div className="space-y-3 pt-3 mt-1 border-t border-glass-border/60">
-                {showCreateMeal && (
-                  <div
-                    data-create-meal
-                    className="glass-subtle rounded-[3px] p-3 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-200"
-                    onKeyDownCapture={(e) => {
-                      if (
-                        e.key === "Enter" &&
-                        (e.target as HTMLElement).closest("[data-create-meal]")
-                      ) {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        void handleCreateMeal()
-                      }
-                    }}
-                  >
-                    <Input
-                      placeholder="Meal name"
-                      value={newMealName}
-                      onChange={(e) => setNewMealName(e.target.value)}
-                      className="bg-background/40 border-primary/15"
-                    />
-                    <div className="grid grid-cols-4 gap-1.5">
-                      <div className="space-y-1">
-                        <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">Cal *</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={newMealCal}
-                          onChange={(e) => setNewMealCal(e.target.value)}
-                          className="bg-background/40 border-primary/15 text-xs"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">Protein</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="g"
-                          value={newMealProtein}
-                          onChange={(e) => setNewMealProtein(e.target.value)}
-                          className="bg-background/40 border-primary/15 text-xs"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">Carbs</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="g"
-                          value={newMealCarbs}
-                          onChange={(e) => setNewMealCarbs(e.target.value)}
-                          className="bg-background/40 border-primary/15 text-xs"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[9px] uppercase tracking-wider text-muted-foreground">Fat</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="g"
-                          value={newMealFat}
-                          onChange={(e) => setNewMealFat(e.target.value)}
-                          className="bg-background/40 border-primary/15 text-xs"
-                        />
+                  {/* Draft items */}
+                  {!editingEntry && draftMealItems.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/40 mb-1.5">
+                        Draft · {draftMealItems.length}
+                      </p>
+                      <div className="rounded-lg border border-glass-border/30 divide-y divide-glass-border/20 overflow-hidden">
+                        {draftMealItems.map((item) => (
+                          <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium leading-tight">
+                                {item.description || "Quick add"}
+                              </p>
+                              <p className="mt-0.5 text-[10px] capitalize tabular-nums text-muted-foreground/40">
+                                {item.mealType} · {item.calories} cal
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setDraftMealItems((prev) => prev.filter((x) => x.id !== item.id))}
+                              className="p-1 rounded hover:bg-destructive/10 shrink-0"
+                            >
+                              <X className="h-3 w-3 text-muted-foreground/30" />
+                            </button>
+                          </div>
+                        ))}
+                        <div className="px-3 py-1.5 text-[10px] tabular-nums font-medium text-muted-foreground/50 bg-glass-highlight/5">
+                          {draftTotals.calories.toLocaleString()} cal
+                          {(draftTotals.protein > 0 || draftTotals.carbs > 0 || draftTotals.fat > 0) && (
+                            <span className="text-muted-foreground/30">
+                              {" "}· P {Math.round(draftTotals.protein)}g · C {Math.round(draftTotals.carbs)}g · F {Math.round(draftTotals.fat)}g
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    {saveMealError && (
-                      <p className="text-xs text-destructive" role="alert">
-                        {saveMealError}
-                      </p>
-                    )}
+                  )}
+
+                </div>
+              </div>
+
+              {/* Footer — Post only when draft exists or posting; edit mode always */}
+              {(editingEntry || draftMealItems.length > 0 || postingMeal) && (
+                <div className="shrink-0 border-t border-border/30 px-4 py-2.5 bg-background/60 backdrop-blur-sm">
+                  {editingEntry ? (
+                    <div className="flex gap-2">
+                      <Button type="button" variant="outline" className="flex-1" size="sm" onClick={cancelEdit}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" form="log-food-form" className="flex-1 press-scale" size="sm">
+                        Save
+                      </Button>
+                    </div>
+                  ) : (
                     <Button
                       type="button"
+                      className="w-full press-scale h-8 text-xs"
                       size="sm"
-                      className="w-full"
-                      onClick={() => void handleCreateMeal()}
+                      disabled={postingMeal}
+                      onClick={handlePostMealToDay}
                     >
-                      Save Meal
+                      {postingMeal
+                        ? "Posting..."
+                        : `Post meal · ${draftMealItems.length} item${draftMealItems.length === 1 ? "" : "s"}`}
                     </Button>
-                  </div>
-                )}
-
-                {filteredSavedMeals.length === 0 && !showCreateMeal && (
-                  <div className="glass-subtle rounded-[3px] py-5 text-center">
-                    <p className="text-xs text-muted-foreground/50">
-                      No saved {mealType} meals yet
-                    </p>
-                    <p className="text-[10px] text-muted-foreground/30 mt-1">
-                      Search a food or create a custom meal to save here
-                    </p>
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  {filteredSavedMeals.map((meal) => (
-                    <div
-                      key={meal.id}
-                      className="glass-subtle rounded-[3px] px-3 py-2.5 flex items-center justify-between group hover:bg-grid-accent-dim transition-colors"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleUseSavedMeal(meal)}
-                        className="flex items-center gap-3 min-w-0 flex-1 text-left"
-                      >
-                        <div className="flex items-center justify-center w-7 h-7 rounded-[3px] bg-primary/10 shrink-0">
-                          <Plus className="h-3 w-3 text-primary/70" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate leading-tight">{meal.name}</p>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-[10px] font-semibold tabular-nums text-foreground/80">
-                              {meal.calories} cal
-                            </span>
-                            {meal.protein != null && (
-                              <span className="text-[9px] tabular-nums text-blue-400/70">P {Math.round(meal.protein)}g</span>
-                            )}
-                            {meal.carbs != null && (
-                              <span className="text-[9px] tabular-nums text-amber-400/70">C {Math.round(meal.carbs)}g</span>
-                            )}
-                            {meal.fat != null && (
-                              <span className="text-[9px] tabular-nums text-rose-400/70">F {Math.round(meal.fat)}g</span>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteSavedMeal(meal.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-[3px] hover:bg-destructive/10 shrink-0"
-                      >
-                        <Trash2 className="h-3 w-3 text-muted-foreground/50" />
-                      </button>
-                    </div>
-                  ))}
+                  )}
                 </div>
-              </div>
-            </details>
-
-            <div className="flex flex-col gap-2">
-              {editingEntry && (
-                <Button type="button" variant="outline" className="w-full" size="lg" onClick={cancelEdit}>
-                  Cancel edit
-                </Button>
               )}
-              {!editingEntry && (
-                <Button
-                  type="button"
-                  className="w-full press-scale"
-                  size="lg"
-                  variant="default"
-                  disabled={draftMealItems.length === 0 || postingMeal}
-                  onClick={handlePostMealToDay}
-                >
-                  {postingMeal
-                    ? "Posting..."
-                    : `Post meal to ${today > realToday ? "planned day" : "day"}`}
-                </Button>
-              )}
-            </div>
-          </form>
-          </div>
+            </DialogContent>
+          </Dialog>
 
           <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
             <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-3">

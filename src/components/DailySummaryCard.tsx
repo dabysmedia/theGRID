@@ -40,7 +40,7 @@ export function DailySummaryCard({
       : null
 
   return (
-    <Link href={href} className="group flex h-full min-h-0">
+    <Link href={href} className="group flex h-full min-h-0 touch-manipulation">
       <div
         className="glass hud-corners flex h-full min-h-0 w-full flex-col p-3 sm:p-4 press-scale hover:bg-glass-highlight/40 hover:shadow-lg hover:shadow-black/10 cursor-pointer relative overflow-hidden transition-[background-color,box-shadow] duration-200"
         style={{ borderRadius: "4px" }}

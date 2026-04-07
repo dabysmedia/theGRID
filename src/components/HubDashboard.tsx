@@ -15,6 +15,7 @@ import { DailySummaryCard } from "./DailySummaryCard"
 import { DatePicker } from "./DatePicker"
 import { WeeklyHero } from "./WeeklyHero"
 import { FastingTimer } from "./FastingTimer"
+import { FastingHubTile } from "./FastingHubTile"
 import { useActiveDate } from "@/context/DateContext"
 import { cn } from "@/lib/utils"
 
@@ -141,6 +142,11 @@ export function HubDashboard() {
               </div>
             )
           })}
+          <div
+            className={`animate-scale-in aspect-square min-h-0 w-full max-w-full ${staggerClasses[mainCategories.length] ?? ""}`}
+          >
+            <FastingHubTile />
+          </div>
         </div>
 
         <div className="mt-3 space-y-2">

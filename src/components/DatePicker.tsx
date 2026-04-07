@@ -23,28 +23,32 @@ export function DatePicker() {
   }
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex flex-wrap items-center gap-1">
       {/* Prev day */}
       <button
         onClick={goPrev}
-        className="flex items-center justify-center w-8 h-8 text-muted-foreground/50 hover:text-primary hover:bg-grid-accent-dim press-scale transition-colors"
+        type="button"
+        className="flex h-11 w-11 touch-manipulation items-center justify-center text-muted-foreground/50 transition-colors hover:bg-grid-accent-dim hover:text-primary press-scale sm:h-8 sm:w-8"
         style={{ borderRadius: "3px" }}
         aria-label="Previous day"
       >
-        <ChevronLeft className="h-4 w-4" />
+        <ChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" />
       </button>
 
       {/* Date display — clickable */}
       <button
+        type="button"
         onClick={openPicker}
-        className={`relative group text-xs tracking-[0.1em] uppercase px-3 py-1.5 transition-all ${
+        className={`relative min-h-11 touch-manipulation group px-3 py-2.5 text-xs tracking-[0.1em] uppercase transition-all sm:min-h-0 sm:py-1.5 ${
           isToday
             ? "text-muted-foreground hover:text-foreground hover:bg-glass-highlight/30"
             : "text-primary font-semibold bg-grid-accent-dim border border-primary/20"
         }`}
         style={{ borderRadius: "3px" }}
       >
-        <span className="text-muted-foreground/40 mr-1.5 group-hover:text-muted-foreground/60 transition-colors">//</span>
+        <span className="text-muted-foreground/40 mr-1.5 group-hover:text-muted-foreground/60 transition-colors">
+          {"//"}
+        </span>
         {display}
         {!isToday && (
           <span className="absolute -top-px -right-px w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
@@ -62,22 +66,24 @@ export function DatePicker() {
 
       {/* Next day */}
       <button
+        type="button"
         onClick={goNext}
-        className="flex items-center justify-center w-8 h-8 text-muted-foreground/50 hover:text-primary hover:bg-grid-accent-dim press-scale transition-colors"
+        className="flex h-11 w-11 touch-manipulation items-center justify-center text-muted-foreground/50 transition-colors hover:bg-grid-accent-dim hover:text-primary press-scale sm:h-8 sm:w-8"
         style={{ borderRadius: "3px" }}
         aria-label="Next day"
       >
-        <ChevronRight className="h-4 w-4" />
+        <ChevronRight className="h-5 w-5 sm:h-4 sm:w-4" />
       </button>
 
       {/* Return to today */}
       {!isToday && (
         <button
+          type="button"
           onClick={goToday}
-          className="flex items-center gap-1 ml-1.5 px-2.5 py-1.5 text-[10px] tracking-[0.12em] uppercase font-semibold text-primary bg-grid-accent-dim border border-primary/20 hover:bg-primary/20 hover:border-primary/35 transition-all"
+          className="ml-1.5 flex min-h-11 touch-manipulation items-center gap-1.5 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary transition-all bg-grid-accent-dim border border-primary/20 hover:bg-primary/20 hover:border-primary/35 sm:min-h-0 sm:px-2.5 sm:py-1.5"
           style={{ borderRadius: "3px" }}
         >
-          <RotateCcw className="h-3 w-3" />
+          <RotateCcw className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
           Today
         </button>
       )}

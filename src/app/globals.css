@@ -160,6 +160,12 @@
     padding-right: env(safe-area-inset-right, 0px);
     -webkit-tap-highlight-color: transparent;
   }
+  button,
+  [type="button"],
+  [type="submit"],
+  [role="button"] {
+    touch-action: manipulation;
+  }
   html {
     @apply font-mono;
     -webkit-font-smoothing: antialiased;

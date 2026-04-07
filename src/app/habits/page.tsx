@@ -490,7 +490,7 @@ export default function HabitsPage() {
                           key={key}
                           type="button"
                           onClick={() => setFormIcon(key)}
-                          className={`flex items-center justify-center w-8 h-8 transition-all ${
+                          className={`flex h-10 w-10 touch-manipulation items-center justify-center transition-all sm:h-8 sm:w-8 ${
                             formIcon === key ? "ring-1 ring-primary/40 bg-primary/10" : "hover:bg-glass-highlight/30"
                           }`}
                           style={{ borderRadius: "3px" }}
