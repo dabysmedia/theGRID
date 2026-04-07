@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { kmToMiles, runKmToStepsFromRun } from "@/lib/units"
-import { startOfDay, subDays } from "date-fns"
+import { formatDate, parseLocalDate } from "@/lib/utils"
+import { format } from "date-fns"
+import { subDays } from "date-fns"
+import {
+  utcCalendarDayKeyFromIso,
+  utcCalendarDayRangeInclusive,
+} from "@/lib/dateStorage"
 
 /** Matches Prisma Goal — used here so dashboard logic stays typed if client stubs lag schema. */
 interface GoalRow {
@@ -80,12 +86,13 @@ function latestGoalByCategory(goals: GoalRow[]): Map<string, GoalRow> {
 export async function GET(req: NextRequest) {
   try {
     const dateParam = req.nextUrl.searchParams.get("d")
-    const refDate = dateParam
-      ? startOfDay(new Date(dateParam + "T00:00:00"))
-      : startOfDay(new Date())
-
-    const today = refDate
-    const weekAgo = subDays(today, 6)
+    const refDate =
+      dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+        ? parseLocalDate(dateParam)
+        : new Date()
+    const refDayStr = formatDate(refDate)
+    const weekStartStr = formatDate(subDays(refDate, 6))
+    const dateInRange = utcCalendarDayRangeInclusive(weekStartStr, refDayStr)
 
     const [
       calorieEntries,
@@ -97,13 +104,13 @@ export async function GET(req: NextRequest) {
       bowelEntries,
       goals,
     ] = await Promise.all([
-      prisma.calorieEntry.findMany({ where: { date: { gte: weekAgo } } }),
-      prisma.stepEntry.findMany({ where: { date: { gte: weekAgo } } }),
-      prisma.runEntry.findMany({ where: { date: { gte: weekAgo } } }),
-      prisma.workoutEntry.findMany({ where: { date: { gte: weekAgo } } }),
-      prisma.sleepEntry.findMany({ where: { date: { gte: weekAgo } } }),
-      prisma.alcoholEntry.findMany({ where: { date: { gte: weekAgo } } }),
-      prisma.bowelEntry.findMany({ where: { date: { gte: weekAgo } } }),
+      prisma.calorieEntry.findMany({ where: { date: dateInRange } }),
+      prisma.stepEntry.findMany({ where: { date: dateInRange } }),
+      prisma.runEntry.findMany({ where: { date: dateInRange } }),
+      prisma.workoutEntry.findMany({ where: { date: dateInRange } }),
+      prisma.sleepEntry.findMany({ where: { date: dateInRange } }),
+      prisma.alcoholEntry.findMany({ where: { date: dateInRange } }),
+      prisma.bowelEntry.findMany({ where: { date: dateInRange } }),
       prisma.goal.findMany({ where: { active: true } }),
     ])
 
@@ -115,9 +122,10 @@ export async function GET(req: NextRequest) {
     ): number[] {
       const result: number[] = []
       for (let i = 0; i <= 6; i++) {
-        const day = subDays(today, 6 - i)
+        const day = subDays(refDate, 6 - i)
+        const dayKey = format(day, "yyyy-MM-dd")
         const dayEntries = entries.filter(
-          (e) => startOfDay(e.date).getTime() === day.getTime()
+          (e) => utcCalendarDayKeyFromIso(e.date) === dayKey
         )
         result.push(valueExtractor(dayEntries))
       }

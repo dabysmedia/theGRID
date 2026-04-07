@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { DEFAULT_WEIGHT_UNIT } from "@/lib/units"
-import { startOfDay } from "date-fns"
+import { formatDate } from "@/lib/utils"
+import { parseYyyyMmDdToStoredDate } from "@/lib/dateStorage"
 
 async function findOrCreateBodyweightGoal() {
   let goal = await prisma.longGoal.findFirst({
@@ -27,9 +28,9 @@ async function findOrCreateBodyweightGoal() {
 function resolveDate(req: NextRequest): Date {
   const d = req.nextUrl.searchParams.get("d")
   if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
-    return startOfDay(new Date(d + "T00:00:00"))
+    return parseYyyyMmDdToStoredDate(d)
   }
-  return startOfDay(new Date())
+  return parseYyyyMmDdToStoredDate(formatDate(new Date()))
 }
 
 export async function GET(req: NextRequest) {
@@ -81,8 +82,8 @@ export async function POST(req: NextRequest) {
 
     const dateParam = body.date
     const targetDay = dateParam
-      ? startOfDay(new Date(dateParam + "T00:00:00"))
-      : startOfDay(new Date())
+      ? parseYyyyMmDdToStoredDate(String(dateParam).trim())
+      : parseYyyyMmDdToStoredDate(formatDate(new Date()))
 
     const existing = await prisma.longGoalEntry.findFirst({
       where: { goalId: goal.id, date: targetDay },

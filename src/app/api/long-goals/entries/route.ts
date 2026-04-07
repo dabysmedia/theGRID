@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { parseYyyyMmDdToStoredDate } from "@/lib/dateStorage"
 
 export async function POST(req: NextRequest) {
   try {
@@ -7,7 +8,7 @@ export async function POST(req: NextRequest) {
     const entry = await prisma.longGoalEntry.create({
       data: {
         goalId: body.goalId,
-        date: new Date(body.date + "T00:00:00"),
+        date: parseYyyyMmDdToStoredDate(String(body.date)),
         value: parseFloat(body.value),
         notes: body.notes || null,
       },

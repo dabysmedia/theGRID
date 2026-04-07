@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { startOfDay, subDays } from "date-fns"
+import { formatDate } from "@/lib/utils"
+import { subDays } from "date-fns"
+import { parseYyyyMmDdToStoredDate, utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 
 async function getOrCreateGoal() {
   let goal = await prisma.longGoal.findFirst({
@@ -29,20 +31,21 @@ export async function GET() {
       orderBy: { date: "desc" },
     })
 
-    const today = startOfDay(new Date())
-    const weekAgo = subDays(today, 6)
-    const monthAgo = subDays(today, 29)
+    const todayStr = formatDate(new Date())
+    const todayD = new Date()
+    const weekAgoStr = formatDate(subDays(todayD, 6))
+    const monthAgoStr = formatDate(subDays(todayD, 29))
 
-    const todayEntry = entries.find(
-      (e) => startOfDay(new Date(e.date)).getTime() === today.getTime()
-    )
+    const todayEntry = entries.find((e) => utcCalendarDayKeyFromIso(e.date) === todayStr)
 
-    const last7 = entries.filter(
-      (e) => new Date(e.date).getTime() >= weekAgo.getTime()
-    )
-    const last30 = entries.filter(
-      (e) => new Date(e.date).getTime() >= monthAgo.getTime()
-    )
+    const last7 = entries.filter((e) => {
+      const k = utcCalendarDayKeyFromIso(e.date)
+      return k >= weekAgoStr && k <= todayStr
+    })
+    const last30 = entries.filter((e) => {
+      const k = utcCalendarDayKeyFromIso(e.date)
+      return k >= monthAgoStr && k <= todayStr
+    })
 
     const values = entries.map((e) => e.value)
     const avg7 =
@@ -88,7 +91,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const goal = await getOrCreateGoal()
-    const date = new Date(body.date + "T00:00:00")
+    const date = parseYyyyMmDdToStoredDate(String(body.date))
 
     const existing = await prisma.longGoalEntry.findFirst({
       where: { goalId: goal.id, date },

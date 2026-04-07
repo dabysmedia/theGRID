@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { startOfDay } from "date-fns"
+import { parseYyyyMmDdToStoredDate } from "@/lib/dateStorage"
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "habitId and date required" }, { status: 400 })
     }
 
-    const date = startOfDay(new Date(body.date + "T00:00:00"))
+    const date = parseYyyyMmDdToStoredDate(String(body.date))
 
     const existing = await prisma.habitCompletion.findUnique({
       where: { habitId_date: { habitId: body.habitId, date } },

@@ -1,20 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { startOfDay, endOfDay } from "date-fns"
+import { parseYyyyMmDdToStoredDate, utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const dateParam = searchParams.get("date")
 
   try {
-    const where = dateParam
-      ? {
-          date: {
-            gte: startOfDay(new Date(dateParam)),
-            lte: endOfDay(new Date(dateParam)),
-          },
-        }
-      : {}
+    const where =
+      dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+        ? { date: utcRangeWhereForCalendarDay(dateParam) }
+        : {}
 
     const entries = await prisma.calorieEntry.findMany({
       where,
@@ -42,8 +38,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Date and meal type are required." }, { status: 400 })
     }
 
-    const date = new Date(`${dateStr}T00:00:00`)
-    if (Number.isNaN(date.getTime())) {
+    let date: Date
+    try {
+      date = parseYyyyMmDdToStoredDate(dateStr)
+    } catch {
       return NextResponse.json({ error: "Invalid date." }, { status: 400 })
     }
 
@@ -96,8 +94,10 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Date and meal type are required." }, { status: 400 })
     }
 
-    const date = new Date(`${dateStr}T00:00:00`)
-    if (Number.isNaN(date.getTime())) {
+    let date: Date
+    try {
+      date = parseYyyyMmDdToStoredDate(dateStr)
+    } catch {
       return NextResponse.json({ error: "Invalid date." }, { status: 400 })
     }
 

@@ -11,13 +11,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { format, isToday, isYesterday, startOfDay, subDays } from "date-fns"
+import { format, isToday, isYesterday, subDays } from "date-fns"
 import { PageHeader } from "@/components/PageHeader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
 import { formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { kmToMiles, runKmToStepsFromRun, STEPS_PER_MILE_FROM_RUN } from "@/lib/units"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 
@@ -41,7 +42,7 @@ interface RunEntry {
 }
 
 function dayKeyFromEntry(dateIso: string): string {
-  return formatDate(startOfDay(new Date(dateIso)))
+  return utcCalendarDayKeyFromIso(dateIso)
 }
 
 function groupHeaderLabel(dayKey: string): string {
@@ -245,6 +246,11 @@ export default function StepsPage() {
   async function handleDelete(id: string) {
     const res = await fetch(`/api/steps?id=${id}`, { method: "DELETE" })
     if (res.ok) setEntries(entries.filter((e) => e.id !== id))
+  }
+
+  async function handleDeleteRun(id: string) {
+    const res = await fetch(`/api/running?id=${id}`, { method: "DELETE" })
+    if (res.ok) setRunEntries(runEntries.filter((r) => r.id !== id))
   }
 
   const todayTotal = stats.todayTotal
@@ -505,7 +511,7 @@ export default function StepsPage() {
                   return (
                     <div
                       key={`run-${run.id}`}
-                      className="glass-subtle rounded-xl p-3.5 flex items-center justify-between"
+                      className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#22c55e]/10 shrink-0">
@@ -521,6 +527,13 @@ export default function StepsPage() {
                           </p>
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRun(run.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-destructive/10 shrink-0"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
                     </div>
                   )
                 })}

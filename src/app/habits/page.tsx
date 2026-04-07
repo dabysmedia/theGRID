@@ -216,7 +216,7 @@ export default function HabitsPage() {
             return {
               ...h,
               completions: [
-                { id: result.id, habitId, date: todayStr + "T00:00:00.000Z", createdAt: new Date().toISOString() },
+                { id: result.id, habitId, date: todayStr + "T12:00:00.000Z", createdAt: new Date().toISOString() },
                 ...h.completions,
               ],
             }

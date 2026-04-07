@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { format, startOfDay, subDays } from "date-fns"
+import { format, subDays } from "date-fns"
 import { Moon, Trash2, Calendar, Star, TrendingUp } from "lucide-react"
 import {
   ResponsiveContainer,
@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
 import { formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 
 const sleepGoalPresets: GoalPreset[] = [
@@ -53,7 +54,7 @@ function formatTimeRange(bed: string, wake: string): string {
 }
 
 function entryDateKey(entry: SleepEntry): string {
-  return formatDate(new Date(entry.date))
+  return utcCalendarDayKeyFromIso(entry.date)
 }
 
 function StatCard({
@@ -99,11 +100,11 @@ export default function SleepPage() {
   const refDate = parseLocalDate(activeDate)
 
   const last7DaysEntries = useMemo(() => {
-    const ref = parseLocalDate(activeDate)
-    const from = subDays(ref, 6)
+    const refKey = activeDate
+    const fromKey = formatDate(subDays(parseLocalDate(activeDate), 6))
     return entries.filter((e) => {
-      const d = startOfDay(new Date(e.date))
-      return d >= from && d <= ref
+      const k = entryDateKey(e)
+      return k >= fromKey && k <= refKey
     })
   }, [entries, activeDate])
 
@@ -157,7 +158,8 @@ export default function SleepPage() {
   const chartEntries = useMemo(() => {
     const chronological = [...entries].reverse()
     if (!cutoff) return chronological
-    return chronological.filter((e) => startOfDay(new Date(e.date)) >= cutoff)
+    const cutoffKey = formatDate(cutoff)
+    return chronological.filter((e) => entryDateKey(e) >= cutoffKey)
   }, [entries, cutoff])
 
   const chartData = useMemo(() => {

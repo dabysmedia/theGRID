@@ -1,20 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { startOfDay, endOfDay } from "date-fns"
+import { parseYyyyMmDdToStoredDate, utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const dateParam = searchParams.get("date")
 
   try {
-    const where = dateParam
-      ? {
-          date: {
-            gte: startOfDay(new Date(dateParam)),
-            lte: endOfDay(new Date(dateParam)),
-          },
-        }
-      : {}
+    const where =
+      dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+        ? { date: utcRangeWhereForCalendarDay(dateParam) }
+        : {}
 
     const entries = await prisma.runEntry.findMany({
       where,
@@ -41,8 +37,8 @@ export async function POST(req: NextRequest) {
   try {
     const distance = Number.parseFloat(String(body.distance ?? ""))
     const duration = Number.parseInt(String(body.duration ?? ""), 10)
-    const dateStr = typeof body.date === "string" ? body.date : ""
-    const dateBuilt = new Date(dateStr + "T00:00:00")
+    const dateStr = typeof body.date === "string" ? body.date.trim() : ""
+    const dateBuilt = parseYyyyMmDdToStoredDate(dateStr)
     if (!Number.isFinite(distance) || distance <= 0 || !Number.isFinite(duration) || duration <= 0) {
       return NextResponse.json(
         { error: "Valid distance and duration are required." },
