@@ -82,6 +82,61 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PUT(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const id = typeof body.id === "string" ? body.id.trim() : ""
+    if (!id) {
+      return NextResponse.json({ error: "Entry id is required." }, { status: 400 })
+    }
+
+    const dateStr = typeof body.date === "string" ? body.date.trim() : ""
+    const mealType = typeof body.mealType === "string" ? body.mealType.trim() : ""
+    if (!dateStr || !mealType) {
+      return NextResponse.json({ error: "Date and meal type are required." }, { status: 400 })
+    }
+
+    const date = new Date(`${dateStr}T00:00:00`)
+    if (Number.isNaN(date.getTime())) {
+      return NextResponse.json({ error: "Invalid date." }, { status: 400 })
+    }
+
+    const calories = Math.round(parseFloat(String(body.calories ?? "").trim()))
+    if (!Number.isFinite(calories) || calories < 0) {
+      return NextResponse.json({ error: "Valid calories are required." }, { status: 400 })
+    }
+
+    const entry = await prisma.calorieEntry.update({
+      where: { id },
+      data: {
+        date,
+        mealType,
+        description:
+          typeof body.description === "string" && body.description.trim() !== ""
+            ? body.description.trim()
+            : null,
+        calories,
+        protein: safeOptionalFloat(body.protein),
+        carbs: safeOptionalFloat(body.carbs),
+        fat: safeOptionalFloat(body.fat),
+      },
+    })
+    return NextResponse.json(entry)
+  } catch (e) {
+    console.error("[calories PUT]", e)
+    const dev = process.env.NODE_ENV === "development"
+    return NextResponse.json(
+      {
+        error:
+          dev && e instanceof Error
+            ? e.message
+            : "Could not update entry. Check your connection and try again.",
+      },
+      { status: 500 }
+    )
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const id = searchParams.get("id")

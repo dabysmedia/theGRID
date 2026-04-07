@@ -3,6 +3,80 @@ import { prisma } from "@/lib/prisma"
 import { kmToMiles, runKmToStepsFromRun } from "@/lib/units"
 import { startOfDay, subDays } from "date-fns"
 
+/** Matches Prisma Goal — used here so dashboard logic stays typed if client stubs lag schema. */
+interface GoalRow {
+  category: string
+  goalType: string
+  direction: string
+  target: number
+  unit: string
+  createdAt: Date
+}
+
+/** Running distance goals are entered in miles (`unit: mi`); legacy rows may store km. */
+function runningTargetMiles(target: number, unit: string): number {
+  if (unit === "mi") return target
+  return kmToMiles(target)
+}
+
+/**
+ * Maps CategoryGoal presets to a single number comparable to today's dashboard value.
+ * Weekly-style goals are converted to daily equivalents where the UI shows daily totals.
+ */
+function dashboardGoalValue(g: GoalRow): number | null {
+  const { category, goalType, target, unit } = g
+  switch (category) {
+    case "calories":
+      if (goalType === "daily" || goalType === "weekly_avg" || goalType === "target") {
+        return target
+      }
+      return null
+    case "steps":
+      if (goalType === "daily" || goalType === "target") return target
+      if (goalType === "weekly") return Math.round((target / 7) * 10) / 10
+      return null
+    case "running": {
+      if (goalType === "pace") return null
+      const mi = runningTargetMiles(target, unit)
+      if (goalType === "weekly") return Math.round((mi / 7) * 10) / 10
+      if (goalType === "daily" || goalType === "target" || goalType === "per_session") {
+        return Math.round(mi * 10) / 10
+      }
+      return null
+    }
+    case "workouts":
+      if (goalType === "per_session") return null
+      if (goalType === "weekly") return Math.round((target / 7) * 10) / 10
+      if (goalType === "daily" || goalType === "target") return target
+      return null
+    case "sleep":
+      if (goalType === "daily" || goalType === "weekly_avg" || goalType === "target") {
+        return target
+      }
+      return null
+    case "alcohol":
+      if (goalType === "daily" || goalType === "target") return target
+      if (goalType === "weekly") return Math.round((target / 7) * 10) / 10
+      return null
+    case "bowel":
+      if (goalType === "daily" || goalType === "target") return target
+      return null
+    default:
+      return null
+  }
+}
+
+function latestGoalByCategory(goals: GoalRow[]): Map<string, GoalRow> {
+  const sorted = [...goals].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+  )
+  const map = new Map<string, GoalRow>()
+  for (const g of sorted) {
+    if (!map.has(g.category)) map.set(g.category, g)
+  }
+  return map
+}
+
 export async function GET(req: NextRequest) {
   try {
     const dateParam = req.nextUrl.searchParams.get("d")
@@ -33,12 +107,7 @@ export async function GET(req: NextRequest) {
       prisma.goal.findMany({ where: { active: true } }),
     ])
 
-    const dailyGoalMap = new Map<string, { target: number; direction: string }>()
-    for (const g of goals) {
-      if (g.goalType === "daily" || g.goalType === "target") {
-        dailyGoalMap.set(g.category, { target: g.target, direction: g.direction })
-      }
-    }
+    const goalByCategory = latestGoalByCategory(goals)
 
     function dailyTotals<T extends { date: Date }>(
       entries: T[],
@@ -84,55 +153,69 @@ export async function GET(req: NextRequest) {
     )
     const bowelLast7 = dailyTotals(bowelEntries, (items) => items.length)
 
+    const calG = goalByCategory.get("calories")
+    const stepsG = goalByCategory.get("steps")
+    const runG = goalByCategory.get("running")
+    const woG = goalByCategory.get("workouts")
+    const sleepG = goalByCategory.get("sleep")
+    const alcG = goalByCategory.get("alcohol")
+    const bowelG = goalByCategory.get("bowel")
+
+    const calGoal = calG ? dashboardGoalValue(calG) : null
+    const stepsGoal = stepsG ? dashboardGoalValue(stepsG) : null
+    const runGoal = runG ? dashboardGoalValue(runG) : null
+    const woGoal = woG ? dashboardGoalValue(woG) : null
+    const sleepGoal = sleepG ? dashboardGoalValue(sleepG) : null
+    const alcGoal = alcG ? dashboardGoalValue(alcG) : null
+    const bowelGoal = bowelG ? dashboardGoalValue(bowelG) : null
+
     return NextResponse.json({
       calories: {
         todayValue: calorieLast7[6],
-        goal: dailyGoalMap.get("calories")?.target ?? 2000,
-        direction: dailyGoalMap.get("calories")?.direction ?? "up",
+        goal: calGoal ?? 2000,
+        direction: calG?.direction ?? "up",
         unit: "cal",
         last7: calorieLast7,
       },
       steps: {
         todayValue: stepsLast7[6],
-        goal: dailyGoalMap.get("steps")?.target ?? 10000,
-        direction: dailyGoalMap.get("steps")?.direction ?? "up",
+        goal: stepsGoal ?? 10000,
+        direction: stepsG?.direction ?? "up",
         unit: "steps",
         last7: stepsLast7,
       },
       running: {
         todayValue: Math.round(runLast7[6] * 10) / 10,
-        goal: dailyGoalMap.get("running")
-          ? Math.round(kmToMiles(dailyGoalMap.get("running")!.target) * 10) / 10
-          : null,
-        direction: dailyGoalMap.get("running")?.direction ?? "up",
+        goal: runGoal,
+        direction: runG?.direction ?? "up",
         unit: "mi",
         last7: runLast7,
       },
       workouts: {
         todayValue: workoutLast7[6],
-        goal: dailyGoalMap.get("workouts")?.target ?? null,
-        direction: dailyGoalMap.get("workouts")?.direction ?? "up",
+        goal: woGoal,
+        direction: woG?.direction ?? "up",
         unit: "sessions",
         last7: workoutLast7,
       },
       sleep: {
         todayValue: Math.round(sleepLast7[6] * 10) / 10,
-        goal: dailyGoalMap.get("sleep")?.target ?? 8,
-        direction: dailyGoalMap.get("sleep")?.direction ?? "up",
+        goal: sleepGoal ?? 8,
+        direction: sleepG?.direction ?? "up",
         unit: "hrs",
         last7: sleepLast7,
       },
       alcohol: {
         todayValue: alcoholLast7[6],
-        goal: dailyGoalMap.get("alcohol")?.target ?? null,
-        direction: dailyGoalMap.get("alcohol")?.direction ?? "down",
+        goal: alcGoal,
+        direction: alcG?.direction ?? "down",
         unit: "units",
         last7: alcoholLast7,
       },
       bowel: {
         todayValue: bowelLast7[6],
-        goal: null,
-        direction: "up",
+        goal: bowelGoal,
+        direction: bowelG?.direction ?? "up",
         unit: "",
         last7: bowelLast7,
       },

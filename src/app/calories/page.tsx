@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { format, subDays } from "date-fns"
-import { Calendar, ChevronDown, Flame, Trash2, Plus, Star, X } from "lucide-react"
+import { Calendar, ChevronDown, Flame, Trash2, Plus, Star, X, Pencil } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -74,6 +74,7 @@ export default function CaloriesPage() {
   const [newMealFat, setNewMealFat] = useState("")
   const [showSavePrompt, setShowSavePrompt] = useState(false)
   const [saveMealError, setSaveMealError] = useState<string | null>(null)
+  const [editingEntry, setEditingEntry] = useState<CalorieEntry | null>(null)
   const frequentlyAddedDetailsRef = useRef<HTMLDetailsElement>(null)
 
   const { activeDate } = useActiveDate()
@@ -168,9 +169,55 @@ export default function CaloriesPage() {
     setCalories(String(Math.round(base + n)))
   }
 
+  function cancelEdit() {
+    setEditingEntry(null)
+    setDescription("")
+    setCalories("")
+    setProtein("")
+    setCarbs("")
+    setFat("")
+    setMealType("lunch")
+    setShowSavePrompt(false)
+  }
+
+  function startEdit(entry: CalorieEntry) {
+    setEditingEntry(entry)
+    setMealType(entry.mealType)
+    setDescription(entry.description ?? "")
+    setCalories(String(entry.calories))
+    setProtein(entry.protein != null ? String(entry.protein) : "")
+    setCarbs(entry.carbs != null ? String(entry.carbs) : "")
+    setFat(entry.fat != null ? String(entry.fat) : "")
+    setShowSavePrompt(false)
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!calories) return
+
+    if (editingEntry) {
+      const res = await fetch("/api/calories", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingEntry.id,
+          date: editingEntry.date.split("T")[0],
+          mealType,
+          description: description || null,
+          calories,
+          protein: protein || null,
+          carbs: carbs || null,
+          fat: fat || null,
+        }),
+      })
+
+      if (res.ok) {
+        const updated = (await res.json()) as CalorieEntry
+        setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
+        cancelEdit()
+      }
+      return
+    }
 
     const res = await fetch("/api/calories", {
       method: "POST",
@@ -200,7 +247,15 @@ export default function CaloriesPage() {
 
   async function handleDelete(id: string) {
     const res = await fetch(`/api/calories?id=${id}`, { method: "DELETE" })
-    if (res.ok) setEntries(entries.filter((e) => e.id !== id))
+    if (res.ok) {
+      setEntries((prev) => prev.filter((e) => e.id !== id))
+      setEditingEntry((cur) => {
+        if (cur?.id === id) {
+          queueMicrotask(() => cancelEdit())
+        }
+        return cur?.id === id ? null : cur
+      })
+    }
   }
 
   async function handleUseSavedMeal(meal: SavedMeal) {
@@ -369,6 +424,25 @@ export default function CaloriesPage() {
           </div>
 
           <FoodSearch onSelect={handleFoodSelect} />
+
+          {editingEntry && (
+            <div
+              className="glass-subtle flex items-center justify-between gap-3 px-3 py-2.5 mb-1"
+              style={{ borderRadius: "4px" }}
+            >
+              <p className="text-xs text-muted-foreground leading-snug">
+                Editing{" "}
+                <span className="text-foreground font-medium">
+                  {format(parseLocalDate(editingEntry.date.split("T")[0]), "MMM d, yyyy")}
+                </span>
+                <span className="capitalize"> · {editingEntry.mealType}</span>
+              </p>
+              <Button type="button" variant="ghost" size="sm" className="shrink-0 h-8 px-2" onClick={cancelEdit}>
+                <X className="h-4 w-4" />
+                <span className="sr-only">Cancel edit</span>
+              </Button>
+            </div>
+          )}
 
           <div className="hud-divider my-4" />
 
@@ -633,9 +707,16 @@ export default function CaloriesPage() {
               </div>
             </details>
 
-            <Button type="submit" className="w-full press-scale" size="lg">
-              Log Calories
-            </Button>
+            <div className="flex flex-col gap-2">
+              {editingEntry && (
+                <Button type="button" variant="outline" className="w-full" size="lg" onClick={cancelEdit}>
+                  Cancel edit
+                </Button>
+              )}
+              <Button type="submit" className="w-full press-scale" size="lg">
+                {editingEntry ? "Save changes" : "Log Calories"}
+              </Button>
+            </div>
           </form>
           </div>
 
@@ -712,9 +793,9 @@ export default function CaloriesPage() {
                 {items.map((entry) => (
                   <div
                     key={entry.id}
-                    className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group"
+                    className="glass-subtle rounded-xl p-3.5 flex items-center justify-between gap-2 group"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#ef4444]/10 shrink-0">
                         <span className="text-xs font-semibold text-[#ef4444] capitalize">
                           {entry.mealType.charAt(0)}
@@ -749,13 +830,26 @@ export default function CaloriesPage() {
                         )}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(entry.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-destructive/10 shrink-0"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                    </button>
+                    <div className="flex items-center gap-0.5 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(entry)}
+                        className="p-1.5 rounded-lg hover:bg-primary/10 shrink-0"
+                        title="Edit"
+                        aria-label="Edit entry"
+                      >
+                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(entry.id)}
+                        className="p-1.5 rounded-lg hover:bg-destructive/10 shrink-0"
+                        title="Delete"
+                        aria-label="Delete entry"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
