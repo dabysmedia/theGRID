@@ -20,16 +20,15 @@ export function PageHeader({ title, icon: Icon, iconColor }: PageHeaderProps) {
         <button
           type="button"
           onClick={() => router.back()}
-          className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center glass press-scale hover:bg-glass-highlight/40 transition-[background-color] duration-200 sm:h-9 sm:w-9"
-          style={{ borderRadius: '3px' }}
+          className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl glass press-scale hover:bg-glass-highlight/40 transition-[background-color] duration-200 sm:h-9 sm:w-9"
         >
           <ArrowLeft className="h-5 w-5 text-muted-foreground sm:h-4 sm:w-4" />
         </button>
         <div className="flex items-center gap-2.5">
           {Icon && (
             <div
-              className="flex items-center justify-center w-8 h-8"
-              style={{ backgroundColor: `${iconColor}18`, borderRadius: '3px' }}
+              className="flex items-center justify-center w-8 h-8 rounded-lg"
+              style={{ backgroundColor: `${iconColor}18` }}
             >
               <Icon className="h-4 w-4" style={{ color: iconColor }} />
             </div>

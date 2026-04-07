@@ -301,64 +301,7 @@ export default function StepsPage() {
         color="#22c55e"
       />
 
-      <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-          7-Day Trend
-        </h2>
-        <div className="h-40 lg:h-48 w-full">
-          {chartData.some((d) => d.steps > 0) ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="stepsBarGrad" x1="0" y1="1" x2="0" y2="0">
-                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#22c55e" stopOpacity={1} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="oklch(1 0 0 / 5%)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={36}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "oklch(0.19 0.012 250 / 98%)",
-                    border: "1px solid oklch(1 0 0 / 8%)",
-                    borderRadius: "3px",
-                    fontSize: "12px",
-                    backdropFilter: "blur(8px)",
-                  }}
-                  labelStyle={{ color: "oklch(0.60 0.01 250)" }}
-                  formatter={(val) => [
-                    `${Number(val ?? 0).toLocaleString()} steps`,
-                    "Total",
-                  ]}
-                />
-                <Bar dataKey="steps" fill="url(#stepsBarGrad)" radius={[6, 6, 0, 0]} maxBarSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-              Log steps to see your week
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
-        <div className="glass rounded-2xl p-5">
+      <div className="glass rounded-2xl p-5 animate-fade-up stagger-2">
           <div className="text-center lg:text-left mb-5">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today&apos;s Total</p>
             <p className="text-4xl font-bold tabular-nums tracking-tight">{todayTotal.toLocaleString()}</p>
@@ -444,7 +387,63 @@ export default function StepsPage() {
           </form>
         </div>
 
-        <div className="space-y-3">
+      <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+          7-Day Trend
+        </h2>
+        <div className="h-40 lg:h-48 w-full">
+          {chartData.some((d) => d.steps > 0) ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="stepsBarGrad" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#22c55e" stopOpacity={1} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="oklch(1 0 0 / 5%)"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={36}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "oklch(0.19 0.012 250 / 98%)",
+                    border: "1px solid oklch(1 0 0 / 8%)",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    backdropFilter: "blur(8px)",
+                  }}
+                  labelStyle={{ color: "oklch(0.60 0.01 250)" }}
+                  formatter={(val) => [
+                    `${Number(val ?? 0).toLocaleString()} steps`,
+                    "Total",
+                  ]}
+                />
+                <Bar dataKey="steps" fill="url(#stepsBarGrad)" radius={[6, 6, 0, 0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+              Log steps to see your week
+            </div>
+          )}
+        </div>
+      </div>
+
+        <div className="space-y-3 animate-fade-up stagger-2">
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">History</h2>
           {entries.length === 0 && runEntries.length === 0 && (
             <div className="glass-subtle rounded-2xl p-6 text-center">
@@ -529,7 +528,6 @@ export default function StepsPage() {
             </div>
           ))}
         </div>
-      </div>
     </div>
   )
 }

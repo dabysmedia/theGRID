@@ -27,7 +27,7 @@ export function BottomNav() {
       {/* Mobile: bottom bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden animate-slide-up">
         <div className="mx-auto max-w-[440px] px-3 pb-[env(safe-area-inset-bottom,0px)]">
-          <div className="glass-frost mb-2 shadow-lg shadow-black/40 hud-corners" style={{ borderRadius: '4px' }}>
+          <div className="glass-frost relative mb-2 rounded-2xl shadow-lg shadow-black/40 hud-corners">
             {/* Top edge glow */}
             <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-primary/25 to-transparent" />
             <div className="grid h-16 grid-cols-5 items-stretch px-0.5">
@@ -48,7 +48,7 @@ export function BottomNav() {
                     )}
                   >
                     {isActive && (
-                      <span className="pointer-events-none absolute inset-1 bg-grid-accent-dim animate-nav-indicator" style={{ borderRadius: '2px' }} />
+                      <span className="pointer-events-none absolute inset-1 rounded-md bg-grid-accent-dim animate-nav-indicator" />
                     )}
                     <span className={`relative flex h-6 w-6 shrink-0 items-center justify-center transition-transform duration-200 sm:h-5 sm:w-5 ${isActive ? "scale-110" : ""}`}>
                       <item.icon
@@ -70,7 +70,7 @@ export function BottomNav() {
       </nav>
 
       {/* Desktop: side rail */}
-      <nav className="hidden lg:flex fixed left-0 top-0 bottom-0 z-50 w-[72px] xl:w-[200px] flex-col items-center xl:items-stretch py-6 xl:py-8 xl:px-4 glass-frost border-r border-glass-border">
+      <nav className="hidden lg:flex fixed left-0 top-0 bottom-0 z-50 w-[72px] xl:w-[200px] flex-col items-center xl:items-stretch border-r border-glass-border py-6 xl:py-8 xl:px-4 glass-frost">
         {/* Top glow line */}
         <div className="absolute top-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
 
@@ -92,16 +92,15 @@ export function BottomNav() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "relative flex min-h-[2.75rem] touch-manipulation items-center justify-center xl:justify-start gap-3 px-3 py-2.5 text-xs font-medium tracking-[0.15em] uppercase transition-colors duration-150",
+                  "relative flex min-h-[2.75rem] touch-manipulation items-center justify-center xl:justify-start gap-3 rounded-xl px-3 py-2.5 text-xs font-medium tracking-[0.15em] uppercase transition-colors duration-150",
                   isActive
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground hover:bg-glass-highlight/30"
                 )}
-                style={{ borderRadius: '3px' }}
               >
                 {isActive && (
                   <>
-                    <span className="pointer-events-none absolute inset-0 bg-grid-accent-dim animate-nav-indicator" style={{ borderRadius: '3px' }} />
+                    <span className="pointer-events-none absolute inset-0 rounded-xl bg-grid-accent-dim animate-nav-indicator" />
                     <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary/60 animate-fade-in" style={{ borderRadius: '0 2px 2px 0' }} />
                   </>
                 )}

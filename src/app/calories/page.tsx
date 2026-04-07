@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react"
 import { addDays, differenceInCalendarDays, endOfWeek, format, startOfWeek, subDays } from "date-fns"
-import { Calendar, ChevronDown, Flame, Lock, Search, Trash2, Plus, Star, Unlock, X, Pencil, Target, Check } from "lucide-react"
+import { ChevronDown, Flame, Search, Trash2, Plus, Star, X, Pencil, Target, Check } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -49,9 +49,9 @@ interface SavedMeal {
   useCount: number
 }
 
-interface CalorieBudget {
+interface WeeklyGoal {
   id: string
-  dailyBudget: number
+  weeklyTarget: number
 }
 
 interface DraftMealItem {
@@ -62,6 +62,8 @@ interface DraftMealItem {
   protein: number | null
   carbs: number | null
   fat: number | null
+  /** Set when added from a saved meal — used for list highlight */
+  savedMealId?: string
 }
 
 const mealTypes = ["breakfast", "lunch", "dinner", "snack"]
@@ -76,6 +78,94 @@ function dateGroupLabel(
   if (dateKey === yesterdayStr) return "Yesterday"
   if (dateKey > realTodayStr) return `Planned · ${format(parseLocalDate(dateKey), "EEE, MMM d")}`
   return format(parseLocalDate(dateKey), "EEE, MMM d")
+}
+
+/** Over budget (red) only at ≥101% of target */
+const OVER_TARGET_RATIO = 1.01
+
+/** Consumed vs daily target: over = red at ≥101%; on track = emerald (≥95%); under = sky */
+function calorieTargetTextClass(consumed: number, target: number): string {
+  if (target <= 0) return "text-foreground"
+  const r = consumed / target
+  if (r >= OVER_TARGET_RATIO) return "text-red-500 dark:text-red-400"
+  if (r >= 0.95) return "text-emerald-600 dark:text-emerald-400"
+  return "text-sky-600 dark:text-sky-400/90"
+}
+
+/** Weekly consumed vs weekly goal (same bands) */
+function weeklyProgressTextClass(consumed: number, weeklyGoal: number): string {
+  if (weeklyGoal <= 0) return "text-foreground"
+  return calorieTargetTextClass(consumed, weeklyGoal)
+}
+
+/** Calories still available today — red “over” only at ≥101% of today’s target */
+function remainingVsTargetTextClass(consumed: number, target: number): string {
+  if (target <= 0) return "text-muted-foreground/40"
+  const r = consumed / target
+  if (r >= OVER_TARGET_RATIO) return "text-red-400/90 font-medium"
+  if (r >= 0.95) return "text-emerald-600 dark:text-emerald-400 font-medium"
+  return "text-sky-600/80 dark:text-sky-400/80"
+}
+
+/** Circular ring stroke — same bands as the calorie number */
+function todayProgressRingStrokeHex(consumed: number, target: number): string {
+  if (target <= 0) return "#38bdf8"
+  const r = consumed / target
+  if (r >= OVER_TARGET_RATIO) return "#f87171"
+  if (r >= 0.95) return "#059669"
+  return "#0284c7"
+}
+
+/** Rolling daily slice for any calendar day (same math as the weekly goal card). */
+function adaptiveDayTargetForDate(
+  dateKey: string,
+  weeklyTarget: number,
+  dailyTotals: Map<string, number>
+): number {
+  const ref = parseLocalDate(dateKey)
+  const weekStart = startOfWeek(ref, { weekStartsOn: 1 })
+  const weekEnd = endOfWeek(ref, { weekStartsOn: 1 })
+  let consumedPriorDays = 0
+  const daysPast = differenceInCalendarDays(ref, weekStart)
+  for (let i = 0; i < daysPast; i++) {
+    consumedPriorDays += dailyTotals.get(formatDate(addDays(weekStart, i))) ?? 0
+  }
+  const daysLeft = differenceInCalendarDays(weekEnd, ref) + 1
+  const remaining = Math.round(weeklyTarget - consumedPriorDays)
+  return daysLeft > 0 ? Math.max(0, Math.round(remaining / daysLeft)) : 0
+}
+
+function summarizeDay(items: CalorieEntry[]) {
+  let calories = 0
+  let protein = 0
+  let carbs = 0
+  let fat = 0
+  let hasP = false
+  let hasC = false
+  let hasF = false
+  for (const e of items) {
+    calories += e.calories
+    if (e.protein != null) {
+      protein += e.protein
+      hasP = true
+    }
+    if (e.carbs != null) {
+      carbs += e.carbs
+      hasC = true
+    }
+    if (e.fat != null) {
+      fat += e.fat
+      hasF = true
+    }
+  }
+  const round = (n: number) => Math.round(n * 10) / 10
+  return {
+    calories,
+    protein: hasP ? round(protein) : null,
+    carbs: hasC ? round(carbs) : null,
+    fat: hasF ? round(fat) : null,
+    count: items.length,
+  }
 }
 
 export default function CaloriesPage() {
@@ -99,14 +189,24 @@ export default function CaloriesPage() {
   const [editingEntry, setEditingEntry] = useState<CalorieEntry | null>(null)
   const [draftMealItems, setDraftMealItems] = useState<DraftMealItem[]>([])
   const [postingMeal, setPostingMeal] = useState(false)
-  const [budget, setBudget] = useState<CalorieBudget | null>(null)
-  const [editingBudget, setEditingBudget] = useState(false)
-  const [budgetInput, setBudgetInput] = useState("")
-  const [dayLocked, setDayLocked] = useState(false)
-  const [adjustedDailyTarget, setAdjustedDailyTarget] = useState<number | null>(null)
+  const [weeklyGoal, setWeeklyGoal] = useState<WeeklyGoal | null>(null)
+  const [editingGoal, setEditingGoal] = useState(false)
+  const [goalInput, setGoalInput] = useState("")
   
   const [logFoodOpen, setLogFoodOpen] = useState(false)
   const [logFoodSearchOpen, setLogFoodSearchOpen] = useState(false)
+  const [logFoodManualOpen, setLogFoodManualOpen] = useState(false)
+  const [flashSavedMealId, setFlashSavedMealId] = useState<string | null>(null)
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set())
+
+  const toggleHistoryDay = useCallback((dateKey: string) => {
+    setExpandedDays((prev) => {
+      const next = new Set(prev)
+      if (next.has(dateKey)) next.delete(dateKey)
+      else next.add(dateKey)
+      return next
+    })
+  }, [])
 
   const { activeDate } = useActiveDate()
   const today = activeDate
@@ -124,7 +224,10 @@ export default function CaloriesPage() {
   }, [])
 
   useEffect(() => {
-    if (!logFoodOpen) setLogFoodSearchOpen(false)
+    if (!logFoodOpen) {
+      setLogFoodSearchOpen(false)
+      setLogFoodManualOpen(false)
+    }
   }, [logFoodOpen])
 
   useEffect(() => {
@@ -142,13 +245,13 @@ export default function CaloriesPage() {
       .then(async (r) => {
         const data = await r.json()
         if (data && typeof data.target === "number") {
-          setBudget({ id: data.id, dailyBudget: data.target })
-          setBudgetInput(String(Math.round(data.target)))
+          setWeeklyGoal({ id: data.id, weeklyTarget: data.target })
+          setGoalInput(String(Math.round(data.target)))
         } else {
-          setBudget(null)
+          setWeeklyGoal(null)
         }
       })
-      .catch(() => setBudget(null))
+      .catch(() => setWeeklyGoal(null))
   }, [])
 
   const filteredSavedMeals = useMemo(
@@ -321,7 +424,10 @@ export default function CaloriesPage() {
       protein: meal.protein,
       carbs: meal.carbs,
       fat: meal.fat,
+      savedMealId: meal.id,
     }
+    setFlashSavedMealId(meal.id)
+    window.setTimeout(() => setFlashSavedMealId(null), 900)
     setDraftMealItems((prev) => [...prev, item])
     fetch(`/api/saved-meals?id=${meal.id}`, { method: "PATCH" })
       .then(() => fetchSavedMeals())
@@ -454,70 +560,60 @@ export default function CaloriesPage() {
     )
   }, [draftMealItems])
 
-  const weeklyAdjustment = useMemo(() => {
-    const perDayGoal = budget ? budget.dailyBudget : 0
+  const savedMealIdsInDraft = useMemo(
+    () =>
+      new Set(
+        draftMealItems
+          .map((i) => i.savedMealId)
+          .filter((x): x is string => Boolean(x))
+      ),
+    [draftMealItems]
+  )
+
+  const weekPlan = useMemo(() => {
+    if (!weeklyGoal) return null
+    const wt = weeklyGoal.weeklyTarget
 
     const ref = parseLocalDate(today)
     const weekStart = startOfWeek(ref, { weekStartsOn: 1 })
     const weekEnd = endOfWeek(ref, { weekStartsOn: 1 })
-    const weeklyBudget = perDayGoal * 7
 
-    let consumedToDate = 0
-    for (let i = 0; i <= differenceInCalendarDays(ref, weekStart); i++) {
-      const dayKey = formatDate(addDays(weekStart, i))
-      consumedToDate += dailyTotals.get(dayKey) ?? 0
+    let consumedPriorDays = 0
+    const daysPast = differenceInCalendarDays(ref, weekStart)
+    for (let i = 0; i < daysPast; i++) {
+      consumedPriorDays += dailyTotals.get(formatDate(addDays(weekStart, i))) ?? 0
     }
 
-    const remainingDays = differenceInCalendarDays(weekEnd, ref)
-    const remainingBudget = Math.round(weeklyBudget - consumedToDate)
-
-    const pct = weeklyBudget > 0 ? Math.min(100, (consumedToDate / weeklyBudget) * 100) : 0
+    const consumedToday = todayTotal
+    const consumedTotal = consumedPriorDays + consumedToday
+    const daysLeft = differenceInCalendarDays(weekEnd, ref) + 1
+    const remaining = Math.round(wt - consumedPriorDays)
+    const todayTarget = daysLeft > 0 ? Math.max(0, Math.round(remaining / daysLeft)) : 0
+    const todayRemaining = Math.max(0, todayTarget - consumedToday)
+    const pct = wt > 0 ? Math.min(100, (consumedTotal / wt) * 100) : 0
+    const overUnder = consumedTotal - wt
 
     return {
-      perDayGoal: Math.round(perDayGoal),
-      weeklyBudget: Math.round(weeklyBudget),
-      consumedToDate,
-      remainingDays,
-      remainingBudget,
+      weeklyTarget: wt,
+      consumedTotal,
+      consumedToday,
+      todayTarget,
+      todayRemaining,
+      remaining,
+      daysLeft,
       pct,
+      overUnder,
     }
-  }, [budget, dailyTotals, today])
+  }, [weeklyGoal, dailyTotals, today, todayTotal])
 
-  function handleLockDay() {
-    if (!budget) return
-    const perDayGoal = budget.dailyBudget
-    const ref = parseLocalDate(today)
-    const weekEnd = endOfWeek(ref, { weekStartsOn: 1 })
-    const weekStart = startOfWeek(ref, { weekStartsOn: 1 })
-    const weeklyBudget = perDayGoal * 7
-
-    let consumedThrough = 0
-    for (let i = 0; i <= differenceInCalendarDays(ref, weekStart); i++) {
-      const dayKey = formatDate(addDays(weekStart, i))
-      consumedThrough += dailyTotals.get(dayKey) ?? 0
-    }
-
-    const remaining = differenceInCalendarDays(weekEnd, ref)
-    const leftover = Math.round(weeklyBudget - consumedThrough)
-    const perDay = remaining > 0 ? Math.max(0, Math.round(leftover / remaining)) : null
-
-    setAdjustedDailyTarget(perDay)
-    setDayLocked(true)
-  }
-
-  function handleUnlockDay() {
-    setDayLocked(false)
-    setAdjustedDailyTarget(null)
-  }
-
-  async function saveBudget() {
-    const val = parseFloat(budgetInput)
+  async function saveGoal() {
+    const val = parseFloat(goalInput)
     if (Number.isNaN(val) || val <= 0) return
 
-    const method = budget ? "PUT" : "POST"
-    const payload = budget
-      ? { id: budget.id, target: val, unit: "cal", goalType: "daily", direction: "down" }
-      : { category: "calories", goalType: "daily", direction: "down", target: val, unit: "cal", active: true }
+    const method = weeklyGoal ? "PUT" : "POST"
+    const payload = weeklyGoal
+      ? { id: weeklyGoal.id, target: val, unit: "cal", goalType: "weekly", direction: "down" }
+      : { category: "calories", goalType: "weekly", direction: "down", target: val, unit: "cal", active: true }
 
     const res = await fetch("/api/goals", {
       method,
@@ -526,36 +622,40 @@ export default function CaloriesPage() {
     })
     if (res.ok) {
       const saved = await res.json()
-      setBudget({ id: saved.id, dailyBudget: saved.target })
-      setBudgetInput(String(Math.round(saved.target)))
-      setEditingBudget(false)
+      setWeeklyGoal({ id: saved.id, weeklyTarget: saved.target })
+      setGoalInput(String(Math.round(saved.target)))
+      setEditingGoal(false)
     }
   }
 
-  async function deleteBudget() {
-    if (!budget) return
-    const res = await fetch(`/api/goals?id=${budget.id}`, { method: "DELETE" })
+  async function deleteGoal() {
+    if (!weeklyGoal) return
+    const res = await fetch(`/api/goals?id=${weeklyGoal.id}`, { method: "DELETE" })
     if (res.ok) {
-      setBudget(null)
-      setBudgetInput("")
-      setEditingBudget(false)
+      setWeeklyGoal(null)
+      setGoalInput("")
+      setEditingGoal(false)
     }
   }
+
+  const todayRing =
+    weekPlan != null
+      ? {
+          radius: 56,
+          circumference: 2 * Math.PI * 56,
+          progress:
+            weekPlan.todayTarget > 0
+              ? Math.min(1, weekPlan.consumedToday / weekPlan.todayTarget)
+              : 0,
+          stroke: todayProgressRingStrokeHex(weekPlan.consumedToday, weekPlan.todayTarget),
+        }
+      : null
 
   return (
     <div className="space-y-6">
       <PageHeader title="Calories" icon={Flame} iconColor="#ef4444" />
 
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Today
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {todayTotal.toLocaleString()}
-          </span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">cal</p>
-        </div>
         <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             7-Day Avg
@@ -587,151 +687,224 @@ export default function CaloriesPage() {
         </div>
       </div>
 
-      {/* Budget bar */}
+      {/* Today: ring + weekly stats + log (combined) */}
       <div className="animate-fade-up">
-        {editingBudget ? (
-          <div className="glass-subtle rounded-xl px-4 py-3 space-y-2.5">
+        {editingGoal ? (
+          <div className="glass rounded-2xl border border-border/20 p-5 lg:p-6 shadow-sm">
             <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Daily budget
+              Weekly calorie goal
             </p>
-            <div className="flex items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <Input
                 type="number"
                 min="0"
-                step="50"
-                value={budgetInput}
-                onChange={(e) => setBudgetInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") saveBudget() }}
-                placeholder="2000"
-                className="h-8 w-28 text-sm bg-background/40 border-primary/15"
+                step="500"
+                value={goalInput}
+                onChange={(e) => setGoalInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveGoal() }}
+                placeholder="14000"
+                className="h-9 w-32 text-sm bg-background/40 border-primary/15"
                 autoFocus
               />
-              <span className="text-[10px] text-muted-foreground/40">cal / day</span>
+              <span className="text-[10px] text-muted-foreground/40">cal / week</span>
+              {goalInput && parseFloat(goalInput) > 0 && (
+                <span className="text-[10px] tabular-nums text-muted-foreground/30">≈ {Math.round(parseFloat(goalInput) / 7).toLocaleString()} / day</span>
+              )}
               <div className="flex items-center gap-1 ml-auto">
-                <button onClick={saveBudget} className="p-1.5 rounded-md text-primary hover:bg-primary/10 transition-colors">
+                <button type="button" onClick={saveGoal} className="p-1.5 rounded-md text-primary hover:bg-primary/10 transition-colors">
                   <Check className="h-3.5 w-3.5" />
                 </button>
-                <button onClick={() => { setEditingBudget(false); if (budget) setBudgetInput(String(Math.round(budget.dailyBudget))) }} className="p-1.5 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors">
+                <button type="button" onClick={() => { setEditingGoal(false); if (weeklyGoal) setGoalInput(String(Math.round(weeklyGoal.weeklyTarget))) }} className="p-1.5 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors">
                   <X className="h-3.5 w-3.5" />
                 </button>
-                {budget && (
-                  <button onClick={deleteBudget} className="p-1.5 rounded-md text-muted-foreground/20 hover:text-destructive transition-colors">
+                {weeklyGoal && (
+                  <button type="button" onClick={deleteGoal} className="p-1.5 rounded-md text-muted-foreground/20 hover:text-destructive transition-colors">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
             </div>
           </div>
-        ) : budget ? (
-          <div className="glass-subtle rounded-xl overflow-hidden">
-            <div className="px-4 py-3 space-y-2.5">
-              {/* Top row — base budget + edit */}
-              {!dayLocked && (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Target className="h-3.5 w-3.5 text-red-400/70 shrink-0" />
-                    <span className="text-sm font-semibold tabular-nums">
-                      {weeklyAdjustment.perDayGoal.toLocaleString()}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground/40">cal / day</span>
+        ) : weekPlan && todayRing ? (
+          <div className="glass relative overflow-hidden rounded-3xl border border-border/20 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] p-6 shadow-[inset_0_1px_0_0_oklch(1_0_0/10%),0_22px_56px_-20px_oklch(0_0_0/42%)] lg:p-8 dark:border-[oklch(1_0_0/9%)] dark:from-glass-highlight/[0.1] dark:to-primary/[0.05] dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/12%),0_28px_72px_-24px_oklch(0_0_0/62%)]">
+            <div
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]"
+              aria-hidden
+            />
+            <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12" aria-hidden />
+            <div className="relative z-[1] flex flex-col items-stretch gap-8 lg:flex-row lg:items-center lg:gap-10">
+              <div className="flex justify-center lg:justify-start lg:shrink-0">
+                <div className="relative aspect-square w-full max-w-[min(100%,280px)] min-h-[220px] min-w-[220px] sm:min-h-[260px] sm:min-w-[260px] overflow-visible">
+                  <div
+                    className="pointer-events-none absolute inset-[9%] rounded-full blur-[1px]"
+                    style={{
+                      background: `radial-gradient(circle at 50% 42%, ${todayRing.stroke}22 0%, ${todayRing.stroke}08 38%, transparent 68%)`,
+                    }}
+                    aria-hidden
+                  />
+                  <svg
+                    className="relative z-[1] h-full w-full -rotate-90 overflow-visible"
+                    viewBox="0 0 128 128"
+                    aria-hidden
+                  >
+                    <circle
+                      cx="64"
+                      cy="64"
+                      r={todayRing.radius}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="7"
+                      className="text-muted/24"
+                    />
+                    <circle
+                      cx="64"
+                      cy="64"
+                      r={todayRing.radius}
+                      fill="none"
+                      stroke={todayRing.stroke}
+                      strokeWidth="7"
+                      strokeLinecap="round"
+                      strokeDasharray={todayRing.circumference}
+                      strokeDashoffset={todayRing.circumference * (1 - todayRing.progress)}
+                      className="transition-[stroke-dashoffset] duration-700 ease-out"
+                      style={{
+                        filter: [
+                          `drop-shadow(0 0 1px ${todayRing.stroke})`,
+                          `drop-shadow(0 0 4px ${todayRing.stroke}33)`,
+                        ].join(" "),
+                      }}
+                    />
+                  </svg>
+                  <div className="pointer-events-none absolute inset-0 z-[2] flex flex-col items-center justify-center px-5">
+                    <p
+                      className={cn(
+                        "text-4xl font-bold tabular-nums tracking-[-0.02em] transition-colors sm:text-5xl dark:[text-shadow:0_1px_0_oklch(0_0_0/35%)]",
+                        calorieTargetTextClass(todayTotal, weekPlan.todayTarget)
+                      )}
+                    >
+                      {todayTotal.toLocaleString()}
+                    </p>
+                    <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground/40 sm:text-[11px]">
+                      calories
+                    </p>
+                    <p className="mt-3 max-w-[13rem] text-center text-[11px] leading-snug text-muted-foreground/60 sm:text-xs">
+                      Target{" "}
+                      <span className="font-semibold tabular-nums text-foreground/85">
+                        {weekPlan.todayTarget.toLocaleString()}
+                      </span>
+                      <span className="text-muted-foreground/35"> today</span>
+                    </p>
                   </div>
-                  <button onClick={() => setEditingBudget(true)} className="p-1 text-muted-foreground/25 hover:text-muted-foreground transition-colors">
-                    <Pencil className="h-3 w-3" />
-                  </button>
                 </div>
-              )}
-
-              {/* Locked state — adjusted target is hero */}
-              {dayLocked && adjustedDailyTarget != null && (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Target className="h-3.5 w-3.5 text-primary/70 shrink-0" />
-                    <span className="text-sm font-semibold tabular-nums text-primary">
-                      {adjustedDailyTarget.toLocaleString()}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground/40">cal / day remaining</span>
-                  </div>
-                  <button onClick={() => setEditingBudget(true)} className="p-1 text-muted-foreground/25 hover:text-muted-foreground transition-colors">
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                </div>
-              )}
-
-              {/* Progress bar */}
-              <div className="h-1 w-full rounded-full bg-muted/15 overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-700 ease-out"
-                  style={{
-                    width: `${Math.min(weeklyAdjustment.pct, 100)}%`,
-                    backgroundColor: weeklyAdjustment.pct > 100 ? "#f87171" : "#ef4444",
-                    boxShadow: weeklyAdjustment.pct > 0 ? "0 0 6px oklch(0.6 0.2 25 / 25%)" : "none",
-                  }}
-                />
               </div>
 
-              {/* Stats row */}
-              <div className="flex items-center justify-between text-[10px] tabular-nums text-muted-foreground/40">
-                <span>{weeklyAdjustment.consumedToDate.toLocaleString()} used</span>
-                <span className={weeklyAdjustment.remainingBudget < 0 ? "text-red-400/80 font-medium" : ""}>
-                  {weeklyAdjustment.remainingBudget.toLocaleString()} left
-                </span>
-                <span>{weeklyAdjustment.remainingDays}d left</span>
+              <div className="min-w-0 flex-1 space-y-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/38">
+                      Today
+                    </p>
+                    <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm tabular-nums leading-snug">
+                      <span className={cn("font-medium transition-colors", calorieTargetTextClass(weekPlan.consumedToday, weekPlan.todayTarget))}>
+                        {weekPlan.consumedToday.toLocaleString()}{" "}
+                        <span className="text-muted-foreground/50 font-normal">eaten</span>
+                      </span>
+                      <span className={cn("font-medium transition-colors", remainingVsTargetTextClass(weekPlan.consumedToday, weekPlan.todayTarget))}>
+                        {weekPlan.todayRemaining.toLocaleString()}{" "}
+                        <span className="text-muted-foreground/50 font-normal">left</span>
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingGoal(true)}
+                    className="rounded-xl border border-border/25 bg-background/45 p-2 text-muted-foreground/45 shadow-[inset_0_1px_0_0_oklch(1_0_0/8%)] backdrop-blur-sm transition-colors hover:border-border/45 hover:bg-background/60 hover:text-foreground dark:bg-background/25 dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)] dark:hover:bg-background/40"
+                    title="Edit weekly goal"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 rounded-2xl border border-border/20 bg-gradient-to-b from-background/40 to-background/[0.12] px-3 py-3 text-center tabular-nums shadow-[inset_0_1px_0_0_oklch(1_0_0/10%)] sm:gap-3 sm:px-4 dark:from-background/30 dark:to-background/[0.08] dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)]">
+                  <div>
+                    <p className="mb-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/32">Week</p>
+                    <p className="text-[12px] font-semibold leading-tight text-foreground/90">
+                      <span className={cn("transition-colors", weeklyProgressTextClass(weekPlan.consumedTotal, weekPlan.weeklyTarget))}>
+                        {weekPlan.consumedTotal.toLocaleString()}
+                      </span>
+                      <span className="text-muted-foreground/30 font-normal"> / {weekPlan.weeklyTarget.toLocaleString()}</span>
+                    </p>
+                  </div>
+                  <div className="border-x border-border/20">
+                    <p className="mb-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/32">Left</p>
+                    <p
+                      className={cn(
+                        "text-[12px] font-semibold leading-tight",
+                        weekPlan.weeklyTarget > 0 &&
+                          weekPlan.consumedTotal / weekPlan.weeklyTarget >= OVER_TARGET_RATIO
+                          ? "text-red-400/85"
+                          : "text-foreground/90"
+                      )}
+                    >
+                      {Math.abs(weekPlan.weeklyTarget - weekPlan.consumedTotal).toLocaleString()}
+                      <span className="text-muted-foreground/40 font-normal">
+                        {" "}
+                        {weekPlan.overUnder > 0 ? "over" : "left"}
+                      </span>
+                    </p>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/32">Days</p>
+                    <p className="text-[12px] font-semibold leading-tight text-foreground/90">{weekPlan.daysLeft}</p>
+                  </div>
+                </div>
+
+                {today > realToday && (
+                  <p className="text-[10px] uppercase tracking-wider text-primary/75">
+                    Planning mode (date selector)
+                  </p>
+                )}
+
+                <Button
+                  type="button"
+                  size="lg"
+                  className="w-full gap-2 shadow-md shadow-primary/20 ring-1 ring-primary/15"
+                  onClick={() => setLogFoodOpen(true)}
+                >
+                  <Plus className="h-4 w-4 shrink-0" />
+                  Log food
+                </Button>
+                {draftMealItems.length > 0 && (
+                  <p className="text-center text-[11px] text-muted-foreground lg:text-left">
+                    <span className="font-semibold tabular-nums text-foreground">{draftMealItems.length}</span> item
+                    {draftMealItems.length === 1 ? "" : "s"} in draft — tap Log food to continue
+                  </p>
+                )}
               </div>
             </div>
-
-            {/* Lock / Unlock strip */}
-            <button
-              type="button"
-              onClick={dayLocked ? handleUnlockDay : handleLockDay}
-              className={cn(
-                "w-full flex items-center justify-center gap-1.5 py-2 text-[10px] font-medium uppercase tracking-wider transition-colors border-t",
-                dayLocked
-                  ? "bg-primary/5 border-primary/10 text-primary/70 hover:bg-primary/10"
-                  : "border-border/20 text-muted-foreground/30 hover:text-muted-foreground/60 hover:bg-glass-highlight/10"
-              )}
-            >
-              {dayLocked ? (
-                <>
-                  <Lock className="h-3 w-3" />
-                  Day closed — unlock to edit
-                </>
-              ) : (
-                <>
-                  <Unlock className="h-3 w-3" />
-                  Close day &amp; recalculate
-                </>
-              )}
-            </button>
           </div>
         ) : (
-          <button
-            onClick={() => setEditingBudget(true)}
-            className="glass-subtle rounded-xl w-full flex items-center justify-center gap-1.5 py-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/30 hover:text-muted-foreground transition-colors"
-          >
-            <Target className="h-3 w-3" />
-            Set calorie budget
-          </button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
-        <div className="space-y-6 min-w-0">
-          <div className="glass rounded-2xl p-5">
-            <div className="text-center lg:text-left mb-5">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today&apos;s Total</p>
-              <p className="text-4xl font-bold tabular-nums tracking-tight">{todayTotal.toLocaleString()}</p>
-              <p className="text-sm text-muted-foreground">calories</p>
+          <div className="glass rounded-2xl border border-border/20 p-6 lg:p-7 shadow-sm">
+            <div className="text-center lg:text-left">
+              <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/45">Today</p>
+              <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-foreground">{todayTotal.toLocaleString()}</p>
+              <p className="mt-1 text-sm text-muted-foreground">calories</p>
               {today > realToday && (
-                <p className="text-[10px] uppercase tracking-wider text-primary/80 mt-1">
-                  Planning mode (using top date selector)
-                </p>
+                <p className="mt-2 text-[10px] uppercase tracking-wider text-primary/80">Planning mode (date selector)</p>
               )}
             </div>
-
+            <button
+              type="button"
+              onClick={() => setEditingGoal(true)}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border/40 py-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/40 transition-colors hover:border-primary/25 hover:text-muted-foreground"
+            >
+              <Target className="h-3.5 w-3.5" />
+              Set weekly calorie goal
+            </button>
             <Button
               type="button"
               size="lg"
-              className="w-full gap-2"
+              className="mt-4 w-full gap-2"
               onClick={() => setLogFoodOpen(true)}
             >
               <Plus className="h-4 w-4 shrink-0" />
@@ -744,7 +917,11 @@ export default function CaloriesPage() {
               </p>
             )}
           </div>
+        )}
+      </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
+        <div className="space-y-6 min-w-0">
           <Dialog open={logFoodOpen} onOpenChange={setLogFoodOpen}>
             <DialogContent
               showCloseButton
@@ -774,7 +951,7 @@ export default function CaloriesPage() {
                       type="button"
                       onClick={() => setMealType(m)}
                       className={cn(
-                        "flex-1 rounded-md py-1.5 text-[11px] font-medium capitalize transition-all duration-150",
+                        "flex-1 rounded-md py-2.5 text-xs font-medium capitalize transition-all duration-150",
                         mealType === m
                           ? "bg-background text-foreground shadow-sm shadow-black/10"
                           : "text-muted-foreground/50 hover:text-muted-foreground"
@@ -787,11 +964,11 @@ export default function CaloriesPage() {
               </div>
 
               {/* Search — collapsed by default */}
-              <div className="relative z-20 shrink-0 border-y border-border/20 px-4 py-2">
+              <div className="relative z-20 shrink-0 border-y border-border/20 px-4 py-2.5">
                 <button
                   type="button"
                   onClick={() => setLogFoodSearchOpen((v) => !v)}
-                  className="flex w-full items-center justify-between gap-2 rounded-lg py-1.5 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  className="flex w-full items-center justify-between gap-2 rounded-lg py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <span className="flex items-center gap-2 min-w-0">
                     <Search className="h-3.5 w-3.5 shrink-0 opacity-60" />
@@ -812,8 +989,8 @@ export default function CaloriesPage() {
               </div>
 
               {/* Body */}
-              <div className="relative z-0 min-h-0 flex-1 overflow-y-auto px-4 py-3">
-                <div className="space-y-3">
+              <div className="relative z-0 min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                <div className="space-y-4">
 
                   {/* Saved meals — flat list, add mode only */}
                   {!editingEntry && (
@@ -849,28 +1026,28 @@ export default function CaloriesPage() {
                             placeholder="Meal name"
                             value={newMealName}
                             onChange={(e) => setNewMealName(e.target.value)}
-                            className="h-8 bg-background/40 border-primary/15 text-xs"
+                            className="h-10 bg-background/40 border-primary/15 text-sm"
                           />
-                          <div className="grid grid-cols-4 gap-1.5">
-                            <div className="space-y-0.5">
-                              <Label className="text-[8px] uppercase tracking-wider text-muted-foreground/50">Cal *</Label>
-                              <Input type="number" min="0" placeholder="0" value={newMealCal} onChange={(e) => setNewMealCal(e.target.value)} className="h-7 bg-background/40 border-primary/15 text-xs" />
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">Cal *</Label>
+                              <Input type="number" min="0" placeholder="0" value={newMealCal} onChange={(e) => setNewMealCal(e.target.value)} className="h-9 bg-background/40 border-primary/15 text-sm" />
                             </div>
-                            <div className="space-y-0.5">
-                              <Label className="text-[8px] uppercase tracking-wider text-muted-foreground/50">P</Label>
-                              <Input type="number" min="0" placeholder="g" value={newMealProtein} onChange={(e) => setNewMealProtein(e.target.value)} className="h-7 bg-background/40 border-primary/15 text-xs" />
+                            <div className="space-y-1">
+                              <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">P</Label>
+                              <Input type="number" min="0" placeholder="g" value={newMealProtein} onChange={(e) => setNewMealProtein(e.target.value)} className="h-9 bg-background/40 border-primary/15 text-sm" />
                             </div>
-                            <div className="space-y-0.5">
-                              <Label className="text-[8px] uppercase tracking-wider text-muted-foreground/50">C</Label>
-                              <Input type="number" min="0" placeholder="g" value={newMealCarbs} onChange={(e) => setNewMealCarbs(e.target.value)} className="h-7 bg-background/40 border-primary/15 text-xs" />
+                            <div className="space-y-1">
+                              <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">C</Label>
+                              <Input type="number" min="0" placeholder="g" value={newMealCarbs} onChange={(e) => setNewMealCarbs(e.target.value)} className="h-9 bg-background/40 border-primary/15 text-sm" />
                             </div>
-                            <div className="space-y-0.5">
-                              <Label className="text-[8px] uppercase tracking-wider text-muted-foreground/50">F</Label>
-                              <Input type="number" min="0" placeholder="g" value={newMealFat} onChange={(e) => setNewMealFat(e.target.value)} className="h-7 bg-background/40 border-primary/15 text-xs" />
+                            <div className="space-y-1">
+                              <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">F</Label>
+                              <Input type="number" min="0" placeholder="g" value={newMealFat} onChange={(e) => setNewMealFat(e.target.value)} className="h-9 bg-background/40 border-primary/15 text-sm" />
                             </div>
                           </div>
                           {saveMealError && <p className="text-[10px] text-destructive" role="alert">{saveMealError}</p>}
-                          <Button type="button" size="sm" className="w-full h-7 text-xs" onClick={() => void handleCreateMeal()}>
+                          <Button type="button" size="sm" className="w-full h-10 text-sm" onClick={() => void handleCreateMeal()}>
                             Save
                           </Button>
                         </div>
@@ -878,89 +1055,136 @@ export default function CaloriesPage() {
 
                       {filteredSavedMeals.length > 0 && (
                         <div className="space-y-0.5">
-                          {filteredSavedMeals.map((meal) => (
-                            <div
-                              key={meal.id}
-                              className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-glass-highlight/15"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleUseSavedMeal(meal)}
-                                className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
+                          {filteredSavedMeals.map((meal) => {
+                            const inDraft = savedMealIdsInDraft.has(meal.id)
+                            const flash = flashSavedMealId === meal.id
+                            return (
+                              <div
+                                key={meal.id}
+                                className={cn(
+                                  "group flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 transition-all duration-300",
+                                  inDraft
+                                    ? "ring-1 ring-primary/35 bg-gradient-to-r from-primary/[0.09] to-transparent shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)]"
+                                    : "hover:bg-glass-highlight/15",
+                                  flash && "animate-in zoom-in-95 duration-300 ring-2 ring-primary/45"
+                                )}
                               >
-                                <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 shrink-0">
-                                  <Plus className="h-2.5 w-2.5 text-primary/60" />
-                                </div>
-                                <span className="text-xs font-medium truncate">{meal.name}</span>
-                              </button>
-                              <span className="text-[10px] tabular-nums text-muted-foreground/40 shrink-0">
-                                {meal.calories}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteSavedMeal(meal.id)}
-                                className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-destructive/10 shrink-0 transition-opacity"
-                              >
-                                <Trash2 className="h-2.5 w-2.5 text-muted-foreground/30" />
-                              </button>
-                            </div>
-                          ))}
+                                <button
+                                  type="button"
+                                  onClick={() => handleUseSavedMeal(meal)}
+                                  className="flex items-center gap-3 min-w-0 flex-1 text-left"
+                                >
+                                  <div
+                                    className={cn(
+                                      "flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors duration-300",
+                                      inDraft ? "bg-primary/20 text-primary" : "bg-primary/10"
+                                    )}
+                                  >
+                                    {inDraft ? (
+                                      <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                                    ) : (
+                                      <Plus className="h-3.5 w-3.5 text-primary/60" />
+                                    )}
+                                  </div>
+                                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                                    <span className="text-sm font-medium truncate">{meal.name}</span>
+                                    {inDraft && (
+                                      <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary/80">
+                                        In meal
+                                      </span>
+                                    )}
+                                  </span>
+                                </button>
+                                <span className="text-xs tabular-nums text-muted-foreground/40 shrink-0">
+                                  {meal.calories}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSavedMeal(meal.id)}
+                                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-destructive/10 shrink-0 transition-opacity"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground/30" />
+                                </button>
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* Calorie input */}
-                  <form id="log-food-form" onSubmit={handleSubmit} className="space-y-2">
-                    <div className="flex items-center gap-1.5">
-                      <Input
-                        id="calories"
-                        type="number"
-                        min="0"
-                        step="1"
-                        inputMode="numeric"
-                        placeholder="Calories"
-                        value={calories}
-                        onChange={(e) => setCalories(e.target.value)}
-                        className="flex-1 min-w-0"
-                        required
+                  {/* Manual estimate — collapsed by default (add mode); always open when editing */}
+                  {!editingEntry && (
+                    <button
+                      type="button"
+                      onClick={() => setLogFoodManualOpen((v) => !v)}
+                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-border/25 bg-glass-highlight/[0.04] py-2.5 px-3 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-glass-highlight/10"
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <Target className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                        <span className="truncate">Estimate calories</span>
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          "h-3.5 w-3.5 shrink-0 opacity-40 transition-transform duration-200",
+                          logFoodManualOpen && "rotate-180"
+                        )}
                       />
-                      {([
-                        { n: 250, label: "+250" },
-                        { n: 500, label: "+500" },
-                        { n: 1000, label: "+1k" },
-                      ] as const).map(({ n, label }) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => addCalories(n)}
-                          className="h-9 rounded-md border border-glass-border px-2 text-[10px] font-medium tabular-nums text-muted-foreground/50 hover:bg-glass-highlight/15 hover:text-foreground transition-colors sm:h-8"
-                          title={`Add ${n.toLocaleString()} cal`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {showSavePrompt && description && calories && (
-                        <button
-                          type="button"
-                          onClick={handleSaveCurrentAsFrequent}
-                          className="flex items-center gap-1 rounded-md border border-dashed border-primary/20 px-2 py-1.5 text-[10px] font-medium text-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
-                        >
-                          <Star className="h-3 w-3" />
-                          Save
-                        </button>
-                      )}
-                      {!editingEntry && (
-                        <Button type="submit" size="sm" className="flex-1 h-8">
-                          {estimateCalDisplay != null
-                            ? `Add ${estimateCalDisplay.toLocaleString()} cal`
-                            : "Add to meal"}
-                        </Button>
-                      )}
-                    </div>
-                  </form>
+                    </button>
+                  )}
+
+                  {(editingEntry || logFoodManualOpen) && (
+                    <form id="log-food-form" onSubmit={handleSubmit} className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="calories"
+                          type="number"
+                          min="0"
+                          step="1"
+                          inputMode="numeric"
+                          placeholder="Calories"
+                          value={calories}
+                          onChange={(e) => setCalories(e.target.value)}
+                          className="flex-1 min-w-0 h-11"
+                          required
+                        />
+                        {([
+                          { n: 250, label: "+250" },
+                          { n: 500, label: "+500" },
+                          { n: 1000, label: "+1k" },
+                        ] as const).map(({ n, label }) => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => addCalories(n)}
+                            className="h-11 rounded-md border border-glass-border px-3 text-xs font-medium tabular-nums text-muted-foreground/50 hover:bg-glass-highlight/15 hover:text-foreground transition-colors touch-manipulation"
+                            title={`Add ${n.toLocaleString()} cal`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        {showSavePrompt && description && calories && (
+                          <button
+                            type="button"
+                            onClick={handleSaveCurrentAsFrequent}
+                            className="flex items-center gap-1.5 rounded-md border border-dashed border-primary/20 px-3 py-2.5 text-xs font-medium text-primary/50 hover:text-primary hover:bg-primary/5 transition-colors touch-manipulation"
+                          >
+                            <Star className="h-3.5 w-3.5" />
+                            Save
+                          </button>
+                        )}
+                        {!editingEntry && (
+                          <Button type="submit" size="sm" className="flex-1 h-11 text-sm">
+                            {estimateCalDisplay != null
+                              ? `Add ${estimateCalDisplay.toLocaleString()} cal`
+                              : "Add to meal"}
+                          </Button>
+                        )}
+                      </div>
+                    </form>
+                  )}
 
                   {/* Draft items */}
                   {!editingEntry && draftMealItems.length > 0 && (
@@ -970,21 +1194,21 @@ export default function CaloriesPage() {
                       </p>
                       <div className="rounded-lg border border-glass-border/30 divide-y divide-glass-border/20 overflow-hidden">
                         {draftMealItems.map((item) => (
-                          <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+                          <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-3 text-xs">
                             <div className="min-w-0">
-                              <p className="truncate font-medium leading-tight">
+                              <p className="truncate font-medium leading-tight text-sm">
                                 {item.description || "Quick add"}
                               </p>
-                              <p className="mt-0.5 text-[10px] capitalize tabular-nums text-muted-foreground/40">
+                              <p className="mt-0.5 text-[11px] capitalize tabular-nums text-muted-foreground/40">
                                 {item.mealType} · {item.calories} cal
                               </p>
                             </div>
                             <button
                               type="button"
                               onClick={() => setDraftMealItems((prev) => prev.filter((x) => x.id !== item.id))}
-                              className="p-1 rounded hover:bg-destructive/10 shrink-0"
+                              className="p-2 rounded-md hover:bg-destructive/10 shrink-0 touch-manipulation"
                             >
-                              <X className="h-3 w-3 text-muted-foreground/30" />
+                              <X className="h-4 w-4 text-muted-foreground/30" />
                             </button>
                           </div>
                         ))}
@@ -1005,21 +1229,21 @@ export default function CaloriesPage() {
 
               {/* Footer — Post only when draft exists or posting; edit mode always */}
               {(editingEntry || draftMealItems.length > 0 || postingMeal) && (
-                <div className="shrink-0 border-t border-border/30 px-4 py-2.5 bg-background/60 backdrop-blur-sm">
+                <div className="shrink-0 border-t border-border/30 px-4 py-3 bg-background/60 backdrop-blur-sm">
                   {editingEntry ? (
                     <div className="flex gap-2">
-                      <Button type="button" variant="outline" className="flex-1" size="sm" onClick={cancelEdit}>
+                      <Button type="button" variant="outline" className="flex-1 h-11" size="default" onClick={cancelEdit}>
                         Cancel
                       </Button>
-                      <Button type="submit" form="log-food-form" className="flex-1 press-scale" size="sm">
+                      <Button type="submit" form="log-food-form" className="flex-1 press-scale h-11" size="default">
                         Save
                       </Button>
                     </div>
                   ) : (
                     <Button
                       type="button"
-                      className="w-full press-scale h-8 text-xs"
-                      size="sm"
+                      className="w-full press-scale h-11 text-sm"
+                      size="default"
                       disabled={postingMeal}
                       onClick={handlePostMealToDay}
                     >
@@ -1064,7 +1288,7 @@ export default function CaloriesPage() {
                       contentStyle={{
                         background: "oklch(0.19 0.012 250 / 98%)",
                         border: "1px solid oklch(1 0 0 / 8%)",
-                        borderRadius: "3px",
+                        borderRadius: "8px",
                         fontSize: "10px",
                         padding: "4px 6px",
                         backdropFilter: "blur(8px)",
@@ -1088,87 +1312,199 @@ export default function CaloriesPage() {
           </div>
         </div>
 
-        <div className="space-y-3">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">History</h2>
-          {entries.length === 0 && (
-            <div className="glass-subtle rounded-2xl p-6 text-center">
-              <p className="text-sm text-muted-foreground">No entries yet</p>
+        <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-2">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-3">
+            History
+          </p>
+          {entries.length === 0 ? (
+            <div className="h-40 lg:h-48 flex items-center justify-center">
+              <p className="text-sm text-muted-foreground text-center px-4">No entries yet</p>
             </div>
-          )}
-          {historyGroups.map(({ dateKey, items }) => (
-            <div key={dateKey} className="space-y-2">
-              <div className="flex items-center gap-2 mb-1.5 px-1">
-                <Calendar className="h-3 w-3 text-muted-foreground/40" />
-                <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  {dateGroupLabel(dateKey, today, yesterday, realToday)}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {items.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="glass-subtle rounded-xl p-3.5 flex items-center justify-between gap-2 group"
+          ) : (
+          <div className="space-y-2">
+            {historyGroups.map(({ dateKey, items }) => {
+              const summary = summarizeDay(items)
+              const open = expandedDays.has(dateKey)
+              const label = dateGroupLabel(dateKey, today, yesterday, realToday)
+              const subDate =
+                dateKey === today || dateKey === yesterday
+                  ? format(parseLocalDate(dateKey), "EEE, MMM d")
+                  : null
+              const dayTarget =
+                weeklyGoal != null
+                  ? adaptiveDayTargetForDate(dateKey, weeklyGoal.weeklyTarget, dailyTotals)
+                  : 0
+              const historyDayCalClass =
+                weeklyGoal != null && dayTarget > 0
+                  ? calorieTargetTextClass(summary.calories, dayTarget)
+                  : "text-foreground"
+              return (
+                <div
+                  key={dateKey}
+                  className="rounded-lg overflow-hidden border border-glass-border/30 bg-glass-highlight/5 transition-colors"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleHistoryDay(dateKey)}
+                    aria-expanded={open}
+                    className="w-full text-left px-3.5 py-3 flex items-start gap-3 transition-colors hover:bg-glass-highlight/25 active:bg-glass-highlight/35"
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#ef4444]/10 shrink-0">
-                        <span className="text-xs font-semibold text-[#ef4444] capitalize">
-                          {entry.mealType.charAt(0)}
-                        </span>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-sm">{entry.calories} cal</span>
-                          <span className="text-xs text-muted-foreground capitalize">{entry.mealType}</span>
-                        </div>
-                        {(entry.protein != null || entry.carbs != null || entry.fat != null) && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {entry.protein != null && (
-                              <span className="text-[10px] font-medium tabular-nums px-1.5 py-0.5 rounded-md bg-muted/60 text-muted-foreground">
-                                P {entry.protein}g
-                              </span>
-                            )}
-                            {entry.carbs != null && (
-                              <span className="text-[10px] font-medium tabular-nums px-1.5 py-0.5 rounded-md bg-muted/60 text-muted-foreground">
-                                C {entry.carbs}g
-                              </span>
-                            )}
-                            {entry.fat != null && (
-                              <span className="text-[10px] font-medium tabular-nums px-1.5 py-0.5 rounded-md bg-muted/60 text-muted-foreground">
-                                F {entry.fat}g
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span className="text-sm font-semibold tracking-tight text-foreground">
+                              {label}
+                            </span>
+                            {subDate && (
+                              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/55 tabular-nums">
+                                {subDate}
                               </span>
                             )}
                           </div>
-                        )}
-                        {entry.description && (
-                          <p className="text-xs text-muted-foreground/70 mt-0.5 truncate">{entry.description}</p>
-                        )}
+                          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                            {summary.count} {summary.count === 1 ? "entry" : "entries"}
+                            {(summary.protein != null || summary.carbs != null || summary.fat != null) && (
+                              <>
+                                <span className="text-muted-foreground/25"> · </span>
+                                <span className="normal-case font-normal tracking-normal text-muted-foreground/65">
+                                  {summary.protein != null && (
+                                    <span className="tabular-nums">P {summary.protein}g</span>
+                                  )}
+                                  {summary.protein != null && (summary.carbs != null || summary.fat != null) && (
+                                    <span className="text-muted-foreground/30"> · </span>
+                                  )}
+                                  {summary.carbs != null && (
+                                    <span className="tabular-nums">C {summary.carbs}g</span>
+                                  )}
+                                  {summary.carbs != null && summary.fat != null && (
+                                    <span className="text-muted-foreground/30"> · </span>
+                                  )}
+                                  {summary.fat != null && <span className="tabular-nums">F {summary.fat}g</span>}
+                                </span>
+                              </>
+                            )}
+                          </p>
+                        </div>
+                        <div className="flex items-start gap-2 shrink-0">
+                          <div className="text-right">
+                            <p
+                              className={cn(
+                                "text-lg font-bold tabular-nums leading-none transition-colors",
+                                historyDayCalClass
+                              )}
+                            >
+                              {summary.calories.toLocaleString()}
+                            </p>
+                            <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/45 mt-1">
+                              kcal
+                            </p>
+                          </div>
+                          <span
+                            className={cn(
+                              "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] border border-glass-border/50 bg-background/30 transition-transform duration-200",
+                              open && "bg-primary/10 border-primary/25"
+                            )}
+                          >
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 text-muted-foreground/50 transition-transform duration-200",
+                                open && "rotate-180 text-primary/80"
+                              )}
+                            />
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-0.5 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 opacity-100 transition-opacity">
-                      <button
-                        type="button"
-                        onClick={() => startEdit(entry)}
-                        className="p-1.5 rounded-lg hover:bg-primary/10 shrink-0"
-                        title="Edit"
-                        aria-label="Edit entry"
-                      >
-                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(entry.id)}
-                        className="p-1.5 rounded-lg hover:bg-destructive/10 shrink-0"
-                        title="Delete"
-                        aria-label="Delete entry"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
+                  </button>
+
+                  {open && (
+                    <div className="border-t border-glass-border/30 bg-muted/15">
+                      <ul className="divide-y divide-glass-border/20">
+                        {items.map((entry) => (
+                          <li
+                            key={entry.id}
+                            className="flex items-stretch gap-3 px-3 py-2.5 transition-colors hover:bg-glass-highlight/10 group/row"
+                          >
+                            <div
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-glass-border/40 bg-[#ef4444]/8"
+                            >
+                              <span className="text-sm font-semibold capitalize text-[#ef4444]">
+                                {entry.mealType.charAt(0)}
+                              </span>
+                            </div>
+                            <div className="min-w-0 flex-1 py-0.5">
+                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
+                                <span
+                                  className={cn(
+                                    "text-sm font-semibold tabular-nums transition-colors",
+                                    historyDayCalClass
+                                  )}
+                                >
+                                  {entry.calories}{" "}
+                                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
+                                    cal
+                                  </span>
+                                </span>
+                                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/55 capitalize">
+                                  {entry.mealType}
+                                </span>
+                              </div>
+                              {(entry.protein != null || entry.carbs != null || entry.fat != null) && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {entry.protein != null && (
+                                    <span className="text-[10px] font-medium tabular-nums rounded-[3px] border border-glass-border/35 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">
+                                      P {entry.protein}g
+                                    </span>
+                                  )}
+                                  {entry.carbs != null && (
+                                    <span className="text-[10px] font-medium tabular-nums rounded-[3px] border border-glass-border/35 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">
+                                      C {entry.carbs}g
+                                    </span>
+                                  )}
+                                  {entry.fat != null && (
+                                    <span className="text-[10px] font-medium tabular-nums rounded-[3px] border border-glass-border/35 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">
+                                      F {entry.fat}g
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {entry.description && (
+                                <p className="mt-1 text-xs leading-snug text-muted-foreground/75 line-clamp-2">
+                                  {entry.description}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-0.5 shrink-0 self-center opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                onClick={() => startEdit(entry)}
+                                className="p-2 rounded-[3px] hover:bg-primary/12 touch-manipulation"
+                                title="Edit"
+                                aria-label="Edit entry"
+                              >
+                                <Pencil className="h-4 w-4 text-muted-foreground" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(entry.id)}
+                                className="p-2 rounded-[3px] hover:bg-destructive/12 touch-manipulation"
+                                title="Delete"
+                                aria-label="Delete entry"
+                              >
+                                <Trash2 className="h-4 w-4 text-muted-foreground" />
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          )}
         </div>
       </div>
     </div>

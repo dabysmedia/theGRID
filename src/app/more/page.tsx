@@ -19,7 +19,7 @@ export default function MorePage() {
         </div>
       </header>
 
-      <div className="glass hud-corners p-6 space-y-4 lg:max-w-md" style={{ borderRadius: '4px' }}>
+      <div className="glass hud-corners space-y-4 rounded-2xl p-6 lg:max-w-md">
         <div className="flex items-center gap-3">
           <div className="status-dot" />
           <h2 className="text-sm font-bold tracking-[0.2em] uppercase">

@@ -299,147 +299,7 @@ export default function RunningPage() {
         color="#3b82f6"
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-up stagger-1">
-        <div className="glass rounded-2xl p-4 lg:p-5 min-h-[12rem] min-w-0">
-          <h2 className="text-sm font-semibold uppercase tracking-wider mb-3">
-            Distance trend
-          </h2>
-          {chartData.length >= 2 ? (
-            <div className="h-40 lg:h-48 w-full min-h-[10rem] min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={chartData}
-                  margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="runningDistGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.28} />
-                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="oklch(1 0 0 / 5%)"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                    axisLine={false}
-                    tickLine={false}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis
-                    domain={["dataMin - 0.5", "dataMax + 0.5"]}
-                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "oklch(0.19 0.012 250 / 98%)",
-                      border: "1px solid oklch(1 0 0 / 8%)",
-                      borderRadius: "3px",
-                      fontSize: "12px",
-                      backdropFilter: "blur(8px)",
-                    }}
-                    labelStyle={{ color: "oklch(0.60 0.01 250)" }}
-                    formatter={(val) => [`${Number(val).toFixed(1)} mi`, "Distance"]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="distance"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    fill="url(#runningDistGrad)"
-                    dot={{ r: 3, fill: "#3b82f6", strokeWidth: 0 }}
-                    activeDot={{ r: 5, fill: "#3b82f6", strokeWidth: 2, stroke: "#fff" }}
-                    isAnimationActive={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="h-40 lg:h-48 min-h-[10rem] flex items-center justify-center">
-              <p className="text-sm text-muted-foreground">
-                Log at least 2 runs to see distance over time
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="glass rounded-2xl p-4 lg:p-5 min-h-[12rem] min-w-0">
-          <h2 className="text-sm font-semibold uppercase tracking-wider mb-3">
-            Pace trend
-          </h2>
-          {paceChartData.filter((d) => d.paceMin != null).length >= 2 ? (
-            <div className="h-40 lg:h-48 w-full min-h-[10rem] min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={paceChartData}
-                  margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="oklch(1 0 0 / 5%)"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                    axisLine={false}
-                    tickLine={false}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis
-                    domain={["auto", "auto"]}
-                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v) => `${Number(v).toFixed(1)}`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "oklch(0.19 0.012 250 / 98%)",
-                      border: "1px solid oklch(1 0 0 / 8%)",
-                      borderRadius: "3px",
-                      fontSize: "12px",
-                      backdropFilter: "blur(8px)",
-                    }}
-                    labelStyle={{ color: "oklch(0.60 0.01 250)" }}
-                    formatter={(val) => {
-                      if (val == null || Number.isNaN(Number(val))) return ["—", "Pace"]
-                      return [
-                        `${formatPaceMinutes(Number(val))} /mi`,
-                        "Pace",
-                      ]
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="paceMin"
-                    stroke="oklch(0.82 0.18 110)"
-                    strokeWidth={2}
-                    dot={{ r: 3, fill: "oklch(0.82 0.18 110)", strokeWidth: 0 }}
-                    activeDot={{ r: 5 }}
-                    connectNulls
-                    isAnimationActive={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="h-40 lg:h-48 min-h-[10rem] flex items-center justify-center">
-              <p className="text-sm text-muted-foreground">
-                Log at least 2 runs with distance and duration to see pace over time
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
-        <div className="glass rounded-2xl p-5">
+      <div className="glass rounded-2xl p-5 animate-fade-up stagger-2">
           <form noValidate onSubmit={handleSubmit} className="space-y-4">
             {/* Environment toggle */}
             <div className="flex rounded-[3px] border border-glass-border overflow-hidden">
@@ -542,9 +402,148 @@ export default function RunningPage() {
               Log Run
             </button>
           </form>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 animate-fade-up stagger-1 lg:grid-cols-2">
+        <div className="glass min-h-[12rem] min-w-0 rounded-2xl p-4 lg:p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider">
+            Distance trend
+          </h2>
+          {chartData.length >= 2 ? (
+            <div className="h-40 min-h-[10rem] w-full min-w-0 lg:h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={chartData}
+                  margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="runningDistGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.28} />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="oklch(1 0 0 / 5%)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    domain={["dataMin - 0.5", "dataMax + 0.5"]}
+                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "oklch(0.19 0.012 250 / 98%)",
+                      border: "1px solid oklch(1 0 0 / 8%)",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      backdropFilter: "blur(8px)",
+                    }}
+                    labelStyle={{ color: "oklch(0.60 0.01 250)" }}
+                    formatter={(val) => [`${Number(val).toFixed(1)} mi`, "Distance"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="distance"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    fill="url(#runningDistGrad)"
+                    dot={{ r: 3, fill: "#3b82f6", strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: "#3b82f6", strokeWidth: 2, stroke: "#fff" }}
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex h-40 min-h-[10rem] items-center justify-center lg:h-48">
+              <p className="text-sm text-muted-foreground">
+                Log at least 2 runs to see distance over time
+              </p>
+            </div>
+          )}
         </div>
 
-        <div className="space-y-3">
+        <div className="glass min-h-[12rem] min-w-0 rounded-2xl p-4 lg:p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider">
+            Pace trend
+          </h2>
+          {paceChartData.filter((d) => d.paceMin != null).length >= 2 ? (
+            <div className="h-40 min-h-[10rem] w-full min-w-0 lg:h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={paceChartData}
+                  margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="oklch(1 0 0 / 5%)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    domain={["auto", "auto"]}
+                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `${Number(v).toFixed(1)}`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "oklch(0.19 0.012 250 / 98%)",
+                      border: "1px solid oklch(1 0 0 / 8%)",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      backdropFilter: "blur(8px)",
+                    }}
+                    labelStyle={{ color: "oklch(0.60 0.01 250)" }}
+                    formatter={(val) => {
+                      if (val == null || Number.isNaN(Number(val))) return ["—", "Pace"]
+                      return [
+                        `${formatPaceMinutes(Number(val))} /mi`,
+                        "Pace",
+                      ]
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="paceMin"
+                    stroke="oklch(0.82 0.18 110)"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: "oklch(0.82 0.18 110)", strokeWidth: 0 }}
+                    activeDot={{ r: 5 }}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex h-40 min-h-[10rem] items-center justify-center lg:h-48">
+              <p className="text-sm text-muted-foreground">
+                Log at least 2 runs with distance and duration to see pace over time
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="animate-fade-up stagger-2 space-y-3">
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">History</h2>
           {entries.length === 0 && (
             <div className="glass-subtle rounded-2xl p-6 text-center">
@@ -606,7 +605,6 @@ export default function RunningPage() {
               </div>
             </div>
           ))}
-        </div>
       </div>
     </div>
   )

@@ -154,8 +154,7 @@ export function HubDashboard() {
             type="button"
             onClick={() => setOthersOpen((o) => !o)}
             aria-expanded={othersOpen}
-            className="glass-subtle flex w-full items-center justify-center gap-2 py-2.5 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/80 transition-colors hover:text-foreground hover:bg-glass-highlight/25"
-            style={{ borderRadius: "4px" }}
+            className="glass-subtle flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/80 transition-colors hover:text-foreground hover:bg-glass-highlight/25"
           >
             <ChevronDown
               className={cn("h-3.5 w-3.5 shrink-0 transition-transform duration-200", othersOpen && "rotate-180")}

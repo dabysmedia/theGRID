@@ -189,10 +189,9 @@ function FastingSettingsDialog({
                   type="button"
                   onClick={() => handlePreset(p)}
                   className={cn(
-                    "glass-subtle py-2 px-3 text-center transition-all duration-150 hover:bg-glass-highlight/30",
+                    "rounded-xl glass-subtle px-3 py-2 text-center transition-all duration-150 hover:bg-glass-highlight/30",
                     selected === p.name && "ring-1 ring-primary bg-primary/10"
                   )}
-                  style={{ borderRadius: "3px" }}
                 >
                   <span className="block text-sm font-bold tabular-nums">{p.name}</span>
                   <span className="block text-[10px] text-muted-foreground/60 tracking-wider">
@@ -204,10 +203,9 @@ function FastingSettingsDialog({
                 type="button"
                 onClick={() => setSelected("Custom")}
                 className={cn(
-                  "glass-subtle py-2 px-3 text-center transition-all duration-150 hover:bg-glass-highlight/30",
+                  "rounded-xl glass-subtle px-3 py-2 text-center transition-all duration-150 hover:bg-glass-highlight/30",
                   selected === "Custom" && "ring-1 ring-primary bg-primary/10"
                 )}
-                style={{ borderRadius: "3px" }}
               >
                 <span className="block text-sm font-bold">Custom</span>
                 <span className="block text-[10px] text-muted-foreground/60 tracking-wider">
@@ -285,8 +283,7 @@ function FastingSettingsDialog({
                     setEatStartMinutes(q.m)
                     setSelected("Custom")
                   }}
-                  className="glass-subtle px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider hover:bg-glass-highlight/30"
-                  style={{ borderRadius: "3px" }}
+                  className="rounded-lg glass-subtle px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider hover:bg-glass-highlight/30"
                 >
                   {q.label}
                 </button>
@@ -361,7 +358,7 @@ export function FastingTimer() {
 
   if (!mounted) {
     return (
-      <div className="glass relative p-5 sm:p-6" style={{ borderRadius: "4px" }}>
+      <div className="glass relative rounded-2xl p-5 sm:p-6">
         <div className="flex items-center gap-2">
           <Timer className="h-3.5 w-3.5 text-muted-foreground/50" />
           <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground/50">
@@ -376,7 +373,7 @@ export function FastingTimer() {
   }
 
   return (
-    <div className="glass relative p-5 sm:p-6" style={{ borderRadius: "4px" }}>
+    <div className="glass relative rounded-2xl p-5 sm:p-6">
       <div
         className="absolute top-0 left-3 right-3 h-px transition-colors duration-700"
         style={{

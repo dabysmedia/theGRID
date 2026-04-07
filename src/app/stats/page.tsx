@@ -92,7 +92,7 @@ function ChartTooltipContent({ active, payload, label, unit, formatter }: {
   const val = payload[0].value
   const display = formatter ? formatter(val) : `${val}`
   return (
-    <div className="glass rounded-sm px-2.5 py-1.5 text-[10px] font-mono border border-border">
+    <div className="glass rounded-lg border border-border px-2.5 py-1.5 font-mono text-[10px]">
       <div className="text-muted-foreground/70">{label}</div>
       <div className="font-semibold">{display}{unit ? ` ${unit}` : ""}</div>
     </div>
@@ -106,7 +106,7 @@ function StatCard({ label, value, sub, color }: {
   color?: string
 }) {
   return (
-    <div className="glass p-3 space-y-0.5" style={{ borderRadius: "3px" }}>
+    <div className="glass space-y-0.5 rounded-xl p-3">
       <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60">{label}</div>
       <div className="text-base font-bold tracking-wide" style={color ? { color } : undefined}>{value}</div>
       {sub && <div className="text-[9px] text-muted-foreground/50">{sub}</div>}
@@ -125,12 +125,12 @@ function SectionChart({
   summaryCards: React.ReactNode
 }) {
   return (
-    <div className="glass p-4 lg:p-5 space-y-3 animate-fade-up" style={{ borderRadius: "4px" }}>
+    <div className="glass animate-fade-up space-y-3 rounded-2xl p-4 lg:p-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div
-            className="flex items-center justify-center w-7 h-7"
-            style={{ backgroundColor: `${color}15`, borderRadius: "3px" }}
+            className="flex h-7 w-7 items-center justify-center rounded-lg"
+            style={{ backgroundColor: `${color}15` }}
           >
             <Icon className="h-3.5 w-3.5" style={{ color }} />
           </div>
@@ -202,8 +202,7 @@ export default function StatsPage() {
       <div className="flex items-center justify-center gap-4 animate-fade-up">
         <button
           onClick={prevMonth}
-          className="glass p-2 hover:bg-glass-highlight/30 active:scale-95 transition-all"
-          style={{ borderRadius: "3px" }}
+          className="glass rounded-xl p-2 transition-all hover:bg-glass-highlight/30 active:scale-95"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -213,8 +212,7 @@ export default function StatsPage() {
         <button
           onClick={nextMonth}
           disabled={isCurrentMonth}
-          className="glass p-2 hover:bg-glass-highlight/30 active:scale-95 transition-all disabled:opacity-30"
-          style={{ borderRadius: "3px" }}
+          className="glass rounded-xl p-2 transition-all hover:bg-glass-highlight/30 active:scale-95 disabled:opacity-30"
         >
           <ChevronRight className="h-4 w-4" />
         </button>

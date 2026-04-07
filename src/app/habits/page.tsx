@@ -270,7 +270,7 @@ export default function HabitsPage() {
       <PageHeader title="Habits" icon={CheckSquare} iconColor="#22c55e" />
 
       {/* Progress bar */}
-      <div className="glass px-3 py-2 animate-fade-up" style={{ borderRadius: "4px" }}>
+      <div className="glass animate-fade-up rounded-xl px-3 py-2">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[9px] font-semibold uppercase tracking-[0.12em]">Today</span>
           <span className="text-[10px] font-bold tabular-nums">
@@ -278,10 +278,10 @@ export default function HabitsPage() {
             <span className="text-muted-foreground/50">/{habits.length}</span>
           </span>
         </div>
-        <div className="h-1 w-full bg-muted/30 overflow-hidden" style={{ borderRadius: "1px" }}>
+        <div className="h-1 w-full overflow-hidden rounded-full bg-muted/30">
           <div
-            className="h-full bg-primary transition-all duration-700 ease-out"
-            style={{ width: `${todayProgress}%`, borderRadius: "1px" }}
+            className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
+            style={{ width: `${todayProgress}%` }}
           />
         </div>
       </div>
@@ -292,15 +292,14 @@ export default function HabitsPage() {
           <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
         </div>
       ) : habits.length === 0 ? (
-        <div className="glass p-6 text-center animate-fade-up" style={{ borderRadius: "4px" }}>
+        <div className="glass animate-fade-up rounded-2xl p-6 text-center">
           <CheckSquare className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
           <p className="text-xs text-muted-foreground mb-4">No habits yet. Add your first one to get started.</p>
           {!showForm && (
             <button
               type="button"
               onClick={openCreate}
-              className="w-full glass-frost py-2.5 flex items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-primary hover:bg-glass-highlight/30 active:scale-[0.98] transition-all shadow-lg shadow-black/20"
-              style={{ borderRadius: "4px" }}
+              className="glass-frost flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-primary shadow-lg shadow-black/20 transition-all hover:bg-glass-highlight/30 active:scale-[0.98]"
             >
               <Plus className="h-3.5 w-3.5" />
               New Habit
@@ -320,18 +319,17 @@ export default function HabitsPage() {
             return (
               <div
                 key={habit.id}
-                className="glass px-2.5 py-2 space-y-1.5 animate-fade-up"
-                style={{ borderRadius: "4px", animationDelay: `${idx * 40}ms` }}
+                className="glass animate-fade-up space-y-1.5 rounded-xl px-2.5 py-2"
+                style={{ animationDelay: `${idx * 40}ms` }}
               >
                 {/* Header: check + name + stats + edit */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => toggleHabit(habit.id)}
-                    className={`flex items-center justify-center w-7 h-7 shrink-0 transition-all duration-300 active:scale-90 ${
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-all duration-300 active:scale-90 ${
                       done ? "" : "hover:scale-105"
                     }`}
                     style={{
-                      borderRadius: "3px",
                       backgroundColor: done ? habit.color : `${habit.color}15`,
                     }}
                   >
@@ -365,8 +363,7 @@ export default function HabitsPage() {
 
                   <button
                     onClick={() => openEdit(habit)}
-                    className="p-0.5 hover:bg-glass-highlight/40 transition-colors shrink-0 opacity-35 hover:opacity-100"
-                    style={{ borderRadius: "2px" }}
+                    className="shrink-0 rounded-md p-0.5 opacity-35 transition-colors hover:bg-glass-highlight/40 hover:opacity-100"
                     title="Edit"
                   >
                     <Pencil className="h-2.5 w-2.5" />
@@ -395,7 +392,7 @@ export default function HabitsPage() {
                           isFuture ? "text-muted-foreground/12" : isActive && !isDone ? "ring-1 ring-primary/35" : ""
                         }`}
                         style={{
-                          borderRadius: "1.5px",
+                          borderRadius: "3px",
                           backgroundColor: isDone ? habit.color : isFuture ? "transparent" : "oklch(1 0 0 / 3%)",
                           color: isDone ? "#fff" : undefined,
                           fontWeight: isDone || isActive ? 700 : 400,
@@ -413,8 +410,7 @@ export default function HabitsPage() {
             <button
               type="button"
               onClick={openCreate}
-              className="w-full glass-frost py-2.5 flex items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-primary hover:bg-glass-highlight/30 active:scale-[0.98] transition-all shadow-lg shadow-black/20 mt-1"
-              style={{ borderRadius: "4px" }}
+              className="glass-frost mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-primary shadow-lg shadow-black/20 transition-all hover:bg-glass-highlight/30 active:scale-[0.98]"
             >
               <Plus className="h-3.5 w-3.5" />
               New Habit
@@ -427,8 +423,7 @@ export default function HabitsPage() {
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in px-4" onClick={closeForm}>
           <div
-            className="w-full max-w-[400px] glass-frost p-4 space-y-3 animate-scale-in"
-            style={{ borderRadius: "6px" }}
+            className="glass-frost animate-scale-in w-full max-w-[400px] space-y-3 rounded-2xl p-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -437,8 +432,7 @@ export default function HabitsPage() {
               </h2>
               <button
                 onClick={closeForm}
-                className="p-1 hover:bg-glass-highlight/40 transition-colors"
-                style={{ borderRadius: "3px" }}
+                className="rounded-lg p-1 transition-colors hover:bg-glass-highlight/40"
               >
                 <X className="h-4 w-4 text-muted-foreground" />
               </button>
@@ -490,10 +484,9 @@ export default function HabitsPage() {
                           key={key}
                           type="button"
                           onClick={() => setFormIcon(key)}
-                          className={`flex h-10 w-10 touch-manipulation items-center justify-center transition-all sm:h-8 sm:w-8 ${
+                          className={`flex h-10 w-10 touch-manipulation items-center justify-center rounded-lg transition-all sm:h-8 sm:w-8 ${
                             formIcon === key ? "ring-1 ring-primary/40 bg-primary/10" : "hover:bg-glass-highlight/30"
                           }`}
-                          style={{ borderRadius: "3px" }}
                         >
                           <Ic className="h-3.5 w-3.5" style={{ color: formIcon === key ? formColor : undefined }} />
                         </button>
@@ -510,10 +503,10 @@ export default function HabitsPage() {
                         key={c}
                         type="button"
                         onClick={() => setFormColor(c)}
-                        className={`w-6 h-6 transition-all ${
+                        className={`h-6 w-6 rounded-md transition-all ${
                           formColor === c ? "ring-2 ring-white/40 scale-110" : "hover:scale-110"
                         }`}
-                        style={{ backgroundColor: c, borderRadius: "3px" }}
+                        style={{ backgroundColor: c }}
                       />
                     ))}
                   </div>

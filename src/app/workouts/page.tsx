@@ -215,60 +215,7 @@ export default function WorkoutsPage() {
         color="#a855f7"
       />
 
-      <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-          Last 14 days
-        </h2>
-        {daysWithData >= 2 ? (
-          <div className="h-40 lg:h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 10, fill: "oklch(0.7 0.02 280)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval={0}
-                />
-                <YAxis hide domain={[0, "auto"]} />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.[0]) return null
-                    const row = payload[0].payload as { key: string; count: number }
-                    const n = row.count
-                    const dateLine = format(parseLocalDate(row.key), "EEE, MMM d")
-                    return (
-                      <div
-                        className="rounded-[10px] border px-2.5 py-1.5 text-xs shadow-lg"
-                        style={{
-                          background: "oklch(0.19 0.012 250 / 98%)",
-                          borderColor: "oklch(1 0 0 / 8%)",
-                        }}
-                      >
-                        <p className="text-[11px] text-muted-foreground mb-0.5">{dateLine}</p>
-                        <p className="font-semibold tabular-nums">
-                          {n} workout{n === 1 ? "" : "s"}
-                        </p>
-                      </div>
-                    )
-                  }}
-                />
-                <Bar dataKey="count" fill="#a855f7" radius={[4, 4, 0, 0]} maxBarSize={28} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div className="h-40 lg:h-48 flex flex-col items-center justify-center rounded-xl border border-dashed border-muted-foreground/20 bg-muted/5 px-4 text-center">
-            <p className="text-sm text-muted-foreground">Not enough data for a trend yet</p>
-            <p className="text-xs text-muted-foreground/60 mt-1">
-              Log workouts on at least two different days to see your chart.
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
-        <div className="glass rounded-2xl p-5">
+      <div className="glass rounded-2xl p-5 animate-fade-up stagger-2">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex gap-2 flex-wrap">
               {workoutTypes.map((t) => (
@@ -327,9 +274,61 @@ export default function WorkoutsPage() {
               Log Workout
             </Button>
           </form>
-        </div>
+      </div>
 
-        <div className="space-y-3">
+      <div className="glass animate-fade-up stagger-2 rounded-2xl p-4 lg:p-5">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Last 14 days
+        </h2>
+        {daysWithData >= 2 ? (
+          <div className="h-40 w-full lg:h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10, fill: "oklch(0.7 0.02 280)" }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval={0}
+                />
+                <YAxis hide domain={[0, "auto"]} />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.[0]) return null
+                    const row = payload[0].payload as { key: string; count: number }
+                    const n = row.count
+                    const dateLine = format(parseLocalDate(row.key), "EEE, MMM d")
+                    return (
+                      <div
+                        className="rounded-[10px] border px-2.5 py-1.5 text-xs shadow-lg"
+                        style={{
+                          background: "oklch(0.19 0.012 250 / 98%)",
+                          borderColor: "oklch(1 0 0 / 8%)",
+                        }}
+                      >
+                        <p className="mb-0.5 text-[11px] text-muted-foreground">{dateLine}</p>
+                        <p className="font-semibold tabular-nums">
+                          {n} workout{n === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                    )
+                  }}
+                />
+                <Bar dataKey="count" fill="#a855f7" radius={[4, 4, 0, 0]} maxBarSize={28} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="flex h-40 flex-col items-center justify-center rounded-xl border border-dashed border-muted-foreground/20 bg-muted/5 px-4 text-center lg:h-48">
+            <p className="text-sm text-muted-foreground">Not enough data for a trend yet</p>
+            <p className="mt-1 text-xs text-muted-foreground/60">
+              Log workouts on at least two different days to see your chart.
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="animate-fade-up stagger-2 space-y-3">
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">History</h2>
           {entries.length === 0 && (
             <div className="glass-subtle rounded-2xl p-6 text-center">
@@ -389,7 +388,6 @@ export default function WorkoutsPage() {
               ))}
             </div>
           ))}
-        </div>
       </div>
     </div>
   )

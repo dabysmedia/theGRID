@@ -206,7 +206,7 @@ export default function AlcoholPage() {
                 contentStyle={{
                   background: "oklch(0.19 0.012 250 / 98%)",
                   border: "1px solid oklch(1 0 0 / 8%)",
-                  borderRadius: "3px",
+                  borderRadius: "8px",
                   fontSize: "12px",
                   backdropFilter: "blur(8px)",
                 }}

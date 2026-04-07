@@ -43,10 +43,10 @@ export default function LogPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4">
         {logCategories.map((cat) => (
           <Link key={cat.href} href={cat.href} className="group">
-            <div className="glass hud-corners p-4 lg:p-5 transition-all duration-200 hover:bg-glass-highlight/40 active:scale-[0.97] cursor-pointer h-full flex flex-col items-center text-center gap-3" style={{ borderRadius: '4px' }}>
+            <div className="glass hud-corners flex h-full cursor-pointer flex-col items-center gap-3 rounded-2xl p-4 text-center transition-all duration-200 hover:bg-glass-highlight/40 active:scale-[0.97] lg:p-5">
               <div
-                className="flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14"
-                style={{ backgroundColor: `${cat.color}12`, borderRadius: '4px' }}
+                className="flex h-12 w-12 items-center justify-center rounded-xl lg:h-14 lg:w-14"
+                style={{ backgroundColor: `${cat.color}12` }}
               >
                 <cat.icon className="h-6 w-6 lg:h-7 lg:w-7" style={{ color: cat.color }} />
               </div>

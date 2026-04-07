@@ -219,7 +219,7 @@ export function CategoryGoal({
   if (picking || (!goal && !editing && !picking)) {
     if (picking) {
       return (
-        <div className="glass-subtle rounded-[3px] px-3.5 py-3 animate-fade-up space-y-2.5">
+        <div className="glass-subtle rounded-xl px-3.5 py-3 animate-fade-up space-y-2.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Target className="h-3.5 w-3.5" style={{ color }} />
@@ -239,7 +239,7 @@ export function CategoryGoal({
               <button
                 key={p.type}
                 onClick={() => handlePickPreset(p)}
-                className="px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] rounded-[2px] border border-glass-border text-muted-foreground/70 hover:text-foreground hover:bg-grid-accent-dim transition-colors"
+                className="px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] rounded-md border border-glass-border text-muted-foreground/70 hover:text-foreground hover:bg-grid-accent-dim transition-colors"
               >
                 {p.label}
                 <span className="text-muted-foreground/30 ml-1 normal-case lowercase">
@@ -254,7 +254,7 @@ export function CategoryGoal({
 
     // No goal, show "Set a goal"
     return (
-      <div className="glass-subtle rounded-[3px] px-3.5 py-3 animate-fade-up">
+      <div className="glass-subtle rounded-xl px-3.5 py-3 animate-fade-up">
         <button
           onClick={() => {
             if (presets.length === 1) {
@@ -275,7 +275,7 @@ export function CategoryGoal({
   // --- Editing ---
   if (editing && activePreset) {
     return (
-      <div className="glass-subtle rounded-[3px] px-3.5 py-3 animate-fade-up space-y-2">
+      <div className="glass-subtle rounded-xl px-3.5 py-3 animate-fade-up space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
           <Target className="h-3.5 w-3.5 shrink-0" style={{ color }} />
           <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground shrink-0">
@@ -310,20 +310,20 @@ export function CategoryGoal({
           <div className="flex items-center gap-0.5 ml-auto">
             <button
               onClick={handleSave}
-              className="p-1 text-primary hover:bg-primary/10 rounded-[2px] transition-colors"
+              className="p-1 text-primary hover:bg-primary/10 rounded-md transition-colors"
             >
               <Check className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={handleCancel}
-              className="p-1 text-muted-foreground/50 hover:text-muted-foreground rounded-[2px] transition-colors"
+              className="p-1 text-muted-foreground/50 hover:text-muted-foreground rounded-md transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
             {goal && (
               <button
                 onClick={handleDelete}
-                className="p-1 text-muted-foreground/30 hover:text-destructive rounded-[2px] transition-colors"
+                className="p-1 text-muted-foreground/30 hover:text-destructive rounded-md transition-colors"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -340,7 +340,7 @@ export function CategoryGoal({
     const displayTarget = formatDisplayValue(goal.target, goal.goalType)
 
     return (
-      <div className="glass-subtle rounded-[3px] px-3.5 py-3 animate-fade-up space-y-2">
+      <div className="glass-subtle rounded-xl px-3.5 py-3 animate-fade-up space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Target className="h-3.5 w-3.5" style={{ color }} />

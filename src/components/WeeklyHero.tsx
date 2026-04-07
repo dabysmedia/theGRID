@@ -197,10 +197,9 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
 
   return (
     <div
-      className={`glass p-5 lg:p-6 relative overflow-hidden transition-opacity duration-500 ${
+      className={`glass relative overflow-hidden rounded-2xl bg-gradient-to-b from-glass-highlight/[0.08] via-transparent to-transparent p-5 lg:p-6 transition-opacity duration-500 dark:from-glass-highlight/[0.06] dark:to-transparent ${
         loading ? "opacity-50" : "opacity-100"
       }`}
-      style={{ borderRadius: "4px" }}
     >
       {/* Top edge glow */}
       <div className="absolute top-0 left-3 right-3 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
@@ -300,8 +299,7 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
         {secondaryStats.map((stat) => (
           <div
             key={stat.label}
-            className="flex-1 glass-subtle py-2 px-2.5 flex items-center gap-1.5"
-            style={{ borderRadius: '3px' }}
+            className="flex flex-1 items-center gap-1.5 rounded-xl glass-subtle px-2.5 py-2"
           >
             {stat.icon}
             <div className="min-w-0">

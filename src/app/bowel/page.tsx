@@ -192,51 +192,7 @@ export default function BowelPage() {
         color="#78716c"
       />
 
-      <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-3">
-          7-day entries
-        </p>
-        {hasChartData ? (
-          <div className="h-40 lg:h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted/25" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  width={32}
-                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                  axisLine={false}
-                  tickLine={false}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "oklch(0.19 0.012 250 / 98%)",
-                    border: "1px solid oklch(1 0 0 / 8%)",
-                    borderRadius: "3px",
-                    fontSize: "12px",
-                    backdropFilter: "blur(8px)",
-                  }}
-                  formatter={(value) => [`${Number(value ?? 0)}`, "Entries"]}
-                />
-                <Bar dataKey="count" fill="#78716c" radius={[4, 4, 0, 0]} maxBarSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div className="h-40 lg:h-48 flex items-center justify-center">
-            <p className="text-sm text-muted-foreground text-center px-4">Log entries to see trends</p>
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
-        <div className="glass rounded-2xl p-5">
+      <div className="glass rounded-2xl p-5 animate-fade-up stagger-2">
           <div className="text-center lg:text-left mb-5">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today</p>
             <p className="text-4xl font-bold tabular-nums tracking-tight">{todayCount}</p>
@@ -280,9 +236,52 @@ export default function BowelPage() {
               Log Entry
             </Button>
           </form>
-        </div>
+      </div>
 
-        <div className="space-y-3">
+      <div className="glass animate-fade-up stagger-2 rounded-2xl p-4 lg:p-5">
+        <p className="mb-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          7-day entries
+        </p>
+        {hasChartData ? (
+          <div className="h-40 w-full lg:h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted/25" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  width={32}
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "oklch(0.19 0.012 250 / 98%)",
+                    border: "1px solid oklch(1 0 0 / 8%)",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    backdropFilter: "blur(8px)",
+                  }}
+                  formatter={(value) => [`${Number(value ?? 0)}`, "Entries"]}
+                />
+                <Bar dataKey="count" fill="#78716c" radius={[4, 4, 0, 0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="flex h-40 items-center justify-center lg:h-48">
+            <p className="px-4 text-center text-sm text-muted-foreground">Log entries to see trends</p>
+          </div>
+        )}
+      </div>
+
+      <div className="animate-fade-up stagger-2 space-y-3">
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">History</h2>
           {entries.length === 0 && (
             <div className="glass-subtle rounded-2xl p-6 text-center">
@@ -343,7 +342,6 @@ export default function BowelPage() {
               </div>
             </div>
           ))}
-        </div>
       </div>
     </div>
   )
