@@ -12,10 +12,12 @@ import {
   Bar,
   LineChart,
   Line,
+  ComposedChart,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
+  Legend,
 } from "recharts"
 import {
   Flame,
@@ -28,7 +30,12 @@ import {
   Weight,
   ChevronLeft,
   ChevronRight,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Activity,
 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface DayData {
   date: string
@@ -149,6 +156,290 @@ function SectionChart({
   )
 }
 
+/* ═══════════════════════════════════════════════════════════
+   Correlation Panel — weight vs metrics composite chart
+   ═══════════════════════════════════════════════════════════ */
+
+type MetricKey = "steps" | "calories" | "sleepHrs" | "bowel"
+
+const METRIC_META: Record<
+  MetricKey,
+  { label: string; unit: string; color: string; icon: React.ElementType }
+> = {
+  steps: { label: "Steps", unit: "steps", color: "#22c55e", icon: Footprints },
+  calories: { label: "Calories", unit: "cal", color: "#ef4444", icon: Flame },
+  sleepHrs: { label: "Sleep", unit: "hrs", color: "#6366f1", icon: Moon },
+  bowel: { label: "Bowel", unit: "entries", color: "#78716c", icon: CircleDot },
+}
+
+const METRIC_KEYS: MetricKey[] = ["steps", "calories", "sleepHrs", "bowel"]
+
+function pearson(xs: number[], ys: number[]): number | null {
+  if (xs.length < 3 || xs.length !== ys.length) return null
+  const n = xs.length
+  const mx = xs.reduce((a, b) => a + b, 0) / n
+  const my = ys.reduce((a, b) => a + b, 0) / n
+  let num = 0
+  let dx2 = 0
+  let dy2 = 0
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i] - mx
+    const dy = ys[i] - my
+    num += dx * dy
+    dx2 += dx * dx
+    dy2 += dy * dy
+  }
+  const denom = Math.sqrt(dx2 * dy2)
+  if (denom === 0) return null
+  return Math.round((num / denom) * 100) / 100
+}
+
+function correlationLabel(r: number): string {
+  const a = Math.abs(r)
+  if (a < 0.15) return "None"
+  if (a < 0.35) return "Weak"
+  if (a < 0.55) return "Moderate"
+  if (a < 0.75) return "Strong"
+  return "Very strong"
+}
+
+function CorrelationTooltip({
+  active,
+  payload,
+  label,
+  metricKey,
+}: {
+  active?: boolean
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload?: any[]
+  label?: string
+  metricKey: MetricKey
+}) {
+  if (!active || !payload?.length) return null
+  const meta = METRIC_META[metricKey]
+  const metricVal = payload.find((p) => p.dataKey === metricKey)?.value as number | null | undefined
+  const weightVal = payload.find((p) => p.dataKey === "weight")?.value as number | null | undefined
+  return (
+    <div className="glass rounded-lg border border-border px-3 py-2 font-mono text-[10px] space-y-0.5 min-w-[7rem]">
+      <div className="text-muted-foreground/70 mb-1">{label}</div>
+      {metricVal != null && (
+        <div className="flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: meta.color }} />
+          <span className="font-semibold">
+            {metricKey === "sleepHrs" ? metricVal : metricVal.toLocaleString()} {meta.unit}
+          </span>
+        </div>
+      )}
+      {weightVal != null && (
+        <div className="flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#14b8a6" }} />
+          <span className="font-semibold">{weightVal} lbs</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CorrelationPanel({ daily }: { daily: DayData[] }) {
+  const [active, setActive] = useState<MetricKey>("steps")
+
+  const correlations = useMemo(() => {
+    const paired = daily.filter((d) => d.weight != null)
+    const weightArr = paired.map((d) => d.weight!)
+    const out: Record<MetricKey, number | null> = {
+      steps: null,
+      calories: null,
+      sleepHrs: null,
+      bowel: null,
+    }
+    for (const k of METRIC_KEYS) {
+      const vals = paired.map((d) => {
+        const v = d[k]
+        return v ?? 0
+      })
+      out[k] = pearson(vals, weightArr)
+    }
+    return out
+  }, [daily])
+
+  const meta = METRIC_META[active]
+  const hasWeight = daily.some((d) => d.weight != null)
+
+  if (!hasWeight) return null
+
+  return (
+    <div className="glass animate-fade-up space-y-4 rounded-2xl p-4 lg:p-5">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#14b8a6]/15">
+          <Activity className="h-3.5 w-3.5 text-[#14b8a6]" />
+        </div>
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.12em]">
+            Weight Correlation
+          </h2>
+          <p className="text-[9px] text-muted-foreground/55 tracking-wide mt-0.5">
+            How your metrics relate to weight changes
+          </p>
+        </div>
+      </div>
+
+      {/* Toggle pills */}
+      <div className="flex flex-wrap gap-1.5">
+        {METRIC_KEYS.map((k) => {
+          const m = METRIC_META[k]
+          const Icon = m.icon
+          const isActive = k === active
+          return (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setActive(k)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] transition-all duration-150",
+                isActive
+                  ? "bg-background/80 text-foreground shadow-sm ring-1"
+                  : "glass-subtle text-muted-foreground/70 hover:text-foreground hover:bg-glass-highlight/25"
+              )}
+              style={
+                isActive
+                  ? {
+                      ["--tw-ring-color" as string]: `${m.color}55`,
+                      boxShadow: `0 0 12px ${m.color}18`,
+                    }
+                  : undefined
+              }
+            >
+              <Icon className="h-3 w-3" style={isActive ? { color: m.color } : undefined} />
+              {m.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Composed chart */}
+      <div className="h-56 sm:h-64 lg:h-72 w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={daily} margin={{ top: 8, right: 4, left: -12, bottom: 0 }}>
+            <defs>
+              <linearGradient id="corrMetricFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={meta.color} stopOpacity={0.25} />
+                <stop offset="95%" stopColor={meta.color} stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 5%)" vertical={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 9, fill: "oklch(0.55 0.01 250)", fontFamily: "var(--font-mono)" }}
+              tickLine={false}
+              axisLine={false}
+              interval={4}
+            />
+            <YAxis
+              yAxisId="metric"
+              tick={{ fontSize: 9, fill: "oklch(0.55 0.01 250)", fontFamily: "var(--font-mono)" }}
+              tickLine={false}
+              axisLine={false}
+              width={36}
+            />
+            <YAxis
+              yAxisId="weight"
+              orientation="right"
+              tick={{ fontSize: 9, fill: "#14b8a6", fontFamily: "var(--font-mono)" }}
+              tickLine={false}
+              axisLine={false}
+              width={36}
+              domain={["dataMin - 2", "dataMax + 2"]}
+            />
+            <Tooltip content={<CorrelationTooltip metricKey={active} />} />
+            <Legend
+              wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
+              iconSize={8}
+              formatter={(value: string) =>
+                value === "weight" ? "Weight (lbs)" : `${meta.label} (${meta.unit})`
+              }
+            />
+            <Area
+              yAxisId="metric"
+              type="monotone"
+              dataKey={active}
+              stroke={meta.color}
+              fill="url(#corrMetricFill)"
+              strokeWidth={2}
+              dot={false}
+              connectNulls
+              name={active}
+            />
+            <Line
+              yAxisId="weight"
+              type="monotone"
+              dataKey="weight"
+              stroke="#14b8a6"
+              strokeWidth={2.5}
+              dot={{ r: 2.5, fill: "#14b8a6", strokeWidth: 0 }}
+              connectNulls
+              name="weight"
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Correlation badges */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {METRIC_KEYS.map((k) => {
+          const m = METRIC_META[k]
+          const r = correlations[k]
+          const Icon = m.icon
+          const isActive = k === active
+          const TrendIcon =
+            r == null || Math.abs(r) < 0.15
+              ? Minus
+              : r > 0
+                ? TrendingUp
+                : TrendingDown
+          return (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setActive(k)}
+              className={cn(
+                "glass-subtle rounded-xl p-2.5 text-left transition-all duration-150",
+                isActive && "ring-1 ring-primary/30"
+              )}
+            >
+              <div className="flex items-center gap-1.5 mb-1">
+                <Icon className="h-3 w-3" style={{ color: m.color }} />
+                <span className="text-[9px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
+                  {m.label}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <TrendIcon
+                  className="h-3.5 w-3.5"
+                  style={{
+                    color:
+                      r == null || Math.abs(r) < 0.15
+                        ? "oklch(0.5 0.01 250)"
+                        : r > 0
+                          ? "#ef4444"
+                          : "#22c55e",
+                  }}
+                />
+                <span className="text-sm font-bold tabular-nums">
+                  {r != null ? (r > 0 ? "+" : "") + r.toFixed(2) : "—"}
+                </span>
+              </div>
+              <div className="text-[8px] text-muted-foreground/50 tracking-wide mt-0.5">
+                {r != null ? correlationLabel(r) : "Not enough data"}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function StatsPage() {
   const [month, setMonth] = useState(() => format(new Date(), "yyyy-MM"))
   const [data, setData] = useState<MonthlyData | null>(null)
@@ -224,6 +515,9 @@ export default function StatsPage() {
         </div>
       ) : data && s ? (
         <div className="space-y-4">
+          {/* ── WEIGHT CORRELATION ── */}
+          <CorrelationPanel daily={d} />
+
           {/* ── CALORIES ── */}
           <SectionChart
             title="Calories" icon={Flame} color={CATEGORY_COLORS.calories} href="/calories"

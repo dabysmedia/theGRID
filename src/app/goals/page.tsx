@@ -605,9 +605,10 @@ export default function GoalsPage() {
                             onClick={() =>
                               handleDeleteEntry(goal.id, entry.id)
                             }
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-destructive/10"
+                            className="history-row-delete"
+                            aria-label="Delete goal entry"
                           >
-                            <Trash2 className="h-3 w-3 text-muted-foreground/50" />
+                            <Trash2 />
                           </button>
                         </div>
                       ))}

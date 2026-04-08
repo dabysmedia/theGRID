@@ -333,9 +333,10 @@ export default function BowelPage() {
                     <button
                       type="button"
                       onClick={() => handleDelete(entry.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-destructive/10 shrink-0"
+                      className="history-row-delete"
+                      aria-label="Delete entry"
                     >
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Trash2 />
                     </button>
                   </div>
                 ))}

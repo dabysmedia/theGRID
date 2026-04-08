@@ -450,9 +450,10 @@ export default function SleepPage() {
                   <button
                     type="button"
                     onClick={() => handleDelete(entry.id)}
-                    className="shrink-0 rounded-lg p-1.5 opacity-0 transition-opacity hover:bg-destructive/10 group-hover:opacity-100"
+                    className="history-row-delete"
+                    aria-label="Delete sleep entry"
                   >
-                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Trash2 />
                   </button>
                 </div>
               ))}

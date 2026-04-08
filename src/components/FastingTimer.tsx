@@ -172,7 +172,7 @@ function FastingSettingsDialog({
       >
         <Settings2 className="h-3.5 w-3.5" />
       </DialogTrigger>
-      <DialogContent className="glass-frost max-h-[90vh] overflow-y-auto sm:max-w-md">
+      <DialogContent className="glass-frost min-h-0 overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Schedule & ratio</DialogTitle>
         </DialogHeader>

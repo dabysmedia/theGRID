@@ -423,8 +423,8 @@ export function FoodSearch({ onSelect, compact = false }: FoodSearchProps) {
                           <span className="text-[10px] font-normal text-muted-foreground/60 ml-0.5">cal</span>
                         </span>
                       )}
-                      <div className="w-6 h-6 rounded-xl bg-primary/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Plus className="h-3.5 w-3.5 text-primary" />
+                      <div className="food-search-add-chip" aria-hidden>
+                        <Plus />
                       </div>
                     </div>
                   </div>

@@ -926,7 +926,7 @@ export default function CaloriesPage() {
             <DialogContent
               showCloseButton
               className={cn(
-                "glass-frost flex max-h-[min(88vh,760px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md",
+                "glass-frost flex min-h-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-md",
                 "[&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3"
               )}
             >
@@ -1101,9 +1101,10 @@ export default function CaloriesPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteSavedMeal(meal.id)}
-                                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-destructive/10 shrink-0 transition-opacity"
+                                  className="history-row-delete rounded-md"
+                                  aria-label={`Delete saved meal ${meal.name}`}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground/30" />
+                                  <Trash2 />
                                 </button>
                               </div>
                             )
@@ -1475,24 +1476,23 @@ export default function CaloriesPage() {
                                 </p>
                               )}
                             </div>
-                            <div className="flex items-center gap-0.5 shrink-0 self-center opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-4 shrink-0 self-center opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity">
                               <button
                                 type="button"
                                 onClick={() => startEdit(entry)}
-                                className="p-2 rounded-[3px] hover:bg-primary/12 touch-manipulation"
+                                className="history-row-edit"
                                 title="Edit"
                                 aria-label="Edit entry"
                               >
-                                <Pencil className="h-4 w-4 text-muted-foreground" />
+                                <Pencil />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleDelete(entry.id)}
-                                className="p-2 rounded-[3px] hover:bg-destructive/12 touch-manipulation"
-                                title="Delete"
+                                className="history-row-delete-row"
                                 aria-label="Delete entry"
                               >
-                                <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                <Trash2 />
                               </button>
                             </div>
                           </li>
