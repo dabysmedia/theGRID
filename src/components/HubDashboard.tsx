@@ -72,7 +72,7 @@ export function HubDashboard() {
     setLoading(true)
     async function fetchDashboard() {
       try {
-        const res = await fetch(`/api/dashboard?d=${activeDate}`, {
+        const res = await fetch(`/api/dashboard?d=${activeDate}&_ts=${Date.now()}`, {
           cache: "no-store",
         })
         if (res.ok && !cancelled) {

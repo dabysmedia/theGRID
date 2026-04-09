@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { kmToMiles, runKmToStepsFromRun } from "@/lib/units"
-import { formatDate } from "@/lib/utils"
+import { formatDate, parseLocalDate } from "@/lib/utils"
+import { format } from "date-fns"
 import { subDays } from "date-fns"
 import {
-  parseYyyyMmDdToStoredDate,
   utcCalendarDayKeyFromIso,
   utcCalendarDayRangeInclusive,
 } from "@/lib/dateStorage"
@@ -17,6 +17,10 @@ interface GoalRow {
   target: number
   unit: string
   createdAt: Date
+}
+
+interface DatedRow {
+  date: Date
 }
 
 /** Running distance goals are entered in miles (`unit: mi`); legacy rows may store km. */
@@ -86,22 +90,19 @@ function latestGoalByCategory(goals: GoalRow[]): Map<string, GoalRow> {
 export async function GET(req: NextRequest) {
   try {
     const dateParam = req.nextUrl.searchParams.get("d")
-    const refDayStr =
+    const refDate =
       dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
-        ? dateParam
-        : formatDate(new Date())
-    /** Same UTC-noon anchor as weigh-in / Prisma writes — avoids local-vs-UTC bucket mismatch. */
-    const anchorDate = parseYyyyMmDdToStoredDate(refDayStr)
-    const weekStartStr = utcCalendarDayKeyFromIso(subDays(anchorDate, 6))
-    const rangeEndStr = utcCalendarDayKeyFromIso(anchorDate)
-    const dateInRange = utcCalendarDayRangeInclusive(weekStartStr, rangeEndStr)
+        ? parseLocalDate(dateParam)
+        : new Date()
+    const refDayStr = formatDate(refDate)
+    const weekStartStr = formatDate(subDays(refDate, 6))
+    const dateInRange = utcCalendarDayRangeInclusive(weekStartStr, refDayStr)
 
     const [
       calorieEntries,
       stepEntries,
       runEntries,
       workoutEntries,
-      workoutSessions,
       sleepEntries,
       alcoholEntries,
       bowelEntries,
@@ -111,14 +112,25 @@ export async function GET(req: NextRequest) {
       prisma.stepEntry.findMany({ where: { date: dateInRange } }),
       prisma.runEntry.findMany({ where: { date: dateInRange } }),
       prisma.workoutEntry.findMany({ where: { date: dateInRange } }),
-      prisma.workoutSession.findMany({
-        where: { date: dateInRange, status: "completed" },
-      }),
       prisma.sleepEntry.findMany({ where: { date: dateInRange } }),
       prisma.alcoholEntry.findMany({ where: { date: dateInRange } }),
       prisma.bowelEntry.findMany({ where: { date: dateInRange } }),
       prisma.goal.findMany({ where: { active: true } }),
     ])
+
+    // Optional table in some deployments/migration states.
+    let workoutSessions: DatedRow[] = []
+    try {
+      workoutSessions = await prisma.workoutSession.findMany({
+        where: { date: dateInRange, status: "completed" },
+        select: { date: true },
+      })
+    } catch (err) {
+      console.warn(
+        "[dashboard] workoutSession query failed, falling back to legacy workouts only:",
+        (err as Error).message
+      )
+    }
 
     const goalByCategory = latestGoalByCategory(goals)
 
@@ -128,8 +140,8 @@ export async function GET(req: NextRequest) {
     ): number[] {
       const result: number[] = []
       for (let i = 0; i <= 6; i++) {
-        const day = subDays(anchorDate, 6 - i)
-        const dayKey = utcCalendarDayKeyFromIso(day)
+        const day = subDays(refDate, 6 - i)
+        const dayKey = format(day, "yyyy-MM-dd")
         const dayEntries = entries.filter(
           (e) => utcCalendarDayKeyFromIso(e.date) === dayKey
         )
