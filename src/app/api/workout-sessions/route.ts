@@ -23,14 +23,47 @@ export async function GET(req: NextRequest) {
   }
 }
 
+function prismaErrorMessage(err: unknown): string {
+  if (err && typeof err === "object" && "code" in err) {
+    const code = String((err as { code: string }).code)
+    if (code === "P2021" || code === "P2010") {
+      return "Workout tables are missing on the server. Run: npx prisma db push (or redeploy with schema sync)."
+    }
+  }
+  if (err instanceof Error && err.message) {
+    const m = err.message
+    if (/no such table|does not exist/i.test(m) && /WorkoutSession/i.test(m)) {
+      return "Workout tables are missing. Run: npx prisma db push"
+    }
+    return m.length > 220 ? `${m.slice(0, 220)}…` : m
+  }
+  return "Failed to create"
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { name, date, exercises } = body
+    const dateStr = date == null ? "" : String(date).trim()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return NextResponse.json(
+        { error: "Invalid date (expected YYYY-MM-DD)." },
+        { status: 400, headers: { "Cache-Control": "no-store, must-revalidate" } },
+      )
+    }
+    let storedDate: Date
+    try {
+      storedDate = parseYyyyMmDdToStoredDate(dateStr)
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid calendar date." },
+        { status: 400, headers: { "Cache-Control": "no-store, must-revalidate" } },
+      )
+    }
     const session = await prisma.workoutSession.create({
       data: {
         name: (name || "Workout").trim(),
-        date: parseYyyyMmDdToStoredDate(String(date)),
+        date: storedDate,
         exercises: JSON.stringify(Array.isArray(exercises) ? exercises : []),
         status: "active",
       },
@@ -39,9 +72,10 @@ export async function POST(req: NextRequest) {
       status: 201,
       headers: { "Cache-Control": "no-store, must-revalidate" },
     })
-  } catch {
+  } catch (err) {
+    console.error("[workout-sessions POST]", err)
     return NextResponse.json(
-      { error: "Failed to create" },
+      { error: prismaErrorMessage(err) },
       { status: 500, headers: { "Cache-Control": "no-store, must-revalidate" } },
     )
   }

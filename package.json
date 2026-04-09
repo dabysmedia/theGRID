@@ -8,7 +8,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "start": "node scripts/start.mjs",
+    "start": "prisma db push && node scripts/start.mjs",
     "start:next": "next start",
     "start:prod": "prisma db push && node .next/standalone/server.js",
     "lint": "eslint"
