@@ -36,14 +36,16 @@ interface DashboardData {
   bowel: CategorySummary
 }
 
+const emptyLast7 = () => Array.from({ length: 7 }, () => 0)
+
 const defaultData: DashboardData = {
-  calories: { todayValue: 0, goal: 2000, unit: "cal", last7: [] },
-  steps: { todayValue: 0, goal: 10000, unit: "steps", last7: [] },
-  running: { todayValue: 0, goal: null, unit: "mi", last7: [] },
-  workouts: { todayValue: 0, goal: null, unit: "sessions", last7: [] },
-  sleep: { todayValue: 0, goal: 8, unit: "hrs", last7: [] },
-  alcohol: { todayValue: 0, goal: null, unit: "units", last7: [] },
-  bowel: { todayValue: 0, goal: null, unit: "", last7: [] },
+  calories: { todayValue: 0, goal: 2000, unit: "cal", last7: emptyLast7() },
+  steps: { todayValue: 0, goal: 10000, unit: "steps", last7: emptyLast7() },
+  running: { todayValue: 0, goal: null, unit: "mi", last7: emptyLast7() },
+  workouts: { todayValue: 0, goal: null, unit: "sessions", last7: emptyLast7() },
+  sleep: { todayValue: 0, goal: 8, unit: "hrs", last7: emptyLast7() },
+  alcohol: { todayValue: 0, goal: null, unit: "units", last7: emptyLast7() },
+  bowel: { todayValue: 0, goal: null, unit: "", last7: emptyLast7() },
 }
 
 const categories = [
@@ -70,7 +72,9 @@ export function HubDashboard() {
     setLoading(true)
     async function fetchDashboard() {
       try {
-        const res = await fetch(`/api/dashboard?d=${activeDate}`)
+        const res = await fetch(`/api/dashboard?d=${activeDate}`, {
+          cache: "no-store",
+        })
         if (res.ok && !cancelled) {
           setData(await res.json())
         }

@@ -1,4 +1,4 @@
-const CACHE_NAME = "thegrid-v1"
+const CACHE_NAME = "thegrid-v2"
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -22,6 +22,13 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return
+
+  const url = new URL(event.request.url)
+  // Never cache API routes — stale dashboard JSON on mobile / PWA was showing zeros.
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(fetch(event.request))
+    return
+  }
 
   event.respondWith(
     fetch(event.request)

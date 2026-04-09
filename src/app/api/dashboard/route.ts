@@ -183,7 +183,7 @@ export async function GET(req: NextRequest) {
     const alcGoal = alcG ? dashboardGoalValue(alcG) : null
     const bowelGoal = bowelG ? dashboardGoalValue(bowelG) : null
 
-    return NextResponse.json({
+    const body = {
       calories: {
         todayValue: calorieLast7[6],
         goal: calGoal ?? 2000,
@@ -233,11 +233,20 @@ export async function GET(req: NextRequest) {
         unit: "",
         last7: bowelLast7,
       },
+    }
+
+    return NextResponse.json(body, {
+      headers: {
+        "Cache-Control": "no-store, must-revalidate",
+      },
     })
   } catch {
     return NextResponse.json(
       { error: "Database not connected" },
-      { status: 503 }
+      {
+        status: 503,
+        headers: { "Cache-Control": "no-store, must-revalidate" },
+      }
     )
   }
 }
