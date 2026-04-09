@@ -211,6 +211,11 @@
 }
 
 @layer utilities {
+  /* Google Fonts: Nabla (loaded via link in root layout) */
+  .font-nabla {
+    font-family: "Nabla", cursive;
+  }
+
   /* Full-viewport background: grid + ambient — fixed layer so every route shows the same pattern */
   .page-bg {
     position: fixed;

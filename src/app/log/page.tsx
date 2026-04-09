@@ -28,19 +28,17 @@ export default function LogPage() {
   return (
     <div className="space-y-8">
       <header>
-        <div className="flex items-center gap-2.5 sm:gap-3">
-          <div className="status-dot translate-y-px" aria-hidden />
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+        <div className="flex items-start gap-2.5 sm:gap-3">
+          <div className="status-dot mt-1 shrink-0 translate-y-px" aria-hidden />
+          <div className="min-w-0 flex flex-col gap-2 sm:gap-2.5">
+            <h1 className="font-nabla text-xl font-semibold leading-tight tracking-[-0.03em] text-foreground sm:text-2xl">
               Quick Log
             </h1>
-            <p className="mt-1 text-[11px] leading-snug text-muted-foreground/75 sm:text-xs">
+            <DatePicker />
+            <p className="text-[11px] leading-snug text-muted-foreground/75 sm:text-xs">
               Select a category to enter data
             </p>
           </div>
-        </div>
-        <div className="mt-4 border-t border-border/30 pt-4 sm:mt-5">
-          <DatePicker />
         </div>
       </header>
 
