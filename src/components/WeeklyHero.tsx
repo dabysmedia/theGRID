@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import {
   Flame,
   Footprints,
@@ -194,7 +195,17 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
   const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
   const dateRange = `${monthNames[weekStart.getMonth()]} ${weekStart.getDate()} – ${monthNames[weekEnd.getMonth()]} ${weekEnd.getDate()}`
 
-  const dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
+  /** Rolling last7 slots: index 0 = oldest day, 6 = activeDate (matches /api/dashboard). */
+  const dayLabels = useMemo(() => {
+    const letters = ["S", "M", "T", "W", "T", "F", "S"]
+    const d = parseLocalDate(activeDate)
+    return Array.from({ length: 7 }, (_, i) => {
+      const x = new Date(d)
+      x.setDate(d.getDate() - 6 + i)
+      return letters[x.getDay()]
+    })
+  }, [activeDate])
+
   const stepsMax = Math.max(...data.steps.last7, 1)
 
   return (

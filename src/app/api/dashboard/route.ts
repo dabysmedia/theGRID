@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { kmToMiles, runKmToStepsFromRun } from "@/lib/units"
-import { formatDate, parseLocalDate } from "@/lib/utils"
-import { format } from "date-fns"
+import { formatDate } from "@/lib/utils"
 import { subDays } from "date-fns"
 import {
+  parseYyyyMmDdToStoredDate,
   utcCalendarDayKeyFromIso,
   utcCalendarDayRangeInclusive,
 } from "@/lib/dateStorage"
@@ -86,13 +86,15 @@ function latestGoalByCategory(goals: GoalRow[]): Map<string, GoalRow> {
 export async function GET(req: NextRequest) {
   try {
     const dateParam = req.nextUrl.searchParams.get("d")
-    const refDate =
+    const refDayStr =
       dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
-        ? parseLocalDate(dateParam)
-        : new Date()
-    const refDayStr = formatDate(refDate)
-    const weekStartStr = formatDate(subDays(refDate, 6))
-    const dateInRange = utcCalendarDayRangeInclusive(weekStartStr, refDayStr)
+        ? dateParam
+        : formatDate(new Date())
+    /** Same UTC-noon anchor as weigh-in / Prisma writes — avoids local-vs-UTC bucket mismatch. */
+    const anchorDate = parseYyyyMmDdToStoredDate(refDayStr)
+    const weekStartStr = utcCalendarDayKeyFromIso(subDays(anchorDate, 6))
+    const rangeEndStr = utcCalendarDayKeyFromIso(anchorDate)
+    const dateInRange = utcCalendarDayRangeInclusive(weekStartStr, rangeEndStr)
 
     const [
       calorieEntries,
@@ -126,8 +128,8 @@ export async function GET(req: NextRequest) {
     ): number[] {
       const result: number[] = []
       for (let i = 0; i <= 6; i++) {
-        const day = subDays(refDate, 6 - i)
-        const dayKey = format(day, "yyyy-MM-dd")
+        const day = subDays(anchorDate, 6 - i)
+        const dayKey = utcCalendarDayKeyFromIso(day)
         const dayEntries = entries.filter(
           (e) => utcCalendarDayKeyFromIso(e.date) === dayKey
         )
