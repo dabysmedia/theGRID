@@ -346,7 +346,7 @@ export function FoodSearch({ onSelect, compact = false }: FoodSearchProps) {
           </div>
 
           {/* Confirm */}
-          <Button onClick={handleConfirm} size="default" className="w-full gap-1.5 h-11 text-sm">
+          <Button variant="glass" onClick={handleConfirm} size="default" className="w-full gap-1.5 h-11 text-sm">
             <Check className="h-4 w-4" />
             Add to entry
           </Button>

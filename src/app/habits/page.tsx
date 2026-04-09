@@ -496,7 +496,7 @@ export default function HabitsPage() {
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full" size="default" disabled={!formName.trim()}>
+                <Button type="submit" variant="glass" className="w-full" size="default" disabled={!formName.trim()}>
                   {editingHabit ? "Save Changes" : "Create Habit"}
                 </Button>
 

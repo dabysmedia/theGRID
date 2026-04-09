@@ -16,13 +16,13 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "theGRID",
+  title: "THEGRID",
   description: "Tactical health & fitness command system",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "theGRID",
+    title: "THEGRID",
   },
 }
 
@@ -49,7 +49,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Nabla&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Iceberg&display=swap"
           rel="stylesheet"
         />
       </head>

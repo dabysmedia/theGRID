@@ -313,7 +313,7 @@ export default function SleepPage() {
               />
             </div>
 
-            <Button type="submit" className="w-full press-scale" size="lg">
+            <Button type="submit" variant="glass" className="w-full press-scale" size="lg">
               Log Sleep
             </Button>
           </form>

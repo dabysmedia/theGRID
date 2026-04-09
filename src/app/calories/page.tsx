@@ -872,8 +872,9 @@ export default function CaloriesPage() {
 
                 <Button
                   type="button"
+                  variant="glass"
                   size="lg"
-                  className="w-full gap-2 shadow-md shadow-primary/20 ring-1 ring-primary/15"
+                  className="w-full gap-2"
                   onClick={() => setLogFoodOpen(true)}
                 >
                   <Plus className="h-4 w-4 shrink-0" />
@@ -908,6 +909,7 @@ export default function CaloriesPage() {
             </button>
             <Button
               type="button"
+              variant="glass"
               size="lg"
               className="mt-4 w-full gap-2"
               onClick={() => setLogFoodOpen(true)}
@@ -1052,7 +1054,13 @@ export default function CaloriesPage() {
                             </div>
                           </div>
                           {saveMealError && <p className="text-[10px] text-destructive" role="alert">{saveMealError}</p>}
-                          <Button type="button" size="sm" className="w-full h-10 text-sm" onClick={() => void handleCreateMeal()}>
+                          <Button
+                            type="button"
+                            variant="glass"
+                            size="sm"
+                            className="w-full h-10 text-sm"
+                            onClick={() => void handleCreateMeal()}
+                          >
                             Save
                           </Button>
                         </div>
@@ -1182,7 +1190,7 @@ export default function CaloriesPage() {
                           </button>
                         )}
                         {!editingEntry && (
-                          <Button type="submit" size="sm" className="flex-1 h-11 text-sm">
+                          <Button type="submit" variant="glass" size="sm" className="flex-1 h-11 text-sm">
                             {estimateCalDisplay != null
                               ? `Add ${estimateCalDisplay.toLocaleString()} cal`
                               : "Add to meal"}
@@ -1241,13 +1249,14 @@ export default function CaloriesPage() {
                       <Button type="button" variant="outline" className="flex-1 h-11" size="default" onClick={cancelEdit}>
                         Cancel
                       </Button>
-                      <Button type="submit" form="log-food-form" className="flex-1 press-scale h-11" size="default">
+                      <Button type="submit" variant="glass" form="log-food-form" className="flex-1 press-scale h-11" size="default">
                         Save
                       </Button>
                     </div>
                   ) : (
                     <Button
                       type="button"
+                      variant="glass"
                       className="w-full press-scale h-11 text-sm"
                       size="default"
                       disabled={postingMeal}

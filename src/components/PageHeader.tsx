@@ -28,8 +28,10 @@ export function PageHeader({ title, icon: Icon, iconColor }: PageHeaderProps) {
                 />
               </div>
             )}
-            <h1 className="font-nabla min-w-0 flex-1 truncate text-xl font-semibold leading-tight tracking-[-0.03em] text-foreground sm:text-2xl sm:leading-none">
-              {title}
+            <h1 className="font-iceberg min-w-0 flex-1 text-2xl font-semibold leading-tight tracking-[-0.03em] sm:text-3xl sm:leading-none">
+              <span className="text-gradient-glass title-underline-accent block truncate">
+                {title}
+              </span>
             </h1>
           </div>
 

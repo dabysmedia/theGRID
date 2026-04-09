@@ -239,7 +239,7 @@ export default function GoalsPage() {
             setShowForm(true)
           }}
           className="w-full"
-          variant="outline"
+          variant="glass"
           size="lg"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -400,7 +400,7 @@ export default function GoalsPage() {
                 {formError}
               </p>
             )}
-            <Button type="submit" className="w-full" size="lg">
+            <Button type="submit" variant="glass" className="w-full" size="lg">
               Create Goal
             </Button>
           </form>

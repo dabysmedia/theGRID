@@ -6,6 +6,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/** Primary “glass” CTA — frosted panel + ladder yellow accent (matches glass UI) */
+export const glassCtaButtonClass =
+  "relative overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-b from-primary/15 via-primary/6 to-transparent text-primary backdrop-blur-md shadow-[inset_0_1px_0_0_oklch(1_0_0/12%)] transition-all hover:border-primary/45 hover:from-primary/22 hover:text-primary dark:border-primary/25 dark:from-primary/10 dark:hover:from-primary/18"
+
 export function todayDate(): Date {
   return startOfDay(new Date())
 }

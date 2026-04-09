@@ -208,11 +208,12 @@ export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
         ) : (
           <Button
             type="submit"
+            variant="glass"
             disabled={!value.trim() || submitting}
             size="sm"
             className="w-full sm:w-auto sm:ml-auto sm:shrink-0"
           >
-            Log
+            {embedded ? "Log weight" : "Log"}
           </Button>
         )}
       </div>

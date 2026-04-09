@@ -478,8 +478,10 @@ export default function StatsPage() {
         <div className="flex items-start gap-2.5 sm:gap-3">
           <div className="status-dot mt-1 shrink-0 translate-y-px" aria-hidden />
           <div className="min-w-0 flex flex-col gap-2 sm:gap-2.5">
-            <h1 className="font-nabla text-xl font-semibold leading-tight tracking-[-0.03em] text-foreground sm:text-2xl">
-              Statistics
+            <h1 className="font-iceberg text-2xl font-semibold leading-tight tracking-[-0.03em] sm:text-3xl">
+              <span className="text-gradient-glass title-underline-accent inline-block">
+                Statistics
+              </span>
             </h1>
             <DatePicker />
             <p className="text-[11px] leading-snug text-muted-foreground/75 sm:text-xs">

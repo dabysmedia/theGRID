@@ -150,6 +150,36 @@
   }
 }
 
+/* Typographic scale: rem-based text and spacing scale together */
+html {
+  font-size: 106.25%;
+}
+
+@media (max-width: 639px) {
+  html {
+    font-size: 112.5%;
+  }
+  /*
+   * Arbitrary `text-[Npx]` utilities compile to fixed px; remap to rem so they follow the root scale
+   * (otherwise labels stay tiny while body text grows).
+   */
+  .text-\[8px\] {
+    font-size: 0.5rem !important;
+  }
+  .text-\[9px\] {
+    font-size: 0.5625rem !important;
+  }
+  .text-\[10px\] {
+    font-size: 0.625rem !important;
+  }
+  .text-\[11px\] {
+    font-size: 0.6875rem !important;
+  }
+  .text-\[12px\] {
+    font-size: 0.75rem !important;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -211,9 +241,9 @@
 }
 
 @layer utilities {
-  /* Google Fonts: Nabla (loaded via link in root layout) */
-  .font-nabla {
-    font-family: "Nabla", cursive;
+  /* Google Fonts: Iceberg (loaded via link in root layout) */
+  .font-iceberg {
+    font-family: "Iceberg", sans-serif;
   }
 
   /* Full-viewport background: grid + ambient — fixed layer so every route shows the same pattern */
@@ -339,6 +369,43 @@
     background-clip: text;
   }
 
+  /* Page titles — frosted highlight → grid accent → steel (matches glass panels) */
+  .text-gradient-glass {
+    background: linear-gradient(
+      165deg,
+      oklch(0.42 0.02 250) 0%,
+      oklch(0.62 0.14 110) 40%,
+      oklch(0.2 0.012 250) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .dark .text-gradient-glass {
+    background: linear-gradient(
+      165deg,
+      oklch(0.96 0.006 250 / 0.96) 0%,
+      oklch(0.84 0.16 110) 38%,
+      oklch(0.72 0.03 250 / 0.92) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Page titles — grid accent underline (matches --primary / ladder yellow) */
+  .title-underline-accent {
+    text-decoration-line: underline;
+    text-decoration-color: oklch(0.78 0.17 110);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.22em;
+  }
+
+  .dark .title-underline-accent {
+    text-decoration-color: oklch(0.82 0.18 110);
+  }
+
   /* ── HUD corner brackets — ladder yellow on steel ──────── */
   .hud-corners {
     position: relative;
@@ -376,20 +443,24 @@
 
   /* ── Status indicator — ladder yellow pulse ────────────── */
   .status-dot {
-    width: 6px;
-    height: 6px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: oklch(0.82 0.18 110);
-    box-shadow: 0 0 6px oklch(0.82 0.18 110 / 45%);
+    box-shadow:
+      0 0 12px oklch(0.82 0.18 110 / 55%),
+      0 0 24px oklch(0.82 0.18 110 / 28%);
     animation: pulse-glow 2.5s ease-in-out infinite;
   }
 
   .status-dot-amber {
-    width: 6px;
-    height: 6px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: oklch(0.75 0.17 70);
-    box-shadow: 0 0 6px oklch(0.75 0.17 70 / 45%);
+    box-shadow:
+      0 0 12px oklch(0.75 0.17 70 / 55%),
+      0 0 24px oklch(0.75 0.17 70 / 28%);
     animation: pulse-glow-amber 2.5s ease-in-out infinite;
   }
 
@@ -427,13 +498,39 @@
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.5; box-shadow: 0 0 4px oklch(0.82 0.18 110 / 20%); }
-  50% { opacity: 1; box-shadow: 0 0 8px oklch(0.82 0.18 110 / 55%); }
+  0%,
+  100% {
+    opacity: 0.55;
+    box-shadow:
+      0 0 10px oklch(0.82 0.18 110 / 32%),
+      0 0 22px oklch(0.82 0.18 110 / 18%),
+      0 0 36px oklch(0.82 0.18 110 / 8%);
+  }
+  50% {
+    opacity: 1;
+    box-shadow:
+      0 0 16px oklch(0.82 0.18 110 / 72%),
+      0 0 32px oklch(0.82 0.18 110 / 48%),
+      0 0 48px oklch(0.82 0.18 110 / 22%);
+  }
 }
 
 @keyframes pulse-glow-amber {
-  0%, 100% { opacity: 0.5; box-shadow: 0 0 4px oklch(0.75 0.17 70 / 20%); }
-  50% { opacity: 1; box-shadow: 0 0 8px oklch(0.75 0.17 70 / 55%); }
+  0%,
+  100% {
+    opacity: 0.55;
+    box-shadow:
+      0 0 10px oklch(0.75 0.17 70 / 32%),
+      0 0 22px oklch(0.75 0.17 70 / 18%),
+      0 0 36px oklch(0.75 0.17 70 / 8%);
+  }
+  50% {
+    opacity: 1;
+    box-shadow:
+      0 0 16px oklch(0.75 0.17 70 / 72%),
+      0 0 32px oklch(0.75 0.17 70 / 48%),
+      0 0 48px oklch(0.75 0.17 70 / 22%);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════

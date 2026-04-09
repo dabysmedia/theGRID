@@ -253,7 +253,7 @@ export default function BowelPage() {
               />
             </div>
 
-            <Button type="submit" className="w-full press-scale" size="lg">
+            <Button type="submit" variant="glass" className="w-full press-scale" size="lg">
               Log Entry
             </Button>
           </form>

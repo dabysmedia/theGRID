@@ -10,8 +10,10 @@ export default function MorePage() {
         <div className="flex items-start gap-2.5 sm:gap-3">
           <div className="status-dot mt-1 shrink-0 translate-y-px" aria-hidden />
           <div className="min-w-0 flex flex-col gap-2 sm:gap-2.5">
-            <h1 className="font-nabla text-xl font-semibold leading-tight tracking-[-0.03em] text-foreground sm:text-2xl">
-              System
+            <h1 className="font-iceberg text-2xl font-semibold leading-tight tracking-[-0.03em] sm:text-3xl">
+              <span className="text-gradient-glass title-underline-accent inline-block">
+                System
+              </span>
             </h1>
             <DatePicker />
             <p className="text-[11px] leading-snug text-muted-foreground/75 sm:text-xs">
@@ -24,10 +26,9 @@ export default function MorePage() {
       <div className="glass hud-corners space-y-4 rounded-2xl p-6 lg:max-w-md">
         <div className="flex items-center gap-3">
           <div className="status-dot" />
-          <h2 className="text-sm font-bold tracking-[0.2em] uppercase">
-            <span className="text-muted-foreground/90">the</span>
-            <span className="inline-block origin-left scale-150 align-baseline text-foreground">
-              GRID
+          <h2 className="text-base font-bold tracking-[0.18em] uppercase sm:text-lg">
+            <span className="text-gradient-glass title-underline-accent font-iceberg inline-block">
+              THEGRID
             </span>
           </h2>
         </div>

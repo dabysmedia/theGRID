@@ -6,6 +6,8 @@ export const FASTING_CONFIG_KEY = "theGRID_fasting_config"
 export const FASTING_LOGS_KEY = "theGRID_fasting_logs"
 /** Wall-clock ms when the dashboard timer was paused; null = live */
 export const FASTING_TIMER_PAUSE_KEY = "theGRID_fasting_timer_paused_at_ms"
+/** When "true", the home fasting widget is inactive (no live countdown) until re-enabled */
+export const FASTING_TIMER_DISABLED_KEY = "theGRID_fasting_timer_disabled"
 /** @deprecated session-based timer — migrated away */
 const LEGACY_STATE_KEY = "theGRID_fasting_state"
 
@@ -140,6 +142,25 @@ export function saveFastingTimerPausedAtMs(ms: number | null): void {
   try {
     if (ms == null) localStorage.removeItem(FASTING_TIMER_PAUSE_KEY)
     else localStorage.setItem(FASTING_TIMER_PAUSE_KEY, String(ms))
+  } catch {
+    /* noop */
+  }
+}
+
+export function loadFastingTimerDisabled(): boolean {
+  if (typeof window === "undefined") return false
+  try {
+    return localStorage.getItem(FASTING_TIMER_DISABLED_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+export function saveFastingTimerDisabled(disabled: boolean): void {
+  if (typeof window === "undefined") return
+  try {
+    if (disabled) localStorage.setItem(FASTING_TIMER_DISABLED_KEY, "1")
+    else localStorage.removeItem(FASTING_TIMER_DISABLED_KEY)
   } catch {
     /* noop */
   }

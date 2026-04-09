@@ -92,10 +92,9 @@ export function HubDashboard() {
         <div className="flex flex-col gap-2 sm:gap-2.5">
           <div className="flex items-center gap-2.5">
             <div className="status-dot translate-y-px" aria-hidden />
-            <h1 className="font-nabla text-[1.375rem] font-semibold leading-none tracking-[-0.03em] sm:text-2xl">
-              <span className="text-muted-foreground/90">the</span>
-              <span className="inline-block origin-left scale-150 align-baseline font-semibold text-foreground">
-                GRID
+            <h1 className="font-iceberg text-3xl font-semibold leading-none tracking-[-0.03em] sm:text-4xl">
+              <span className="text-gradient-glass title-underline-accent inline-block">
+                THEGRID
               </span>
             </h1>
           </div>

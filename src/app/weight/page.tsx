@@ -391,6 +391,7 @@ export default function WeightPage() {
             </div>
             <Button
               type="submit"
+              variant="glass"
               className="w-full press-scale"
               size="lg"
               disabled={submitting}

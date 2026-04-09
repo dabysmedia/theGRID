@@ -1,6 +1,6 @@
 {
-  "name": "theGRID",
-  "short_name": "theGRID",
+  "name": "THEGRID",
+  "short_name": "THEGRID",
   "description": "Tactical health & fitness command system",
   "start_url": "/",
   "display": "standalone",

@@ -520,6 +520,7 @@ function RoutineEditor({
             </div>
 
             <Button
+              variant="glass"
               className="w-full press-scale"
               size="lg"
               disabled={!name.trim() || exercises.length === 0}
@@ -828,8 +829,9 @@ function ActiveWorkout({
               Discard
             </Button>
             <Button
+              variant="glass"
               size="sm"
-              className="h-9 gap-1.5 bg-[#a855f7] hover:bg-[#9333ea] press-scale touch-manipulation"
+              className="h-9 gap-1.5 press-scale touch-manipulation"
               onClick={onFinish}
             >
               <Check className="size-3.5" />
@@ -1151,9 +1153,17 @@ export default function WorkoutsPage() {
       body: JSON.stringify({ name, date: today, exercises }),
     })
 
-    if (res.ok) {
-      const session = await res.json()
-      setSessions((prev) => [session, ...prev])
+    if (!res.ok) return
+
+    const session = await res.json()
+    setSessions((prev) => [session, ...prev])
+
+    try {
+      const sync = await fetch("/api/workout-sessions")
+      const list = await sync.json()
+      if (Array.isArray(list)) setSessions(list)
+    } catch {
+      /* keep optimistic update */
     }
   }
 
@@ -1417,25 +1427,16 @@ export default function WorkoutsPage() {
 
           {/* Quick start */}
           <div className="animate-fade-up stagger-2">
-            <button
+            <Button
               type="button"
-              onClick={() => startSession("Workout")}
-              className={cn(
-                "glass relative flex h-14 w-full items-center justify-center gap-2.5 overflow-hidden rounded-2xl touch-manipulation press-scale",
-                "border border-[#a855f7]/35 bg-gradient-to-b from-[#a855f7]/14 via-transparent to-transparent",
-                "text-base font-semibold text-[#a855f7] shadow-[inset_0_1px_0_0_oklch(1_0_0/14%)]",
-                "dark:border-[#a855f7]/25 dark:from-[#a855f7]/12 dark:text-[#c084fc]",
-                "hover:border-[#a855f7]/50 hover:from-[#a855f7]/20",
-                "active:scale-[0.99]",
-              )}
+              variant="glass"
+              size="lg"
+              onClick={() => void startSession("Workout")}
+              className="h-14 w-full gap-2.5 rounded-2xl press-scale text-base font-semibold"
             >
-              <span
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,oklch(0.72_0.2_300/18%),transparent_65%)] dark:bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,oklch(0.65_0.18_300/14%),transparent_65%)]"
-                aria-hidden
-              />
-              <Play className="relative size-5 shrink-0 opacity-95" />
-              <span className="relative">Start Empty Workout</span>
-            </button>
+              <Play className="size-5 shrink-0 opacity-95" />
+              Start Empty Workout
+            </Button>
           </div>
 
           {/* ── My Routines ──────────────────────── */}
@@ -1535,6 +1536,7 @@ export default function WorkoutsPage() {
                   </div>
 
                   <Button
+                    variant="glass"
                     size="sm"
                     className="w-full gap-1.5 press-scale touch-manipulation"
                     onClick={() =>

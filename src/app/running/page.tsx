@@ -18,9 +18,9 @@ import { PageHeader } from "@/components/PageHeader"
 import { PageStatTile } from "@/components/PageStatTile"
 import { useActiveDate } from "@/context/DateContext"
 import { Badge } from "@/components/ui/badge"
-import { buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { parseLocalDate, cn } from "@/lib/utils"
+import { parseLocalDate } from "@/lib/utils"
 import { kmToMiles, milesToKm } from "@/lib/units"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 
@@ -396,12 +396,9 @@ export default function RunningPage() {
               </p>
             )}
 
-            <button
-              type="submit"
-              className={cn(buttonVariants({ variant: "default", size: "lg" }), "w-full press-scale")}
-            >
+            <Button type="submit" variant="glass" size="lg" className="w-full press-scale">
               Log Run
-            </button>
+            </Button>
           </form>
       </div>
 
