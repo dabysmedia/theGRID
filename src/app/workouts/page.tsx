@@ -218,6 +218,11 @@ function normalizeDateKey(d: string): string {
   return d.split("T")[0]
 }
 
+function normalizeSessionStatus(s: WorkoutSession): WorkoutSession {
+  const status = String(s.status ?? "").trim().toLowerCase()
+  return { ...s, status: status || "active" }
+}
+
 function formatTimer(seconds: number): string {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
@@ -1033,6 +1038,10 @@ function ActiveWorkout({
 /** Safari can cache GET /api/workout-sessions and serve a stale list after POST — breaks active workout. */
 const noStore: RequestInit = { cache: "no-store" }
 
+function sessionsListUrl(): string {
+  return `/api/workout-sessions?_=${Date.now()}`
+}
+
 /* ──────────────────────────────────────────────────────────
    Main Page
    ────────────────────────────────────────────────────────── */
@@ -1047,6 +1056,8 @@ export default function WorkoutsPage() {
   const [showRoutineEditor, setShowRoutineEditor] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<WorkoutTemplate | null>(null)
   const [templateMenuId, setTemplateMenuId] = useState<string | null>(null)
+  const [startError, setStartError] = useState<string | null>(null)
+  const [startingWorkout, setStartingWorkout] = useState(false)
 
   const { activeDate } = useActiveDate()
   const today = activeDate
@@ -1055,8 +1066,8 @@ export default function WorkoutsPage() {
   // Fetch data
   useEffect(() => {
     Promise.all([
-      fetch("/api/workout-sessions", noStore).then((r) => r.json()),
-      fetch("/api/workout-templates", noStore).then((r) => r.json()),
+      fetch(sessionsListUrl(), noStore).then((r) => r.json()),
+      fetch(`/api/workout-templates?_=${Date.now()}`, noStore).then((r) => r.json()),
     ])
       .then(([s, t]) => {
         setSessions(Array.isArray(s) ? s : [])
@@ -1068,10 +1079,11 @@ export default function WorkoutsPage() {
       })
   }, [])
 
-  const activeSession = useMemo(
-    () => sessions.find((s) => s.status === "active") ?? null,
-    [sessions],
-  )
+  const activeSession = useMemo(() => {
+    const norm = (s: WorkoutSession) =>
+      String(s.status ?? "").trim().toLowerCase()
+    return sessions.find((s) => norm(s) === "active") ?? null
+  }, [sessions])
 
   const weekStart = formatDate(subDays(parseLocalDate(activeDate), 6))
   const weekDayKeys = useMemo(
@@ -1082,10 +1094,11 @@ export default function WorkoutsPage() {
     [activeDate],
   )
 
-  const completedSessions = useMemo(
-    () => sessions.filter((s) => s.status === "completed"),
-    [sessions],
-  )
+  const completedSessions = useMemo(() => {
+    const norm = (s: WorkoutSession) =>
+      String(s.status ?? "").trim().toLowerCase()
+    return sessions.filter((s) => norm(s) === "completed")
+  }, [sessions])
 
   const byDay = useMemo(() => {
     const m = new Map<string, WorkoutSession[]>()
@@ -1134,6 +1147,7 @@ export default function WorkoutsPage() {
     name: string,
     templateExercises?: TemplateExercise[],
   ) {
+    setStartError(null)
     const exercises: SessionExercise[] = templateExercises
       ? templateExercises.map((te) => ({
           id: uid(),
@@ -1150,31 +1164,47 @@ export default function WorkoutsPage() {
         }))
       : []
 
-    const res = await fetch("/api/workout-sessions", {
-      ...noStore,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, date: today, exercises }),
-    })
-
-    if (!res.ok) return
-
-    const session = (await res.json()) as WorkoutSession
-    setSessions((prev) => [session, ...prev.filter((s) => s.id !== session.id)])
-
+    setStartingWorkout(true)
     try {
-      const sync = await fetch("/api/workout-sessions", noStore)
-      const list = await sync.json()
-      if (!Array.isArray(list)) return
-      const hasNew = list.some((s: WorkoutSession) => s.id === session.id)
-      const merged = hasNew ? list : [session, ...list]
-      merged.sort(
-        (a: WorkoutSession, b: WorkoutSession) =>
-          new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+      const res = await fetch(sessionsListUrl(), {
+        ...noStore,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, date: today, exercises }),
+      })
+
+      const rawText = await res.text()
+      if (!res.ok) {
+        let msg = `Could not start workout (${res.status})`
+        try {
+          const err = JSON.parse(rawText) as { error?: string }
+          if (typeof err?.error === "string") msg = err.error
+        } catch {
+          if (rawText) msg = rawText.slice(0, 160)
+        }
+        setStartError(msg)
+        return
+      }
+
+      let raw: WorkoutSession
+      try {
+        raw = JSON.parse(rawText) as WorkoutSession
+      } catch {
+        setStartError("Invalid response from server.")
+        return
+      }
+
+      const session = normalizeSessionStatus(raw)
+      setSessions((prev) => [
+        session,
+        ...prev.filter((s) => s.id !== session.id),
+      ])
+    } catch (e) {
+      setStartError(
+        e instanceof Error ? e.message : "Network error — try again.",
       )
-      setSessions(merged)
-    } catch {
-      /* keep optimistic update */
+    } finally {
+      setStartingWorkout(false)
     }
   }
 
@@ -1441,17 +1471,23 @@ export default function WorkoutsPage() {
           </div>
 
           {/* Quick start */}
-          <div className="animate-fade-up stagger-2">
+          <div className="animate-fade-up stagger-2 space-y-2">
             <Button
               type="button"
               variant="glass"
               size="lg"
+              disabled={startingWorkout}
               onClick={() => void startSession("Workout")}
               className="h-14 w-full gap-2.5 rounded-2xl press-scale text-base font-semibold"
             >
               <Play className="size-5 shrink-0 opacity-95" />
-              Start Empty Workout
+              {startingWorkout ? "Starting…" : "Start Empty Workout"}
             </Button>
+            {startError && (
+              <p className="text-center text-xs text-destructive px-1" role="alert">
+                {startError}
+              </p>
+            )}
           </div>
 
           {/* ── My Routines ──────────────────────── */}
