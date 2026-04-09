@@ -35,7 +35,7 @@ export default function LogPage() {
             <p className="text-[10px] text-muted-foreground/65 tracking-[0.08em] uppercase mt-0.5">Select category to input data</p>
           </div>
         </div>
-        <div className="pl-5 lg:pl-0">
+        <div className="pl-0">
           <DatePicker />
         </div>
       </header>

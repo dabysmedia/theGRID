@@ -22,6 +22,7 @@ import {
   ReferenceLine,
 } from "recharts"
 import { PageHeader } from "@/components/PageHeader"
+import { PageStatTile } from "@/components/PageStatTile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -74,7 +75,7 @@ function StatCard({
   trend?: "up" | "down" | "neutral"
 }) {
   return (
-    <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
+    <PageStatTile className="flex-1 min-w-0">
       <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
         {label}
       </p>
@@ -91,7 +92,7 @@ function StatCard({
         )}
       </div>
       {sub && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{sub}</p>}
-    </div>
+    </PageStatTile>
   )
 }
 

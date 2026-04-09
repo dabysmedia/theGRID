@@ -38,7 +38,7 @@ export function PageHeader({ title, icon: Icon, iconColor }: PageHeaderProps) {
         <div className="flex-1" />
         <div className="status-dot" />
       </div>
-      <div className="pl-5 lg:pl-0">
+      <div className="pl-0">
         <DatePicker />
       </div>
     </header>

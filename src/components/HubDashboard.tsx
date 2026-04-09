@@ -95,7 +95,7 @@ export function HubDashboard() {
             the<span className="text-gradient">GRID</span>
           </h1>
         </div>
-        <div className="pl-5 lg:pl-0">
+        <div className="pl-0">
           <DatePicker />
         </div>
       </header>

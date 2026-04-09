@@ -12,6 +12,7 @@ import {
 } from "recharts"
 import { format, startOfDay, subDays } from "date-fns"
 import { PageHeader } from "@/components/PageHeader"
+import { PageStatTile } from "@/components/PageStatTile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -48,13 +49,13 @@ function normalizeDateKey(d: string): string {
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
+    <PageStatTile className="flex-1 min-w-0">
       <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
         {label}
       </p>
       <span className="text-lg lg:text-xl font-bold tabular-nums">{value}</span>
       {sub && <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">{sub}</p>}
-    </div>
+    </PageStatTile>
   )
 }
 

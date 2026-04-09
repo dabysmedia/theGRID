@@ -26,7 +26,7 @@ export function BottomNav() {
     <>
       {/* Mobile: bottom bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden animate-slide-up">
-        <div className="mx-auto max-w-[440px] px-3 pb-[env(safe-area-inset-bottom,0px)]">
+        <div className="w-full ps-[max(0.75rem,env(safe-area-inset-left,0px))] pe-[max(0.75rem,env(safe-area-inset-right,0px))] pb-[env(safe-area-inset-bottom,0px)] sm:ps-4 sm:pe-4 md:ps-6 md:pe-6">
           <div className="glass-frost relative mb-2 rounded-2xl shadow-lg shadow-black/40 hud-corners">
             {/* Top edge glow */}
             <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-primary/25 to-transparent" />

@@ -4,6 +4,8 @@ import { addDays, format, startOfDay } from "date-fns"
 
 export const FASTING_CONFIG_KEY = "theGRID_fasting_config"
 export const FASTING_LOGS_KEY = "theGRID_fasting_logs"
+/** Wall-clock ms when the dashboard timer was paused; null = live */
+export const FASTING_TIMER_PAUSE_KEY = "theGRID_fasting_timer_paused_at_ms"
 /** @deprecated session-based timer — migrated away */
 const LEGACY_STATE_KEY = "theGRID_fasting_state"
 
@@ -120,6 +122,29 @@ export function loadFastingConfig(): FastingConfig {
   }
 }
 
+export function loadFastingTimerPausedAtMs(): number | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = localStorage.getItem(FASTING_TIMER_PAUSE_KEY)
+    if (raw == null || raw === "") return null
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n <= 0) return null
+    return n
+  } catch {
+    return null
+  }
+}
+
+export function saveFastingTimerPausedAtMs(ms: number | null): void {
+  if (typeof window === "undefined") return
+  try {
+    if (ms == null) localStorage.removeItem(FASTING_TIMER_PAUSE_KEY)
+    else localStorage.setItem(FASTING_TIMER_PAUSE_KEY, String(ms))
+  } catch {
+    /* noop */
+  }
+}
+
 export function saveFastingConfig(c: FastingConfig): void {
   const fastHours = clamp(Math.round(c.fastHours), 1, 23)
   let eatHours = clamp(Math.round(c.eatHours), 1, 23)
@@ -216,6 +241,38 @@ export function loadFastLogs(): FastLogEntry[] {
 
 export function saveFastLogs(logs: FastLogEntry[]): void {
   localStorage.setItem(FASTING_LOGS_KEY, JSON.stringify(logs))
+}
+
+/**
+ * While in the eating phase, the completed fast ended at `eatingWindowStart`.
+ * Call periodically (or on mount) so we still record the fast if the app missed
+ * the fasting→eating transition (tab closed, background throttling, or first load in eat window).
+ */
+export function ensureFastLogForEatingPhase(
+  snapshot: ScheduleSnapshot,
+  config: FastingConfig
+): void {
+  if (snapshot.phase !== "eating") return
+  const eatStart = snapshot.eatingWindowStart
+  const fastEndedMs = eatStart.getTime()
+  const fastStartMs = fastEndedMs - config.fastHours * 3600_000
+  const fastStartedAt = new Date(fastStartMs).toISOString()
+  const fastEndedAt = eatStart.toISOString()
+  const durationMinutes = (fastEndedMs - fastStartMs) / 60000
+
+  const toleranceMs = 120_000
+  const logs = loadFastLogs()
+  const already = logs.some(
+    (l) => Math.abs(new Date(l.fastEndedAt).getTime() - fastEndedMs) < toleranceMs
+  )
+  if (already) return
+
+  appendFastLog({
+    fastStartedAt,
+    fastEndedAt,
+    durationMinutes,
+    plannedFastHours: config.fastHours,
+  })
 }
 
 export function appendFastLog(entry: Omit<FastLogEntry, "id">): FastLogEntry {

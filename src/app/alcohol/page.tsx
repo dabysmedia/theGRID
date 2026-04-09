@@ -13,6 +13,7 @@ import {
   CartesianGrid,
 } from "recharts"
 import { PageHeader } from "@/components/PageHeader"
+import { PageStatTile } from "@/components/PageStatTile"
 import { useActiveDate } from "@/context/DateContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -146,32 +147,32 @@ export default function AlcoholPage() {
       <PageHeader title="Alcohol" icon={Beer} iconColor={AMBER} />
 
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[7.5rem] shrink-0">
+        <PageStatTile className="flex-1 min-w-[7.5rem] shrink-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Today
           </p>
           <p className="text-lg lg:text-xl font-bold tabular-nums">{todayUnits}</p>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[7.5rem] shrink-0">
+        </PageStatTile>
+        <PageStatTile className="flex-1 min-w-[7.5rem] shrink-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Week Total
           </p>
           <p className="text-lg lg:text-xl font-bold tabular-nums">{weekTotal}</p>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[7.5rem] shrink-0">
+        </PageStatTile>
+        <PageStatTile className="flex-1 min-w-[7.5rem] shrink-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Avg/Day
           </p>
           <p className="text-lg lg:text-xl font-bold tabular-nums">
             {avgPerDay.toFixed(1)}
           </p>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[7.5rem] shrink-0">
+        </PageStatTile>
+        <PageStatTile className="flex-1 min-w-[7.5rem] shrink-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Dry Days
           </p>
           <p className="text-lg lg:text-xl font-bold tabular-nums">{dryDays}</p>
-        </div>
+        </PageStatTile>
       </div>
 
       <CategoryGoal

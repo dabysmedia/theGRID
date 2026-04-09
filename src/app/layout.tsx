@@ -64,9 +64,10 @@ export default function RootLayout({
             <div className="flex min-h-dvh flex-1 flex-col">
               <main
                 className="
-              mx-auto flex w-full flex-1 flex-col px-4 pt-[calc(env(safe-area-inset-top,0px)+2rem)] pb-[calc(6rem+env(safe-area-inset-bottom,0px))]
-              max-w-[440px]
-              sm:max-w-[440px]
+              mx-auto flex w-full max-w-full flex-1 flex-col
+              ps-[max(0.75rem,env(safe-area-inset-left,0px))] pe-[max(0.75rem,env(safe-area-inset-right,0px))]
+              pt-[calc(env(safe-area-inset-top,0px)+2rem)] pb-[calc(6rem+env(safe-area-inset-bottom,0px))]
+              sm:ps-4 sm:pe-4 md:ps-6 md:pe-6
               md:max-w-2xl
               lg:ml-[72px] lg:mr-0 lg:max-w-3xl lg:px-8 lg:pb-8
               xl:ml-[200px] xl:max-w-5xl xl:px-10

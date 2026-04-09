@@ -15,6 +15,7 @@ import {
   Line,
 } from "recharts"
 import { PageHeader } from "@/components/PageHeader"
+import { PageStatTile } from "@/components/PageStatTile"
 import { useActiveDate } from "@/context/DateContext"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -258,38 +259,38 @@ export default function RunningPage() {
       <PageHeader title="Running" icon={PersonStanding} iconColor="#3b82f6" />
 
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
+        <PageStatTile className="min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Total Distance
           </p>
           <span className="text-lg lg:text-xl font-bold tabular-nums">
             {stats.count === 0 ? "0" : stats.totalMi.toFixed(1)} mi
           </span>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
+        </PageStatTile>
+        <PageStatTile className="min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Avg Pace
           </p>
           <span className="text-lg lg:text-xl font-bold tabular-nums">
             {avgPaceDisplay}
           </span>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
+        </PageStatTile>
+        <PageStatTile className="min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Total Runs
           </p>
           <span className="text-lg lg:text-xl font-bold tabular-nums">
             {stats.count}
           </span>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
+        </PageStatTile>
+        <PageStatTile className="min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Longest Run
           </p>
           <span className="text-lg lg:text-xl font-bold tabular-nums">
             {stats.count === 0 ? "—" : `${stats.longestMi.toFixed(1)} mi`}
           </span>
-        </div>
+        </PageStatTile>
       </div>
 
       <CategoryGoal

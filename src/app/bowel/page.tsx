@@ -14,6 +14,7 @@ import {
 } from "recharts"
 import { useActiveDate } from "@/context/DateContext"
 import { PageHeader } from "@/components/PageHeader"
+import { PageStatTile } from "@/components/PageStatTile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -156,33 +157,33 @@ export default function BowelPage() {
       <PageHeader title="Bowel" icon={CircleDot} iconColor="#78716c" />
 
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
+        <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Today
           </p>
           <span className="text-lg lg:text-xl font-bold tabular-nums">{todayCount}</span>
           <p className="text-[10px] text-muted-foreground/60 mt-0.5">entries</p>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
+        </PageStatTile>
+        <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             This Week
           </p>
           <span className="text-lg lg:text-xl font-bold tabular-nums">{weekCount}</span>
           <p className="text-[10px] text-muted-foreground/60 mt-0.5">last 7 days</p>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
+        </PageStatTile>
+        <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Avg Type
           </p>
           <span className="text-lg lg:text-xl font-bold tabular-nums">{avgTypeStr}</span>
           <p className="text-[10px] text-muted-foreground/60 mt-0.5">Bristol</p>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-[10rem]">
+        </PageStatTile>
+        <PageStatTile className="flex-1 min-w-[10rem]">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Most Common
           </p>
           <span className="text-sm lg:text-base font-bold leading-tight line-clamp-2">{mostCommonStr}</span>
-        </div>
+        </PageStatTile>
       </div>
 
       <CategoryGoal

@@ -863,8 +863,17 @@
     transform: translate(-50%, -50%) !important;
     margin: 0 !important;
     box-sizing: border-box !important;
-    width: min(calc(100vw - 2rem), 28rem) !important;
-    max-width: min(calc(100vw - 2rem), 28rem) !important;
+    /* Match main layout horizontal insets; scale to viewport (same idea as ps/pe on <main>) */
+    --dialog-inline: max(0.75rem, env(safe-area-inset-left, 0px));
+    --dialog-inline-end: max(0.75rem, env(safe-area-inset-right, 0px));
+    width: min(
+      calc(100vw - var(--dialog-inline) - var(--dialog-inline-end)),
+      36rem
+    ) !important;
+    max-width: min(
+      calc(100vw - var(--dialog-inline) - var(--dialog-inline-end)),
+      36rem
+    ) !important;
     max-height: min(
       90dvh,
       calc(

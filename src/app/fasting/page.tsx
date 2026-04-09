@@ -172,8 +172,8 @@ export default function FastingPage() {
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em]">Daily fast hours (14d)</h2>
         </div>
         <p className="text-[10px] text-muted-foreground/65 leading-relaxed">
-          Hours from completed fasts ending on each day (local time). Open the app around the end of a fasting window
-          so the home timer can record the transition.
+          Hours from completed fasts ending on each day (local time). The home timer logs a fast when you enter your
+          eating window; if you open the app anytime while eating, any missed completion is backfilled automatically.
         </p>
         <div className="h-48 w-full">
           <ResponsiveContainer width="100%" height="100%">

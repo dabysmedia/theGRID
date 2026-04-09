@@ -14,6 +14,7 @@ import {
 } from "recharts"
 import { useActiveDate } from "@/context/DateContext"
 import { PageHeader } from "@/components/PageHeader"
+import { PageStatTile } from "@/components/PageStatTile"
 import { FoodSearch } from "@/components/FoodSearch"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -656,7 +657,7 @@ export default function CaloriesPage() {
       <PageHeader title="Calories" icon={Flame} iconColor="#ef4444" />
 
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
+        <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             7-Day Avg
           </p>
@@ -664,8 +665,8 @@ export default function CaloriesPage() {
             {Math.round(avg7).toLocaleString()}
           </span>
           <p className="text-[10px] text-muted-foreground/60 mt-0.5">cal / day</p>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
+        </PageStatTile>
+        <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Week Total
           </p>
@@ -673,8 +674,8 @@ export default function CaloriesPage() {
             {weekTotal.toLocaleString()}
           </span>
           <p className="text-[10px] text-muted-foreground/60 mt-0.5">last 7 days</p>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
+        </PageStatTile>
+        <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Best Day
           </p>
@@ -684,7 +685,7 @@ export default function CaloriesPage() {
           {bestDaySub && (
             <p className="text-[10px] text-muted-foreground/60 mt-0.5">{bestDaySub}</p>
           )}
-        </div>
+        </PageStatTile>
       </div>
 
       {/* Today: ring + weekly stats + log (combined) */}
@@ -926,7 +927,7 @@ export default function CaloriesPage() {
             <DialogContent
               showCloseButton
               className={cn(
-                "glass-frost flex min-h-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-md",
+                "glass-frost flex min-h-0 flex-col gap-0 overflow-hidden p-0",
                 "[&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3"
               )}
             >
@@ -1003,7 +1004,7 @@ export default function CaloriesPage() {
                           <button
                             type="button"
                             onClick={() => { setShowCreateMeal(!showCreateMeal); setSaveMealError(null) }}
-                            className="text-[10px] font-medium text-primary/50 hover:text-primary transition-colors"
+                            className="min-h-10 shrink-0 rounded-lg border border-primary/25 bg-primary/10 px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-primary transition-colors hover:border-primary/40 hover:bg-primary/18 active:scale-[0.98] touch-manipulation"
                           >
                             {showCreateMeal ? "Cancel" : "+ New"}
                           </button>

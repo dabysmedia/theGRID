@@ -14,7 +14,7 @@ export default function MorePage() {
             <p className="text-[10px] text-muted-foreground/65 tracking-[0.08em] uppercase mt-0.5">Configuration & info</p>
           </div>
         </div>
-        <div className="pl-5 lg:pl-0">
+        <div className="pl-0">
           <DatePicker />
         </div>
       </header>

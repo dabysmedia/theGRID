@@ -13,6 +13,7 @@ import {
 } from "recharts"
 import { format, isToday, isYesterday, subDays } from "date-fns"
 import { PageHeader } from "@/components/PageHeader"
+import { PageStatTile } from "@/components/PageStatTile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -260,7 +261,7 @@ export default function StepsPage() {
       <PageHeader title="Steps" icon={Footprints} iconColor="#22c55e" />
 
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
+        <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Today
           </p>
@@ -268,8 +269,8 @@ export default function StepsPage() {
             {stats.todayTotal.toLocaleString()}
           </span>
           <p className="text-[10px] text-muted-foreground/60 mt-0.5">steps total</p>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
+        </PageStatTile>
+        <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             7-Day Avg
           </p>
@@ -277,8 +278,8 @@ export default function StepsPage() {
             {Math.round(stats.avg7).toLocaleString()}
           </span>
           <p className="text-[10px] text-muted-foreground/60 mt-0.5">daily average</p>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
+        </PageStatTile>
+        <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Week Total
           </p>
@@ -286,8 +287,8 @@ export default function StepsPage() {
             {stats.weekTotal.toLocaleString()}
           </span>
           <p className="text-[10px] text-muted-foreground/60 mt-0.5">last 7 days</p>
-        </div>
-        <div className="glass-subtle rounded-xl p-3 lg:p-4 flex-1 min-w-0">
+        </PageStatTile>
+        <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
             Best Day
           </p>
@@ -297,7 +298,7 @@ export default function StepsPage() {
           <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">
             {stats.bestDayLabel ?? "no data yet"}
           </p>
-        </div>
+        </PageStatTile>
       </div>
 
       <CategoryGoal

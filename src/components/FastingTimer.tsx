@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import Link from "next/link"
-import { Timer, Settings2, Utensils, TrendingUp } from "lucide-react"
+import { Timer, Settings2, Utensils, TrendingUp, Pause, Play, Square } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,13 +17,15 @@ import { Label } from "@/components/ui/label"
 import {
   type FastingConfig,
   type FastingPhase,
-  appendFastLog,
+  ensureFastLogForEatingPhase,
   getScheduleSnapshot,
   loadFastingConfig,
   saveFastingConfig,
   minutesToTimeInputValue,
   timeInputValueToMinutes,
   formatShortTime,
+  loadFastingTimerPausedAtMs,
+  saveFastingTimerPausedAtMs,
 } from "@/lib/fasting"
 
 const PRESETS = [
@@ -38,6 +40,10 @@ const COLORS = {
   fasting: "#f97316",
   eating: "#22c55e",
 } as const
+
+/** Matches calories “today” wheel card — border, vertical tint, inset + drop shadow */
+const FASTING_CARD_SHEEN =
+  "glass relative overflow-hidden rounded-2xl border border-border/20 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] shadow-[inset_0_1px_0_0_oklch(1_0_0/10%),0_22px_56px_-20px_oklch(0_0_0/42%)] dark:border-[oklch(1_0_0/9%)] dark:from-glass-highlight/[0.1] dark:to-primary/[0.05] dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/12%),0_28px_72px_-24px_oklch(0_0_0/62%)]"
 
 function padTwo(n: number) {
   return String(Math.floor(n)).padStart(2, "0")
@@ -172,7 +178,7 @@ function FastingSettingsDialog({
       >
         <Settings2 className="h-3.5 w-3.5" />
       </DialogTrigger>
-      <DialogContent className="glass-frost min-h-0 overflow-y-auto sm:max-w-md">
+      <DialogContent className="glass-frost min-h-0 overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Schedule & ratio</DialogTitle>
         </DialogHeader>
@@ -303,50 +309,60 @@ function FastingSettingsDialog({
 export function FastingTimer() {
   const [config, setConfig] = useState<FastingConfig>(loadFastingConfig)
   const [now, setNow] = useState(() => Date.now())
+  const [pausedAtMs, setPausedAtMs] = useState<number | null>(null)
   const [mounted, setMounted] = useState(false)
-  const prevPhase = useRef<FastingPhase | null>(null)
   const skipTransitionLog = useRef(false)
 
   // Client-only: avoid SSR/localStorage mismatch for timer shell + config
   /* eslint-disable react-hooks/set-state-in-effect -- intentional mount gate */
   useEffect(() => {
     setConfig(loadFastingConfig())
+    setPausedAtMs(loadFastingTimerPausedAtMs())
     setMounted(true)
   }, [])
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  const isPaused = pausedAtMs != null
+  const effectiveNow = isPaused ? pausedAtMs : now
+
   useEffect(() => {
+    if (isPaused) return
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [isPaused])
 
   const snapshot = useMemo(
-    () => getScheduleSnapshot(new Date(now), config),
-    [now, config]
+    () => getScheduleSnapshot(new Date(effectiveNow), config),
+    [effectiveNow, config]
   )
+
+  const handlePause = useCallback(() => {
+    const t = Date.now()
+    saveFastingTimerPausedAtMs(t)
+    setPausedAtMs(t)
+    setNow(t)
+  }, [])
+
+  const handleResume = useCallback(() => {
+    saveFastingTimerPausedAtMs(null)
+    setPausedAtMs(null)
+    setNow(Date.now())
+  }, [])
+
+  /** Pause while live, resume while paused (toggle); complements explicit Pause / Resume */
+  const handleStop = useCallback(() => {
+    if (isPaused) handleResume()
+    else handlePause()
+  }, [isPaused, handlePause, handleResume])
 
   useEffect(() => {
     if (!mounted) return
-    const p = snapshot.phase
     if (skipTransitionLog.current) {
       skipTransitionLog.current = false
-      prevPhase.current = p
       return
     }
-    const was = prevPhase.current
-    if (was !== null && was === "fasting" && p === "eating") {
-      const eatStart = snapshot.eatingWindowStart
-      const fastStart = new Date(eatStart.getTime() - config.fastHours * 3600000)
-      const dm = (eatStart.getTime() - fastStart.getTime()) / 60000
-      appendFastLog({
-        fastStartedAt: fastStart.toISOString(),
-        fastEndedAt: eatStart.toISOString(),
-        durationMinutes: dm,
-        plannedFastHours: config.fastHours,
-      })
-    }
-    prevPhase.current = p
-  }, [mounted, snapshot, config.fastHours])
+    ensureFastLogForEatingPhase(snapshot, config)
+  }, [mounted, snapshot, config])
 
   const handleConfigSave = useCallback((c: FastingConfig) => {
     skipTransitionLog.current = true
@@ -358,27 +374,39 @@ export function FastingTimer() {
 
   if (!mounted) {
     return (
-      <div className="glass relative rounded-2xl p-5 sm:p-6">
-        <div className="flex items-center gap-2">
-          <Timer className="h-3.5 w-3.5 text-muted-foreground/50" />
-          <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground/50">
-            Fasting
-          </span>
-        </div>
-        <div className="flex justify-center py-8">
-          <div className="h-[200px] w-[200px] rounded-full bg-muted/10 animate-pulse" />
+      <div className={`${FASTING_CARD_SHEEN} p-5 sm:p-6`}>
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12"
+          aria-hidden
+        />
+        <div className="relative z-10">
+          <div className="flex items-center gap-2">
+            <Timer className="h-3.5 w-3.5 text-muted-foreground/50" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground/50">
+              Fasting
+            </span>
+          </div>
+          <div className="flex justify-center py-8">
+            <div className="h-[200px] w-[200px] rounded-full bg-muted/10 animate-pulse" />
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="glass relative rounded-2xl p-5 sm:p-6">
+    <div className={`${FASTING_CARD_SHEEN} p-5 sm:p-6`}>
       <div
-        className="absolute top-0 left-3 right-3 h-px transition-colors duration-700"
-        style={{
-          background: `linear-gradient(90deg, transparent, ${phaseColor}33, transparent)`,
-        }}
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12"
+        aria-hidden
       />
 
       <div className="relative z-10 mb-4 flex items-center justify-between gap-2">
@@ -388,11 +416,16 @@ export function FastingTimer() {
             style={{
               backgroundColor: phaseColor,
               boxShadow: `0 0 6px ${phaseColor}60`,
-              animation: "pulse-glow 2.5s ease-in-out infinite",
+              animation: isPaused ? "none" : "pulse-glow 2.5s ease-in-out infinite",
             }}
           />
           <h2 className="truncate text-[11px] font-semibold uppercase tracking-[0.2em]">Fasting</h2>
           <span className="hidden text-[10px] text-muted-foreground/55 sm:inline">· {config.presetName}</span>
+          {isPaused && (
+            <span className="rounded-md bg-muted/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Paused
+            </span>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <Link
@@ -436,6 +469,46 @@ export function FastingTimer() {
                 </p>
               </div>
             </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+            {!isPaused && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 touch-manipulation sm:h-8"
+                onClick={handlePause}
+                aria-label="Pause timer"
+              >
+                <Pause className="h-3.5 w-3.5" />
+                Pause
+              </Button>
+            )}
+            {isPaused && (
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="h-9 gap-1.5 touch-manipulation sm:h-8"
+                onClick={handleResume}
+                aria-label="Resume live timer"
+              >
+                <Play className="h-3.5 w-3.5" />
+                Resume
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-9 gap-1.5 touch-manipulation sm:h-8"
+              onClick={handleStop}
+              aria-label={isPaused ? "Stop pause and sync to live time" : "Stop timer (pause)"}
+            >
+              <Square className="h-3.5 w-3.5" />
+              Stop
+            </Button>
           </div>
         </div>
       </div>

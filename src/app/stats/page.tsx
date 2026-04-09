@@ -484,7 +484,7 @@ export default function StatsPage() {
             </p>
           </div>
         </div>
-        <div className="pl-5 lg:pl-0">
+        <div className="pl-0">
           <DatePicker />
         </div>
       </header>
