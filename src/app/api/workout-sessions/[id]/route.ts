@@ -8,10 +8,19 @@ export async function GET(
   const { id } = await params
   try {
     const session = await prisma.workoutSession.findUnique({ where: { id } })
-    if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 })
-    return NextResponse.json(session)
+    if (!session)
+      return NextResponse.json(
+        { error: "Not found" },
+        { status: 404, headers: { "Cache-Control": "no-store, must-revalidate" } },
+      )
+    return NextResponse.json(session, {
+      headers: { "Cache-Control": "no-store, must-revalidate" },
+    })
   } catch {
-    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to fetch" },
+      { status: 500, headers: { "Cache-Control": "no-store, must-revalidate" } },
+    )
   }
 }
 
@@ -34,9 +43,14 @@ export async function PUT(
       data.exercises = JSON.stringify(Array.isArray(body.exercises) ? body.exercises : [])
 
     const session = await prisma.workoutSession.update({ where: { id }, data })
-    return NextResponse.json(session)
+    return NextResponse.json(session, {
+      headers: { "Cache-Control": "no-store, must-revalidate" },
+    })
   } catch {
-    return NextResponse.json({ error: "Failed to update" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to update" },
+      { status: 500, headers: { "Cache-Control": "no-store, must-revalidate" } },
+    )
   }
 }
 
@@ -47,8 +61,14 @@ export async function DELETE(
   const { id } = await params
   try {
     await prisma.workoutSession.delete({ where: { id } })
-    return NextResponse.json({ success: true })
+    return NextResponse.json(
+      { success: true },
+      { headers: { "Cache-Control": "no-store, must-revalidate" } },
+    )
   } catch {
-    return NextResponse.json({ error: "Failed to delete" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to delete" },
+      { status: 500, headers: { "Cache-Control": "no-store, must-revalidate" } },
+    )
   }
 }

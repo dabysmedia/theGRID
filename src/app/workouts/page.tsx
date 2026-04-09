@@ -1030,6 +1030,9 @@ function ActiveWorkout({
   )
 }
 
+/** Safari can cache GET /api/workout-sessions and serve a stale list after POST — breaks active workout. */
+const noStore: RequestInit = { cache: "no-store" }
+
 /* ──────────────────────────────────────────────────────────
    Main Page
    ────────────────────────────────────────────────────────── */
@@ -1052,8 +1055,8 @@ export default function WorkoutsPage() {
   // Fetch data
   useEffect(() => {
     Promise.all([
-      fetch("/api/workout-sessions").then((r) => r.json()),
-      fetch("/api/workout-templates").then((r) => r.json()),
+      fetch("/api/workout-sessions", noStore).then((r) => r.json()),
+      fetch("/api/workout-templates", noStore).then((r) => r.json()),
     ])
       .then(([s, t]) => {
         setSessions(Array.isArray(s) ? s : [])
@@ -1148,6 +1151,7 @@ export default function WorkoutsPage() {
       : []
 
     const res = await fetch("/api/workout-sessions", {
+      ...noStore,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, date: today, exercises }),
@@ -1155,13 +1159,20 @@ export default function WorkoutsPage() {
 
     if (!res.ok) return
 
-    const session = await res.json()
-    setSessions((prev) => [session, ...prev])
+    const session = (await res.json()) as WorkoutSession
+    setSessions((prev) => [session, ...prev.filter((s) => s.id !== session.id)])
 
     try {
-      const sync = await fetch("/api/workout-sessions")
+      const sync = await fetch("/api/workout-sessions", noStore)
       const list = await sync.json()
-      if (Array.isArray(list)) setSessions(list)
+      if (!Array.isArray(list)) return
+      const hasNew = list.some((s: WorkoutSession) => s.id === session.id)
+      const merged = hasNew ? list : [session, ...list]
+      merged.sort(
+        (a: WorkoutSession, b: WorkoutSession) =>
+          new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+      )
+      setSessions(merged)
     } catch {
       /* keep optimistic update */
     }
@@ -1189,6 +1200,7 @@ export default function WorkoutsPage() {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
       await fetch(`/api/workout-sessions/${activeSession.id}`, {
+        ...noStore,
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1214,6 +1226,7 @@ export default function WorkoutsPage() {
     )
 
     const res = await fetch(`/api/workout-sessions/${activeSession.id}`, {
+      ...noStore,
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1234,6 +1247,7 @@ export default function WorkoutsPage() {
   async function discardActiveSession() {
     if (!activeSession) return
     const res = await fetch(`/api/workout-sessions/${activeSession.id}`, {
+      ...noStore,
       method: "DELETE",
     })
     if (res.ok) {
@@ -1243,6 +1257,7 @@ export default function WorkoutsPage() {
 
   async function deleteSession(id: string) {
     const res = await fetch(`/api/workout-sessions/${id}`, {
+      ...noStore,
       method: "DELETE",
     })
     if (res.ok) setSessions((prev) => prev.filter((s) => s.id !== id))
