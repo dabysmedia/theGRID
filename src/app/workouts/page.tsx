@@ -43,11 +43,20 @@ interface ExerciseSet {
   completed: boolean
 }
 
+interface MuscleTag {
+  name: string
+  color: string
+  code: string
+}
+
 interface SessionExercise {
   id: string
   name: string
   notes: string
   sets: ExerciseSet[]
+  primaryMuscles?: MuscleTag[]
+  secondaryMuscles?: MuscleTag[]
+  category?: string
 }
 
 interface TemplateExercise {
@@ -56,6 +65,25 @@ interface TemplateExercise {
   targetSets: number
   targetReps: string
   notes: string
+  primaryMuscles?: MuscleTag[]
+}
+
+interface PickedExercise {
+  name: string
+  primaryMuscles: MuscleTag[]
+  secondaryMuscles: MuscleTag[]
+  category: string
+}
+
+interface ApiExercise {
+  id: string
+  code: string
+  name: string
+  description?: string
+  primaryMuscles: Array<{ id: string; code: string; color: string; name: string }>
+  secondaryMuscles: Array<{ id: string; code: string; color: string; name: string }>
+  types: Array<{ id: string; code: string; name: string }>
+  categories: Array<{ id: string; code: string; name: string }>
 }
 
 interface WorkoutTemplate {
@@ -117,98 +145,82 @@ function uid(): string {
 }
 
 /* ──────────────────────────────────────────────────────────
-   Exercise Library
+   Exercise Library — offline fallback when API is unavailable
    ────────────────────────────────────────────────────────── */
 
-interface LibraryExercise {
-  name: string
-  muscle: string
+const FALLBACK_MUSCLE_COLORS: Record<string, string> = {
+  Chest: "#D62828",
+  Back: "#1D4ED8",
+  Shoulders: "#F77F00",
+  Legs: "#577590",
+  Quadriceps: "#577590",
+  Hamstrings: "#90BE6D",
+  Glutes: "#6D597A",
+  Calves: "#4CC9F0",
+  Arms: "#FFBE0B",
+  Biceps: "#FFBE0B",
+  Triceps: "#2DC653",
+  Forearms: "#219EBC",
+  Core: "#E76F51",
+  Abdominals: "#E76F51",
+  Obliques: "#00B4D8",
+  Trapezius: "#264653",
+  Cardio: "#4CC9F0",
 }
 
-const EXERCISE_LIBRARY: LibraryExercise[] = [
-  { name: "Bench Press", muscle: "Chest" },
-  { name: "Incline Bench Press", muscle: "Chest" },
-  { name: "Decline Bench Press", muscle: "Chest" },
-  { name: "Dumbbell Bench Press", muscle: "Chest" },
-  { name: "Incline Dumbbell Press", muscle: "Chest" },
-  { name: "Dumbbell Flyes", muscle: "Chest" },
-  { name: "Cable Crossover", muscle: "Chest" },
-  { name: "Push-ups", muscle: "Chest" },
-  { name: "Chest Dips", muscle: "Chest" },
-  { name: "Pec Deck", muscle: "Chest" },
+function makeFallback(name: string, muscle: string, category = "Free weight"): ApiExercise {
+  const color = FALLBACK_MUSCLE_COLORS[muscle] ?? "#888888"
+  return {
+    id: name.toLowerCase().replace(/\s+/g, "-"),
+    code: name.toUpperCase().replace(/\s+/g, "_"),
+    name,
+    primaryMuscles: [{ id: muscle, code: muscle.toUpperCase(), color, name: muscle }],
+    secondaryMuscles: [],
+    types: [],
+    categories: [{ id: category, code: category.toUpperCase().replace(/\s+/g, "_"), name: category }],
+  }
+}
 
-  { name: "Deadlift", muscle: "Back" },
-  { name: "Sumo Deadlift", muscle: "Back" },
-  { name: "Barbell Row", muscle: "Back" },
-  { name: "Dumbbell Row", muscle: "Back" },
-  { name: "Pull-ups", muscle: "Back" },
-  { name: "Chin-ups", muscle: "Back" },
-  { name: "Lat Pulldown", muscle: "Back" },
-  { name: "Seated Cable Row", muscle: "Back" },
-  { name: "T-Bar Row", muscle: "Back" },
-  { name: "Pendlay Row", muscle: "Back" },
-
-  { name: "Overhead Press", muscle: "Shoulders" },
-  { name: "Dumbbell Shoulder Press", muscle: "Shoulders" },
-  { name: "Arnold Press", muscle: "Shoulders" },
-  { name: "Lateral Raises", muscle: "Shoulders" },
-  { name: "Front Raises", muscle: "Shoulders" },
-  { name: "Face Pulls", muscle: "Shoulders" },
-  { name: "Rear Delt Flyes", muscle: "Shoulders" },
-  { name: "Upright Row", muscle: "Shoulders" },
-  { name: "Shrugs", muscle: "Shoulders" },
-
-  { name: "Squat", muscle: "Legs" },
-  { name: "Front Squat", muscle: "Legs" },
-  { name: "Leg Press", muscle: "Legs" },
-  { name: "Romanian Deadlift", muscle: "Legs" },
-  { name: "Leg Curl", muscle: "Legs" },
-  { name: "Leg Extension", muscle: "Legs" },
-  { name: "Bulgarian Split Squat", muscle: "Legs" },
-  { name: "Lunges", muscle: "Legs" },
-  { name: "Hip Thrust", muscle: "Legs" },
-  { name: "Hack Squat", muscle: "Legs" },
-  { name: "Calf Raises", muscle: "Legs" },
-  { name: "Goblet Squat", muscle: "Legs" },
-
-  { name: "Barbell Curl", muscle: "Arms" },
-  { name: "Dumbbell Curl", muscle: "Arms" },
-  { name: "Hammer Curl", muscle: "Arms" },
-  { name: "Preacher Curl", muscle: "Arms" },
-  { name: "Concentration Curl", muscle: "Arms" },
-  { name: "Tricep Pushdown", muscle: "Arms" },
-  { name: "Skull Crushers", muscle: "Arms" },
-  { name: "Overhead Tricep Extension", muscle: "Arms" },
-  { name: "Close-Grip Bench Press", muscle: "Arms" },
-  { name: "Dips", muscle: "Arms" },
-
-  { name: "Plank", muscle: "Core" },
-  { name: "Hanging Leg Raise", muscle: "Core" },
-  { name: "Cable Crunch", muscle: "Core" },
-  { name: "Ab Wheel Rollout", muscle: "Core" },
-  { name: "Russian Twist", muscle: "Core" },
-  { name: "Bicycle Crunch", muscle: "Core" },
-  { name: "Dead Bug", muscle: "Core" },
-
-  { name: "Running", muscle: "Cardio" },
-  { name: "Cycling", muscle: "Cardio" },
-  { name: "Rowing Machine", muscle: "Cardio" },
-  { name: "Jump Rope", muscle: "Cardio" },
-  { name: "Stair Climber", muscle: "Cardio" },
-  { name: "Elliptical", muscle: "Cardio" },
-  { name: "Battle Ropes", muscle: "Cardio" },
+const FALLBACK_EXERCISES: ApiExercise[] = [
+  // Chest
+  makeFallback("Bench Press", "Chest"), makeFallback("Incline Bench Press", "Chest"),
+  makeFallback("Decline Bench Press", "Chest"), makeFallback("Dumbbell Bench Press", "Chest"),
+  makeFallback("Dumbbell Flyes", "Chest"), makeFallback("Cable Crossover", "Chest", "Cable"),
+  makeFallback("Push-ups", "Chest", "Body weight"), makeFallback("Chest Dips", "Chest", "Body weight"),
+  makeFallback("Pec Deck", "Chest", "Machine"),
+  // Back
+  makeFallback("Deadlift", "Back"), makeFallback("Barbell Row", "Back"),
+  makeFallback("Dumbbell Row", "Back"), makeFallback("Pull-ups", "Back", "Body weight"),
+  makeFallback("Chin-ups", "Back", "Body weight"), makeFallback("Lat Pulldown", "Back", "Cable"),
+  makeFallback("Seated Cable Row", "Back", "Cable"), makeFallback("T-Bar Row", "Back"),
+  // Shoulders
+  makeFallback("Overhead Press", "Shoulders"), makeFallback("Dumbbell Shoulder Press", "Shoulders"),
+  makeFallback("Arnold Press", "Shoulders"), makeFallback("Lateral Raises", "Shoulders"),
+  makeFallback("Front Raises", "Shoulders"), makeFallback("Face Pulls", "Shoulders", "Cable"),
+  makeFallback("Rear Delt Flyes", "Shoulders"), makeFallback("Upright Row", "Shoulders"),
+  // Legs
+  makeFallback("Squat", "Quadriceps"), makeFallback("Front Squat", "Quadriceps"),
+  makeFallback("Leg Press", "Quadriceps", "Machine"), makeFallback("Romanian Deadlift", "Hamstrings"),
+  makeFallback("Leg Curl", "Hamstrings", "Machine"), makeFallback("Leg Extension", "Quadriceps", "Machine"),
+  makeFallback("Bulgarian Split Squat", "Quadriceps"), makeFallback("Lunges", "Quadriceps"),
+  makeFallback("Hip Thrust", "Glutes"), makeFallback("Calf Raises", "Calves"),
+  // Arms
+  makeFallback("Barbell Curl", "Biceps"), makeFallback("Dumbbell Curl", "Biceps"),
+  makeFallback("Hammer Curl", "Biceps"), makeFallback("Preacher Curl", "Biceps"),
+  makeFallback("Tricep Pushdown", "Triceps", "Cable"), makeFallback("Skull Crushers", "Triceps"),
+  makeFallback("Overhead Tricep Extension", "Triceps"), makeFallback("Close-Grip Bench Press", "Triceps"),
+  makeFallback("Dips", "Triceps", "Body weight"),
+  // Core
+  makeFallback("Plank", "Abdominals", "Body weight"), makeFallback("Hanging Leg Raise", "Abdominals", "Body weight"),
+  makeFallback("Cable Crunch", "Abdominals", "Cable"), makeFallback("Ab Wheel Rollout", "Abdominals"),
+  makeFallback("Russian Twist", "Obliques"), makeFallback("Bicycle Crunch", "Abdominals", "Body weight"),
+  // Cardio
+  makeFallback("Running", "Cardio", "Body weight"), makeFallback("Cycling", "Cardio"),
+  makeFallback("Rowing Machine", "Cardio", "Machine"), makeFallback("Jump Rope", "Cardio", "Body weight"),
 ]
 
-const MUSCLE_GROUPS = [
-  "All",
-  "Chest",
-  "Back",
-  "Shoulders",
-  "Legs",
-  "Arms",
-  "Core",
-  "Cardio",
-] as const
+/** Client-side module-level cache so the picker doesn't re-fetch on every open. */
+let exerciseListCache: ApiExercise[] | null = null
 
 /* ──────────────────────────────────────────────────────────
    Helpers
@@ -268,37 +280,75 @@ function ExercisePicker({
 }: {
   open: boolean
   onClose: () => void
-  onSelect: (name: string) => void
+  onSelect: (exercise: PickedExercise) => void
 }) {
+  const [exercises, setExercises] = useState<ApiExercise[]>(exerciseListCache ?? [])
+  const [loading, setLoading] = useState(false)
+  const [usingFallback, setUsingFallback] = useState(false)
   const [search, setSearch] = useState("")
   const [muscleFilter, setMuscleFilter] = useState<string>("All")
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (open) {
-      setSearch("")
-      setMuscleFilter("All")
-      setTimeout(() => inputRef.current?.focus(), 100)
+    if (!open) return
+    setSearch("")
+    setMuscleFilter("All")
+    setTimeout(() => inputRef.current?.focus(), 100)
+
+    if (exerciseListCache) {
+      setExercises(exerciseListCache)
+      return
     }
+
+    setLoading(true)
+    fetch("/api/exercise-library", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          exerciseListCache = data
+          setExercises(data)
+          setUsingFallback(false)
+        } else {
+          setExercises(FALLBACK_EXERCISES)
+          setUsingFallback(true)
+        }
+      })
+      .catch(() => {
+        setExercises(FALLBACK_EXERCISES)
+        setUsingFallback(true)
+      })
+      .finally(() => setLoading(false))
   }, [open])
+
+  const allMuscles = useMemo(() => {
+    const seen = new Set<string>()
+    for (const ex of exercises) {
+      for (const m of ex.primaryMuscles) seen.add(m.name)
+    }
+    return ["All", ...Array.from(seen).sort()]
+  }, [exercises])
 
   const results = useMemo(() => {
     const q = search.toLowerCase().trim()
-    return EXERCISE_LIBRARY.filter((e) => {
-      if (muscleFilter !== "All" && e.muscle !== muscleFilter) return false
-      if (q && !e.name.toLowerCase().includes(q) && !e.muscle.toLowerCase().includes(q))
+    return exercises.filter((ex) => {
+      if (
+        muscleFilter !== "All" &&
+        !ex.primaryMuscles.some((m) => m.name === muscleFilter)
+      )
         return false
+      if (q && !ex.name.toLowerCase().includes(q)) return false
       return true
     })
-  }, [search, muscleFilter])
+  }, [exercises, search, muscleFilter])
 
   const grouped = useMemo(() => {
-    const m = new Map<string, LibraryExercise[]>()
-    for (const e of results) {
-      if (!m.has(e.muscle)) m.set(e.muscle, [])
-      m.get(e.muscle)!.push(e)
+    const map = new Map<string, ApiExercise[]>()
+    for (const ex of results) {
+      const muscle = ex.primaryMuscles[0]?.name ?? "Other"
+      if (!map.has(muscle)) map.set(muscle, [])
+      map.get(muscle)!.push(ex)
     }
-    return m
+    return map
   }, [results])
 
   return (
@@ -332,33 +382,59 @@ function ExercisePicker({
             />
           </div>
 
-          <div className="flex flex-wrap gap-1.5">
-            {MUSCLE_GROUPS.map((mg) => (
-              <button
-                key={mg}
-                type="button"
-                onClick={() => setMuscleFilter(mg)}
-                className={cn(
-                  "rounded-lg px-2.5 py-2 text-[10px] font-medium uppercase tracking-wider transition-colors touch-manipulation sm:py-1.5",
-                  muscleFilter === mg
-                    ? "bg-[#a855f7]/20 text-[#a855f7] ring-1 ring-[#a855f7]/35"
-                    : "bg-muted/25 text-muted-foreground/70 hover:bg-muted/40 active:bg-muted/50",
-                )}
-              >
-                {mg}
-              </button>
-            ))}
-          </div>
+          {!loading && (
+            <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-0.5">
+              {allMuscles.map((mg) => (
+                <button
+                  key={mg}
+                  type="button"
+                  onClick={() => setMuscleFilter(mg)}
+                  className={cn(
+                    "shrink-0 rounded-lg px-2.5 py-2 text-[10px] font-medium uppercase tracking-wider transition-colors touch-manipulation sm:py-1.5",
+                    muscleFilter === mg
+                      ? "bg-[#a855f7]/20 text-[#a855f7] ring-1 ring-[#a855f7]/35"
+                      : "bg-muted/25 text-muted-foreground/70 hover:bg-muted/40 active:bg-muted/50",
+                  )}
+                >
+                  {mg}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div
           className={cn(
-            "min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 pb-[max(1rem,env(safe-area-inset-bottom))]",
+            "min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[max(1rem,env(safe-area-inset-bottom))]",
             "scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0",
           )}
         >
-          {results.length === 0 && search.trim() && (
-            <div className="py-6 text-center">
+          {/* Loading skeleton */}
+          {loading && (
+            <div className="space-y-1 px-2 py-2">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 rounded-xl px-3 py-3 animate-pulse"
+                >
+                  <div className="size-9 rounded-lg bg-muted/20 shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 bg-muted/20 rounded w-3/4" />
+                    <div className="h-2 bg-muted/15 rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!loading && usingFallback && (
+            <p className="px-4 pt-2 pb-0 text-[10px] text-amber-400/70 text-center">
+              Offline — using built-in list
+            </p>
+          )}
+
+          {!loading && results.length === 0 && search.trim() && (
+            <div className="py-6 px-4 text-center">
               <p className="mb-3 text-sm text-muted-foreground/70">
                 No matches for &ldquo;{search}&rdquo;
               </p>
@@ -367,7 +443,12 @@ function ExercisePicker({
                 variant="outline"
                 className="touch-manipulation"
                 onClick={() => {
-                  onSelect(search.trim())
+                  onSelect({
+                    name: search.trim(),
+                    primaryMuscles: [],
+                    secondaryMuscles: [],
+                    category: "",
+                  })
                   onClose()
                 }}
               >
@@ -377,29 +458,78 @@ function ExercisePicker({
             </div>
           )}
 
-          {Array.from(grouped.entries()).map(([muscle, exercises]) => (
-            <div key={muscle}>
-              <p className="mb-1.5 px-0.5 text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/50">
-                {muscle}
-              </p>
-              {exercises.map((ex) => (
-                <button
-                  key={ex.name}
-                  type="button"
-                  onClick={() => {
-                    onSelect(ex.name)
-                    onClose()
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted/25 active:bg-muted/35 sm:py-2.5 touch-manipulation"
-                >
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#a855f7]/10 sm:size-8">
-                    <Dumbbell className="size-4 text-[#a855f7] sm:size-3.5" />
-                  </div>
-                  <span className="min-w-0 flex-1 text-sm font-medium leading-snug">{ex.name}</span>
-                </button>
-              ))}
-            </div>
-          ))}
+          {!loading &&
+            Array.from(grouped.entries()).map(([muscle, exList]) => (
+              <div key={muscle}>
+                <p className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/50">
+                  {muscle}
+                </p>
+                {exList.map((ex) => {
+                  const primaryColor = ex.primaryMuscles[0]?.color ?? "#a855f7"
+                  return (
+                    <button
+                      key={ex.id}
+                      type="button"
+                      onClick={() => {
+                        onSelect({
+                          name: ex.name,
+                          primaryMuscles: ex.primaryMuscles.map((m) => ({
+                            name: m.name,
+                            color: m.color,
+                            code: m.code,
+                          })),
+                          secondaryMuscles: ex.secondaryMuscles.map((m) => ({
+                            name: m.name,
+                            color: m.color,
+                            code: m.code,
+                          })),
+                          category: ex.categories[0]?.name ?? "",
+                        })
+                        onClose()
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/25 active:bg-muted/35 sm:py-2.5 touch-manipulation"
+                    >
+                      <div
+                        className="flex size-9 shrink-0 items-center justify-center rounded-lg sm:size-8"
+                        style={{ backgroundColor: `${primaryColor}20` }}
+                      >
+                        <div
+                          className="size-2 rounded-full"
+                          style={{ backgroundColor: primaryColor }}
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium leading-snug">{ex.name}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          {ex.primaryMuscles.map((m) => (
+                            <span
+                              key={m.code}
+                              className="text-[9px] font-medium rounded px-1.5 py-0.5"
+                              style={{
+                                backgroundColor: `${m.color}22`,
+                                color: m.color,
+                              }}
+                            >
+                              {m.name}
+                            </span>
+                          ))}
+                          {ex.categories[0]?.name && (
+                            <span className="text-[9px] text-muted-foreground/45">
+                              · {ex.categories[0].name}
+                            </span>
+                          )}
+                          {ex.secondaryMuscles.length > 0 && (
+                            <span className="text-[9px] text-muted-foreground/35">
+                              + {ex.secondaryMuscles.map((m) => m.name).join(", ")}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
         </div>
       </DialogContent>
     </Dialog>
@@ -432,15 +562,16 @@ function RoutineEditor({
     }
   }, [open, initial])
 
-  function addExercise(exName: string) {
+  function addExercise(picked: PickedExercise) {
     setExercises((prev) => [
       ...prev,
       {
         id: uid(),
-        name: exName,
+        name: picked.name,
         targetSets: 3,
         targetReps: "10",
         notes: "",
+        primaryMuscles: picked.primaryMuscles,
       },
     ])
   }
@@ -482,6 +613,19 @@ function RoutineEditor({
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{ex.name}</p>
+                    {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
+                      <div className="flex gap-1 mt-0.5 mb-1 flex-wrap">
+                        {ex.primaryMuscles.map((m) => (
+                          <span
+                            key={m.code}
+                            className="text-[9px] font-medium rounded px-1.5 py-0.5"
+                            style={{ backgroundColor: `${m.color}22`, color: m.color }}
+                          >
+                            {m.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 mt-1">
                       <Input
                         className="h-7 w-14 px-2 text-xs text-center"
@@ -543,7 +687,7 @@ function RoutineEditor({
       <ExercisePicker
         open={showPicker}
         onClose={() => setShowPicker(false)}
-        onSelect={addExercise}
+        onSelect={(picked) => addExercise(picked)}
       />
     </>
   )
@@ -640,13 +784,16 @@ function ActiveWorkout({
     onUpdate(updated)
   }, [session.id, previousByExercise, exerciseCount, setCountSig])
 
-  function addExercise(name: string) {
+  function addExercise(picked: PickedExercise) {
     const updated: SessionExercise[] = [
       ...exercises,
       {
         id: uid(),
-        name,
+        name: picked.name,
         notes: "",
+        primaryMuscles: picked.primaryMuscles,
+        secondaryMuscles: picked.secondaryMuscles,
+        category: picked.category,
         sets: [
           {
             id: uid(),
@@ -873,14 +1020,32 @@ function ActiveWorkout({
               key={ex.id}
               className="glass rounded-2xl p-4 animate-fade-up"
             >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-[#a855f7]">
-                  {ex.name}
-                </h3>
+              <div className="flex items-start justify-between mb-3">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-[#a855f7]">{ex.name}</h3>
+                  {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
+                      {ex.primaryMuscles.map((m) => (
+                        <span
+                          key={m.code}
+                          className="text-[9px] font-medium rounded px-1.5 py-0.5"
+                          style={{ backgroundColor: `${m.color}22`, color: m.color }}
+                        >
+                          {m.name}
+                        </span>
+                      ))}
+                      {ex.category && (
+                        <span className="text-[9px] text-muted-foreground/40">
+                          · {ex.category}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => removeExercise(ex.id)}
-                  className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  className="shrink-0 p-1.5 rounded-lg text-muted-foreground/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                 >
                   <Trash2 className="size-3.5" />
                 </button>
@@ -1029,7 +1194,7 @@ function ActiveWorkout({
       <ExercisePicker
         open={showPicker}
         onClose={() => setShowPicker(false)}
-        onSelect={addExercise}
+        onSelect={(picked) => addExercise(picked)}
       />
     </>
   )
