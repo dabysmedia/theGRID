@@ -34,6 +34,7 @@ interface BowelEntry {
 }
 
 const bristolLabels: Record<number, string> = {
+  0: "No poop",
   1: "Hard lumps",
   2: "Lumpy sausage",
   3: "Cracked sausage",
@@ -73,6 +74,7 @@ export default function BowelPage() {
 
   const { chartData, weekCount, avgTypeStr, mostCommonStr } = useMemo(() => {
     const weekKeys = new Set(last7Days().map((d) => formatDate(d)))
+    const weekEntries = entries.filter((e) => weekKeys.has(entryDateKey(e)))
     const days = last7Days()
     const chartData = days.map((d) => {
       const key = formatDate(d)
@@ -80,23 +82,24 @@ export default function BowelPage() {
       return { label: format(d, "EEE"), count }
     })
 
-    const weekCount = entries.filter((e) => weekKeys.has(entryDateKey(e))).length
+    const weekCount = weekEntries.length
 
     let avgTypeStr = "—"
-    if (entries.length > 0) {
-      const sum = entries.reduce((acc, e) => acc + e.bristolScale, 0)
-      avgTypeStr = (sum / entries.length).toFixed(1)
+    const stoolOnly = weekEntries.filter((e) => e.bristolScale >= 1)
+    if (stoolOnly.length > 0) {
+      const sum = stoolOnly.reduce((acc, e) => acc + e.bristolScale, 0)
+      avgTypeStr = (sum / stoolOnly.length).toFixed(1)
     }
 
     let mostCommonStr = "—"
-    if (entries.length > 0) {
+    if (weekEntries.length > 0) {
       const freq = new Map<number, number>()
-      for (const e of entries) {
+      for (const e of weekEntries) {
         freq.set(e.bristolScale, (freq.get(e.bristolScale) ?? 0) + 1)
       }
-      let bestType = 1
+      let bestType = 0
       let bestCount = 0
-      for (let t = 1; t <= 7; t++) {
+      for (let t = 0; t <= 7; t++) {
         const c = freq.get(t) ?? 0
         if (c > bestCount) {
           bestCount = c
@@ -104,7 +107,10 @@ export default function BowelPage() {
         }
       }
       if (bestCount > 0) {
-        mostCommonStr = `${bestType} · ${bristolLabels[bestType]}`
+        mostCommonStr =
+          bestType === 0
+            ? "No poop"
+            : `${bestType} · ${bristolLabels[bestType]}`
       }
     }
 
@@ -176,7 +182,7 @@ export default function BowelPage() {
             Avg Type
           </p>
           <span className="text-lg lg:text-xl font-bold tabular-nums">{avgTypeStr}</span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">Bristol</p>
+          <p className="text-[10px] text-muted-foreground/60 mt-0.5">Bristol 1–7 only</p>
         </PageStatTile>
         <PageStatTile className="flex-1 min-w-[10rem]">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
@@ -203,9 +209,23 @@ export default function BowelPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                Bristol Scale ({bristolScale}/7 &mdash; {bristolLabels[bristolScale]})
+                {bristolScale === 0
+                  ? "No bowel movement"
+                  : `Bristol scale (${bristolScale}/7 — ${bristolLabels[bristolScale]})`}
               </Label>
-              <div className="flex gap-1.5 mt-1">
+              <Button
+                type="button"
+                variant={bristolScale === 0 ? "default" : "outline"}
+                size="sm"
+                className="h-10 w-full touch-manipulation"
+                onClick={() => setBristolScale(0)}
+              >
+                No poop
+              </Button>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                Log when you had no movement this day (still counts as a check-in).
+              </p>
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 {[1, 2, 3, 4, 5, 6, 7].map((s) => (
                   <Button
                     key={s}
@@ -306,7 +326,7 @@ export default function BowelPage() {
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[#78716c]/15 shrink-0">
                         <span className="text-xl font-bold tabular-nums text-[#78716c]">
-                          {entry.bristolScale}
+                          {entry.bristolScale === 0 ? "—" : entry.bristolScale}
                         </span>
                       </div>
                       <div className="min-w-0 flex-1">
@@ -316,7 +336,7 @@ export default function BowelPage() {
                               {bristolLabels[entry.bristolScale]}
                             </p>
                             <p className="text-xs font-medium text-muted-foreground mt-0.5">
-                              Type {entry.bristolScale}
+                              {entry.bristolScale === 0 ? "Logged" : `Type ${entry.bristolScale}`}
                             </p>
                           </div>
                           <time

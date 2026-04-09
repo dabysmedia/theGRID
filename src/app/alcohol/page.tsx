@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Beer, Calendar, Trash2 } from "lucide-react"
-import { format } from "date-fns"
+import { format, subDays } from "date-fns"
 import {
   ResponsiveContainer,
   BarChart,
@@ -18,7 +18,7 @@ import { useActiveDate } from "@/context/DateContext"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { formatDate, last7Days, parseLocalDate } from "@/lib/utils"
+import { averageOnLoggedDays, formatDate, parseLocalDate } from "@/lib/utils"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 
 const alcoholGoalPresets: GoalPreset[] = [
@@ -50,10 +50,9 @@ export default function AlcoholPage() {
   const [units, setUnits] = useState("1")
 
   const today = activeDate
-  const sevenDays = useMemo(() => last7Days(), [])
   const weekDateKeys = useMemo(
-    () => sevenDays.map((d) => formatDate(d)),
-    [sevenDays]
+    () => Array.from({ length: 7 }, (_, i) => formatDate(subDays(parseLocalDate(activeDate), 6 - i))),
+    [activeDate]
   )
 
   useEffect(() => {
@@ -82,7 +81,10 @@ export default function AlcoholPage() {
   }, [unitsByDay, weekDateKeys])
 
   const todayUnits = unitsByDay.get(today) ?? 0
-  const avgPerDay = weekTotal / 7
+  const avgPerDay = useMemo(() => {
+    const daily = weekDateKeys.map((k) => unitsByDay.get(k) ?? 0)
+    return averageOnLoggedDays(daily)
+  }, [unitsByDay, weekDateKeys])
   const dryDays = useMemo(() => {
     let n = 0
     for (const k of weekDateKeys) {
@@ -93,15 +95,15 @@ export default function AlcoholPage() {
 
   const chartData = useMemo(
     () =>
-      sevenDays.map((d) => {
-        const key = formatDate(d)
+      weekDateKeys.map((key) => {
+        const d = parseLocalDate(key)
         return {
           label: format(d, "EEE"),
           dateKey: key,
           units: unitsByDay.get(key) ?? 0,
         }
       }),
-    [sevenDays, unitsByDay]
+    [weekDateKeys, unitsByDay]
   )
 
   const entriesByDate = useMemo(() => {
@@ -166,6 +168,7 @@ export default function AlcoholPage() {
           <p className="text-lg lg:text-xl font-bold tabular-nums">
             {avgPerDay.toFixed(1)}
           </p>
+          <p className="text-[10px] text-muted-foreground/60 mt-0.5">units on days w/ drinks</p>
         </PageStatTile>
         <PageStatTile className="flex-1 min-w-[7.5rem] shrink-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">

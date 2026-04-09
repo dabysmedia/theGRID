@@ -25,11 +25,18 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+    const raw = Number(body.bristolScale)
+    if (!Number.isFinite(raw) || raw < 0 || raw > 7 || !Number.isInteger(raw)) {
+      return NextResponse.json(
+        { error: "bristolScale must be integer 0–7 (0 = no movement)" },
+        { status: 400 }
+      )
+    }
     const entry = await prisma.bowelEntry.create({
       data: {
         date: parseYyyyMmDdToStoredDate(String(body.date)),
         time: new Date(body.time),
-        bristolScale: parseInt(body.bristolScale),
+        bristolScale: raw,
         notes: body.notes || null,
       },
     })

@@ -19,7 +19,7 @@ import { FoodSearch } from "@/components/FoodSearch"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { cn, formatDate, last7Days, parseLocalDate } from "@/lib/utils"
+import { averageOnLoggedDays, cn, formatDate, parseLocalDate } from "@/lib/utils"
 import {
   Dialog,
   DialogContent,
@@ -267,12 +267,16 @@ export default function CaloriesPage() {
       dailyTotals.set(d, (dailyTotals.get(d) ?? 0) + e.calories)
     }
 
-    const days = last7Days()
+    const days = Array.from({ length: 7 }, (_, i) =>
+      subDays(parseLocalDate(activeDate), 6 - i)
+    )
     let weekSum = 0
+    const dailyLast7: number[] = []
     const chartData = days.map((d) => {
       const key = formatDate(d)
       const total = dailyTotals.get(key) ?? 0
       weekSum += total
+      dailyLast7.push(total)
       return { label: format(d, "EEE"), total }
     })
 
@@ -289,10 +293,10 @@ export default function CaloriesPage() {
       dailyTotals,
       chartData,
       weekTotal: weekSum,
-      avg7: weekSum / 7,
+      avg7: averageOnLoggedDays(dailyLast7),
       bestDay: { value: bestVal, key: bestKey },
     }
-  }, [entries])
+  }, [entries, activeDate])
 
   const hasChartData = chartData.some((d) => d.total > 0)
 
@@ -664,7 +668,7 @@ export default function CaloriesPage() {
           <span className="text-lg lg:text-xl font-bold tabular-nums">
             {Math.round(avg7).toLocaleString()}
           </span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">cal / day</p>
+          <p className="text-[10px] text-muted-foreground/60 mt-0.5">avg on logged days</p>
         </PageStatTile>
         <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">

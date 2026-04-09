@@ -56,10 +56,20 @@ export function FoodSearch({ onSelect, compact = false }: FoodSearchProps) {
     setError(null)
     try {
       const res = await fetch(`/api/food-search?q=${encodeURIComponent(q)}`)
-      if (!res.ok) throw new Error("Search failed")
       const data = await res.json()
-      setResults(data.foods ?? [])
+      const foods = data.foods ?? []
+      setResults(foods)
       setSource(data.source ?? null)
+      if (!res.ok) {
+        setError(typeof data.error === "string" ? data.error : "Search unavailable")
+        setOpen(true)
+        return
+      }
+      if (typeof data.error === "string" && data.error) {
+        setError(data.error)
+      } else {
+        setError(null)
+      }
       setOpen(true)
     } catch {
       setError("Search unavailable")

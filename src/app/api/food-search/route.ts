@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 
+/** Avoid Next.js caching upstream food API responses (stale/empty in prod). */
+const fetchNoStore: RequestInit = { cache: "no-store" }
+
+export const dynamic = "force-dynamic"
+
 interface FoodItem {
   food_id: string
   food_name: string
@@ -29,6 +34,7 @@ async function getFatSecretToken(): Promise<string> {
   if (!clientId || !clientSecret) throw new Error("No FatSecret creds")
 
   const res = await fetch("https://oauth.fatsecret.com/connect/token", {
+    ...fetchNoStore,
     method: "POST",
     headers: {
       Authorization:
@@ -70,6 +76,7 @@ async function searchFatSecret(query: string): Promise<FoodItem[]> {
   const token = await getFatSecretToken()
 
   const res = await fetch("https://platform.fatsecret.com/rest/server.api", {
+    ...fetchNoStore,
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -118,9 +125,53 @@ async function searchFatSecret(query: string): Promise<FoodItem[]> {
    USDA FoodData Central – fallback
    ═══════════════════════════════════════════════════════ */
 
-function extractNutrient(nutrients: Array<{ nutrientNumber?: string; value?: number }>, number: string): number | null {
-  const n = nutrients.find((x) => x.nutrientNumber === number)
-  return n?.value != null ? n.value : null
+/** USDA FDC nutrient ids when `nutrientNumber` is missing (search/detail payloads vary). */
+function nutrientIdFromNumber(number: string): number | null {
+  switch (number) {
+    case "208":
+      return 1008
+    case "203":
+      return 1003
+    case "204":
+      return 1004
+    case "205":
+      return 1005
+    default:
+      return null
+  }
+}
+
+function extractNutrient(
+  nutrients: Array<Record<string, unknown>>,
+  number: string
+): number | null {
+  const wantId = nutrientIdFromNumber(number)
+  for (const x of nutrients) {
+    const rawNum = x.nutrientNumber
+    const num =
+      rawNum == null ? null : typeof rawNum === "string" ? rawNum : String(rawNum)
+    if (num === number) {
+      const v = x.value
+      if (typeof v === "number") return v
+    }
+    if (wantId != null && x.nutrientId === wantId) {
+      const v = x.value
+      if (typeof v === "number") return v
+    }
+    const nested = x.nutrient as { number?: string | number; id?: number } | undefined
+    if (nested) {
+      const nn = nested.number != null ? String(nested.number) : null
+      if (nn === number) {
+        const v = x.value
+        if (typeof v === "number") return v
+      }
+      if (wantId != null && nested.id === wantId) {
+        const v = x.value
+        if (typeof v === "number") return v
+      }
+    }
+  }
+  return null
 }
 
 async function searchFDC(query: string): Promise<FoodItem[]> {
@@ -128,8 +179,8 @@ async function searchFDC(query: string): Promise<FoodItem[]> {
   if (!key) throw new Error("No FDC key")
 
   const res = await fetch(
-    `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${key}&query=${encodeURIComponent(query)}&pageSize=15`,
-    { method: "GET" }
+    `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(key)}&query=${encodeURIComponent(query)}&pageSize=15`,
+    { ...fetchNoStore, method: "GET" }
   )
 
   if (!res.ok) throw new Error(`FDC ${res.status}`)
@@ -138,7 +189,7 @@ async function searchFDC(query: string): Promise<FoodItem[]> {
   const rawFoods: Array<Record<string, unknown>> = data?.foods ?? []
 
   return rawFoods.map((f) => {
-    const nutrients = (f.foodNutrients ?? []) as Array<{ nutrientNumber?: string; value?: number }>
+    const nutrients = (f.foodNutrients ?? []) as Array<Record<string, unknown>>
     const energy = extractNutrient(nutrients, "208") ?? extractNutrient(nutrients, "957")
     const protein = extractNutrient(nutrients, "203")
     const fat = extractNutrient(nutrients, "204")
@@ -187,22 +238,56 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ foods: [], source: null })
   }
 
-  // Try FatSecret first
-  try {
-    const foods = await searchFatSecret(query)
-    if (foods.length > 0) {
-      return NextResponse.json({ foods, source: "fatsecret" })
-    }
-  } catch (err) {
-    console.warn("FatSecret unavailable, falling back to USDA FDC:", (err as Error).message)
+  const hasFatSecret =
+    Boolean(process.env.FATSECRET_CLIENT_ID?.trim()) &&
+    Boolean(process.env.FATSECRET_CLIENT_SECRET?.trim())
+  const hasFdc = Boolean(process.env.FDC_API_KEY?.trim())
+
+  if (!hasFatSecret && !hasFdc) {
+    console.error(
+      "[food-search] No FATSECRET_* or FDC_API_KEY in server environment — set at least one in production."
+    )
+    return NextResponse.json({
+      foods: [],
+      source: null,
+      error:
+        "Food search is not configured on the server (add FDC_API_KEY or FatSecret credentials).",
+    })
   }
 
-  // Fallback to USDA FoodData Central
+  // Try FatSecret first when credentials are present
+  if (hasFatSecret) {
+    try {
+      const foods = await searchFatSecret(query)
+      if (foods.length > 0) {
+        return NextResponse.json({ foods, source: "fatsecret" })
+      }
+    } catch (err) {
+      console.warn(
+        "FatSecret unavailable, falling back to USDA FDC:",
+        (err as Error).message
+      )
+    }
+  }
+
+  // USDA FoodData Central (fallback or primary when FatSecret is absent / empty)
+  if (!hasFdc) {
+    console.error("[food-search] FatSecret returned no results and FDC_API_KEY is not set.")
+    return NextResponse.json({
+      foods: [],
+      source: null,
+      error: "Food search unavailable (add FDC_API_KEY as a fallback on the server).",
+    })
+  }
+
   try {
     const foods = await searchFDC(query)
     return NextResponse.json({ foods, source: "usda" })
   } catch (err) {
-    console.error("Both food APIs failed:", (err as Error).message)
-    return NextResponse.json({ foods: [], source: null, error: "Food search unavailable" }, { status: 502 })
+    console.error("USDA FDC food search failed:", (err as Error).message)
+    return NextResponse.json(
+      { foods: [], source: null, error: "Food search unavailable" },
+      { status: 502 }
+    )
   }
 }

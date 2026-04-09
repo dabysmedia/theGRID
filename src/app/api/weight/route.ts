@@ -38,31 +38,48 @@ export async function GET() {
 
     const todayEntry = entries.find((e) => utcCalendarDayKeyFromIso(e.date) === todayStr)
 
-    const last7 = entries.filter((e) => {
-      const k = utcCalendarDayKeyFromIso(e.date)
-      return k >= weekAgoStr && k <= todayStr
-    })
-    const last30 = entries.filter((e) => {
-      const k = utcCalendarDayKeyFromIso(e.date)
-      return k >= monthAgoStr && k <= todayStr
-    })
+    /** First (chronological) weigh-in per calendar day (entries are newest-first). */
+    function weightsByDayInRange(fromStr: string, toStr: string): Map<string, number> {
+      const byDay = new Map<string, number>()
+      for (const e of entries) {
+        const k = utcCalendarDayKeyFromIso(e.date)
+        if (k >= fromStr && k <= toStr && !byDay.has(k)) {
+          byDay.set(k, e.value)
+        }
+      }
+      return byDay
+    }
+
+    const last7Map = weightsByDayInRange(weekAgoStr, todayStr)
+    const last30Map = weightsByDayInRange(monthAgoStr, todayStr)
+    const last7Vals = [...last7Map.values()]
+    const last30Vals = [...last30Map.values()]
 
     const values = entries.map((e) => e.value)
     const avg7 =
-      last7.length > 0
-        ? Math.round((last7.reduce((s, e) => s + e.value, 0) / last7.length) * 10) / 10
+      last7Vals.length > 0
+        ? Math.round(
+            (last7Vals.reduce((s, v) => s + v, 0) / last7Vals.length) * 10
+          ) / 10
         : null
     const avg30 =
-      last30.length > 0
-        ? Math.round((last30.reduce((s, e) => s + e.value, 0) / last30.length) * 10) / 10
+      last30Vals.length > 0
+        ? Math.round(
+            (last30Vals.reduce((s, v) => s + v, 0) / last30Vals.length) * 10
+          ) / 10
         : null
 
     const allTimeHigh = values.length ? Math.max(...values) : null
     const allTimeLow = values.length ? Math.min(...values) : null
 
+    const last7Keys = [...last7Map.keys()].sort()
     const weekChange =
-      last7.length >= 2
-        ? Math.round((last7[0].value - last7[last7.length - 1].value) * 10) / 10
+      last7Keys.length >= 2
+        ? Math.round(
+            (last7Map.get(last7Keys[last7Keys.length - 1])! -
+              last7Map.get(last7Keys[0])!) *
+              10
+          ) / 10
         : null
 
     return NextResponse.json({

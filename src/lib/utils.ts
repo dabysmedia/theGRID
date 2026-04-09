@@ -23,6 +23,16 @@ export function last7Days(): Date[] {
   return Array.from({ length: 7 }, (_, i) => subDays(today, 6 - i))
 }
 
+/**
+ * Mean of daily values where the day has logged data (value greater than zero).
+ * Aligns with weekly overview / dashboard: missing days are excluded from the denominator.
+ */
+export function averageOnLoggedDays(dailyTotals: number[]): number {
+  const logged = dailyTotals.filter((v) => v > 0)
+  if (!logged.length) return 0
+  return logged.reduce((s, v) => s + v, 0) / logged.length
+}
+
 /** Parse "YYYY-MM-DD" as midnight local time (avoids UTC gotcha with new Date()) */
 export function parseLocalDate(dateStr: string): Date {
   return new Date(dateStr + "T00:00:00")

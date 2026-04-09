@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
-import { formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import { averageOnLoggedDays, formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { kmToMiles, runKmToStepsFromRun, STEPS_PER_MILE_FROM_RUN } from "@/lib/units"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
@@ -124,7 +124,7 @@ export default function StepsPage() {
     const todayTotal = byDay.get(today) ?? 0
     const dailyTotals = weekDayKeys.map((k) => byDay.get(k) ?? 0)
     const weekTotal = dailyTotals.reduce((a, b) => a + b, 0)
-    const avg7 = weekTotal / 7
+    const avg7 = averageOnLoggedDays(dailyTotals)
 
     let best = 0
     let bestKey: string | null = null
@@ -277,7 +277,7 @@ export default function StepsPage() {
           <span className="text-lg lg:text-xl font-bold tabular-nums">
             {Math.round(stats.avg7).toLocaleString()}
           </span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">daily average</p>
+          <p className="text-[10px] text-muted-foreground/60 mt-0.5">avg on logged days</p>
         </PageStatTile>
         <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">

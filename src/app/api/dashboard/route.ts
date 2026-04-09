@@ -99,6 +99,7 @@ export async function GET(req: NextRequest) {
       stepEntries,
       runEntries,
       workoutEntries,
+      workoutSessions,
       sleepEntries,
       alcoholEntries,
       bowelEntries,
@@ -108,6 +109,9 @@ export async function GET(req: NextRequest) {
       prisma.stepEntry.findMany({ where: { date: dateInRange } }),
       prisma.runEntry.findMany({ where: { date: dateInRange } }),
       prisma.workoutEntry.findMany({ where: { date: dateInRange } }),
+      prisma.workoutSession.findMany({
+        where: { date: dateInRange, status: "completed" },
+      }),
       prisma.sleepEntry.findMany({ where: { date: dateInRange } }),
       prisma.alcoholEntry.findMany({ where: { date: dateInRange } }),
       prisma.bowelEntry.findMany({ where: { date: dateInRange } }),
@@ -146,7 +150,9 @@ export async function GET(req: NextRequest) {
       items.reduce((s, e) => s + e.distance, 0)
     )
     const runLast7 = runLast7Km.map((km) => Math.round(kmToMiles(km) * 10) / 10)
-    const workoutLast7 = dailyTotals(workoutEntries, (items) => items.length)
+    const legacyWorkoutLast7 = dailyTotals(workoutEntries, (items) => items.length)
+    const sessionWorkoutLast7 = dailyTotals(workoutSessions, (items) => items.length)
+    const workoutLast7 = legacyWorkoutLast7.map((v, i) => v + sessionWorkoutLast7[i])
     const sleepLast7 = dailyTotals(sleepEntries, (items) => {
       if (!items.length) return 0
       const entry = items[0]

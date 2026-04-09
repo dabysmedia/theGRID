@@ -114,9 +114,11 @@ interface WeeklyHeroProps {
   loading: boolean
 }
 
-function weekAvg(last7: number[]): number {
-  if (!last7.length) return 0
-  return last7.reduce((s, v) => s + v, 0) / last7.length
+/** Mean over days with logged data only (0 = no data for that day in dashboard aggregates). */
+function weekAvgFromLoggedDays(last7: number[]): number {
+  const logged = last7.filter((v) => v > 0)
+  if (!logged.length) return 0
+  return logged.reduce((s, v) => s + v, 0) / logged.length
 }
 
 function weekTotal(last7: number[]): number {
@@ -133,18 +135,18 @@ function clamp01(n: number): number {
 function computeWeeklyScore(d: DashboardData): number {
   const calGoal = d.calories.goal ?? 2000
   const stepsGoal = d.steps.goal ?? 10000
-  const calAvg = weekAvg(d.calories.last7)
-  const stepsAvg = weekAvg(d.steps.last7)
+  const calAvg = weekAvgFromLoggedDays(d.calories.last7)
+  const stepsAvg = weekAvgFromLoggedDays(d.steps.last7)
 
   const calScore = calGoal > 0 ? clamp01(calAvg / calGoal) : 0
   const stepsScore = stepsGoal > 0 ? clamp01(stepsAvg / stepsGoal) : 0
 
   const runGoalDaily = d.running.goal ?? 3
-  const runAvg = weekAvg(d.running.last7)
+  const runAvg = weekAvgFromLoggedDays(d.running.last7)
   const runScore = runGoalDaily > 0 ? clamp01(runAvg / runGoalDaily) : 0
 
   const workoutGoalDaily = d.workouts.goal ?? 1
-  const workoutAvg = weekAvg(d.workouts.last7)
+  const workoutAvg = weekAvgFromLoggedDays(d.workouts.last7)
   const workoutScore =
     workoutGoalDaily > 0 ? clamp01(workoutAvg / workoutGoalDaily) : 0
 
@@ -154,9 +156,9 @@ function computeWeeklyScore(d: DashboardData): number {
 
 export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
   const { activeDate } = useActiveDate()
-  const calAvg = Math.round(weekAvg(data.calories.last7))
-  const stepsAvg = Math.round(weekAvg(data.steps.last7))
-  const sleepAvg = Math.round(weekAvg(data.sleep.last7) * 10) / 10
+  const calAvg = Math.round(weekAvgFromLoggedDays(data.calories.last7))
+  const stepsAvg = Math.round(weekAvgFromLoggedDays(data.steps.last7))
+  const sleepAvg = Math.round(weekAvgFromLoggedDays(data.sleep.last7) * 10) / 10
 
   const calGoal = data.calories.goal ?? 2000
   const stepsGoal = data.steps.goal ?? 10000

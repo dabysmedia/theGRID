@@ -112,20 +112,32 @@ export default function SleepPage() {
   const stats = useMemo(() => {
     const last = entries[0]
     const lastNight = last ? calcDuration(last.bedtime, last.wakeTime) : "—"
+
+    const byNight = new Map<string, { hrs: number[]; qual: number[] }>()
+    for (const e of last7DaysEntries) {
+      const k = entryDateKey(e)
+      if (!byNight.has(k)) byNight.set(k, { hrs: [], qual: [] })
+      const g = byNight.get(k)!
+      g.hrs.push(durationHours(e.bedtime, e.wakeTime))
+      g.qual.push(e.quality)
+    }
+    const nightHrAvgs = [...byNight.values()].map(
+      ({ hrs }) => hrs.reduce((s, v) => s + v, 0) / hrs.length
+    )
+    const nightQAvgs = [...byNight.values()].map(
+      ({ qual }) => qual.reduce((s, v) => s + v, 0) / qual.length
+    )
+
     const avg7h =
-      last7DaysEntries.length > 0
+      nightHrAvgs.length > 0
         ? (
-            last7DaysEntries.reduce(
-              (s, e) => s + durationHours(e.bedtime, e.wakeTime),
-              0
-            ) / last7DaysEntries.length
+            nightHrAvgs.reduce((s, v) => s + v, 0) / nightHrAvgs.length
           ).toFixed(1)
         : null
     const avgQ =
-      last7DaysEntries.length > 0
+      nightQAvgs.length > 0
         ? (
-            last7DaysEntries.reduce((s, e) => s + e.quality, 0) /
-            last7DaysEntries.length
+            nightQAvgs.reduce((s, v) => s + v, 0) / nightQAvgs.length
           ).toFixed(1)
         : null
     let best = "—"
@@ -137,7 +149,7 @@ export default function SleepPage() {
       )
       best = calcDuration(bestEntry.bedtime, bestEntry.wakeTime)
     }
-    const consistency = Math.round((last7DaysEntries.length / 7) * 100)
+    const consistency = Math.round((byNight.size / 7) * 100)
     const bestQuality =
       entries.length > 0 ? Math.max(...entries.map((e) => e.quality)) : null
     return { lastNight, avg7h, avgQ, best, consistency, bestQuality }
