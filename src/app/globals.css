@@ -537,24 +537,26 @@ html {
    SLEEK ANIMATIONS
    ═══════════════════════════════════════════════════════════ */
 
+/* Transform-only entrances: avoid opacity in keyframes + animation-fill-mode: both,
+   which leaves content invisible on iOS Safari if the animation never completes. */
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { transform: translateY(12px); }
+  to   { transform: translateY(0); }
 }
 
 @keyframes fade-in {
-  from { opacity: 0; }
+  from { opacity: 1; }
   to   { opacity: 1; }
 }
 
 @keyframes slide-up {
-  from { transform: translateY(100%); opacity: 0; }
-  to   { transform: translateY(0); opacity: 1; }
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
 }
 
 @keyframes scale-in {
-  from { opacity: 0; transform: scale(0.92); }
-  to   { opacity: 1; transform: scale(1); }
+  from { transform: scale(0.92); }
+  to   { transform: scale(1); }
 }
 
 @keyframes draw-ring {
@@ -573,13 +575,13 @@ html {
 }
 
 @keyframes count-up {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { transform: translateY(6px); }
+  to   { transform: translateY(0); }
 }
 
 @keyframes nav-indicator {
-  from { opacity: 0; transform: scaleX(0); }
-  to   { opacity: 1; transform: scaleX(1); }
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
 }
 
 @layer utilities {
