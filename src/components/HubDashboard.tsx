@@ -88,14 +88,15 @@ export function HubDashboard() {
 
   return (
     <div className="space-y-8">
-      <header className="space-y-2 animate-fade-up">
-        <div className="flex items-center gap-3 lg:hidden">
-          <div className="status-dot" />
-          <h1 className="text-xl font-bold tracking-[0.2em] uppercase">
-            the<span className="text-gradient">GRID</span>
+      <header className="animate-fade-up">
+        <div className="flex items-center gap-2.5 lg:hidden">
+          <div className="status-dot translate-y-px" aria-hidden />
+          <h1 className="text-[1.375rem] font-semibold leading-none tracking-tight sm:text-2xl">
+            <span className="text-muted-foreground/90">the</span>
+            <span className="text-gradient font-semibold">GRID</span>
           </h1>
         </div>
-        <div className="pl-0">
+        <div className="mt-4 border-t border-border/30 pt-4 sm:mt-5 lg:mt-0 lg:border-0 lg:pt-0">
           <DatePicker />
         </div>
       </header>

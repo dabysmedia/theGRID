@@ -474,17 +474,19 @@ export default function StatsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2 animate-fade-up">
-        <div className="flex items-center gap-3">
-          <div className="status-dot" />
-          <div>
-            <h1 className="text-lg font-bold tracking-[0.15em] uppercase">Statistics</h1>
-            <p className="text-[10px] text-muted-foreground/65 tracking-[0.08em] uppercase mt-0.5">
+      <header className="animate-fade-up">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="status-dot translate-y-px" aria-hidden />
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+              Statistics
+            </h1>
+            <p className="mt-1 text-[11px] leading-snug text-muted-foreground/75 sm:text-xs">
               Monthly analytics overview
             </p>
           </div>
         </div>
-        <div className="pl-0">
+        <div className="mt-4 border-t border-border/30 pt-4 sm:mt-5">
           <DatePicker />
         </div>
       </header>

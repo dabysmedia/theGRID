@@ -29,6 +29,7 @@ import type { LucideIcon } from "lucide-react"
 import { PageHeader } from "@/components/PageHeader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 import { useActiveDate } from "@/context/DateContext"
 import { format, subDays, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from "date-fns"
 
@@ -124,6 +125,28 @@ function getMonthRate(completions: HabitCompletion[], monthDays: Date[], todaySt
   return Math.round((count / pastDays.length) * 100)
 }
 
+function NewHabitCTA({ onClick, className }: { onClick: () => void; className?: string }) {
+  return (
+    <Button
+      type="button"
+      onClick={onClick}
+      variant="ghost"
+      size="sm"
+      className={cn(
+        "glass relative h-10 min-h-10 w-full justify-center gap-2 overflow-hidden rounded-xl px-3.5 text-foreground shadow-md shadow-black/25 ring-1 ring-white/10 hud-corners",
+        "hover:bg-glass-highlight/25",
+        className
+      )}
+    >
+      <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-[oklch(0.82_0.18_110_/_35%)] to-transparent" />
+      <span className="relative z-[1] flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-glass-highlight/35 ring-1 ring-white/5 backdrop-blur-sm">
+        <Plus className="h-3.5 w-3.5 text-grid-accent" strokeWidth={2.5} />
+      </span>
+      <span className="relative z-[1] text-gradient text-sm font-semibold tracking-wide">New Habit</span>
+    </Button>
+  )
+}
+
 export default function HabitsPage() {
   const { activeDate } = useActiveDate()
   const [habits, setHabits] = useState<Habit[]>([])
@@ -172,10 +195,6 @@ export default function HabitsPage() {
     }
     return set
   }, [habits, completionMap, todayStr])
-
-  const todayProgress = habits.length > 0
-    ? Math.round((completedToday.size / habits.length) * 100)
-    : 0
 
   function openCreate() {
     setEditingHabit(null)
@@ -269,23 +288,6 @@ export default function HabitsPage() {
     <div className="space-y-3">
       <PageHeader title="Habits" icon={CheckSquare} iconColor="#22c55e" />
 
-      {/* Progress bar */}
-      <div className="glass animate-fade-up rounded-xl px-3 py-2">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[9px] font-semibold uppercase tracking-[0.12em]">Today</span>
-          <span className="text-[10px] font-bold tabular-nums">
-            <span className="text-primary">{completedToday.size}</span>
-            <span className="text-muted-foreground/50">/{habits.length}</span>
-          </span>
-        </div>
-        <div className="h-1 w-full overflow-hidden rounded-full bg-muted/30">
-          <div
-            className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
-            style={{ width: `${todayProgress}%` }}
-          />
-        </div>
-      </div>
-
       {/* Habit cards */}
       {loading ? (
         <div className="flex items-center justify-center py-10">
@@ -295,16 +297,7 @@ export default function HabitsPage() {
         <div className="glass animate-fade-up rounded-2xl p-6 text-center">
           <CheckSquare className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
           <p className="text-xs text-muted-foreground mb-4">No habits yet. Add your first one to get started.</p>
-          {!showForm && (
-            <button
-              type="button"
-              onClick={openCreate}
-              className="glass-frost flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-primary shadow-lg shadow-black/20 transition-all hover:bg-glass-highlight/30 active:scale-[0.98]"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              New Habit
-            </button>
-          )}
+          {!showForm && <NewHabitCTA onClick={openCreate} />}
         </div>
       ) : (
         <div className="space-y-2">
@@ -406,16 +399,7 @@ export default function HabitsPage() {
               </div>
             )
           })}
-          {!showForm && (
-            <button
-              type="button"
-              onClick={openCreate}
-              className="glass-frost mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-primary shadow-lg shadow-black/20 transition-all hover:bg-glass-highlight/30 active:scale-[0.98]"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              New Habit
-            </button>
-          )}
+          {!showForm && <NewHabitCTA onClick={openCreate} className="mt-1" />}
         </div>
       )}
 
