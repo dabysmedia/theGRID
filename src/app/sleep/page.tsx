@@ -234,7 +234,7 @@ export default function SleepPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Sleep" icon={Moon} iconColor="#6366f1" />
+      <PageHeader title="Sleep" />
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 animate-fade-up min-w-0">
         <StatCard label="Last Night" value={stats.lastNight} />

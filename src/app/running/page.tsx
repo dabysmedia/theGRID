@@ -257,7 +257,7 @@ export default function RunningPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Running" icon={PersonStanding} iconColor="#3b82f6" />
+      <PageHeader title="Running" />
 
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
         <PageStatTile className="min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">

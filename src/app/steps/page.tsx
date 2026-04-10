@@ -259,7 +259,7 @@ export default function StepsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Steps" icon={Footprints} iconColor="#22c55e" />
+      <PageHeader title="Steps" />
 
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
         <PageStatTile className="flex-1 min-w-0">

@@ -287,7 +287,7 @@ export default function HabitsPage() {
 
   return (
     <div className="space-y-3">
-      <PageHeader title="Habits" icon={CheckSquare} iconColor="#22c55e" />
+      <PageHeader title="Habits" />
 
       {/* Habit cards */}
       {loading ? (

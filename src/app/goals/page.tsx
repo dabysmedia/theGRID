@@ -229,7 +229,7 @@ export default function GoalsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Goals" icon={Target} iconColor="oklch(0.82 0.18 110)" />
+      <PageHeader title="Goals" />
 
       {/* Create button or form */}
       {!showForm ? (

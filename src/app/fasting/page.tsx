@@ -137,7 +137,7 @@ export default function FastingPage() {
 
   return (
     <div className="space-y-8 pb-8">
-      <PageHeader title="Fasting" icon={Timer} iconColor={ORANGE} />
+      <PageHeader title="Fasting" />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-fade-up">
         <div className="glass hud-corners space-y-0.5 rounded-2xl p-3">

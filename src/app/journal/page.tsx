@@ -924,7 +924,7 @@ export default function JournalPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <PageHeader title="Journal" icon={NotebookPen} iconColor="oklch(0.70 0.14 250)" />
+      <PageHeader title="Journal" />
 
       {/* Entries feed */}
       {loading ? (

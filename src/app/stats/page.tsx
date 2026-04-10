@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react"
 import Link from "next/link"
-import { DatePicker } from "@/components/DatePicker"
-import { ProfileHeaderTrigger } from "@/context/ProfileDialogContext"
+import { PageHeader } from "@/components/PageHeader"
 import { format, subMonths, addMonths } from "date-fns"
 import {
   ResponsiveContainer,
@@ -476,23 +475,12 @@ export default function StatsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="animate-fade-up">
-        <div className="flex items-start gap-2.5 sm:gap-3">
-          <div className="status-dot mt-1 shrink-0 translate-y-px" aria-hidden />
-          <div className="min-w-0 flex flex-1 flex-col gap-2 sm:gap-2.5">
-            <h1 className="font-iceberg text-2xl font-semibold leading-tight tracking-[-0.03em] sm:text-3xl">
-              <span className="text-gradient-glass title-underline-accent inline-block">
-                Statistics
-              </span>
-            </h1>
-            <DatePicker />
-            <p className="text-[11px] leading-snug text-muted-foreground/75 sm:text-xs">
-              Monthly analytics overview
-            </p>
-          </div>
-          <ProfileHeaderTrigger className="mt-1 shrink-0" />
-        </div>
-      </header>
+      <div className="space-y-2">
+        <PageHeader title="Statistics" />
+        <p className="text-[11px] leading-snug text-muted-foreground/75 sm:text-xs">
+          Monthly analytics overview
+        </p>
+      </div>
 
       {/* Month navigator */}
       <div className="flex items-center justify-center gap-4 animate-fade-up">

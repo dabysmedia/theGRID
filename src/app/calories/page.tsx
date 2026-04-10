@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react"
 import { addDays, differenceInCalendarDays, endOfWeek, format, startOfWeek, subDays } from "date-fns"
-import { ChevronDown, Flame, Search, Trash2, Plus, Star, X, Pencil, Target, Check } from "lucide-react"
+import { ChevronDown, Search, Trash2, Plus, Star, X, Pencil, Target, Check } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -661,7 +661,7 @@ export default function CaloriesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Calories" icon={Flame} iconColor="#ef4444" />
+      <PageHeader title="Calories" />
 
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
         <PageStatTile className="flex-1 min-w-0">

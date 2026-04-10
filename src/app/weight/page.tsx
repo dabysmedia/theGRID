@@ -165,7 +165,7 @@ export default function WeightPage() {
   if (loading) {
     return (
       <div className="space-y-6 animate-pulse">
-        <PageHeader title="Weight" icon={Weight} iconColor="#22c55e" />
+        <PageHeader title="Weight" />
         <div className="h-32 glass rounded-2xl" />
         <div className="h-48 glass rounded-2xl" />
       </div>
@@ -206,7 +206,7 @@ export default function WeightPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Weight" icon={Weight} iconColor="#22c55e" />
+      <PageHeader title="Weight" />
 
       {/* Stats row */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">

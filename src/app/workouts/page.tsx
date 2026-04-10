@@ -1523,7 +1523,7 @@ export default function WorkoutsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Workouts" icon={Dumbbell} iconColor="#a855f7" />
+      <PageHeader title="Workouts" />
 
       {/* ── Active workout ───────────────────────── */}
       {activeSession && (

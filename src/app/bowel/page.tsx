@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { format, subDays } from "date-fns"
-import { Calendar, CircleDot, Trash2 } from "lucide-react"
+import { Calendar, Trash2 } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -161,7 +161,7 @@ export default function BowelPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Bowel" icon={CircleDot} iconColor="#78716c" />
+      <PageHeader title="Bowel" />
 
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
         <PageStatTile className="flex-1 min-w-0">
