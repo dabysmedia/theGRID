@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       where,
       orderBy: { createdAt: "desc" },
       include: {
-        user: { select: { id: true, name: true, avatarColor: true } },
+        user: { select: { id: true, name: true, avatarColor: true, avatarUrl: true } },
       },
     })
     return NextResponse.json(entries)
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     const entry = await prisma.journalEntry.create({
       data: { date, content, mood, images, attachedStats, userId },
       include: {
-        user: { select: { id: true, name: true, avatarColor: true } },
+        user: { select: { id: true, name: true, avatarColor: true, avatarUrl: true } },
       },
     })
     return NextResponse.json(entry, { status: 201 })
@@ -127,7 +127,7 @@ export async function PUT(req: NextRequest) {
       where: { id },
       data: updateData,
       include: {
-        user: { select: { id: true, name: true, avatarColor: true } },
+        user: { select: { id: true, name: true, avatarColor: true, avatarUrl: true } },
       },
     })
     return NextResponse.json(entry)

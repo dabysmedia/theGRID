@@ -32,6 +32,7 @@ import { kmToMiles, DEFAULT_WEIGHT_UNIT } from "@/lib/units"
 import { apiFetch } from "@/lib/api-fetch"
 import { useUser } from "@/context/UserContext"
 import { PageHeader } from "@/components/PageHeader"
+import { UserProfileAvatar } from "@/components/ProfileSwitcher"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -55,6 +56,7 @@ interface EntryUser {
   id: string
   name: string
   avatarColor: string
+  avatarUrl?: string | null
 }
 
 interface JournalEntry {
@@ -257,12 +259,7 @@ function EntryCard({
         <div className="flex items-center justify-between gap-2 px-3.5 py-3">
           <div className="flex items-center gap-2.5 min-w-0">
             {author && (
-              <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                style={{ backgroundColor: author.avatarColor }}
-              >
-                {author.name.charAt(0).toUpperCase()}
-              </div>
+              <UserProfileAvatar user={author} size="sm" noPhotoStyle="color" />
             )}
             <div className="min-w-0">
               {author && (

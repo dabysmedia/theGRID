@@ -8,22 +8,27 @@ import { cn } from "@/lib/utils"
 export function UserProfileAvatar({
   user,
   size = "md",
+  /** `color`: initial on `avatarColor` (e.g. journal). `glass`: yellow glass (profiles). */
+  noPhotoStyle = "glass",
 }: {
   user: UserProfile
   size?: "sm" | "md" | "lg"
+  noPhotoStyle?: "glass" | "color"
 }) {
   const sizeClass =
     size === "lg" ? "w-14 h-14 text-xl" : size === "md" ? "w-10 h-10 text-base" : "w-8 h-8 text-sm"
 
   const hasPhoto = Boolean(user.avatarUrl)
+  const colorLetter = !hasPhoto && noPhotoStyle === "color"
 
   return (
     <div
       className={cn(
         "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold",
-        hasPhoto ? "ring-2 ring-amber-400/35 ring-offset-2 ring-offset-background" : "pfp-glass-yellow",
+        hasPhoto ? "ring-2 ring-amber-400/35 ring-offset-2 ring-offset-background" : colorLetter ? "text-white" : "pfp-glass-yellow",
         sizeClass
       )}
+      style={colorLetter ? { backgroundColor: user.avatarColor } : undefined}
     >
       {hasPhoto ? (
         <img
