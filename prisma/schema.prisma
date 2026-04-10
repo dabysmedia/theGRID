@@ -188,3 +188,16 @@ model BowelEntry {
 
   @@index([date])
 }
+
+model JournalEntry {
+  id            String   @id @default(cuid())
+  date          DateTime
+  content       String   @default("")
+  mood          Int?
+  images        String   @default("[]")
+  attachedStats String   @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([date])
+}
