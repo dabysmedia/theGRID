@@ -11,10 +11,18 @@ import { resolveJournalUploadDir } from "./resolve-uploads-path.mjs"
 
 function findPublicDirs() {
   const cwd = process.cwd()
-  return [
-    path.join(cwd, "public"),
-    path.join(cwd, ".next", "standalone", "public"),
-  ].filter((p) => {
+  const dirs = [path.join(cwd, "public")]
+
+  // Standalone server uses cwd `.next/standalone` and only reads static files from
+  // `.next/standalone/public`. That folder may not exist until we create it here.
+  const standaloneRoot = path.join(cwd, ".next", "standalone")
+  if (fs.existsSync(standaloneRoot)) {
+    const standalonePublic = path.join(standaloneRoot, "public")
+    fs.mkdirSync(standalonePublic, { recursive: true })
+    dirs.push(standalonePublic)
+  }
+
+  return dirs.filter((p) => {
     try {
       return fs.existsSync(p)
     } catch {
