@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { DatePicker } from "@/components/DatePicker"
+import { ProfileHeaderTrigger } from "@/context/ProfileDialogContext"
 import {
   Flame,
   Footprints,
@@ -30,7 +31,7 @@ export default function LogPage() {
       <header>
         <div className="flex items-start gap-2.5 sm:gap-3">
           <div className="status-dot mt-1 shrink-0 translate-y-px" aria-hidden />
-          <div className="min-w-0 flex flex-col gap-2 sm:gap-2.5">
+          <div className="min-w-0 flex flex-1 flex-col gap-2 sm:gap-2.5">
             <h1 className="font-iceberg text-2xl font-semibold leading-tight tracking-[-0.03em] sm:text-3xl">
               <span className="text-gradient-glass title-underline-accent inline-block">
                 Quick Log
@@ -41,6 +42,7 @@ export default function LogPage() {
               Select a category to enter data
             </p>
           </div>
+          <ProfileHeaderTrigger className="mt-1 shrink-0" />
         </div>
       </header>
 

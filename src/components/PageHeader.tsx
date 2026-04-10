@@ -2,6 +2,7 @@
 
 import type { LucideIcon } from "lucide-react"
 import { DatePicker } from "@/components/DatePicker"
+import { ProfileHeaderTrigger } from "@/context/ProfileDialogContext"
 
 interface PageHeaderProps {
   title: string
@@ -38,7 +39,10 @@ export function PageHeader({ title, icon: Icon, iconColor }: PageHeaderProps) {
           <DatePicker />
         </div>
 
-        <div className="status-dot mt-1.5 shrink-0 sm:mt-1" aria-hidden />
+        <div className="flex shrink-0 items-start gap-2 sm:gap-2.5">
+          <div className="status-dot mt-1.5 sm:mt-1" aria-hidden />
+          <ProfileHeaderTrigger />
+        </div>
       </div>
     </header>
   )

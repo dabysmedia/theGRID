@@ -17,6 +17,7 @@ import { WeeklyHero } from "./WeeklyHero"
 import { FastingTimer } from "./FastingTimer"
 import { FastingHubTile } from "./FastingHubTile"
 import { useActiveDate } from "@/context/DateContext"
+import { ProfileHeaderTrigger } from "@/context/ProfileDialogContext"
 import { cn } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
 
@@ -96,12 +97,15 @@ export function HubDashboard() {
       <header className="animate-fade-up">
         <div className="flex flex-col gap-2 sm:gap-2.5">
           <div className="flex items-center gap-2.5">
-            <div className="status-dot translate-y-px" aria-hidden />
-            <h1 className="font-iceberg text-3xl font-semibold leading-none tracking-[-0.03em] sm:text-4xl">
-              <span className="text-gradient-glass title-underline-accent inline-block">
-                THEGRID
-              </span>
-            </h1>
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+              <div className="status-dot translate-y-px shrink-0" aria-hidden />
+              <h1 className="font-iceberg min-w-0 text-3xl font-semibold leading-none tracking-[-0.03em] sm:text-4xl">
+                <span className="text-gradient-glass title-underline-accent inline-block truncate">
+                  THEGRID
+                </span>
+              </h1>
+            </div>
+            <ProfileHeaderTrigger className="mt-0 shrink-0 translate-y-px" />
           </div>
           <DatePicker />
         </div>
