@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, avatarColor: true, avatarUrl: true, pinHash: true },
+      select: { id: true, name: true, avatarColor: true, pinHash: true },
     })
 
     if (!user) {
@@ -28,7 +28,6 @@ export async function POST(req: NextRequest) {
           id: user.id,
           name: user.name,
           avatarColor: user.avatarColor,
-          avatarUrl: user.avatarUrl,
         },
       })
     }
@@ -43,7 +42,6 @@ export async function POST(req: NextRequest) {
         id: user.id,
         name: user.name,
         avatarColor: user.avatarColor,
-        avatarUrl: user.avatarUrl,
       },
     })
   } catch {

@@ -2,6 +2,8 @@
 /**
  * Production boot: force SQLite URL when using a volume, symlink uploads, sync schema, bootstrap Carlos, then start Next.
  * Used by `npm start` (Railway Nixpacks) and Docker CMD.
+ *
+ * Uploads: set UPLOADS_PATH to a dedicated volume (e.g. /app/uploads) so journal files sync separately from the DB volume.
  */
 import { spawn } from "node:child_process"
 import { execSync } from "node:child_process"

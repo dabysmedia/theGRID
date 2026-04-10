@@ -5,6 +5,7 @@ import {
   utcRangeWhereForCalendarDay,
 } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
+import { getJournalUploadDir } from "@/lib/uploads-path"
 import fs from "node:fs"
 import path from "node:path"
 
@@ -161,9 +162,12 @@ export async function DELETE(req: NextRequest) {
     }
 
     const images: string[] = JSON.parse(entry.images || "[]")
+    const journalDir = getJournalUploadDir()
     for (const imgUrl of images) {
       if (imgUrl.startsWith("/uploads/journal/")) {
-        const filePath = path.join(process.cwd(), "public", imgUrl)
+        const name = path.basename(imgUrl)
+        if (name.includes("..") || name.includes("/")) continue
+        const filePath = path.join(journalDir, name)
         try {
           if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
         } catch {}

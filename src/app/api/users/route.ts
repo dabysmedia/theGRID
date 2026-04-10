@@ -10,7 +10,7 @@ const AVATAR_COLORS = [
 export async function GET() {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, name: true, avatarColor: true, avatarUrl: true },
+      select: { id: true, name: true, avatarColor: true },
       orderBy: { createdAt: "asc" },
     })
     return NextResponse.json(users)
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
         pinHash: pin ? hashPin(pin) : "",
         avatarColor,
       },
-      select: { id: true, name: true, avatarColor: true, avatarUrl: true },
+      select: { id: true, name: true, avatarColor: true },
     })
     return NextResponse.json(user, { status: 201 })
   } catch (e) {

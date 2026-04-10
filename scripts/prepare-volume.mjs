@@ -1,36 +1,13 @@
 #!/usr/bin/env node
 /**
- * When DATA_DIR or DATABASE_PATH points at a persistent volume, store uploads there
- * instead of the container filesystem (which is ephemeral on Railway).
- * Symlinks public/.../uploads/{journal,avatars} → $DATA_ROOT/uploads/* so /uploads/* URLs keep working.
+ * Symlink public/.../uploads/journal → persistent journal upload dir so /uploads/journal/* URLs work.
+ *
+ * Set UPLOADS_PATH to a dedicated volume (e.g. /app/uploads on Railway) — files live in UPLOADS_PATH/journal.
+ * Legacy: if only DATA_DIR / DATABASE_PATH is set, uses <dataRoot>/uploads/journal (same as before).
  */
 import fs from "node:fs"
 import path from "node:path"
-
-function dataRoot() {
-  const dir = process.env.DATA_DIR?.trim()
-  if (dir) return dir.replace(/\/+$/, "")
-  const p = process.env.DATABASE_PATH?.trim()
-  if (p) {
-    let s = p.replace(/^file:/, "").replace(/\/+$/, "")
-    const resolved = path.resolve(s)
-    try {
-      if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
-        return resolved
-      }
-    } catch {
-      /* ignore */
-    }
-    return path.dirname(resolved)
-  }
-  const url = process.env.DATABASE_URL?.trim()
-  if (url?.startsWith("file:")) {
-    const f = url.slice(5).trim()
-    const resolved = path.resolve(f)
-    return path.dirname(resolved)
-  }
-  return null
-}
+import { resolveJournalUploadDir } from "./resolve-uploads-path.mjs"
 
 function findPublicDirs() {
   const cwd = process.cwd()
@@ -46,37 +23,35 @@ function findPublicDirs() {
   })
 }
 
-const root = dataRoot()
-if (!root) {
-  console.log("[prepare-volume] No DATA_DIR/DATABASE_PATH — uploads stay under public/")
+const target = resolveJournalUploadDir()
+if (!target) {
+  console.log(
+    "[prepare-volume] No UPLOADS_PATH or DATA_DIR/DATABASE_PATH — uploads stay under public/"
+  )
   process.exit(0)
 }
 
-const subdirs = ["journal", "avatars"]
+fs.mkdirSync(target, { recursive: true })
 
-for (const sub of subdirs) {
-  const target = path.join(root, "uploads", sub)
-  fs.mkdirSync(target, { recursive: true })
-
-  for (const publicDir of findPublicDirs()) {
-    const uploadsParent = path.join(publicDir, "uploads")
-    const linkPath = path.join(uploadsParent, sub)
-    try {
-      fs.mkdirSync(uploadsParent, { recursive: true })
-    } catch {
-      /* ignore */
-    }
-    try {
-      const stat = fs.lstatSync(linkPath)
-      if (stat.isSymbolicLink()) {
-        fs.unlinkSync(linkPath)
-      } else if (stat.isDirectory()) {
-        fs.rmSync(linkPath, { recursive: true })
-      }
-    } catch {
-      /* does not exist */
-    }
-    fs.symlinkSync(target, linkPath, "dir")
-    console.log(`[prepare-volume] ${linkPath} → ${target}`)
+const sub = "journal"
+for (const publicDir of findPublicDirs()) {
+  const uploadsParent = path.join(publicDir, "uploads")
+  const linkPath = path.join(uploadsParent, sub)
+  try {
+    fs.mkdirSync(uploadsParent, { recursive: true })
+  } catch {
+    /* ignore */
   }
+  try {
+    const stat = fs.lstatSync(linkPath)
+    if (stat.isSymbolicLink()) {
+      fs.unlinkSync(linkPath)
+    } else if (stat.isDirectory()) {
+      fs.rmSync(linkPath, { recursive: true })
+    }
+  } catch {
+    /* does not exist */
+  }
+  fs.symlinkSync(target, linkPath, "dir")
+  console.log(`[prepare-volume] ${linkPath} → ${target}`)
 }
