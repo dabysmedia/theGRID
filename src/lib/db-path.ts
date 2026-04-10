@@ -6,13 +6,10 @@ import fs from "node:fs"
  *
  * - If DATABASE_PATH points at a directory (e.g. `/data` mount), uses `thegrid.db` inside it.
  * - Strips Prisma-style `file:` prefixes if someone pastes DATABASE_URL by mistake.
- * - DATA_DIR and RAILWAY_VOLUME_MOUNT_PATH are supported aliases.
+ * - DATA_DIR is supported as an alias for the mount directory only.
  */
 export function resolveSqliteFilePath(): string {
-  const raw =
-    process.env.DATABASE_PATH ??
-    process.env.DATA_DIR ??
-    process.env.RAILWAY_VOLUME_MOUNT_PATH
+  const raw = process.env.DATABASE_PATH ?? process.env.DATA_DIR
   if (!raw) {
     return path.resolve(process.cwd(), "prisma", "dev.db")
   }

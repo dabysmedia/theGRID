@@ -10,18 +10,7 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-function hasDataDirEnv(): boolean {
-  return Boolean(
-    process.env.DATABASE_PATH ||
-      process.env.DATA_DIR ||
-      process.env.RAILWAY_VOLUME_MOUNT_PATH
-  )
-}
-
 function resolveDbUrl(): string {
-  // In Railway/data-volume deployments, force file DB from mounted path even if
-  // a stale DATABASE_URL exists in env.
-  if (hasDataDirEnv()) return `file:${resolveSqliteFilePath()}`
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL
   return `file:${resolveSqliteFilePath()}`
 }

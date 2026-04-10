@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { ResponsiveContainer, LineChart, Line, YAxis, Tooltip } from "recharts"
 import { PageHeader } from "@/components/PageHeader"
+import { apiFetch } from "@/lib/api-fetch"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -93,7 +94,7 @@ export default function GoalsPage() {
   const [formError, setFormError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch("/api/long-goals")
+    apiFetch("/api/long-goals")
       .then(async (r) => {
         const data = await r.json()
         setGoals(Array.isArray(data) ? data : [])
@@ -146,7 +147,7 @@ export default function GoalsPage() {
       return
     }
 
-    const res = await fetch("/api/long-goals", {
+    const res = await apiFetch("/api/long-goals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -183,7 +184,7 @@ export default function GoalsPage() {
     const value = logValue[goalId]
     if (!value) return
 
-    const res = await fetch("/api/long-goals/entries", {
+    const res = await apiFetch("/api/long-goals/entries", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -207,7 +208,7 @@ export default function GoalsPage() {
   }
 
   async function handleDeleteEntry(goalId: string, entryId: string) {
-    const res = await fetch(`/api/long-goals/entries?id=${entryId}`, {
+    const res = await apiFetch(`/api/long-goals/entries?id=${entryId}`, {
       method: "DELETE",
     })
     if (res.ok) {
@@ -222,7 +223,7 @@ export default function GoalsPage() {
   }
 
   async function handleDeleteGoal(id: string) {
-    const res = await fetch(`/api/long-goals?id=${id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/long-goals?id=${id}`, { method: "DELETE" })
     if (res.ok) setGoals(goals.filter((g) => g.id !== id))
   }
 

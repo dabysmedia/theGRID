@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { format, isToday, isYesterday } from "date-fns"
 import { Calendar, PersonStanding, Trash2, TreePine, Zap } from "lucide-react"
+import { apiFetch } from "@/lib/api-fetch"
 import {
   ResponsiveContainer,
   AreaChart,
@@ -151,7 +152,7 @@ export default function RunningPage() {
   }, [entries])
 
   useEffect(() => {
-    fetch("/api/running")
+    apiFetch("/api/running")
       .then(async (r) => {
         const data = await r.json()
         setEntries(Array.isArray(data) ? data : [])
@@ -193,7 +194,7 @@ export default function RunningPage() {
         environment,
         notes: notes.trim() ? notes.trim() : null,
       }
-      const res = await fetch("/api/running", {
+      const res = await apiFetch("/api/running", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -225,7 +226,7 @@ export default function RunningPage() {
   }
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/running?id=${id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/running?id=${id}`, { method: "DELETE" })
     if (res.ok) setEntries(entries.filter((e) => e.id !== id))
   }
 

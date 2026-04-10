@@ -36,6 +36,7 @@ import {
   Activity,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { apiFetch } from "@/lib/api-fetch"
 
 interface DayData {
   date: string
@@ -448,7 +449,7 @@ export default function StatsPage() {
   const fetchMonth = useCallback(async (m: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/stats/monthly?month=${m}`)
+      const res = await apiFetch(`/api/stats/monthly?month=${m}`)
       if (res.ok) setData(await res.json())
     } finally {
       setLoading(false)

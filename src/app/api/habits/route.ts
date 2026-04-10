@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { getActiveUserId } from "@/lib/current-user"
+import { resolveUserId, UserError } from "@/lib/current-user"
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await getActiveUserId(req)
+    const userId = await resolveUserId(req)
     const habits = await prisma.habit.findMany({
-      where: { userId, archived: false },
+      where: { archived: false, userId },
       orderBy: { sortOrder: "asc" },
       include: {
         completions: {
@@ -15,48 +15,46 @@ export async function GET(req: NextRequest) {
       },
     })
     return NextResponse.json(habits)
-  } catch {
+  } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     return NextResponse.json({ error: "Failed to fetch habits" }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await getActiveUserId(req)
+    const userId = await resolveUserId(req)
     const body = await req.json()
-    const maxSort = await prisma.habit.aggregate({
-      where: { userId },
-      _max: { sortOrder: true },
-    })
+    const maxSort = await prisma.habit.aggregate({ _max: { sortOrder: true }, where: { userId } })
     const habit = await prisma.habit.create({
       data: {
-        userId,
         name: body.name,
         icon: body.icon || "check",
         color: body.color || "#22c55e",
         frequency: body.frequency || "daily",
         sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
+        userId,
       },
       include: { completions: true },
     })
     return NextResponse.json(habit, { status: 201 })
-  } catch {
+  } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     return NextResponse.json({ error: "Failed to create habit" }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
-    const userId = await getActiveUserId(req)
+    const userId = await resolveUserId(req)
     const body = await req.json()
     if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 })
-    const existing = await prisma.habit.findFirst({
-      where: { id: body.id, userId },
-      select: { id: true },
-    })
+
+    const existing = await prisma.habit.findFirst({ where: { id: body.id, userId } })
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
     const habit = await prisma.habit.update({
-      where: { id: existing.id },
+      where: { id: body.id },
       data: {
         name: body.name ?? undefined,
         icon: body.icon ?? undefined,
@@ -68,20 +66,23 @@ export async function PUT(req: NextRequest) {
       include: { completions: true },
     })
     return NextResponse.json(habit)
-  } catch {
+  } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     return NextResponse.json({ error: "Failed to update habit" }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    const userId = await getActiveUserId(req)
+    const userId = await resolveUserId(req)
     const id = req.nextUrl.searchParams.get("id")
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
-    const result = await prisma.habit.deleteMany({ where: { id, userId } })
-    if (result.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
+    const { count } = await prisma.habit.deleteMany({ where: { id, userId } })
+    if (!count) return NextResponse.json({ error: "Not found" }, { status: 404 })
     return NextResponse.json({ ok: true })
-  } catch {
+  } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     return NextResponse.json({ error: "Failed to delete habit" }, { status: 500 })
   }
 }

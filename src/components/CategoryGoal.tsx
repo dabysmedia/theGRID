@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { Target, Pencil, Check, X, Trash2, ChevronDown } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { apiFetch } from "@/lib/api-fetch"
 
 export interface GoalPreset {
   type: string
@@ -87,7 +88,7 @@ export function CategoryGoal({
   const [loaded, setLoaded] = useState(false)
 
   const fetchGoal = useCallback(() => {
-    fetch(`/api/goals?category=${category}`)
+    apiFetch(`/api/goals?category=${category}`)
       .then(async (r) => {
         const data = await r.json()
         if (data && data.id) {
@@ -147,7 +148,7 @@ export function CategoryGoal({
           active: true,
         }
 
-    const res = await fetch("/api/goals", {
+    const res = await apiFetch("/api/goals", {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -164,7 +165,7 @@ export function CategoryGoal({
 
   async function handleDelete() {
     if (!goal) return
-    const res = await fetch(`/api/goals?id=${goal.id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/goals?id=${goal.id}`, { method: "DELETE" })
     if (res.ok) {
       setGoal(null)
       setTargetInput("")

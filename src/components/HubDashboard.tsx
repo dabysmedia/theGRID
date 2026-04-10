@@ -18,6 +18,7 @@ import { FastingTimer } from "./FastingTimer"
 import { FastingHubTile } from "./FastingHubTile"
 import { useActiveDate } from "@/context/DateContext"
 import { cn } from "@/lib/utils"
+import { apiFetch } from "@/lib/api-fetch"
 
 interface CategorySummary {
   todayValue: number
@@ -72,7 +73,7 @@ export function HubDashboard() {
     setLoading(true)
     async function fetchDashboard() {
       try {
-        const res = await fetch(`/api/dashboard?d=${activeDate}&_ts=${Date.now()}`, {
+        const res = await apiFetch(`/api/dashboard?d=${activeDate}&_ts=${Date.now()}`, {
           cache: "no-store",
         })
         if (res.ok && !cancelled) {

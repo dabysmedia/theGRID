@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { format, subDays } from "date-fns"
 import { Moon, Trash2, Calendar, Star, TrendingUp } from "lucide-react"
+import { apiFetch } from "@/lib/api-fetch"
 import {
   ResponsiveContainer,
   AreaChart,
@@ -90,7 +91,7 @@ export default function SleepPage() {
   const today = activeDate
 
   useEffect(() => {
-    fetch("/api/sleep")
+    apiFetch("/api/sleep")
       .then(async (r) => {
         const data = await r.json()
         setEntries(Array.isArray(data) ? data : [])
@@ -207,7 +208,7 @@ export default function SleepPage() {
     const bedDatetime = new Date(`${today}T${bedtime}:00`)
     const wakeDatetime = new Date(`${today}T${wakeTime}:00`)
 
-    const res = await fetch("/api/sleep", {
+    const res = await apiFetch("/api/sleep", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -227,7 +228,7 @@ export default function SleepPage() {
   }
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/sleep?id=${id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/sleep?id=${id}`, { method: "DELETE" })
     if (res.ok) setEntries(entries.filter((e) => e.id !== id))
   }
 

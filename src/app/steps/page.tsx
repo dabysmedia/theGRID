@@ -13,6 +13,7 @@ import {
 } from "recharts"
 import { format, isToday, isYesterday, subDays } from "date-fns"
 import { PageHeader } from "@/components/PageHeader"
+import { apiFetch } from "@/lib/api-fetch"
 import { PageStatTile } from "@/components/PageStatTile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -75,11 +76,11 @@ export default function StepsPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/steps").then(async (r) => {
+      apiFetch("/api/steps").then(async (r) => {
         const data = await r.json()
         return Array.isArray(data) ? data : []
       }),
-      fetch("/api/running").then(async (r) => {
+      apiFetch("/api/running").then(async (r) => {
         const data = await r.json()
         return Array.isArray(data) ? data : []
       }),
@@ -226,7 +227,7 @@ export default function StepsPage() {
     const stepsToLog =
       inputMode === "miles" ? milesToSteps(raw) : Math.round(raw)
 
-    const res = await fetch("/api/steps", {
+    const res = await apiFetch("/api/steps", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ date: today, count: stepsToLog }),
@@ -245,12 +246,12 @@ export default function StepsPage() {
       : null
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/steps?id=${id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/steps?id=${id}`, { method: "DELETE" })
     if (res.ok) setEntries(entries.filter((e) => e.id !== id))
   }
 
   async function handleDeleteRun(id: string) {
-    const res = await fetch(`/api/running?id=${id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/running?id=${id}`, { method: "DELETE" })
     if (res.ok) setRunEntries(runEntries.filter((r) => r.id !== id))
   }
 

@@ -3,22 +3,22 @@ import { prisma } from "@/lib/prisma"
 import { formatDate } from "@/lib/utils"
 import { subDays } from "date-fns"
 import { parseYyyyMmDdToStoredDate, utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
-import { getActiveUserId } from "@/lib/current-user"
+import { resolveUserId, UserError } from "@/lib/current-user"
 
 async function getOrCreateGoal(userId: string) {
   let goal = await prisma.longGoal.findFirst({
-    where: { userId, category: "bodyweight" },
+    where: { category: "bodyweight", userId },
   })
   if (!goal) {
     goal = await prisma.longGoal.create({
       data: {
-        userId,
         name: "Bodyweight",
         category: "bodyweight",
         target: 0,
         unit: "lbs",
         direction: "down",
         active: true,
+        userId,
       },
     })
   }
@@ -27,7 +27,7 @@ async function getOrCreateGoal(userId: string) {
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await getActiveUserId(req)
+    const userId = await resolveUserId(req)
     const goal = await getOrCreateGoal(userId)
     const entries = await prisma.longGoalEntry.findMany({
       where: { goalId: goal.id },
@@ -41,7 +41,6 @@ export async function GET(req: NextRequest) {
 
     const todayEntry = entries.find((e) => utcCalendarDayKeyFromIso(e.date) === todayStr)
 
-    /** First (chronological) weigh-in per calendar day (entries are newest-first). */
     function weightsByDayInRange(fromStr: string, toStr: string): Map<string, number> {
       const byDay = new Map<string, number>()
       for (const e of entries) {
@@ -102,15 +101,16 @@ export async function GET(req: NextRequest) {
         totalEntries: entries.length,
       },
     })
-  } catch {
+  } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     return NextResponse.json({ error: "Failed to fetch" }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await resolveUserId(req)
     const body = await req.json()
-    const userId = await getActiveUserId(req)
     const goal = await getOrCreateGoal(userId)
     const date = parseYyyyMmDdToStoredDate(String(body.date))
 
@@ -135,24 +135,31 @@ export async function POST(req: NextRequest) {
       },
     })
     return NextResponse.json(entry, { status: 201 })
-  } catch {
+  } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     return NextResponse.json({ error: "Failed to create" }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const id = searchParams.get("id")
-  if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
-
   try {
-    const userId = await getActiveUserId(req)
-    const result = await prisma.longGoalEntry.deleteMany({
-      where: { id, goal: { userId, category: "bodyweight" } },
+    const userId = await resolveUserId(req)
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get("id")
+    if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
+
+    const entry = await prisma.longGoalEntry.findUnique({
+      where: { id },
+      include: { goal: { select: { userId: true } } },
     })
-    if (result.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 })
+    if (!entry || entry.goal.userId !== userId) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
+
+    await prisma.longGoalEntry.delete({ where: { id } })
     return NextResponse.json({ success: true })
-  } catch {
+  } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 })
   }
 }

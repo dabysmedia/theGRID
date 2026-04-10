@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { averageOnLoggedDays, cn, formatDate, parseLocalDate } from "@/lib/utils"
+import { apiFetch } from "@/lib/api-fetch"
 import {
   Dialog,
   DialogContent,
@@ -216,7 +217,7 @@ export default function CaloriesPage() {
 
   const fetchSavedMeals = useCallback(async () => {
     try {
-      const r = await fetch("/api/saved-meals")
+      const r = await apiFetch("/api/saved-meals")
       const data = await r.json()
       setSavedMeals(Array.isArray(data) ? data : [])
     } catch {
@@ -232,7 +233,7 @@ export default function CaloriesPage() {
   }, [logFoodOpen])
 
   useEffect(() => {
-    fetch("/api/calories")
+    apiFetch("/api/calories")
       .then(async (r) => {
         const data = await r.json()
         setEntries(Array.isArray(data) ? data : [])
@@ -242,7 +243,7 @@ export default function CaloriesPage() {
   }, [fetchSavedMeals])
 
   useEffect(() => {
-    fetch("/api/goals?category=calories")
+    apiFetch("/api/goals?category=calories")
       .then(async (r) => {
         const data = await r.json()
         if (data && typeof data.target === "number") {
@@ -381,7 +382,7 @@ export default function CaloriesPage() {
     if (!calories) return
 
     if (editingEntry) {
-      const res = await fetch("/api/calories", {
+      const res = await apiFetch("/api/calories", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -408,7 +409,7 @@ export default function CaloriesPage() {
   }
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/calories?id=${id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/calories?id=${id}`, { method: "DELETE" })
     if (res.ok) {
       setEntries((prev) => prev.filter((e) => e.id !== id))
       setEditingEntry((cur) => {
@@ -434,7 +435,7 @@ export default function CaloriesPage() {
     setFlashSavedMealId(meal.id)
     window.setTimeout(() => setFlashSavedMealId(null), 900)
     setDraftMealItems((prev) => [...prev, item])
-    fetch(`/api/saved-meals?id=${meal.id}`, { method: "PATCH" })
+    apiFetch(`/api/saved-meals?id=${meal.id}`, { method: "PATCH" })
       .then(() => fetchSavedMeals())
       .catch(() => {})
   }
@@ -445,7 +446,7 @@ export default function CaloriesPage() {
     try {
       const created: CalorieEntry[] = []
       for (const item of draftMealItems) {
-        const res = await fetch("/api/calories", {
+        const res = await apiFetch("/api/calories", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -477,7 +478,7 @@ export default function CaloriesPage() {
     setSaveMealError(null)
     if (!newMealName.trim() || !newMealCal.trim()) return
 
-    const res = await fetch("/api/saved-meals", {
+    const res = await apiFetch("/api/saved-meals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -514,7 +515,7 @@ export default function CaloriesPage() {
   async function handleSaveCurrentAsFrequent() {
     if (!description.trim() || !calories.trim()) return
 
-    await fetch("/api/saved-meals", {
+    await apiFetch("/api/saved-meals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -532,7 +533,7 @@ export default function CaloriesPage() {
   }
 
   async function handleDeleteSavedMeal(id: string) {
-    const res = await fetch(`/api/saved-meals?id=${id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/saved-meals?id=${id}`, { method: "DELETE" })
     if (res.ok) setSavedMeals(savedMeals.filter((m) => m.id !== id))
   }
 
@@ -620,7 +621,7 @@ export default function CaloriesPage() {
       ? { id: weeklyGoal.id, target: val, unit: "cal", goalType: "weekly", direction: "down" }
       : { category: "calories", goalType: "weekly", direction: "down", target: val, unit: "cal", active: true }
 
-    const res = await fetch("/api/goals", {
+    const res = await apiFetch("/api/goals", {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -635,7 +636,7 @@ export default function CaloriesPage() {
 
   async function deleteGoal() {
     if (!weeklyGoal) return
-    const res = await fetch(`/api/goals?id=${weeklyGoal.id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/goals?id=${weeklyGoal.id}`, { method: "DELETE" })
     if (res.ok) {
       setWeeklyGoal(null)
       setGoalInput("")

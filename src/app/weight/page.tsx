@@ -22,6 +22,7 @@ import {
   ReferenceLine,
 } from "recharts"
 import { PageHeader } from "@/components/PageHeader"
+import { apiFetch } from "@/lib/api-fetch"
 import { PageStatTile } from "@/components/PageStatTile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -108,7 +109,7 @@ export default function WeightPage() {
   const today = activeDate
 
   useEffect(() => {
-    fetch("/api/weight")
+    apiFetch("/api/weight")
       .then(async (r) => {
         if (r.ok) setData(await r.json())
       })
@@ -122,7 +123,7 @@ export default function WeightPage() {
     setSubmitting(true)
 
     try {
-      const res = await fetch("/api/weight", {
+      const res = await apiFetch("/api/weight", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: today, value: weight, notes: notes || null }),
@@ -141,7 +142,7 @@ export default function WeightPage() {
         setWeight("")
         setNotes("")
         // Refetch stats
-        const refreshed = await fetch("/api/weight").then((r) => r.json())
+        const refreshed = await apiFetch("/api/weight").then((r) => r.json())
         setData(refreshed)
       }
     } finally {
@@ -150,13 +151,13 @@ export default function WeightPage() {
   }
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/weight?id=${id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/weight?id=${id}`, { method: "DELETE" })
     if (res.ok && data) {
       setData({
         ...data,
         entries: data.entries.filter((e) => e.id !== id),
       })
-      const refreshed = await fetch("/api/weight").then((r) => r.json())
+      const refreshed = await apiFetch("/api/weight").then((r) => r.json())
       setData(refreshed)
     }
   }

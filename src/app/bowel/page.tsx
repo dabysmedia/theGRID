@@ -13,6 +13,7 @@ import {
   YAxis,
 } from "recharts"
 import { useActiveDate } from "@/context/DateContext"
+import { apiFetch } from "@/lib/api-fetch"
 import { PageHeader } from "@/components/PageHeader"
 import { PageStatTile } from "@/components/PageStatTile"
 import { Button } from "@/components/ui/button"
@@ -64,7 +65,7 @@ export default function BowelPage() {
   const yesterday = formatDate(subDays(parseLocalDate(activeDate), 1))
 
   useEffect(() => {
-    fetch("/api/bowel")
+    apiFetch("/api/bowel")
       .then(async (r) => {
         const data = await r.json()
         setEntries(Array.isArray(data) ? data : [])
@@ -133,7 +134,7 @@ export default function BowelPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    const res = await fetch("/api/bowel", {
+    const res = await apiFetch("/api/bowel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -152,7 +153,7 @@ export default function BowelPage() {
   }
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/bowel?id=${id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/bowel?id=${id}`, { method: "DELETE" })
     if (res.ok) setEntries(entries.filter((e) => e.id !== id))
   }
 

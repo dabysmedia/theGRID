@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { startOfMonth, endOfMonth, eachDayOfInterval, format } from "date-fns"
 import { kmToMiles } from "@/lib/units"
-import { getActiveUserId } from "@/lib/current-user"
+import { resolveUserId, UserError } from "@/lib/current-user"
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await getActiveUserId(req)
+    const userId = await resolveUserId(req)
     const monthParam = req.nextUrl.searchParams.get("month")
     const ref = monthParam
       ? new Date(monthParam + "-01T00:00:00")
@@ -17,17 +17,19 @@ export async function GET(req: NextRequest) {
     const days = eachDayOfInterval({ start, end })
     const dayKeys = days.map((d) => format(d, "yyyy-MM-dd"))
 
+    const dateRange = { gte: start, lte: end }
+
     const [calories, steps, runs, workouts, sleeps, alcohols, bowels, weightData] =
       await Promise.all([
-        prisma.calorieEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
-        prisma.stepEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
-        prisma.runEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
-        prisma.workoutEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
-        prisma.sleepEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
-        prisma.alcoholEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
-        prisma.bowelEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
+        prisma.calorieEntry.findMany({ where: { date: dateRange, userId } }),
+        prisma.stepEntry.findMany({ where: { date: dateRange, userId } }),
+        prisma.runEntry.findMany({ where: { date: dateRange, userId } }),
+        prisma.workoutEntry.findMany({ where: { date: dateRange, userId } }),
+        prisma.sleepEntry.findMany({ where: { date: dateRange, userId } }),
+        prisma.alcoholEntry.findMany({ where: { date: dateRange, userId } }),
+        prisma.bowelEntry.findMany({ where: { date: dateRange, userId } }),
         prisma.longGoalEntry.findMany({
-          where: { date: { gte: start, lte: end }, goal: { userId } },
+          where: { date: dateRange, goal: { userId } },
           include: { goal: { select: { category: true } } },
         }),
       ])
@@ -140,7 +142,8 @@ export async function GET(req: NextRequest) {
       daily,
       summary,
     })
-  } catch {
+  } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     return NextResponse.json({ error: "Failed to fetch monthly stats" }, { status: 500 })
   }
 }

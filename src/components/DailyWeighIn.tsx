@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react"
 import Link from "next/link"
 import { ArrowDown, ArrowUp, ChevronRight } from "lucide-react"
+import { apiFetch } from "@/lib/api-fetch"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -68,7 +69,7 @@ export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
 
   const load = useCallback(async () => {
     setStatus("loading")
-    const res = await fetch(`/api/weigh-in?d=${activeDate}`)
+    const res = await apiFetch(`/api/weigh-in?d=${activeDate}`)
     const data = await res.json()
     if (!res.ok) {
       setStatus("ready")
@@ -107,14 +108,14 @@ export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
     setSubmitting(true)
 
     try {
-      const res = await fetch("/api/weigh-in", {
+      const res = await apiFetch("/api/weigh-in", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value, date: activeDate }),
       })
 
       if (res.ok) {
-        const ref = await fetch(`/api/weigh-in?d=${activeDate}`)
+        const ref = await apiFetch(`/api/weigh-in?d=${activeDate}`)
         const data = await ref.json()
         if (ref.ok) {
           applyPayload(data, {

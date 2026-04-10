@@ -8,9 +8,8 @@ import {
   utcCalendarDayKeyFromIso,
   utcCalendarDayRangeInclusive,
 } from "@/lib/dateStorage"
-import { getActiveUserId } from "@/lib/current-user"
+import { resolveUserId, UserError } from "@/lib/current-user"
 
-/** Matches Prisma Goal — used here so dashboard logic stays typed if client stubs lag schema. */
 interface GoalRow {
   category: string
   goalType: string
@@ -24,16 +23,11 @@ interface DatedRow {
   date: Date
 }
 
-/** Running distance goals are entered in miles (`unit: mi`); legacy rows may store km. */
 function runningTargetMiles(target: number, unit: string): number {
   if (unit === "mi") return target
   return kmToMiles(target)
 }
 
-/**
- * Maps CategoryGoal presets to a single number comparable to today's dashboard value.
- * Weekly-style goals are converted to daily equivalents where the UI shows daily totals.
- */
 function dashboardGoalValue(g: GoalRow): number | null {
   const { category, goalType, target, unit } = g
   switch (category) {
@@ -90,7 +84,8 @@ function latestGoalByCategory(goals: GoalRow[]): Map<string, GoalRow> {
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await getActiveUserId(req)
+    const userId = await resolveUserId(req)
+
     const dateParam = req.nextUrl.searchParams.get("d")
     const refDate =
       dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
@@ -110,21 +105,20 @@ export async function GET(req: NextRequest) {
       bowelEntries,
       goals,
     ] = await Promise.all([
-      prisma.calorieEntry.findMany({ where: { userId, date: dateInRange } }),
-      prisma.stepEntry.findMany({ where: { userId, date: dateInRange } }),
-      prisma.runEntry.findMany({ where: { userId, date: dateInRange } }),
-      prisma.workoutEntry.findMany({ where: { userId, date: dateInRange } }),
-      prisma.sleepEntry.findMany({ where: { userId, date: dateInRange } }),
-      prisma.alcoholEntry.findMany({ where: { userId, date: dateInRange } }),
-      prisma.bowelEntry.findMany({ where: { userId, date: dateInRange } }),
-      prisma.goal.findMany({ where: { userId, active: true } }),
+      prisma.calorieEntry.findMany({ where: { date: dateInRange, userId } }),
+      prisma.stepEntry.findMany({ where: { date: dateInRange, userId } }),
+      prisma.runEntry.findMany({ where: { date: dateInRange, userId } }),
+      prisma.workoutEntry.findMany({ where: { date: dateInRange, userId } }),
+      prisma.sleepEntry.findMany({ where: { date: dateInRange, userId } }),
+      prisma.alcoholEntry.findMany({ where: { date: dateInRange, userId } }),
+      prisma.bowelEntry.findMany({ where: { date: dateInRange, userId } }),
+      prisma.goal.findMany({ where: { active: true, userId } }),
     ])
 
-    // Optional table in some deployments/migration states.
     let workoutSessions: DatedRow[] = []
     try {
       workoutSessions = await prisma.workoutSession.findMany({
-        where: { userId, date: dateInRange, status: "completed" },
+        where: { date: dateInRange, status: "completed", userId },
         select: { date: true },
       })
     } catch (err) {
@@ -256,7 +250,13 @@ export async function GET(req: NextRequest) {
         "Cache-Control": "no-store, must-revalidate",
       },
     })
-  } catch {
+  } catch (e) {
+    if (e instanceof UserError) {
+      return NextResponse.json(
+        { error: e.message },
+        { status: e.status, headers: { "Cache-Control": "no-store, must-revalidate" } }
+      )
+    }
     return NextResponse.json(
       { error: "Database not connected" },
       {

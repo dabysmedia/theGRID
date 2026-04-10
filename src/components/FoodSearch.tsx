@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react"
 import { Search, Plus, X, Loader2, Check, Minus } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { apiFetch } from "@/lib/api-fetch"
 import { Button } from "@/components/ui/button"
 
 interface FoodResult {
@@ -55,7 +56,7 @@ export function FoodSearch({ onSelect, compact = false }: FoodSearchProps) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/food-search?q=${encodeURIComponent(q)}`)
+      const res = await apiFetch(`/api/food-search?q=${encodeURIComponent(q)}`)
       const data = await res.json()
       const foods = data.foods ?? []
       setResults(foods)

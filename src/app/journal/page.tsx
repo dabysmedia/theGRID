@@ -28,9 +28,10 @@ import {
   Sparkles,
 } from "lucide-react"
 import { cn, formatDate } from "@/lib/utils"
+import { apiFetch } from "@/lib/api-fetch"
+import { useUser } from "@/context/UserContext"
 import { PageHeader } from "@/components/PageHeader"
 import { Button } from "@/components/ui/button"
-import { useUserContext } from "@/context/UserContext"
 import {
   Dialog,
   DialogContent,
@@ -49,31 +50,36 @@ interface AttachedStats {
   sleep?: { durationMins: number; quality: number }
 }
 
+interface EntryUser {
+  id: string
+  name: string
+  avatarColor: string
+}
+
 interface JournalEntry {
   id: string
-  userId: string
-  authorName: string
-  authorColor: string
   date: string
   content: string
   mood: number | null
   images: string[]
   attachedStats: AttachedStats
+  userId: string | null
+  user: EntryUser | null
   createdAt: string
   updatedAt: string
 }
 
 interface RawJournalEntry {
   id: string
-  userId: string
   date: string
   content: string
   mood: number | null
   images: string
   attachedStats: string
+  userId: string | null
+  user: EntryUser | null
   createdAt: string
   updatedAt: string
-  user?: { id: string; name: string; avatarColor: string } | null
 }
 
 // Available stats fetched from existing APIs
@@ -128,9 +134,6 @@ const MAX_IMAGES = 5
 function parseEntry(raw: RawJournalEntry): JournalEntry {
   return {
     ...raw,
-    authorName: raw.user?.name ?? "Unknown",
-    authorColor: raw.user?.avatarColor ?? "#94a3b8",
-    userId: raw.userId,
     images: (() => {
       try {
         return JSON.parse(raw.images || "[]")
@@ -145,6 +148,8 @@ function parseEntry(raw: RawJournalEntry): JournalEntry {
         return {}
       }
     })(),
+    userId: raw.userId,
+    user: raw.user,
   }
 }
 
@@ -224,40 +229,44 @@ function EntryCard({
   entry,
   onEdit,
   onDelete,
-  canEdit,
+  currentUserId,
 }: {
   entry: JournalEntry
   onEdit: (e: JournalEntry) => void
   onDelete: (id: string) => void
-  canEdit: boolean
+  currentUserId: string | null
 }) {
   const [expanded, setExpanded] = useState(false)
   const [lightboxImg, setLightboxImg] = useState<string | null>(null)
   const isLong = entry.content.length > 200
+  const isOwner = currentUserId != null && entry.userId === currentUserId
 
   const mood = MOODS.find((m) => m.value === entry.mood)
   const dateLabel = format(new Date(entry.date), "MMM d, yyyy")
   const timeLabel = format(new Date(entry.createdAt), "h:mm a")
+  const author = entry.user
 
   return (
     <>
       <article className="glass-frost overflow-hidden rounded-2xl border border-border/30 shadow-sm transition-all">
         <div className="flex items-center justify-between gap-2 px-3.5 py-3">
-          <div className="min-w-0">
-            <div className="mb-1 flex items-center gap-2">
-              <span
-                className="size-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: entry.authorColor }}
-                aria-hidden
-              />
-              <p className="truncate text-xs font-semibold text-foreground">
-                {entry.authorName}
+          <div className="flex items-center gap-2.5 min-w-0">
+            {author && (
+              <div
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                style={{ backgroundColor: author.avatarColor }}
+              >
+                {author.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              {author && (
+                <p className="truncate text-xs font-semibold text-foreground/90">{author.name}</p>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                {dateLabel} &middot; {timeLabel}
               </p>
             </div>
-            <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-foreground/85">
-              {dateLabel}
-            </p>
-            <p className="text-[11px] text-muted-foreground">{timeLabel}</p>
           </div>
           <div className="flex items-center gap-1">
             {mood && (
@@ -271,7 +280,7 @@ function EntryCard({
                 <MoodIcon icon={mood.icon} className="size-4" />
               </span>
             )}
-            {canEdit && (
+            {isOwner && (
               <>
                 <Button
                   variant="ghost"
@@ -401,11 +410,11 @@ function StatsPicker({
     setLoading(true)
     try {
       const [runRes, calRes, stepsRes, weightRes, sleepRes] = await Promise.allSettled([
-        fetch(`/api/running?date=${date}`).then((r) => r.json()),
-        fetch(`/api/calories?date=${date}`).then((r) => r.json()),
-        fetch(`/api/steps?date=${date}`).then((r) => r.json()),
-        fetch(`/api/weigh-in?d=${date}`).then((r) => r.json()),
-        fetch(`/api/sleep?date=${date}`).then((r) => r.json()),
+        apiFetch(`/api/running?date=${date}`).then((r) => r.json()),
+        apiFetch(`/api/calories?date=${date}`).then((r) => r.json()),
+        apiFetch(`/api/steps?date=${date}`).then((r) => r.json()),
+        apiFetch(`/api/weigh-in?d=${date}`).then((r) => r.json()),
+        apiFetch(`/api/sleep?date=${date}`).then((r) => r.json()),
       ])
 
       const s: AvailableStats = {}
@@ -635,7 +644,7 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
       for (const file of files) {
         const fd = new FormData()
         fd.append("file", file)
-        const res = await fetch("/api/journal/upload", { method: "POST", body: fd })
+        const res = await apiFetch("/api/journal/upload", { method: "POST", body: fd })
         if (!res.ok) {
           const j = await res.json()
           throw new Error(j.error ?? "Upload failed")
@@ -655,7 +664,7 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
   const removeImage = async (url: string) => {
     setImages((prev) => prev.filter((u) => u !== url))
     // Best-effort delete from disk
-    fetch(`/api/journal/upload?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {})
+    apiFetch(`/api/journal/upload?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {})
   }
 
   const handleSave = async () => {
@@ -668,12 +677,12 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
     try {
       const payload = { date, content, mood, images, attachedStats }
       const res = editEntry
-        ? await fetch("/api/journal", {
+        ? await apiFetch("/api/journal", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ...payload, id: editEntry.id }),
           })
-        : await fetch("/api/journal", {
+        : await apiFetch("/api/journal", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -862,7 +871,7 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function JournalPage() {
-  const { activeUserId } = useUserContext()
+  const { user } = useUser()
   const [entries, setEntries] = useState<JournalEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [composeOpen, setComposeOpen] = useState(false)
@@ -875,7 +884,7 @@ export default function JournalPage() {
   const fetchEntries = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch("/api/journal")
+      const res = await apiFetch("/api/journal")
       const data: RawJournalEntry[] = await res.json()
       const parsed = Array.isArray(data) ? data.map(parseEntry) : []
       parsed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -903,7 +912,7 @@ export default function JournalPage() {
 
   const handleDeleteConfirm = async (id: string) => {
     try {
-      await fetch(`/api/journal?id=${id}`, { method: "DELETE" })
+      await apiFetch(`/api/journal?id=${id}`, { method: "DELETE" })
       setEntries((prev) => prev.filter((e) => e.id !== id))
     } catch {
       // silently fail
@@ -958,7 +967,7 @@ export default function JournalPage() {
               entry={entry}
               onEdit={handleEdit}
               onDelete={(id) => setDeleteConfirm(id)}
-              canEdit={activeUserId === entry.userId}
+              currentUserId={user?.id ?? null}
             />
           ))}
         </div>

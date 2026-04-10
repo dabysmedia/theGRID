@@ -3,23 +3,23 @@ import { prisma } from "@/lib/prisma"
 import { DEFAULT_WEIGHT_UNIT } from "@/lib/units"
 import { formatDate } from "@/lib/utils"
 import { parseYyyyMmDdToStoredDate } from "@/lib/dateStorage"
-import { getActiveUserId } from "@/lib/current-user"
+import { resolveUserId, UserError } from "@/lib/current-user"
 
 async function findOrCreateBodyweightGoal(userId: string) {
   let goal = await prisma.longGoal.findFirst({
-    where: { userId, category: "bodyweight" },
+    where: { category: "bodyweight", userId },
   })
 
   if (!goal) {
     goal = await prisma.longGoal.create({
       data: {
-        userId,
         name: "Bodyweight",
         category: "bodyweight",
         target: 0,
         unit: DEFAULT_WEIGHT_UNIT,
         direction: "down",
         active: true,
+        userId,
       },
     })
   }
@@ -37,7 +37,7 @@ function resolveDate(req: NextRequest): Date {
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await getActiveUserId(req)
+    const userId = await resolveUserId(req)
     const goal = await findOrCreateBodyweightGoal(userId)
     const targetDay = resolveDate(req)
 
@@ -68,7 +68,8 @@ export async function GET(req: NextRequest) {
       goalId: goal.id,
       unit: goal.unit,
     })
-  } catch {
+  } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     return NextResponse.json({
       done: false,
       todayEntry: null,
@@ -80,8 +81,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await resolveUserId(req)
     const body = await req.json()
-    const userId = await getActiveUserId(req)
     const goal = await findOrCreateBodyweightGoal(userId)
 
     const dateParam = body.date
@@ -110,7 +111,8 @@ export async function POST(req: NextRequest) {
       },
     })
     return NextResponse.json(entry, { status: 201 })
-  } catch {
+  } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     return NextResponse.json({ error: "Failed to log" }, { status: 500 })
   }
 }

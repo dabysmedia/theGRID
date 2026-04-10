@@ -15,6 +15,7 @@ import {
 import { PageHeader } from "@/components/PageHeader"
 import { PageStatTile } from "@/components/PageStatTile"
 import { useActiveDate } from "@/context/DateContext"
+import { apiFetch } from "@/lib/api-fetch"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -56,7 +57,7 @@ export default function AlcoholPage() {
   )
 
   useEffect(() => {
-    fetch("/api/alcohol")
+    apiFetch("/api/alcohol")
       .then(async (r) => {
         const data = await r.json()
         setEntries(Array.isArray(data) ? data : [])
@@ -125,7 +126,7 @@ export default function AlcoholPage() {
     e.preventDefault()
     if (!quantity || !units) return
 
-    const res = await fetch("/api/alcohol", {
+    const res = await apiFetch("/api/alcohol", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ date: today, drinkType, quantity, units }),
@@ -140,7 +141,7 @@ export default function AlcoholPage() {
   }
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/alcohol?id=${id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/alcohol?id=${id}`, { method: "DELETE" })
     if (res.ok) setEntries(entries.filter((e) => e.id !== id))
   }
 

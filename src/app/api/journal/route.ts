@@ -4,23 +4,14 @@ import {
   parseYyyyMmDdToStoredDate,
   utcRangeWhereForCalendarDay,
 } from "@/lib/dateStorage"
-import { getActiveUserId } from "@/lib/current-user"
-
-function extractUploadIdFromUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url, "http://localhost")
-    if (parsed.pathname !== "/api/journal/upload") return null
-    const id = parsed.searchParams.get("id")?.trim()
-    return id || null
-  } catch {
-    return null
-  }
-}
+import { resolveUserId, UserError } from "@/lib/current-user"
+import fs from "node:fs"
+import path from "node:path"
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const dateParam = searchParams.get("date")
-  const monthParam = searchParams.get("month") // YYYY-MM
+  const monthParam = searchParams.get("month")
 
   try {
     let where = {}
@@ -38,9 +29,7 @@ export async function GET(req: NextRequest) {
       where,
       orderBy: { createdAt: "desc" },
       include: {
-        user: {
-          select: { id: true, name: true, avatarColor: true },
-        },
+        user: { select: { id: true, name: true, avatarColor: true } },
       },
     })
     return NextResponse.json(entries)
@@ -56,7 +45,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await getActiveUserId(req)
+    const userId = await resolveUserId(req)
     const body = await req.json()
     const dateStr = typeof body.date === "string" ? body.date.trim() : ""
     if (!dateStr) {
@@ -79,15 +68,14 @@ export async function POST(req: NextRequest) {
         : "{}"
 
     const entry = await prisma.journalEntry.create({
-      data: { userId, date, content, mood, images, attachedStats },
+      data: { date, content, mood, images, attachedStats, userId },
       include: {
-        user: {
-          select: { id: true, name: true, avatarColor: true },
-        },
+        user: { select: { id: true, name: true, avatarColor: true } },
       },
     })
     return NextResponse.json(entry, { status: 201 })
   } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     console.error("[journal POST]", e)
     const dev = process.env.NODE_ENV === "development"
     return NextResponse.json(
@@ -104,11 +92,16 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const userId = await getActiveUserId(req)
+    const userId = await resolveUserId(req)
     const body = await req.json()
     const id = typeof body.id === "string" ? body.id.trim() : ""
     if (!id) {
       return NextResponse.json({ error: "Entry id is required." }, { status: 400 })
+    }
+
+    const existing = await prisma.journalEntry.findFirst({ where: { id, userId } })
+    if (!existing) {
+      return NextResponse.json({ error: "Not found or not your post." }, { status: 404 })
     }
 
     const updateData: Record<string, unknown> = {}
@@ -129,25 +122,16 @@ export async function PUT(req: NextRequest) {
       updateData.date = parseYyyyMmDdToStoredDate(body.date)
     }
 
-    const existing = await prisma.journalEntry.findFirst({
-      where: { id, userId },
-      select: { id: true },
-    })
-    if (!existing) {
-      return NextResponse.json({ error: "Entry not found." }, { status: 404 })
-    }
-
     const entry = await prisma.journalEntry.update({
-      where: { id: existing.id },
+      where: { id },
       data: updateData,
       include: {
-        user: {
-          select: { id: true, name: true, avatarColor: true },
-        },
+        user: { select: { id: true, name: true, avatarColor: true } },
       },
     })
     return NextResponse.json(entry)
   } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     console.error("[journal PUT]", e)
     const dev = process.env.NODE_ENV === "development"
     return NextResponse.json(
@@ -163,35 +147,33 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const id = searchParams.get("id")
-  if (!id) {
-    return NextResponse.json({ error: "ID required." }, { status: 400 })
-  }
-
   try {
-    const userId = await getActiveUserId(req)
+    const userId = await resolveUserId(req)
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get("id")
+    if (!id) {
+      return NextResponse.json({ error: "ID required." }, { status: 400 })
+    }
+
     const entry = await prisma.journalEntry.findFirst({ where: { id, userId } })
     if (!entry) {
-      return NextResponse.json({ error: "Entry not found." }, { status: 404 })
+      return NextResponse.json({ error: "Not found or not your post." }, { status: 404 })
     }
-    if (entry) {
-      // Clean up uploaded image blobs for this entry.
-      const images: string[] = JSON.parse(entry.images || "[]")
-      const uploadIds = images
-        .map((imgUrl) => extractUploadIdFromUrl(imgUrl))
-        .filter((v): v is string => Boolean(v))
 
-      if (uploadIds.length > 0) {
-        await prisma.journalImageUpload.deleteMany({
-          where: { id: { in: uploadIds }, userId },
-        })
+    const images: string[] = JSON.parse(entry.images || "[]")
+    for (const imgUrl of images) {
+      if (imgUrl.startsWith("/uploads/journal/")) {
+        const filePath = path.join(process.cwd(), "public", imgUrl)
+        try {
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+        } catch {}
       }
     }
 
-    await prisma.journalEntry.delete({ where: { id: entry.id } })
+    await prisma.journalEntry.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     console.error("[journal DELETE]", e)
     const dev = process.env.NODE_ENV === "development"
     return NextResponse.json(

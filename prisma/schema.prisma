@@ -8,12 +8,13 @@ datasource db {
 }
 
 model User {
-  id              String          @id @default(cuid())
-  name            String          @unique
-  pinHash         String
-  avatarColor     String          @default("#22c55e")
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  pinHash     String   @default("")
+  avatarColor String   @default("#22c55e")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   calorieEntries  CalorieEntry[]
   stepEntries     StepEntry[]
   runEntries      RunEntry[]
@@ -28,13 +29,10 @@ model User {
   alcoholEntries  AlcoholEntry[]
   bowelEntries    BowelEntry[]
   journalEntries  JournalEntry[]
-  journalUploads  JournalImageUpload[]
 }
 
 model CalorieEntry {
   id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date        DateTime
   mealType    String
   description String?
@@ -42,6 +40,8 @@ model CalorieEntry {
   protein     Float?
   carbs       Float?
   fat         Float?
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
   createdAt   DateTime @default(now())
 
   @@index([date])
@@ -50,10 +50,10 @@ model CalorieEntry {
 
 model StepEntry {
   id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime
   count     Int
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([date])
@@ -62,13 +62,13 @@ model StepEntry {
 
 model RunEntry {
   id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date        DateTime
   distance    Float
   duration    Int
   environment String   @default("outdoor")
   notes       String?
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
   createdAt   DateTime @default(now())
 
   @@index([date])
@@ -77,13 +77,13 @@ model RunEntry {
 
 model WorkoutEntry {
   id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime
   type      String
   name      String
   duration  Int?
   notes     String?
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([date])
@@ -92,10 +92,10 @@ model WorkoutEntry {
 
 model WorkoutTemplate {
   id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   exercises String   @default("[]")
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([userId])
@@ -103,8 +103,6 @@ model WorkoutTemplate {
 
 model WorkoutSession {
   id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
   date       DateTime
   startedAt  DateTime  @default(now())
@@ -113,6 +111,8 @@ model WorkoutSession {
   notes      String?
   status     String    @default("active")
   exercises  String    @default("[]")
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id])
   createdAt  DateTime  @default(now())
 
   @@index([date])
@@ -122,13 +122,13 @@ model WorkoutSession {
 
 model SleepEntry {
   id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime
   bedtime   DateTime
   wakeTime  DateTime
   quality   Int
   notes     String?
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([date])
@@ -137,8 +137,6 @@ model SleepEntry {
 
 model Goal {
   id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   category  String
   goalType  String    @default("daily")
   direction String    @default("up")
@@ -146,6 +144,8 @@ model Goal {
   unit      String
   deadline  DateTime?
   active    Boolean   @default(true)
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id])
   createdAt DateTime  @default(now())
 
   @@index([category])
@@ -154,8 +154,6 @@ model Goal {
 
 model LongGoal {
   id         String          @id @default(cuid())
-  userId     String
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
   category   String
   target     Float
@@ -163,6 +161,8 @@ model LongGoal {
   direction  String          @default("up")
   startValue Float?
   active     Boolean         @default(true)
+  userId     String?
+  user       User?           @relation(fields: [userId], references: [id])
   createdAt  DateTime        @default(now())
   entries    LongGoalEntry[]
 
@@ -184,14 +184,14 @@ model LongGoalEntry {
 
 model Habit {
   id          String            @id @default(cuid())
-  userId      String
-  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   icon        String            @default("check")
   color       String            @default("#22c55e")
   frequency   String            @default("daily")
   archived    Boolean           @default(false)
   sortOrder   Int               @default(0)
+  userId      String?
+  user        User?             @relation(fields: [userId], references: [id])
   createdAt   DateTime          @default(now())
   completions HabitCompletion[]
 
@@ -212,8 +212,6 @@ model HabitCompletion {
 
 model SavedMeal {
   id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   mealType  String
   calories  Int
@@ -221,6 +219,8 @@ model SavedMeal {
   carbs     Float?
   fat       Float?
   useCount  Int      @default(0)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([mealType])
@@ -229,12 +229,12 @@ model SavedMeal {
 
 model AlcoholEntry {
   id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime
   drinkType String
   quantity  Float
   units     Float
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([date])
@@ -243,12 +243,12 @@ model AlcoholEntry {
 
 model BowelEntry {
   id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date         DateTime
   time         DateTime
   bristolScale Int
   notes        String?
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id])
   createdAt    DateTime @default(now())
 
   @@index([date])
@@ -257,27 +257,16 @@ model BowelEntry {
 
 model JournalEntry {
   id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date          DateTime
   content       String   @default("")
   mood          Int?
   images        String   @default("[]")
   attachedStats String   @default("{}")
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@index([date])
   @@index([userId])
-}
-
-model JournalImageUpload {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mimeType  String
-  data      Bytes
-  createdAt DateTime @default(now())
-
-  @@index([userId, createdAt])
 }

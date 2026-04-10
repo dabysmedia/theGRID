@@ -5,10 +5,7 @@ import { defineConfig } from "prisma/config"
 
 /** Same rules as src/lib/db-path.ts (Prisma CLI cannot import app code reliably). */
 function resolveSqliteFilePathForPrisma(): string {
-  const raw =
-    process.env["DATABASE_PATH"] ??
-    process.env["DATA_DIR"] ??
-    process.env["RAILWAY_VOLUME_MOUNT_PATH"]
+  const raw = process.env["DATABASE_PATH"] ?? process.env["DATA_DIR"]
   if (!raw) {
     return path.resolve(__dirname, "prisma", "dev.db")
   }
@@ -28,14 +25,6 @@ function resolveSqliteFilePathForPrisma(): string {
 }
 
 function resolveDbUrl(): string {
-  // Prefer mounted SQLite volume path when any data-dir env is present.
-  if (
-    process.env["DATABASE_PATH"] ||
-    process.env["DATA_DIR"] ||
-    process.env["RAILWAY_VOLUME_MOUNT_PATH"]
-  ) {
-    return `file:${resolveSqliteFilePathForPrisma()}`
-  }
   if (process.env["DATABASE_URL"]) return process.env["DATABASE_URL"]
   return `file:${resolveSqliteFilePathForPrisma()}`
 }

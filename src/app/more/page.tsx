@@ -2,7 +2,7 @@
 
 import { Settings } from "lucide-react"
 import { DatePicker } from "@/components/DatePicker"
-import { UserSwitcher } from "@/components/UserSwitcher"
+import { ProfileSwitcher } from "@/components/ProfileSwitcher"
 
 export default function MorePage() {
   return (
@@ -24,6 +24,10 @@ export default function MorePage() {
         </div>
       </header>
 
+      <div className="glass hud-corners rounded-2xl p-6 lg:max-w-md">
+        <ProfileSwitcher />
+      </div>
+
       <div className="glass hud-corners space-y-4 rounded-2xl p-6 lg:max-w-md">
         <div className="flex items-center gap-3">
           <div className="status-dot" />
@@ -43,8 +47,6 @@ export default function MorePage() {
           <p className="text-[10px] text-muted-foreground/55 tracking-[0.12em] uppercase">BUILD v0.1.0</p>
         </div>
       </div>
-
-      <UserSwitcher />
     </div>
   )
 }

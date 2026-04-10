@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo, useCallback } from "react"
+import { apiFetch } from "@/lib/api-fetch"
 import {
   CheckSquare,
   Plus,
@@ -161,7 +162,7 @@ export default function HabitsPage() {
 
   const fetchHabits = useCallback(async () => {
     try {
-      const res = await fetch("/api/habits")
+      const res = await apiFetch("/api/habits")
       if (res.ok) setHabits(await res.json())
     } finally {
       setLoading(false)
@@ -221,7 +222,7 @@ export default function HabitsPage() {
   }
 
   async function toggleHabit(habitId: string) {
-    const res = await fetch("/api/habits/complete", {
+    const res = await apiFetch("/api/habits/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ habitId, date: todayStr }),
@@ -251,7 +252,7 @@ export default function HabitsPage() {
     if (!formName.trim()) return
 
     if (editingHabit) {
-      const res = await fetch("/api/habits", {
+      const res = await apiFetch("/api/habits", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: editingHabit.id, name: formName.trim(), icon: formIcon, color: formColor }),
@@ -262,7 +263,7 @@ export default function HabitsPage() {
         closeForm()
       }
     } else {
-      const res = await fetch("/api/habits", {
+      const res = await apiFetch("/api/habits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: formName.trim(), icon: formIcon, color: formColor }),
@@ -277,7 +278,7 @@ export default function HabitsPage() {
 
   async function confirmDeleteHabit() {
     if (!editingHabit) return
-    const res = await fetch(`/api/habits?id=${editingHabit.id}`, { method: "DELETE" })
+    const res = await apiFetch(`/api/habits?id=${editingHabit.id}`, { method: "DELETE" })
     if (res.ok) {
       setHabits((prev) => prev.filter((h) => h.id !== editingHabit.id))
       closeForm()

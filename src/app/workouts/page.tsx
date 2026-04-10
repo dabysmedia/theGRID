@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { format, subDays } from "date-fns"
 import { PageHeader } from "@/components/PageHeader"
+import { apiFetch } from "@/lib/api-fetch"
 import { PageStatTile } from "@/components/PageStatTile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -301,7 +302,7 @@ function ExercisePicker({
     }
 
     setLoading(true)
-    fetch("/api/exercise-library", { cache: "no-store" })
+    apiFetch("/api/exercise-library", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
@@ -1231,8 +1232,8 @@ export default function WorkoutsPage() {
   // Fetch data
   useEffect(() => {
     Promise.all([
-      fetch(sessionsListUrl(), noStore).then((r) => r.json()),
-      fetch(`/api/workout-templates?_=${Date.now()}`, noStore).then((r) => r.json()),
+      apiFetch(sessionsListUrl(), noStore).then((r) => r.json()),
+      apiFetch(`/api/workout-templates?_=${Date.now()}`, noStore).then((r) => r.json()),
     ])
       .then(([s, t]) => {
         setSessions(Array.isArray(s) ? s : [])
@@ -1331,7 +1332,7 @@ export default function WorkoutsPage() {
 
     setStartingWorkout(true)
     try {
-      const res = await fetch(sessionsListUrl(), {
+      const res = await apiFetch(sessionsListUrl(), {
         ...noStore,
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1394,7 +1395,7 @@ export default function WorkoutsPage() {
 
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
-      await fetch(`/api/workout-sessions/${activeSession.id}`, {
+      await apiFetch(`/api/workout-sessions/${activeSession.id}`, {
         ...noStore,
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1420,7 +1421,7 @@ export default function WorkoutsPage() {
       sess?.exercises ?? activeSession.exercises,
     )
 
-    const res = await fetch(`/api/workout-sessions/${activeSession.id}`, {
+    const res = await apiFetch(`/api/workout-sessions/${activeSession.id}`, {
       ...noStore,
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -1441,7 +1442,7 @@ export default function WorkoutsPage() {
 
   async function discardActiveSession() {
     if (!activeSession) return
-    const res = await fetch(`/api/workout-sessions/${activeSession.id}`, {
+    const res = await apiFetch(`/api/workout-sessions/${activeSession.id}`, {
       ...noStore,
       method: "DELETE",
     })
@@ -1451,7 +1452,7 @@ export default function WorkoutsPage() {
   }
 
   async function deleteSession(id: string) {
-    const res = await fetch(`/api/workout-sessions/${id}`, {
+    const res = await apiFetch(`/api/workout-sessions/${id}`, {
       ...noStore,
       method: "DELETE",
     })
@@ -1464,7 +1465,7 @@ export default function WorkoutsPage() {
     id?: string,
   ) {
     if (id) {
-      const res = await fetch("/api/workout-templates", {
+      const res = await apiFetch("/api/workout-templates", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, name, exercises }),
@@ -1474,7 +1475,7 @@ export default function WorkoutsPage() {
         setTemplates((prev) => prev.map((t) => (t.id === id ? updated : t)))
       }
     } else {
-      const res = await fetch("/api/workout-templates", {
+      const res = await apiFetch("/api/workout-templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, exercises }),
@@ -1487,7 +1488,7 @@ export default function WorkoutsPage() {
   }
 
   async function deleteTemplate(id: string) {
-    const res = await fetch(`/api/workout-templates?id=${id}`, {
+    const res = await apiFetch(`/api/workout-templates?id=${id}`, {
       method: "DELETE",
     })
     if (res.ok) setTemplates((prev) => prev.filter((t) => t.id !== id))
