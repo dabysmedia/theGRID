@@ -25,6 +25,9 @@ function resolveSqliteFilePathForPrisma(): string {
 }
 
 function resolveDbUrl(): string {
+  if (process.env["DATABASE_PATH"]?.trim() || process.env["DATA_DIR"]?.trim()) {
+    return `file:${resolveSqliteFilePathForPrisma()}`
+  }
   if (process.env["DATABASE_URL"]) return process.env["DATABASE_URL"]
   return `file:${resolveSqliteFilePathForPrisma()}`
 }

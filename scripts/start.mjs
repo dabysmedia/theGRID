@@ -11,6 +11,7 @@ import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { resolveSqliteFilePath } from "./resolve-db-path.mjs"
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..")
 
@@ -18,10 +19,20 @@ function exitChild(code) {
   process.exit(code ?? 0)
 }
 
-/** Absolute path to the primary SQLite database (already synced by `prisma db push`). */
+/**
+ * Force DATABASE_URL to the volume SQLite file when DATABASE_PATH / DATA_DIR is set, so the
+ * Next child (after chdir) still connects to /data even if Railway set DATABASE_URL to Postgres.
+ */
 function buildEnv() {
-  // Only inject DATABASE_URL when not already set (e.g. PostgreSQL in production cloud).
-  if (process.env.DATABASE_URL || process.env.DATABASE_PATH || process.env.DATA_DIR) {
+  const hasVolumeHint =
+    process.env.DATABASE_PATH?.trim() || process.env.DATA_DIR?.trim()
+  if (hasVolumeHint) {
+    return {
+      ...process.env,
+      DATABASE_URL: `file:${resolveSqliteFilePath()}`,
+    }
+  }
+  if (process.env.DATABASE_URL) {
     return process.env
   }
   const dbPath = resolve(root, "prisma", "dev.db")

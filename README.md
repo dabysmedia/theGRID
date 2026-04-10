@@ -45,15 +45,18 @@ npm run db:push      # Push schema changes (no migration)
 npm run db:studio    # Open Prisma Studio GUI
 ```
 
-## Deploy to Railway
+## Deploy to Railway (SQLite + volume)
 
-1. Create a new project on [Railway](https://railway.app)
-2. Add a **PostgreSQL** service
-3. Add a **GitHub Repo** service pointing to this repository
-4. Railway will auto-detect Next.js and set `DATABASE_URL`
-5. The build command (`prisma generate && next build`) handles everything
+This app uses **SQLite on a persistent volume**, not Railway’s Postgres plugin.
 
-The app uses `output: "standalone"` in Next.js config for optimized Docker/Railway deployments.
+1. Create a Railway project and add your **GitHub repo** (or use the included `Dockerfile`).
+2. Add a **volume** and mount it at **`/data`** on the web service.
+3. Set environment variables on the web service:
+   - **`DATA_DIR=/data`** (recommended), or **`DATABASE_PATH=/data/thegrid.db`**
+   - **Remove or unset `DATABASE_URL`** if Railway attached a Postgres plugin — a Postgres `DATABASE_URL` was overriding the SQLite file and made the DB look “empty” on every deploy.
+4. On boot, `scripts/prod-entry.mjs` runs **`prisma db push`**, symlinks **`public/uploads/journal`** to **`/data/uploads/journal`** so image uploads survive redeploys, and creates **Carlos** (PIN **1234**) if there are no users yet.
+
+The app uses `output: "standalone"` in Next.js config for Docker/Railway.
 
 ## Project Structure
 

@@ -8,9 +8,9 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "start": "prisma db push && node scripts/start.mjs",
+    "start": "node scripts/prod-entry.mjs",
     "start:next": "next start",
-    "start:prod": "prisma db push && node .next/standalone/server.js",
+    "start:prod": "node scripts/prod-entry.mjs",
     "lint": "eslint"
   },
   "dependencies": {
