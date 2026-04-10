@@ -23,7 +23,8 @@ function runNode(rel) {
 }
 
 runNode("scripts/prepare-volume.mjs")
-execSync("npx prisma db push", { env, cwd: root, stdio: "inherit" })
+// Allow dropping deprecated columns (e.g. User.avatarUrl) when the DB still has values.
+execSync("npx prisma db push --accept-data-loss", { env, cwd: root, stdio: "inherit" })
 runNode("scripts/ensure-default-user.mjs")
 runNode("scripts/assign-journal-to-carlos.mjs")
 
