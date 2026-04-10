@@ -28,6 +28,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import { cn, formatDate } from "@/lib/utils"
+import { kmToMiles, DEFAULT_WEIGHT_UNIT } from "@/lib/units"
 import { apiFetch } from "@/lib/api-fetch"
 import { useUser } from "@/context/UserContext"
 import { PageHeader } from "@/components/PageHeader"
@@ -165,6 +166,10 @@ function formatRunDuration(secs: number): string {
   return formatDurationMins(Math.round(secs / 60))
 }
 
+function formatRunDistanceMi(distanceKm: number): string {
+  return `${kmToMiles(distanceKm).toFixed(1)} mi`
+}
+
 // ─── Stat Chips ───────────────────────────────────────────────────────────────
 
 function StatChips({ stats }: { stats: AttachedStats }) {
@@ -174,7 +179,7 @@ function StatChips({ stats }: { stats: AttachedStats }) {
     chips.push({
       key: "run",
       icon: <MapPin className="size-3" />,
-      label: `${stats.run.distance.toFixed(1)} km · ${formatRunDuration(stats.run.duration)}`,
+      label: `${formatRunDistanceMi(stats.run.distance)} · ${formatRunDuration(stats.run.duration)}`,
     })
   }
   if (stats.calories) {
@@ -439,7 +444,10 @@ function StatsPicker({
         weightRes.status === "fulfilled" &&
         weightRes.value?.todayEntry
       ) {
-        s.weight = { value: weightRes.value.todayEntry.value, unit: weightRes.value.unit ?? "kg" }
+        s.weight = {
+          value: weightRes.value.todayEntry.value,
+          unit: weightRes.value.unit ?? DEFAULT_WEIGHT_UNIT,
+        }
       }
 
       if (sleepRes.status === "fulfilled" && Array.isArray(sleepRes.value) && sleepRes.value.length > 0) {
@@ -479,7 +487,7 @@ function StatsPicker({
       icon: <MapPin className="size-3.5" />,
       label: "Run",
       summary: (v) =>
-        v.run ? `${v.run.distance.toFixed(1)} km · ${formatRunDuration(v.run.duration)}` : "",
+        v.run ? `${formatRunDistanceMi(v.run.distance)} · ${formatRunDuration(v.run.duration)}` : "",
     },
     {
       key: "calories",

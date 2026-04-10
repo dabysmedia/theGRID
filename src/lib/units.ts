@@ -1,7 +1,7 @@
 /** Default unit for weight-based goals, weigh-ins, and related UI (site-wide). */
 export const DEFAULT_WEIGHT_UNIT = "lbs"
 
-/** Running distance is stored in km (Prisma); UI uses miles. */
+/** Running distance is stored in km in the DB; all UI shows miles. */
 export const KM_PER_MILE = 1.609344
 
 export function kmToMiles(km: number): number {

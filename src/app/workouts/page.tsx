@@ -1005,7 +1005,7 @@ function ActiveWorkout({
               Volume{" "}
               <span className="font-bold text-foreground/80">
                 {vol >= 1000 ? `${(vol / 1000).toFixed(1)}k` : vol}
-                <span className="text-muted-foreground/40 ml-0.5">kg</span>
+                <span className="text-muted-foreground/40 ml-0.5">lb</span>
               </span>
             </span>
           )}
@@ -1061,7 +1061,7 @@ function ActiveWorkout({
                   Previous
                 </span>
                 <span className="text-[9px] font-medium uppercase text-muted-foreground/40 text-center">
-                  kg
+                  lb
                 </span>
                 <span className="text-[9px] font-medium uppercase text-muted-foreground/40 text-center">
                   Reps
@@ -1564,7 +1564,7 @@ export default function WorkoutsPage() {
                   : "—"}
               </span>
               <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                kg this week
+                lb this week
               </p>
             </PageStatTile>
             <PageStatTile className="flex-1 min-w-0">
@@ -1827,8 +1827,8 @@ export default function WorkoutsPage() {
                         {dayVolume > 0 && (
                           <span className="text-[10px] tabular-nums text-muted-foreground/50">
                             {dayVolume >= 1000
-                              ? `${(dayVolume / 1000).toFixed(1)}k kg`
-                              : `${dayVolume} kg`}
+                              ? `${(dayVolume / 1000).toFixed(1)}k lb`
+                              : `${dayVolume} lb`}
                           </span>
                         )}
                       </div>
@@ -1889,8 +1889,8 @@ export default function WorkoutsPage() {
                                       {sessVol > 0 && (
                                         <span className="text-[10px] tabular-nums text-muted-foreground/45">
                                           {sessVol >= 1000
-                                            ? `${(sessVol / 1000).toFixed(1)}k kg vol`
-                                            : `${sessVol} kg vol`}
+                                            ? `${(sessVol / 1000).toFixed(1)}k lb vol`
+                                            : `${sessVol} lb vol`}
                                         </span>
                                       )}
                                     </div>
@@ -1927,7 +1927,7 @@ export default function WorkoutsPage() {
                                         <>
                                           <div className="grid grid-cols-[2rem_1fr_1fr_1.75rem] gap-x-1.5 gap-y-1 text-[9px] uppercase tracking-wide text-muted-foreground/40">
                                             <span className="text-center">#</span>
-                                            <span className="text-center">kg</span>
+                                            <span className="text-center">lb</span>
                                             <span className="text-center">reps</span>
                                             <span className="text-center" title="Logged">
                                               ✓
