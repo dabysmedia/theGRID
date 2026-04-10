@@ -23,6 +23,7 @@ function runNode(rel) {
 runNode("scripts/prepare-volume.mjs")
 execSync("npx prisma db push", { env, cwd: root, stdio: "inherit" })
 runNode("scripts/ensure-default-user.mjs")
+runNode("scripts/assign-health-data-to-carlos.mjs")
 runNode("scripts/assign-journal-to-carlos.mjs")
 
 const child = spawn(process.execPath, [join(root, "scripts", "start.mjs")], {
