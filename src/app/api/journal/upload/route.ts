@@ -40,10 +40,26 @@ function dataRoot(): string | null {
 }
 
 function getUploadDir(): string {
-  const root = dataRoot()
-  if (root) {
-    return path.join(root, "uploads", "journal")
+  // When DATA_DIR is set, always write directly to the persistent volume.
+  // Avoid any process.cwd() fallback here — in a Next.js standalone build
+  // cwd() points to .next/standalone, not /app, so the symlinks created by
+  // prepare-volume.mjs would be bypassed and uploads would be lost on redeploy.
+  const dataDir = process.env.DATA_DIR?.trim()
+  if (dataDir) {
+    return path.join(dataDir.replace(/\/+$/, ""), "uploads", "journal")
   }
+
+  // DATABASE_PATH also signals a persistent volume is configured. Use dataRoot()
+  // to derive the directory, but only when DATABASE_PATH is explicitly set so we
+  // never silently fall back to a cwd()-relative path when a volume is expected.
+  const dbPath = process.env.DATABASE_PATH?.trim()
+  if (dbPath) {
+    const root = dataRoot()
+    // dataRoot() is guaranteed non-null when DATABASE_PATH is set.
+    return path.join(root!, "uploads", "journal")
+  }
+
+  // Local dev only: no volume configured, serve from the public directory.
   return path.join(process.cwd(), "public", "uploads", "journal")
 }
 
