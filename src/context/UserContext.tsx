@@ -16,6 +16,7 @@ export interface UserProfile {
   id: string
   name: string
   avatarColor: string
+  avatarUrl?: string | null
 }
 
 interface UserContextValue {
@@ -101,7 +102,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
     if (!f) return
     const nameSame = f.name === user.name
     const colorSame = f.avatarColor === user.avatarColor
-    if (nameSame && colorSame) return
+    const urlSame = (f.avatarUrl ?? null) === (user.avatarUrl ?? null)
+    if (nameSame && colorSame && urlSame) return
     setUser(f)
     storeUser(f)
   }, [users, user])

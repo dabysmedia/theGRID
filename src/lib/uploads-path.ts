@@ -35,20 +35,28 @@ function legacyDataRoot(): string | null {
 }
 
 /**
- * Absolute directory for journal image files.
- * - UPLOADS_PATH=/app/uploads → .../app/uploads/journal
- * - Else legacy data root → <root>/uploads/journal
- * - Else local dev → public/uploads/journal under cwd
+ * Persistent upload subdirectory: `journal` | `avatars`
+ * - UPLOADS_PATH=/app/uploads → .../app/uploads/<segment>
+ * - Legacy data root → <root>/uploads/<segment>
+ * - Local dev → public/uploads/<segment> under cwd
  */
-export function getJournalUploadDir(): string {
+export function getUploadSegmentDir(segment: string): string {
   const raw = process.env.UPLOADS_PATH?.trim()
   if (raw) {
     const base = path.resolve(raw.replace(/^file:/, "").replace(/\/+$/, ""))
-    return path.join(base, "journal")
+    return path.join(base, segment)
   }
 
   const root = legacyDataRoot()
-  if (root) return path.join(root, "uploads", "journal")
+  if (root) return path.join(root, "uploads", segment)
 
-  return path.join(process.cwd(), "public", "uploads", "journal")
+  return path.join(process.cwd(), "public", "uploads", segment)
+}
+
+export function getJournalUploadDir(): string {
+  return getUploadSegmentDir("journal")
+}
+
+export function getAvatarsUploadDir(): string {
+  return getUploadSegmentDir("avatars")
 }

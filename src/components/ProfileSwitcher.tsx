@@ -15,16 +15,27 @@ export function UserProfileAvatar({
   const sizeClass =
     size === "lg" ? "w-14 h-14 text-xl" : size === "md" ? "w-10 h-10 text-base" : "w-8 h-8 text-sm"
 
+  const hasPhoto = Boolean(user.avatarUrl)
+
   return (
     <div
       className={cn(
-        "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold pfp-glass-yellow",
+        "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold",
+        hasPhoto ? "ring-2 ring-amber-400/35 ring-offset-2 ring-offset-background" : "pfp-glass-yellow",
         sizeClass
       )}
     >
-      <span aria-hidden className="relative z-[1] font-semibold tracking-tight">
-        {user.name.charAt(0).toUpperCase()}
-      </span>
+      {hasPhoto ? (
+        <img
+          src={user.avatarUrl!}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <span aria-hidden className="relative z-[1] font-semibold tracking-tight">
+          {user.name.charAt(0).toUpperCase()}
+        </span>
+      )}
     </div>
   )
 }

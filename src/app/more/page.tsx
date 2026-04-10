@@ -3,6 +3,7 @@
 import { Settings } from "lucide-react"
 import { PageHeader } from "@/components/PageHeader"
 import { ProfileSwitcher } from "@/components/ProfileSwitcher"
+import { ProfilePhotoSettings } from "@/components/ProfilePhotoSettings"
 
 export default function MorePage() {
   return (
@@ -14,7 +15,9 @@ export default function MorePage() {
         </p>
       </div>
 
-      <div className="glass hud-corners rounded-2xl p-6 lg:max-w-md">
+      <div className="glass hud-corners rounded-2xl p-6 lg:max-w-md space-y-8">
+        <ProfilePhotoSettings />
+        <div className="hud-divider" />
         <ProfileSwitcher />
       </div>
 

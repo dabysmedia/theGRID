@@ -1,11 +1,6 @@
 /**
- * Journal (and future) uploads directory resolution.
+ * Persistent upload dirs for prepare-volume symlinks.
  * Keep in sync with src/lib/uploads-path.ts
- *
- * Priority:
- * 1. UPLOADS_PATH — dedicated volume mount (e.g. Railway volume at /app/uploads → UPLOADS_PATH=/app/uploads → files in .../journal)
- * 2. Legacy: DATA_DIR or DATABASE_PATH → <dataRoot>/uploads/journal
- * 3. null — use repo public/uploads/journal (prepare-volume skips symlink; API uses cwd path)
  */
 import fs from "node:fs"
 import path from "node:path"
@@ -38,18 +33,26 @@ export function legacyDataRoot() {
 }
 
 /**
- * @returns {string | null} Absolute journal upload directory on persistent storage, or null for local-only public/
+ * @param {"journal" | "avatars"} segment
+ * @returns {string | null} Absolute dir on volume, or null if using local-only public/
  */
-export function resolveJournalUploadDir() {
+export function resolveUploadSegmentDir(segment) {
   const raw = process.env.UPLOADS_PATH?.trim()
   if (raw) {
-    let s = raw.replace(/^file:/, "").replace(/\/+$/, "")
-    const base = path.resolve(s)
-    return path.join(base, "journal")
+    const base = path.resolve(raw.replace(/^file:/, "").replace(/\/+$/, ""))
+    return path.join(base, segment)
   }
 
   const root = legacyDataRoot()
-  if (root) return path.join(root, "uploads", "journal")
+  if (root) return path.join(root, "uploads", segment)
 
   return null
+}
+
+export function resolveJournalUploadDir() {
+  return resolveUploadSegmentDir("journal")
+}
+
+export function resolveAvatarsUploadDir() {
+  return resolveUploadSegmentDir("avatars")
 }
