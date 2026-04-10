@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { parseYyyyMmDdToStoredDate, utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
+import { getActiveUserId } from "@/lib/current-user"
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const dateParam = searchParams.get("date")
 
   try {
+    const userId = await getActiveUserId(req)
     const where =
       dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
-        ? { date: utcRangeWhereForCalendarDay(dateParam) }
-        : {}
+        ? { userId, date: utcRangeWhereForCalendarDay(dateParam) }
+        : { userId }
 
     const entries = await prisma.calorieEntry.findMany({
       where,
@@ -30,6 +32,7 @@ function safeOptionalFloat(v: unknown): number | null {
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const body = await req.json()
 
     const dateStr = typeof body.date === "string" ? body.date.trim() : ""
@@ -52,6 +55,7 @@ export async function POST(req: NextRequest) {
 
     const entry = await prisma.calorieEntry.create({
       data: {
+        userId,
         date,
         mealType,
         description:
@@ -82,6 +86,7 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const body = await req.json()
     const id = typeof body.id === "string" ? body.id.trim() : ""
     if (!id) {
@@ -106,8 +111,16 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Valid calories are required." }, { status: 400 })
     }
 
+    const existing = await prisma.calorieEntry.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    })
+    if (!existing) {
+      return NextResponse.json({ error: "Entry not found." }, { status: 404 })
+    }
+
     const entry = await prisma.calorieEntry.update({
-      where: { id },
+      where: { id: existing.id },
       data: {
         date,
         mealType,
@@ -143,7 +156,11 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
 
   try {
-    await prisma.calorieEntry.delete({ where: { id } })
+    const userId = await getActiveUserId(req)
+    const result = await prisma.calorieEntry.deleteMany({ where: { id, userId } })
+    if (result.count === 0) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 })

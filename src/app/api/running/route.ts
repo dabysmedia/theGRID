@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { parseYyyyMmDdToStoredDate, utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
+import { getActiveUserId } from "@/lib/current-user"
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const dateParam = searchParams.get("date")
 
   try {
+    const userId = await getActiveUserId(req)
     const where =
       dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
-        ? { date: utcRangeWhereForCalendarDay(dateParam) }
-        : {}
+        ? { userId, date: utcRangeWhereForCalendarDay(dateParam) }
+        : { userId }
 
     const entries = await prisma.runEntry.findMany({
       where,
@@ -35,6 +37,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const userId = await getActiveUserId(req)
     const distance = Number.parseFloat(String(body.distance ?? ""))
     const duration = Number.parseInt(String(body.duration ?? ""), 10)
     const dateStr = typeof body.date === "string" ? body.date.trim() : ""
@@ -48,6 +51,7 @@ export async function POST(req: NextRequest) {
 
     const entry = await prisma.runEntry.create({
       data: {
+        userId,
         date: dateBuilt,
         distance,
         duration,
@@ -67,7 +71,11 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
 
   try {
-    await prisma.runEntry.delete({ where: { id } })
+    const userId = await getActiveUserId(req)
+    const result = await prisma.runEntry.deleteMany({ where: { id, userId } })
+    if (result.count === 0) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 })

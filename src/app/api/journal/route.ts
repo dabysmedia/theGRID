@@ -4,25 +4,17 @@ import {
   parseYyyyMmDdToStoredDate,
   utcRangeWhereForCalendarDay,
 } from "@/lib/dateStorage"
-import fs from "node:fs"
-import path from "node:path"
+import { getActiveUserId } from "@/lib/current-user"
 
-type JournalDelegate = {
-  findMany: (args: unknown) => Promise<unknown>
-  create: (args: unknown) => Promise<unknown>
-  update: (args: unknown) => Promise<unknown>
-  findUnique: (args: unknown) => Promise<{ images?: string } | null>
-  delete: (args: unknown) => Promise<unknown>
-}
-
-function getJournalEntryDelegate(): JournalDelegate {
-  const delegate = (prisma as unknown as { journalEntry?: JournalDelegate }).journalEntry
-  if (!delegate) {
-    throw new Error(
-      "Prisma client is outdated for JournalEntry. Run `prisma generate` and restart the dev server."
-    )
+function extractUploadIdFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url, "http://localhost")
+    if (parsed.pathname !== "/api/journal/upload") return null
+    const id = parsed.searchParams.get("id")?.trim()
+    return id || null
+  } catch {
+    return null
   }
-  return delegate
 }
 
 export async function GET(req: NextRequest) {
@@ -42,10 +34,14 @@ export async function GET(req: NextRequest) {
       where = { date: { gte: start, lte: end } }
     }
 
-    const journalEntry = getJournalEntryDelegate()
-    const entries = await journalEntry.findMany({
+    const entries = await prisma.journalEntry.findMany({
       where,
-      orderBy: { date: "desc" },
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: {
+          select: { id: true, name: true, avatarColor: true },
+        },
+      },
     })
     return NextResponse.json(entries)
   } catch (e) {
@@ -60,6 +56,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const body = await req.json()
     const dateStr = typeof body.date === "string" ? body.date.trim() : ""
     if (!dateStr) {
@@ -81,9 +78,13 @@ export async function POST(req: NextRequest) {
         ? JSON.stringify(body.attachedStats)
         : "{}"
 
-    const journalEntry = getJournalEntryDelegate()
-    const entry = await journalEntry.create({
-      data: { date, content, mood, images, attachedStats },
+    const entry = await prisma.journalEntry.create({
+      data: { userId, date, content, mood, images, attachedStats },
+      include: {
+        user: {
+          select: { id: true, name: true, avatarColor: true },
+        },
+      },
     })
     return NextResponse.json(entry, { status: 201 })
   } catch (e) {
@@ -103,6 +104,7 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const body = await req.json()
     const id = typeof body.id === "string" ? body.id.trim() : ""
     if (!id) {
@@ -127,10 +129,22 @@ export async function PUT(req: NextRequest) {
       updateData.date = parseYyyyMmDdToStoredDate(body.date)
     }
 
-    const journalEntry = getJournalEntryDelegate()
-    const entry = await journalEntry.update({
-      where: { id },
+    const existing = await prisma.journalEntry.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    })
+    if (!existing) {
+      return NextResponse.json({ error: "Entry not found." }, { status: 404 })
+    }
+
+    const entry = await prisma.journalEntry.update({
+      where: { id: existing.id },
       data: updateData,
+      include: {
+        user: {
+          select: { id: true, name: true, avatarColor: true },
+        },
+      },
     })
     return NextResponse.json(entry)
   } catch (e) {
@@ -156,22 +170,26 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    const journalEntry = getJournalEntryDelegate()
-    const entry = await journalEntry.findUnique({ where: { id } })
+    const userId = await getActiveUserId(req)
+    const entry = await prisma.journalEntry.findFirst({ where: { id, userId } })
+    if (!entry) {
+      return NextResponse.json({ error: "Entry not found." }, { status: 404 })
+    }
     if (entry) {
-      // Clean up image files from disk
+      // Clean up uploaded image blobs for this entry.
       const images: string[] = JSON.parse(entry.images || "[]")
-      for (const imgUrl of images) {
-        if (imgUrl.startsWith("/uploads/journal/")) {
-          const filePath = path.join(process.cwd(), "public", imgUrl)
-          try {
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
-          } catch {}
-        }
+      const uploadIds = images
+        .map((imgUrl) => extractUploadIdFromUrl(imgUrl))
+        .filter((v): v is string => Boolean(v))
+
+      if (uploadIds.length > 0) {
+        await prisma.journalImageUpload.deleteMany({
+          where: { id: { in: uploadIds }, userId },
+        })
       }
     }
 
-    await journalEntry.delete({ where: { id } })
+    await prisma.journalEntry.delete({ where: { id: entry.id } })
     return NextResponse.json({ success: true })
   } catch (e) {
     console.error("[journal DELETE]", e)

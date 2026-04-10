@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { getActiveUserId } from "@/lib/current-user"
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
   try {
-    const session = await prisma.workoutSession.findUnique({ where: { id } })
+    const userId = await getActiveUserId(req)
+    const session = await prisma.workoutSession.findFirst({ where: { id, userId } })
     if (!session)
       return NextResponse.json(
         { error: "Not found" },
@@ -30,6 +32,7 @@ export async function PUT(
 ) {
   const { id } = await params
   try {
+    const userId = await getActiveUserId(req)
     const body = await req.json()
     const data: Record<string, unknown> = {}
 
@@ -42,7 +45,17 @@ export async function PUT(
     if (body.exercises !== undefined)
       data.exercises = JSON.stringify(Array.isArray(body.exercises) ? body.exercises : [])
 
-    const session = await prisma.workoutSession.update({ where: { id }, data })
+    const existing = await prisma.workoutSession.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    })
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Not found" },
+        { status: 404, headers: { "Cache-Control": "no-store, must-revalidate" } },
+      )
+    }
+    const session = await prisma.workoutSession.update({ where: { id: existing.id }, data })
     return NextResponse.json(session, {
       headers: { "Cache-Control": "no-store, must-revalidate" },
     })
@@ -55,12 +68,19 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
   try {
-    await prisma.workoutSession.delete({ where: { id } })
+    const userId = await getActiveUserId(req)
+    const result = await prisma.workoutSession.deleteMany({ where: { id, userId } })
+    if (result.count === 0) {
+      return NextResponse.json(
+        { error: "Not found" },
+        { status: 404, headers: { "Cache-Control": "no-store, must-revalidate" } },
+      )
+    }
     return NextResponse.json(
       { success: true },
       { headers: { "Cache-Control": "no-store, must-revalidate" } },

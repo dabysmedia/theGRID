@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { getActiveUserId } from "@/lib/current-user"
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const goals = await prisma.longGoal.findMany({
+      where: { userId },
       orderBy: { createdAt: "desc" },
       include: {
         entries: { orderBy: { date: "desc" } },
@@ -17,6 +20,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const body = await req.json()
     const name = typeof body.name === "string" ? body.name.trim() : ""
     const unit = typeof body.unit === "string" ? body.unit.trim() : ""
@@ -43,6 +47,7 @@ export async function POST(req: NextRequest) {
     }
     const goal = await prisma.longGoal.create({
       data: {
+        userId,
         name,
         category: typeof body.category === "string" ? body.category : "other",
         target,
@@ -61,9 +66,15 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const body = await req.json()
+    const existing = await prisma.longGoal.findFirst({
+      where: { id: body.id, userId },
+      select: { id: true },
+    })
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
     const goal = await prisma.longGoal.update({
-      where: { id: body.id },
+      where: { id: existing.id },
       data: {
         name: body.name ?? undefined,
         target: body.target != null ? parseFloat(body.target) : undefined,
@@ -85,7 +96,9 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
 
   try {
-    await prisma.longGoal.delete({ where: { id } })
+    const userId = await getActiveUserId(req)
+    const result = await prisma.longGoal.deleteMany({ where: { id, userId } })
+    if (result.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 })
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 })

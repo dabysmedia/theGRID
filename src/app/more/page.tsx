@@ -2,6 +2,7 @@
 
 import { Settings } from "lucide-react"
 import { DatePicker } from "@/components/DatePicker"
+import { UserSwitcher } from "@/components/UserSwitcher"
 
 export default function MorePage() {
   return (
@@ -42,6 +43,8 @@ export default function MorePage() {
           <p className="text-[10px] text-muted-foreground/55 tracking-[0.12em] uppercase">BUILD v0.1.0</p>
         </div>
       </div>
+
+      <UserSwitcher />
     </div>
   )
 }

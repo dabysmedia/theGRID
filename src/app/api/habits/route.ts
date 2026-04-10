@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { getActiveUserId } from "@/lib/current-user"
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const habits = await prisma.habit.findMany({
-      where: { archived: false },
+      where: { userId, archived: false },
       orderBy: { sortOrder: "asc" },
       include: {
         completions: {
@@ -20,10 +22,15 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const body = await req.json()
-    const maxSort = await prisma.habit.aggregate({ _max: { sortOrder: true } })
+    const maxSort = await prisma.habit.aggregate({
+      where: { userId },
+      _max: { sortOrder: true },
+    })
     const habit = await prisma.habit.create({
       data: {
+        userId,
         name: body.name,
         icon: body.icon || "check",
         color: body.color || "#22c55e",
@@ -40,10 +47,16 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const body = await req.json()
     if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 })
+    const existing = await prisma.habit.findFirst({
+      where: { id: body.id, userId },
+      select: { id: true },
+    })
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
     const habit = await prisma.habit.update({
-      where: { id: body.id },
+      where: { id: existing.id },
       data: {
         name: body.name ?? undefined,
         icon: body.icon ?? undefined,
@@ -62,9 +75,11 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const id = req.nextUrl.searchParams.get("id")
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
-    await prisma.habit.delete({ where: { id } })
+    const result = await prisma.habit.deleteMany({ where: { id, userId } })
+    if (result.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Failed to delete habit" }, { status: 500 })

@@ -3,14 +3,16 @@ import { prisma } from "@/lib/prisma"
 import { formatDate } from "@/lib/utils"
 import { subDays } from "date-fns"
 import { parseYyyyMmDdToStoredDate, utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
+import { getActiveUserId } from "@/lib/current-user"
 
-async function getOrCreateGoal() {
+async function getOrCreateGoal(userId: string) {
   let goal = await prisma.longGoal.findFirst({
-    where: { category: "bodyweight" },
+    where: { userId, category: "bodyweight" },
   })
   if (!goal) {
     goal = await prisma.longGoal.create({
       data: {
+        userId,
         name: "Bodyweight",
         category: "bodyweight",
         target: 0,
@@ -23,9 +25,10 @@ async function getOrCreateGoal() {
   return goal
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const goal = await getOrCreateGoal()
+    const userId = await getActiveUserId(req)
+    const goal = await getOrCreateGoal(userId)
     const entries = await prisma.longGoalEntry.findMany({
       where: { goalId: goal.id },
       orderBy: { date: "desc" },
@@ -107,7 +110,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const goal = await getOrCreateGoal()
+    const userId = await getActiveUserId(req)
+    const goal = await getOrCreateGoal(userId)
     const date = parseYyyyMmDdToStoredDate(String(body.date))
 
     const existing = await prisma.longGoalEntry.findFirst({
@@ -142,7 +146,11 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
 
   try {
-    await prisma.longGoalEntry.delete({ where: { id } })
+    const userId = await getActiveUserId(req)
+    const result = await prisma.longGoalEntry.deleteMany({
+      where: { id, goal: { userId, category: "bodyweight" } },
+    })
+    if (result.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 })
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 })

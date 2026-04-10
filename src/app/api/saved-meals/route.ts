@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { getActiveUserId } from "@/lib/current-user"
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const mealType = searchParams.get("mealType")
 
   try {
+    const userId = await getActiveUserId(req)
     const meals = await prisma.savedMeal.findMany({
-      where: mealType ? { mealType } : {},
+      where: mealType ? { userId, mealType } : { userId },
       orderBy: { useCount: "desc" },
     })
     return NextResponse.json(meals)
@@ -24,6 +26,7 @@ function safeOptionalFloat(v: unknown): number | null {
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const body = await req.json()
     const name = typeof body.name === "string" ? body.name.trim() : ""
     const mealType = typeof body.mealType === "string" ? body.mealType.trim() : ""
@@ -36,6 +39,7 @@ export async function POST(req: NextRequest) {
     }
     const meal = await prisma.savedMeal.create({
       data: {
+        userId,
         name,
         mealType,
         calories,
@@ -66,8 +70,16 @@ export async function PATCH(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
 
   try {
+    const userId = await getActiveUserId(req)
+    const existing = await prisma.savedMeal.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    })
+    if (!existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
     const meal = await prisma.savedMeal.update({
-      where: { id },
+      where: { id: existing.id },
       data: { useCount: { increment: 1 } },
     })
     return NextResponse.json(meal)
@@ -82,7 +94,11 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
 
   try {
-    await prisma.savedMeal.delete({ where: { id } })
+    const userId = await getActiveUserId(req)
+    const result = await prisma.savedMeal.deleteMany({ where: { id, userId } })
+    if (result.count === 0) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 })

@@ -8,6 +8,7 @@ import {
   utcCalendarDayKeyFromIso,
   utcCalendarDayRangeInclusive,
 } from "@/lib/dateStorage"
+import { getActiveUserId } from "@/lib/current-user"
 
 /** Matches Prisma Goal — used here so dashboard logic stays typed if client stubs lag schema. */
 interface GoalRow {
@@ -89,6 +90,7 @@ function latestGoalByCategory(goals: GoalRow[]): Map<string, GoalRow> {
 
 export async function GET(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const dateParam = req.nextUrl.searchParams.get("d")
     const refDate =
       dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
@@ -108,21 +110,21 @@ export async function GET(req: NextRequest) {
       bowelEntries,
       goals,
     ] = await Promise.all([
-      prisma.calorieEntry.findMany({ where: { date: dateInRange } }),
-      prisma.stepEntry.findMany({ where: { date: dateInRange } }),
-      prisma.runEntry.findMany({ where: { date: dateInRange } }),
-      prisma.workoutEntry.findMany({ where: { date: dateInRange } }),
-      prisma.sleepEntry.findMany({ where: { date: dateInRange } }),
-      prisma.alcoholEntry.findMany({ where: { date: dateInRange } }),
-      prisma.bowelEntry.findMany({ where: { date: dateInRange } }),
-      prisma.goal.findMany({ where: { active: true } }),
+      prisma.calorieEntry.findMany({ where: { userId, date: dateInRange } }),
+      prisma.stepEntry.findMany({ where: { userId, date: dateInRange } }),
+      prisma.runEntry.findMany({ where: { userId, date: dateInRange } }),
+      prisma.workoutEntry.findMany({ where: { userId, date: dateInRange } }),
+      prisma.sleepEntry.findMany({ where: { userId, date: dateInRange } }),
+      prisma.alcoholEntry.findMany({ where: { userId, date: dateInRange } }),
+      prisma.bowelEntry.findMany({ where: { userId, date: dateInRange } }),
+      prisma.goal.findMany({ where: { userId, active: true } }),
     ])
 
     // Optional table in some deployments/migration states.
     let workoutSessions: DatedRow[] = []
     try {
       workoutSessions = await prisma.workoutSession.findMany({
-        where: { date: dateInRange, status: "completed" },
+        where: { userId, date: dateInRange, status: "completed" },
         select: { date: true },
       })
     } catch (err) {

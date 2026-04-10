@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { parseYyyyMmDdToStoredDate } from "@/lib/dateStorage"
+import { getActiveUserId } from "@/lib/current-user"
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const status = searchParams.get("status")
 
   try {
-    const where = status ? { status } : {}
+    const userId = await getActiveUserId(req)
+    const where = status ? { userId, status } : { userId }
     const sessions = await prisma.workoutSession.findMany({
       where,
       orderBy: { startedAt: "desc" },
@@ -42,6 +44,7 @@ function prismaErrorMessage(err: unknown): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const body = await req.json()
     const { name, date, exercises } = body
     const dateStr = date == null ? "" : String(date).trim()
@@ -62,6 +65,7 @@ export async function POST(req: NextRequest) {
     }
     const session = await prisma.workoutSession.create({
       data: {
+        userId,
         name: (name || "Workout").trim(),
         date: storedDate,
         exercises: JSON.stringify(Array.isArray(exercises) ? exercises : []),

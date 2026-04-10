@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { startOfMonth, endOfMonth, eachDayOfInterval, format } from "date-fns"
 import { kmToMiles } from "@/lib/units"
+import { getActiveUserId } from "@/lib/current-user"
 
 export async function GET(req: NextRequest) {
   try {
+    const userId = await getActiveUserId(req)
     const monthParam = req.nextUrl.searchParams.get("month")
     const ref = monthParam
       ? new Date(monthParam + "-01T00:00:00")
@@ -17,15 +19,15 @@ export async function GET(req: NextRequest) {
 
     const [calories, steps, runs, workouts, sleeps, alcohols, bowels, weightData] =
       await Promise.all([
-        prisma.calorieEntry.findMany({ where: { date: { gte: start, lte: end } } }),
-        prisma.stepEntry.findMany({ where: { date: { gte: start, lte: end } } }),
-        prisma.runEntry.findMany({ where: { date: { gte: start, lte: end } } }),
-        prisma.workoutEntry.findMany({ where: { date: { gte: start, lte: end } } }),
-        prisma.sleepEntry.findMany({ where: { date: { gte: start, lte: end } } }),
-        prisma.alcoholEntry.findMany({ where: { date: { gte: start, lte: end } } }),
-        prisma.bowelEntry.findMany({ where: { date: { gte: start, lte: end } } }),
+        prisma.calorieEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
+        prisma.stepEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
+        prisma.runEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
+        prisma.workoutEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
+        prisma.sleepEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
+        prisma.alcoholEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
+        prisma.bowelEntry.findMany({ where: { userId, date: { gte: start, lte: end } } }),
         prisma.longGoalEntry.findMany({
-          where: { date: { gte: start, lte: end } },
+          where: { date: { gte: start, lte: end }, goal: { userId } },
           include: { goal: { select: { category: true } } },
         }),
       ])

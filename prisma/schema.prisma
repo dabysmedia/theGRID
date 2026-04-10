@@ -7,8 +7,34 @@ datasource db {
   provider = "sqlite"
 }
 
+model User {
+  id              String          @id @default(cuid())
+  name            String          @unique
+  pinHash         String
+  avatarColor     String          @default("#22c55e")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  calorieEntries  CalorieEntry[]
+  stepEntries     StepEntry[]
+  runEntries      RunEntry[]
+  workoutEntries  WorkoutEntry[]
+  workoutTemplates WorkoutTemplate[]
+  workoutSessions WorkoutSession[]
+  sleepEntries    SleepEntry[]
+  goals           Goal[]
+  longGoals       LongGoal[]
+  habits          Habit[]
+  savedMeals      SavedMeal[]
+  alcoholEntries  AlcoholEntry[]
+  bowelEntries    BowelEntry[]
+  journalEntries  JournalEntry[]
+  journalUploads  JournalImageUpload[]
+}
+
 model CalorieEntry {
   id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date        DateTime
   mealType    String
   description String?
@@ -19,19 +45,25 @@ model CalorieEntry {
   createdAt   DateTime @default(now())
 
   @@index([date])
+  @@index([userId])
 }
 
 model StepEntry {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime
   count     Int
   createdAt DateTime @default(now())
 
   @@index([date])
+  @@index([userId])
 }
 
 model RunEntry {
   id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date        DateTime
   distance    Float
   duration    Int
@@ -40,10 +72,13 @@ model RunEntry {
   createdAt   DateTime @default(now())
 
   @@index([date])
+  @@index([userId])
 }
 
 model WorkoutEntry {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime
   type      String
   name      String
@@ -52,17 +87,24 @@ model WorkoutEntry {
   createdAt DateTime @default(now())
 
   @@index([date])
+  @@index([userId])
 }
 
 model WorkoutTemplate {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   exercises String   @default("[]")
   createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model WorkoutSession {
   id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
   date       DateTime
   startedAt  DateTime  @default(now())
@@ -75,10 +117,13 @@ model WorkoutSession {
 
   @@index([date])
   @@index([status])
+  @@index([userId])
 }
 
 model SleepEntry {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime
   bedtime   DateTime
   wakeTime  DateTime
@@ -87,10 +132,13 @@ model SleepEntry {
   createdAt DateTime @default(now())
 
   @@index([date])
+  @@index([userId])
 }
 
 model Goal {
   id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   category  String
   goalType  String    @default("daily")
   direction String    @default("up")
@@ -101,10 +149,13 @@ model Goal {
   createdAt DateTime  @default(now())
 
   @@index([category])
+  @@index([userId])
 }
 
 model LongGoal {
   id         String          @id @default(cuid())
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
   category   String
   target     Float
@@ -114,6 +165,8 @@ model LongGoal {
   active     Boolean         @default(true)
   createdAt  DateTime        @default(now())
   entries    LongGoalEntry[]
+
+  @@index([userId])
 }
 
 model LongGoalEntry {
@@ -131,6 +184,8 @@ model LongGoalEntry {
 
 model Habit {
   id          String            @id @default(cuid())
+  userId      String
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   icon        String            @default("check")
   color       String            @default("#22c55e")
@@ -139,6 +194,8 @@ model Habit {
   sortOrder   Int               @default(0)
   createdAt   DateTime          @default(now())
   completions HabitCompletion[]
+
+  @@index([userId])
 }
 
 model HabitCompletion {
@@ -155,6 +212,8 @@ model HabitCompletion {
 
 model SavedMeal {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   mealType  String
   calories  Int
@@ -165,10 +224,13 @@ model SavedMeal {
   createdAt DateTime @default(now())
 
   @@index([mealType])
+  @@index([userId])
 }
 
 model AlcoholEntry {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      DateTime
   drinkType String
   quantity  Float
@@ -176,10 +238,13 @@ model AlcoholEntry {
   createdAt DateTime @default(now())
 
   @@index([date])
+  @@index([userId])
 }
 
 model BowelEntry {
   id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date         DateTime
   time         DateTime
   bristolScale Int
@@ -187,10 +252,13 @@ model BowelEntry {
   createdAt    DateTime @default(now())
 
   @@index([date])
+  @@index([userId])
 }
 
 model JournalEntry {
   id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date          DateTime
   content       String   @default("")
   mood          Int?
@@ -200,4 +268,16 @@ model JournalEntry {
   updatedAt     DateTime @updatedAt
 
   @@index([date])
+  @@index([userId])
+}
+
+model JournalImageUpload {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mimeType  String
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

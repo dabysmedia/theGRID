@@ -3,15 +3,17 @@ import { prisma } from "@/lib/prisma"
 import { DEFAULT_WEIGHT_UNIT } from "@/lib/units"
 import { formatDate } from "@/lib/utils"
 import { parseYyyyMmDdToStoredDate } from "@/lib/dateStorage"
+import { getActiveUserId } from "@/lib/current-user"
 
-async function findOrCreateBodyweightGoal() {
+async function findOrCreateBodyweightGoal(userId: string) {
   let goal = await prisma.longGoal.findFirst({
-    where: { category: "bodyweight" },
+    where: { userId, category: "bodyweight" },
   })
 
   if (!goal) {
     goal = await prisma.longGoal.create({
       data: {
+        userId,
         name: "Bodyweight",
         category: "bodyweight",
         target: 0,
@@ -35,7 +37,8 @@ function resolveDate(req: NextRequest): Date {
 
 export async function GET(req: NextRequest) {
   try {
-    const goal = await findOrCreateBodyweightGoal()
+    const userId = await getActiveUserId(req)
+    const goal = await findOrCreateBodyweightGoal(userId)
     const targetDay = resolveDate(req)
 
     const dayEntry = await prisma.longGoalEntry.findFirst({
@@ -78,7 +81,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const goal = await findOrCreateBodyweightGoal()
+    const userId = await getActiveUserId(req)
+    const goal = await findOrCreateBodyweightGoal(userId)
 
     const dateParam = body.date
     const targetDay = dateParam

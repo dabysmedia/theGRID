@@ -30,6 +30,7 @@ import {
 import { cn, formatDate } from "@/lib/utils"
 import { PageHeader } from "@/components/PageHeader"
 import { Button } from "@/components/ui/button"
+import { useUserContext } from "@/context/UserContext"
 import {
   Dialog,
   DialogContent,
@@ -50,6 +51,9 @@ interface AttachedStats {
 
 interface JournalEntry {
   id: string
+  userId: string
+  authorName: string
+  authorColor: string
   date: string
   content: string
   mood: number | null
@@ -61,6 +65,7 @@ interface JournalEntry {
 
 interface RawJournalEntry {
   id: string
+  userId: string
   date: string
   content: string
   mood: number | null
@@ -68,6 +73,7 @@ interface RawJournalEntry {
   attachedStats: string
   createdAt: string
   updatedAt: string
+  user?: { id: string; name: string; avatarColor: string } | null
 }
 
 // Available stats fetched from existing APIs
@@ -122,6 +128,9 @@ const MAX_IMAGES = 5
 function parseEntry(raw: RawJournalEntry): JournalEntry {
   return {
     ...raw,
+    authorName: raw.user?.name ?? "Unknown",
+    authorColor: raw.user?.avatarColor ?? "#94a3b8",
+    userId: raw.userId,
     images: (() => {
       try {
         return JSON.parse(raw.images || "[]")
@@ -215,10 +224,12 @@ function EntryCard({
   entry,
   onEdit,
   onDelete,
+  canEdit,
 }: {
   entry: JournalEntry
   onEdit: (e: JournalEntry) => void
   onDelete: (id: string) => void
+  canEdit: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [lightboxImg, setLightboxImg] = useState<string | null>(null)
@@ -233,6 +244,16 @@ function EntryCard({
       <article className="glass-frost overflow-hidden rounded-2xl border border-border/30 shadow-sm transition-all">
         <div className="flex items-center justify-between gap-2 px-3.5 py-3">
           <div className="min-w-0">
+            <div className="mb-1 flex items-center gap-2">
+              <span
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: entry.authorColor }}
+                aria-hidden
+              />
+              <p className="truncate text-xs font-semibold text-foreground">
+                {entry.authorName}
+              </p>
+            </div>
             <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-foreground/85">
               {dateLabel}
             </p>
@@ -250,23 +271,27 @@ function EntryCard({
                 <MoodIcon icon={mood.icon} className="size-4" />
               </span>
             )}
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => onEdit(entry)}
-              aria-label="Edit entry"
-            >
-              <Pencil />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => onDelete(entry.id)}
-              aria-label="Delete entry"
-              className="text-destructive hover:text-destructive"
-            >
-              <Trash2 />
-            </Button>
+            {canEdit && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => onEdit(entry)}
+                  aria-label="Edit entry"
+                >
+                  <Pencil />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => onDelete(entry.id)}
+                  aria-label="Delete entry"
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 />
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -837,6 +862,7 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function JournalPage() {
+  const { activeUserId } = useUserContext()
   const [entries, setEntries] = useState<JournalEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [composeOpen, setComposeOpen] = useState(false)
@@ -932,6 +958,7 @@ export default function JournalPage() {
               entry={entry}
               onEdit={handleEdit}
               onDelete={(id) => setDeleteConfirm(id)}
+              canEdit={activeUserId === entry.userId}
             />
           ))}
         </div>
