@@ -1,5 +1,6 @@
 "use client"
 
+import { useLayoutEffect, useState } from "react"
 import {
   Flame,
   Footprints,
@@ -10,6 +11,9 @@ import {
 import { DailyWeighIn } from "@/components/DailyWeighIn"
 import { useActiveDate } from "@/context/DateContext"
 import { parseLocalDate } from "@/lib/utils"
+
+/** Show today’s weigh-in prompt on the hub only from this local hour onward (inclusive). */
+const WEIGH_IN_PROMPT_FROM_HOUR = 4
 
 interface CategorySummary {
   todayValue: number
@@ -155,7 +159,20 @@ function computeWeeklyScore(d: DashboardData): number {
 }
 
 export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
-  const { activeDate } = useActiveDate()
+  const { activeDate, isToday } = useActiveDate()
+  const [showWeighInPrompt, setShowWeighInPrompt] = useState(false)
+
+  useLayoutEffect(() => {
+    if (!isToday) {
+      setShowWeighInPrompt(true)
+      return
+    }
+    const apply = () =>
+      setShowWeighInPrompt(new Date().getHours() >= WEIGH_IN_PROMPT_FROM_HOUR)
+    apply()
+    const id = setInterval(apply, 60_000)
+    return () => clearInterval(id)
+  }, [isToday])
   const calAvg = Math.round(weekAvgFromLoggedDays(data.calories.last7))
   const stepsAvg = Math.round(weekAvgFromLoggedDays(data.steps.last7))
   const sleepAvg = Math.round(weekAvgFromLoggedDays(data.sleep.last7) * 10) / 10
@@ -320,9 +337,11 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
         ))}
       </div>
 
-      <div className="mt-5 pt-5 border-t border-glass-border relative z-10">
-        <DailyWeighIn embedded />
-      </div>
+      {showWeighInPrompt && (
+        <div className="mt-5 pt-5 border-t border-glass-border relative z-10">
+          <DailyWeighIn embedded />
+        </div>
+      )}
     </div>
   )
 }
