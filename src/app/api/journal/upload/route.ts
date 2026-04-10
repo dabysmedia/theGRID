@@ -8,6 +8,8 @@ const MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"])
 
 function getUploadDir(): string {
+  // UPLOADS_PATH / DATA_DIR / DATABASE_PATH avoid cwd-relative paths in production
+  // (standalone cwd is .next/standalone). Local dev falls back to public/uploads/journal.
   return getJournalUploadDir()
 }
 
