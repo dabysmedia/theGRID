@@ -5,7 +5,10 @@ import { defineConfig } from "prisma/config"
 
 /** Same rules as src/lib/db-path.ts (Prisma CLI cannot import app code reliably). */
 function resolveSqliteFilePathForPrisma(): string {
-  const raw = process.env["DATABASE_PATH"] ?? process.env["DATA_DIR"]
+  const raw =
+    process.env["DATABASE_PATH"] ??
+    process.env["DATA_DIR"] ??
+    process.env["RAILWAY_VOLUME_MOUNT_PATH"]
   if (!raw) {
     return path.resolve(__dirname, "prisma", "dev.db")
   }

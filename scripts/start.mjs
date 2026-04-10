@@ -20,8 +20,18 @@ function exitChild(code) {
 
 /** Absolute path to the primary SQLite database (already synced by `prisma db push`). */
 function buildEnv() {
+  const railwayDataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH
   // Only inject DATABASE_URL when not already set (e.g. PostgreSQL in production cloud).
-  if (process.env.DATABASE_URL || process.env.DATABASE_PATH || process.env.DATA_DIR) {
+  if (
+    process.env.DATABASE_URL ||
+    process.env.DATABASE_PATH ||
+    process.env.DATA_DIR ||
+    railwayDataDir
+  ) {
+    // Ensure Railway volume mount variable is respected by app + Prisma config.
+    if (railwayDataDir && !process.env.DATABASE_PATH && !process.env.DATA_DIR) {
+      return { ...process.env, DATABASE_PATH: railwayDataDir }
+    }
     return process.env
   }
   const dbPath = resolve(root, "prisma", "dev.db")
