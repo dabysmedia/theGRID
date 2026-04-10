@@ -47,11 +47,10 @@ function getUploadDir(): string {
   return path.join(process.cwd(), "public", "uploads", "journal")
 }
 
-const UPLOAD_DIR = getUploadDir()
-
 function ensureUploadDir() {
-  if (!fs.existsSync(UPLOAD_DIR)) {
-    fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+  const uploadDir = getUploadDir()
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true })
   }
 }
 
@@ -93,7 +92,7 @@ export async function POST(req: NextRequest) {
 
     const ext = extFromMime(file.type)
     const filename = `${randomUUID()}.${ext}`
-    const filePath = path.join(UPLOAD_DIR, filename)
+    const filePath = path.join(getUploadDir(), filename)
 
     fs.writeFileSync(filePath, Buffer.from(arrayBuffer))
 
@@ -118,7 +117,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Invalid filename." }, { status: 400 })
   }
 
-  const filePath = path.join(UPLOAD_DIR, filename)
+  const filePath = path.join(getUploadDir(), filename)
   try {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
     return NextResponse.json({ success: true })
