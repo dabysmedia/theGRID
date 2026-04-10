@@ -256,10 +256,12 @@ export default function CaloriesPage() {
       .catch(() => setWeeklyGoal(null))
   }, [])
 
-  const filteredSavedMeals = useMemo(
-    () => savedMeals.filter((m) => m.mealType === mealType),
-    [savedMeals, mealType]
-  )
+  /** Show all saves; current meal type first so switching tabs does not hide the rest. */
+  const displayedSavedMeals = useMemo(() => {
+    const same = savedMeals.filter((m) => m.mealType === mealType)
+    const other = savedMeals.filter((m) => m.mealType !== mealType)
+    return [...same, ...other]
+  }, [savedMeals, mealType])
 
   const { dailyTotals, chartData, weekTotal, avg7, bestDay } = useMemo(() => {
     const dailyTotals = new Map<string, number>()
@@ -1003,20 +1005,18 @@ export default function CaloriesPage() {
                   {/* Saved meals — flat list, add mode only */}
                   {!editingEntry && (
                     <div>
-                      {(filteredSavedMeals.length > 0 || showCreateMeal) && (
-                        <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
-                            Saved
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => { setShowCreateMeal(!showCreateMeal); setSaveMealError(null) }}
-                            className="min-h-10 shrink-0 rounded-lg border border-primary/25 bg-primary/10 px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-primary transition-colors hover:border-primary/40 hover:bg-primary/18 active:scale-[0.98] touch-manipulation"
-                          >
-                            {showCreateMeal ? "Cancel" : "+ New"}
-                          </button>
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
+                          Saved
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => { setShowCreateMeal(!showCreateMeal); setSaveMealError(null) }}
+                          className="min-h-10 shrink-0 rounded-lg border border-primary/25 bg-primary/10 px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-primary transition-colors hover:border-primary/40 hover:bg-primary/18 active:scale-[0.98] touch-manipulation"
+                        >
+                          {showCreateMeal ? "Cancel" : "+ New"}
+                        </button>
+                      </div>
 
                       {showCreateMeal && (
                         <div
@@ -1067,11 +1067,12 @@ export default function CaloriesPage() {
                         </div>
                       )}
 
-                      {filteredSavedMeals.length > 0 && (
+                      {displayedSavedMeals.length > 0 && (
                         <div className="space-y-0.5">
-                          {filteredSavedMeals.map((meal) => {
+                          {displayedSavedMeals.map((meal) => {
                             const inDraft = savedMealIdsInDraft.has(meal.id)
                             const flash = flashSavedMealId === meal.id
+                            const typeOther = meal.mealType !== mealType
                             return (
                               <div
                                 key={meal.id}
@@ -1100,8 +1101,13 @@ export default function CaloriesPage() {
                                       <Plus className="h-3.5 w-3.5 text-primary/60" />
                                     )}
                                   </div>
-                                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                                  <span className="flex min-w-0 flex-1 items-center gap-2 flex-wrap">
                                     <span className="text-sm font-medium truncate">{meal.name}</span>
+                                    {typeOther && (
+                                      <span className="shrink-0 rounded-full bg-muted/40 px-1.5 py-0.5 text-[9px] font-medium capitalize text-muted-foreground/80">
+                                        {meal.mealType}
+                                      </span>
+                                    )}
                                     {inDraft && (
                                       <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary/80">
                                         In meal

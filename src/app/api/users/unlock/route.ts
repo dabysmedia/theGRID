@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, avatarColor: true, pinHash: true },
+      select: { id: true, name: true, avatarColor: true, avatarUrl: true, pinHash: true },
     })
 
     if (!user) {
@@ -24,7 +24,12 @@ export async function POST(req: NextRequest) {
     if (!user.pinHash) {
       return NextResponse.json({
         success: true,
-        user: { id: user.id, name: user.name, avatarColor: user.avatarColor },
+        user: {
+          id: user.id,
+          name: user.name,
+          avatarColor: user.avatarColor,
+          avatarUrl: user.avatarUrl,
+        },
       })
     }
 
@@ -34,7 +39,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      user: { id: user.id, name: user.name, avatarColor: user.avatarColor },
+      user: {
+        id: user.id,
+        name: user.name,
+        avatarColor: user.avatarColor,
+        avatarUrl: user.avatarUrl,
+      },
     })
   } catch {
     return NextResponse.json({ error: "Unlock failed." }, { status: 500 })

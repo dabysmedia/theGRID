@@ -16,6 +16,9 @@ export interface UserProfile {
   id: string
   name: string
   avatarColor: string
+  avatarUrl?: string | null
+  /** Bust browser cache after re-uploading the same path */
+  mediaRev?: number
 }
 
 interface UserContextValue {
@@ -95,9 +98,27 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true }
   }, [hydrated]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!user || users.length === 0) return
+    const f = users.find((u) => u.id === user.id)
+    if (!f) return
+    const nameSame = f.name === user.name
+    const colorSame = f.avatarColor === user.avatarColor
+    const urlSame = (f.avatarUrl ?? null) === (user.avatarUrl ?? null)
+    if (nameSame && colorSame && urlSame) return
+    const next: UserProfile = {
+      ...f,
+      ...(urlSame && user.mediaRev != null ? { mediaRev: user.mediaRev } : {}),
+    }
+    setUser(next)
+    const { mediaRev: _mr, ...rest } = next
+    storeUser(rest)
+  }, [users, user])
+
   const switchUser = useCallback((u: UserProfile) => {
+    const { mediaRev: _m, ...rest } = u
     setUser(u)
-    storeUser(u)
+    storeUser(rest)
   }, [])
 
   const logout = useCallback(() => {

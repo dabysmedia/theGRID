@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useUser, type UserProfile } from "@/context/UserContext"
 import { Plus, Lock, Check, UserCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -12,14 +12,38 @@ export function UserProfileAvatar({
   user: UserProfile
   size?: "sm" | "md" | "lg"
 }) {
+  const [imgError, setImgError] = useState(false)
   const sizeClass =
     size === "lg" ? "w-14 h-14 text-xl" : size === "md" ? "w-10 h-10 text-base" : "w-8 h-8 text-sm"
+  const baseUrl = user.avatarUrl?.trim() || ""
+  const src =
+    baseUrl && user.mediaRev != null ? `${baseUrl}?v=${user.mediaRev}` : baseUrl || undefined
+
+  useEffect(() => {
+    setImgError(false)
+  }, [user.avatarUrl, user.mediaRev])
+
+  const showPhoto = Boolean(src && !imgError)
+
   return (
     <div
-      className={cn("rounded-full flex items-center justify-center font-bold text-white shrink-0", sizeClass)}
+      className={cn(
+        "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white",
+        sizeClass
+      )}
       style={{ backgroundColor: user.avatarColor }}
     >
-      {user.name.charAt(0).toUpperCase()}
+      {showPhoto ? (
+        // eslint-disable-next-line @next/next/no-img-element -- user-uploaded dynamic local URLs
+        <img
+          src={src}
+          alt=""
+          className="absolute inset-0 size-full object-cover"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <span aria-hidden>{user.name.charAt(0).toUpperCase()}</span>
+      )}
     </div>
   )
 }

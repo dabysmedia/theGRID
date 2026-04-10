@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * When DATA_DIR or DATABASE_PATH points at a persistent volume, store journal uploads there
+ * When DATA_DIR or DATABASE_PATH points at a persistent volume, store uploads there
  * instead of the container filesystem (which is ephemeral on Railway).
- * Symlinks public/.../uploads/journal → $DATA_ROOT/uploads/journal so /uploads/journal/* URLs keep working.
+ * Symlinks public/.../uploads/{journal,avatars} → $DATA_ROOT/uploads/* so /uploads/* URLs keep working.
  */
 import fs from "node:fs"
 import path from "node:path"
@@ -52,27 +52,31 @@ if (!root) {
   process.exit(0)
 }
 
-const target = path.join(root, "uploads", "journal")
-fs.mkdirSync(target, { recursive: true })
+const subdirs = ["journal", "avatars"]
 
-for (const publicDir of findPublicDirs()) {
-  const uploadsParent = path.join(publicDir, "uploads")
-  const linkPath = path.join(uploadsParent, "journal")
-  try {
-    fs.mkdirSync(uploadsParent, { recursive: true })
-  } catch {
-    /* ignore */
-  }
-  try {
-    const stat = fs.lstatSync(linkPath)
-    if (stat.isSymbolicLink()) {
-      fs.unlinkSync(linkPath)
-    } else if (stat.isDirectory()) {
-      fs.rmSync(linkPath, { recursive: true })
+for (const sub of subdirs) {
+  const target = path.join(root, "uploads", sub)
+  fs.mkdirSync(target, { recursive: true })
+
+  for (const publicDir of findPublicDirs()) {
+    const uploadsParent = path.join(publicDir, "uploads")
+    const linkPath = path.join(uploadsParent, sub)
+    try {
+      fs.mkdirSync(uploadsParent, { recursive: true })
+    } catch {
+      /* ignore */
     }
-  } catch {
-    /* does not exist */
+    try {
+      const stat = fs.lstatSync(linkPath)
+      if (stat.isSymbolicLink()) {
+        fs.unlinkSync(linkPath)
+      } else if (stat.isDirectory()) {
+        fs.rmSync(linkPath, { recursive: true })
+      }
+    } catch {
+      /* does not exist */
+    }
+    fs.symlinkSync(target, linkPath, "dir")
+    console.log(`[prepare-volume] ${linkPath} → ${target}`)
   }
-  fs.symlinkSync(target, linkPath, "dir")
-  console.log(`[prepare-volume] ${linkPath} → ${target}`)
 }
