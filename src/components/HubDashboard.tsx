@@ -10,6 +10,7 @@ import {
   Beer,
   CircleDot,
   ChevronDown,
+  Activity,
 } from "lucide-react"
 import { DailySummaryCard } from "./DailySummaryCard"
 import { PageHeader } from "./PageHeader"
@@ -35,6 +36,7 @@ interface DashboardData {
   sleep: CategorySummary
   alcohol: CategorySummary
   bowel: CategorySummary
+  recovery: CategorySummary
 }
 
 const emptyLast7 = () => Array.from({ length: 7 }, () => 0)
@@ -47,6 +49,7 @@ const defaultData: DashboardData = {
   sleep: { todayValue: 0, goal: 8, unit: "hrs", last7: emptyLast7() },
   alcohol: { todayValue: 0, goal: null, unit: "units", last7: emptyLast7() },
   bowel: { todayValue: 0, goal: null, unit: "", last7: emptyLast7() },
+  recovery: { todayValue: 0, goal: 7, unit: "/10", last7: emptyLast7() },
 }
 
 const categories = [
@@ -56,6 +59,7 @@ const categories = [
   { key: "workouts" as const, title: "Workouts", icon: Dumbbell, href: "/workouts", color: "#a855f7" },
   { key: "sleep" as const, title: "Sleep", icon: Moon, href: "/sleep", color: "#6366f1" },
   { key: "bowel" as const, title: "Bowel", icon: CircleDot, href: "/bowel", color: "#78716c" },
+  { key: "recovery" as const, title: "Recovery", icon: Activity, href: "/recovery", color: "#2dd4bf" },
   { key: "alcohol" as const, title: "Alcohol", icon: Beer, href: "/alcohol", color: "#f59e0b" },
 ] as const
 

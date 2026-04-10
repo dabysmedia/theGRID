@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { startOfMonth, endOfMonth, eachDayOfInterval, format } from "date-fns"
+import { startOfMonth, endOfMonth, eachDayOfInterval, format, addDays } from "date-fns"
 import { kmToMiles } from "@/lib/units"
 import { resolveUserId, UserError } from "@/lib/current-user"
 
@@ -19,6 +19,8 @@ export async function GET(req: NextRequest) {
 
     const dateRange = { gte: start, lte: end }
 
+    const weightRange = { gte: start, lte: addDays(end, 2) }
+
     const [calories, steps, runs, workouts, sleeps, alcohols, bowels, weightData] =
       await Promise.all([
         prisma.calorieEntry.findMany({ where: { date: dateRange, userId } }),
@@ -29,7 +31,7 @@ export async function GET(req: NextRequest) {
         prisma.alcoholEntry.findMany({ where: { date: dateRange, userId } }),
         prisma.bowelEntry.findMany({ where: { date: dateRange, userId } }),
         prisma.longGoalEntry.findMany({
-          where: { date: dateRange, goal: { userId } },
+          where: { date: weightRange, goal: { userId } },
           include: { goal: { select: { category: true } } },
         }),
       ])
@@ -81,9 +83,14 @@ export async function GET(req: NextRequest) {
     const daily = dayKeys.map((k) => {
       const paces = runPaceByDay.get(k)
       const bestPace = paces && paces.length > 0 ? Math.min(...paces) : null
+      const base = new Date(k + "T12:00:00")
+      const k1 = format(addDays(base, 1), "yyyy-MM-dd")
+      const k2 = format(addDays(base, 2), "yyyy-MM-dd")
+      /** Next bodyweight after this day: prefer day +1, else day +2 (for lagged correlation). */
+      const weightForward = weightByDay.get(k1) ?? weightByDay.get(k2) ?? null
       return {
         date: k,
-        label: format(new Date(k + "T12:00:00"), "d"),
+        label: format(base, "d"),
         calories: calByDay.get(k) ?? 0,
         steps: stepsByDay.get(k) ?? 0,
         runMiles: Math.round((runDistByDay.get(k) ?? 0) * 100) / 100,
@@ -93,6 +100,7 @@ export async function GET(req: NextRequest) {
         alcohol: alcoholByDay.get(k) ?? 0,
         bowel: bowelByDay.get(k) ?? 0,
         weight: weightByDay.get(k) ?? null,
+        weightForward,
       }
     })
 

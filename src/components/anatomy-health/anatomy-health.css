@@ -1,0 +1,167 @@
+/**
+ * Scoped tokens for the body diagram only. Panels use global .glass / .glass-subtle + Tailwind.
+ * Colors follow THEGRID dark steel + ladder yellow (--primary) scheme.
+ */
+
+.anatomy-health-root {
+  --anatomy-grid-fine: oklch(1 0 0 / 3.5%);
+
+  /* Nominal / healthy segments — whiter fill, crisp edge */
+  --anatomy-sev-none-fill: oklch(0.99 0 0 / 0.52);
+  --anatomy-sev-none-stroke: oklch(1 0 0 / 0.78);
+  --anatomy-sev-low-fill: oklch(0.32 0.09 110 / 0.48);
+  --anatomy-sev-low-stroke: oklch(0.72 0.16 110 / 0.48);
+  --anatomy-sev-moderate-fill: oklch(0.34 0.1 80 / 0.52);
+  --anatomy-sev-moderate-stroke: oklch(0.78 0.14 85 / 0.5);
+  --anatomy-sev-high-fill: oklch(0.34 0.14 35 / 0.55);
+  --anatomy-sev-high-stroke: oklch(0.7 0.17 35 / 0.52);
+  --anatomy-sev-critical-fill: oklch(0.34 0.19 22 / 0.58);
+  --anatomy-sev-critical-stroke: oklch(0.65 0.2 22 / 0.6);
+
+  /* DOMS — yellow / amber ladder (distinct from injury red) */
+  --anatomy-doms-low-fill: oklch(0.36 0.1 100 / 0.5);
+  --anatomy-doms-low-stroke: oklch(0.72 0.16 100 / 0.45);
+  --anatomy-doms-moderate-fill: oklch(0.38 0.13 95 / 0.55);
+  --anatomy-doms-moderate-stroke: oklch(0.78 0.16 95 / 0.52);
+  --anatomy-doms-high-fill: oklch(0.4 0.14 90 / 0.58);
+  --anatomy-doms-high-stroke: oklch(0.82 0.15 90 / 0.55);
+  --anatomy-doms-critical-fill: oklch(0.42 0.15 88 / 0.62);
+  --anatomy-doms-critical-stroke: oklch(0.86 0.14 88 / 0.58);
+
+  /* Active injury — red ladder */
+  --anatomy-injury-low-fill: oklch(0.36 0.14 25 / 0.52);
+  --anatomy-injury-low-stroke: oklch(0.62 0.2 25 / 0.5);
+  --anatomy-injury-moderate-fill: oklch(0.36 0.17 22 / 0.58);
+  --anatomy-injury-moderate-stroke: oklch(0.66 0.21 22 / 0.55);
+  --anatomy-injury-high-fill: oklch(0.35 0.19 20 / 0.62);
+  --anatomy-injury-high-stroke: oklch(0.64 0.22 20 / 0.58);
+  --anatomy-injury-critical-fill: oklch(0.34 0.2 18 / 0.65);
+  --anatomy-injury-critical-stroke: oklch(0.62 0.22 18 / 0.62);
+
+  --anatomy-hover-glow: oklch(0.82 0.18 110 / 0.38);
+  /* Ladder yellow (hue 110, same family as --primary) — layered selection ring */
+  --anatomy-ladder-glow-outer: oklch(0.62 0.1 110 / 0.26);
+  --anatomy-ladder-glow-mid: oklch(0.74 0.15 110 / 0.42);
+  --anatomy-ladder-glow-inner: oklch(0.84 0.19 110 / 0.62);
+  --anatomy-ladder-glow-core: oklch(0.93 0.18 108 / 0.88);
+  --anatomy-selected-glow: var(--anatomy-ladder-glow-inner);
+}
+
+.anatomy-health-root .anatomy-figure-chassis {
+  background: linear-gradient(
+    180deg,
+    oklch(0.19 0.012 250 / 55%) 0%,
+    oklch(0.16 0.01 250 / 65%) 100%
+  );
+  border: 1px solid oklch(1 0 0 / 10%);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 8%),
+    0 18px 44px -18px oklch(0 0 0 / 48%);
+  backdrop-filter: blur(36px) saturate(1.45);
+  -webkit-backdrop-filter: blur(36px) saturate(1.45);
+}
+
+/* Fills the entire figure viewport edge-to-edge (SVG letterboxing no longer clips the glow). */
+.anatomy-health-root .anatomy-svg-viewport-backdrop {
+  background: linear-gradient(
+    180deg,
+    oklch(0.35 0.06 195 / 0.14) 0%,
+    oklch(0.22 0.04 220 / 0.12) 45%,
+    oklch(0.2 0.03 250 / 0.22) 100%
+  );
+  background-size: 100% 100%;
+}
+
+.anatomy-region-group {
+  cursor: pointer;
+}
+
+.anatomy-region-path {
+  transition:
+    fill 0.2s ease,
+    stroke 0.2s ease,
+    filter 0.2s ease;
+  outline: none;
+}
+
+.anatomy-region-group:focus-visible .anatomy-region-path {
+  filter:
+    drop-shadow(0 0 11px var(--anatomy-ladder-glow-mid))
+    drop-shadow(0 0 5px var(--anatomy-ladder-glow-inner))
+    drop-shadow(0 0 2px var(--anatomy-ladder-glow-core));
+  stroke: var(--anatomy-ladder-glow-core);
+  stroke-width: 3px;
+}
+
+/* Baseline diagram (no DOMS / injury on this segment) */
+.anatomy-region-path[data-anatomy-fill="base"][data-severity="none"] {
+  fill: var(--anatomy-sev-none-fill);
+  stroke: var(--anatomy-sev-none-stroke);
+}
+
+/* DOMS = yellow ladder by soreness tier */
+.anatomy-region-path[data-anatomy-fill="doms"][data-severity="low"] {
+  fill: var(--anatomy-doms-low-fill);
+  stroke: var(--anatomy-doms-low-stroke);
+}
+.anatomy-region-path[data-anatomy-fill="doms"][data-severity="moderate"] {
+  fill: var(--anatomy-doms-moderate-fill);
+  stroke: var(--anatomy-doms-moderate-stroke);
+}
+.anatomy-region-path[data-anatomy-fill="doms"][data-severity="high"] {
+  fill: var(--anatomy-doms-high-fill);
+  stroke: var(--anatomy-doms-high-stroke);
+}
+.anatomy-region-path[data-anatomy-fill="doms"][data-severity="critical"] {
+  fill: var(--anatomy-doms-critical-fill);
+  stroke: var(--anatomy-doms-critical-stroke);
+}
+
+/* Injury = red ladder (takes precedence over DOMS on the same segment) */
+.anatomy-region-path[data-anatomy-fill="injury"][data-severity="low"] {
+  fill: var(--anatomy-injury-low-fill);
+  stroke: var(--anatomy-injury-low-stroke);
+}
+.anatomy-region-path[data-anatomy-fill="injury"][data-severity="moderate"] {
+  fill: var(--anatomy-injury-moderate-fill);
+  stroke: var(--anatomy-injury-moderate-stroke);
+}
+.anatomy-region-path[data-anatomy-fill="injury"][data-severity="high"] {
+  fill: var(--anatomy-injury-high-fill);
+  stroke: var(--anatomy-injury-high-stroke);
+}
+.anatomy-region-path[data-anatomy-fill="injury"][data-severity="critical"] {
+  fill: var(--anatomy-injury-critical-fill);
+  stroke: var(--anatomy-injury-critical-stroke);
+}
+
+.anatomy-region-group[data-hover="true"]:not([data-selected="true"]) .anatomy-region-path {
+  filter: drop-shadow(0 0 5px var(--anatomy-hover-glow));
+  stroke-width: 2px;
+}
+
+.anatomy-region-group[data-selected="true"] .anatomy-region-path {
+  filter:
+    drop-shadow(0 0 17px var(--anatomy-ladder-glow-outer))
+    drop-shadow(0 0 10px var(--anatomy-ladder-glow-mid))
+    drop-shadow(0 0 5px var(--anatomy-ladder-glow-inner))
+    drop-shadow(0 0 2px var(--anatomy-ladder-glow-core));
+  stroke: var(--anatomy-ladder-glow-core);
+  stroke-width: 3.5px;
+}
+
+@media (min-width: 640px) {
+  .anatomy-region-group[data-selected="true"] .anatomy-region-path {
+    stroke-width: 4px;
+    filter:
+      drop-shadow(0 0 22px var(--anatomy-ladder-glow-outer))
+      drop-shadow(0 0 13px var(--anatomy-ladder-glow-mid))
+      drop-shadow(0 0 6px var(--anatomy-ladder-glow-inner))
+      drop-shadow(0 0 2px var(--anatomy-ladder-glow-core));
+  }
+}
+
+.anatomy-health-root .anatomy-doms-highlight .anatomy-region-path {
+  stroke-width: 2px;
+  filter: drop-shadow(0 0 5px var(--anatomy-hover-glow));
+}

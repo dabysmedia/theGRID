@@ -23,6 +23,21 @@ interface DatedRow {
   date: Date
 }
 
+function recoveryCompositeFromEntry(e: {
+  pain: number
+  energy: number
+  mood: number
+  soreness: number
+  stress: number
+  mobility: number
+  sleepFeel: number
+}): number {
+  const inv = (x: number) => 11 - x
+  return (
+    (e.energy + e.mood + e.mobility + e.sleepFeel + inv(e.pain) + inv(e.soreness) + inv(e.stress)) / 7
+  )
+}
+
 function runningTargetMiles(target: number, unit: string): number {
   if (unit === "mi") return target
   return kmToMiles(target)
@@ -66,6 +81,11 @@ function dashboardGoalValue(g: GoalRow): number | null {
     case "bowel":
       if (goalType === "daily" || goalType === "target") return target
       return null
+    case "recovery":
+      if (goalType === "daily" || goalType === "weekly_avg" || goalType === "target") {
+        return target
+      }
+      return null
     default:
       return null
   }
@@ -103,6 +123,7 @@ export async function GET(req: NextRequest) {
       sleepEntries,
       alcoholEntries,
       bowelEntries,
+      recoveryEntries,
       goals,
     ] = await Promise.all([
       prisma.calorieEntry.findMany({ where: { date: dateInRange, userId } }),
@@ -112,6 +133,7 @@ export async function GET(req: NextRequest) {
       prisma.sleepEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.alcoholEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.bowelEntry.findMany({ where: { date: dateInRange, userId } }),
+      prisma.recoveryDailyEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.goal.findMany({ where: { active: true, userId } }),
     ])
 
@@ -176,6 +198,11 @@ export async function GET(req: NextRequest) {
       items.reduce((s, e) => s + e.units, 0)
     )
     const bowelLast7 = dailyTotals(bowelEntries, (items) => items.length)
+    const recoveryLast7 = dailyTotals(recoveryEntries, (items) => {
+      if (!items.length) return 0
+      const e = items[0]
+      return recoveryCompositeFromEntry(e)
+    })
 
     const calG = goalByCategory.get("calories")
     const stepsG = goalByCategory.get("steps")
@@ -184,6 +211,7 @@ export async function GET(req: NextRequest) {
     const sleepG = goalByCategory.get("sleep")
     const alcG = goalByCategory.get("alcohol")
     const bowelG = goalByCategory.get("bowel")
+    const recoveryG = goalByCategory.get("recovery")
 
     const calGoal = calG ? dashboardGoalValue(calG) : null
     const stepsGoal = stepsG ? dashboardGoalValue(stepsG) : null
@@ -192,6 +220,7 @@ export async function GET(req: NextRequest) {
     const sleepGoal = sleepG ? dashboardGoalValue(sleepG) : null
     const alcGoal = alcG ? dashboardGoalValue(alcG) : null
     const bowelGoal = bowelG ? dashboardGoalValue(bowelG) : null
+    const recoveryGoal = recoveryG ? dashboardGoalValue(recoveryG) : null
 
     const body = {
       calories: {
@@ -242,6 +271,13 @@ export async function GET(req: NextRequest) {
         direction: bowelG?.direction ?? "up",
         unit: "",
         last7: bowelLast7,
+      },
+      recovery: {
+        todayValue: Math.round(recoveryLast7[6] * 10) / 10,
+        goal: recoveryGoal ?? 7,
+        direction: recoveryG?.direction ?? "up",
+        unit: "/10",
+        last7: recoveryLast7.map((v) => Math.round(v * 10) / 10),
       },
     }
 

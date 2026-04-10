@@ -33,6 +33,24 @@ function createPrismaClient() {
   return new PrismaClient({ adapter })
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient()
+/** After `prisma generate` adds models, dev HMR can keep a stale global client without new delegates. */
+function clientHasRecoveryModels(client: PrismaClient): boolean {
+  const c = client as unknown as {
+    recoveryDailyEntry?: unknown
+    injuryRecord?: unknown
+  }
+  return c.recoveryDailyEntry != null && c.injuryRecord != null
+}
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
+function getPrismaClient(): PrismaClient {
+  const cached = globalForPrisma.prisma
+  if (cached && clientHasRecoveryModels(cached)) return cached
+  if (cached) {
+    void cached.$disconnect().catch(() => {})
+  }
+  const fresh = createPrismaClient()
+  globalForPrisma.prisma = fresh
+  return fresh
+}
+
+export const prisma = getPrismaClient()

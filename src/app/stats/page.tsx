@@ -30,9 +30,6 @@ import {
   Weight,
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   Activity,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -50,6 +47,8 @@ interface DayData {
   alcohol: number
   bowel: number
   weight: number | null
+  /** Bodyweight on day+1, else day+2 (from extended fetch); null if neither logged */
+  weightForward: number | null
 }
 
 interface Summary {
@@ -163,14 +162,25 @@ function SectionChart({
 
 type MetricKey = "steps" | "calories" | "sleepHrs" | "bowel"
 
+type CorrelationMode = "sameDay" | "lagged1to2"
+
 const METRIC_META: Record<
   MetricKey,
-  { label: string; unit: string; color: string; icon: React.ElementType }
+  {
+    label: string
+    unit: string
+    color: string
+    icon: React.ElementType
+    /** Noun phrase for “higher X …” copy in correlation cards */
+    compareNoun: string
+    /** Sleep: same-day weight. Food/activity: weight 1–2 days later. */
+    correlationMode: CorrelationMode
+  }
 > = {
-  steps: { label: "Steps", unit: "steps", color: "#22c55e", icon: Footprints },
-  calories: { label: "Calories", unit: "cal", color: "#ef4444", icon: Flame },
-  sleepHrs: { label: "Sleep", unit: "hrs", color: "#6366f1", icon: Moon },
-  bowel: { label: "Bowel", unit: "entries", color: "#78716c", icon: CircleDot },
+  steps: { label: "Steps", unit: "steps", color: "#22c55e", icon: Footprints, compareNoun: "steps", correlationMode: "lagged1to2" },
+  calories: { label: "Calories", unit: "cal", color: "#ef4444", icon: Flame, compareNoun: "calories", correlationMode: "lagged1to2" },
+  sleepHrs: { label: "Sleep", unit: "hrs", color: "#6366f1", icon: Moon, compareNoun: "sleep", correlationMode: "sameDay" },
+  bowel: { label: "Bowel", unit: "entries", color: "#78716c", icon: CircleDot, compareNoun: "bowel entries", correlationMode: "lagged1to2" },
 }
 
 const METRIC_KEYS: MetricKey[] = ["steps", "calories", "sleepHrs", "bowel"]
@@ -195,13 +205,259 @@ function pearson(xs: number[], ys: number[]): number | null {
   return Math.round((num / denom) * 100) / 100
 }
 
-function correlationLabel(r: number): string {
+function correlationStrengthWord(r: number): string {
   const a = Math.abs(r)
-  if (a < 0.15) return "None"
-  if (a < 0.35) return "Weak"
-  if (a < 0.55) return "Moderate"
-  if (a < 0.75) return "Strong"
-  return "Very strong"
+  if (a < 0.15) return "none"
+  if (a < 0.35) return "weak"
+  if (a < 0.55) return "moderate"
+  if (a < 0.75) return "strong"
+  return "very strong"
+}
+
+function formatR(x: number): string {
+  return `${x > 0 ? "+" : ""}${x.toFixed(2)}`
+}
+
+function strengthShort(r: number): string {
+  const s = correlationStrengthWord(r)
+  if (s === "very strong") return "Very strong"
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/** Whoop-style: short headline + light context (r stays small). */
+const CORR_VOICE: Record<
+  MetricKey,
+  { lagPos: string; lagNeg: string; sleepPos: string; sleepNeg: string }
+> = {
+  steps: {
+    lagPos: "Big step days often showed up before a heavier next weigh-in.",
+    lagNeg: "More steps tended to line up with a lighter weigh-in a day or two later.",
+    sleepPos: "",
+    sleepNeg: "",
+  },
+  calories: {
+    lagPos: "Higher intake days often came before a bump on the scale.",
+    lagNeg: "Lighter eating often came before an easier next weigh-in.",
+    sleepPos: "",
+    sleepNeg: "",
+  },
+  sleepHrs: {
+    lagPos: "",
+    lagNeg: "",
+    sleepPos: "More sleep and a heavier weigh-in often landed on the same day.",
+    sleepNeg: "Better sleep tended to match a lighter number that same day.",
+  },
+  bowel: {
+    lagPos: "These logs and your weight often climbed in the same direction within a couple days.",
+    lagNeg: "They tended to drift opposite over the next day or two.",
+    sleepPos: "",
+    sleepNeg: "",
+  },
+}
+
+function correlationCardCopy(
+  metricKey: MetricKey,
+  r: number | null,
+  pairCount: number,
+  mode: CorrelationMode
+): { title: string; sub: string } {
+  if (pairCount < 3) {
+    return {
+      title: "Hang tight — we need a few more days here.",
+      sub: `${pairCount} paired so far · 3+ to read the signal`,
+    }
+  }
+  if (r == null) {
+    return {
+      title: "Not enough movement to score this one.",
+      sub: "Weight or this metric barely budged on the days we could pair.",
+    }
+  }
+  const a = Math.abs(r)
+  if (a < 0.15) {
+    return {
+      title: "No real pattern jumped out this month.",
+      sub: `Noise level · r ${formatR(r)}`,
+    }
+  }
+
+  const v = CORR_VOICE[metricKey]
+  const title =
+    mode === "sameDay"
+      ? r > 0
+        ? v.sleepPos
+        : v.sleepNeg
+      : r > 0
+        ? v.lagPos
+        : v.lagNeg
+
+  const sub = `${strengthShort(r)} signal · r ${formatR(r)}`
+
+  return { title, sub }
+}
+
+function lastWeightAtOrBefore(daily: DayData[], index: number): number | null {
+  for (let i = index; i >= 0; i--) {
+    const w = daily[i]!.weight
+    if (w != null) return w
+  }
+  return null
+}
+
+/** Forward weigh-in vs last known weight at/before that day (lagged metrics). */
+function forwardDeltaLb(daily: DayData[], i: number): number | null {
+  const wf = daily[i]!.weightForward
+  if (wf == null) return null
+  const prev = lastWeightAtOrBefore(daily, i)
+  if (prev == null) return null
+  return Math.round((wf - prev) * 10) / 10
+}
+
+function mean(nums: number[]): number {
+  if (nums.length === 0) return 0
+  return nums.reduce((a, b) => a + b, 0) / nums.length
+}
+
+/** Right column: metric-aware scale cues (heuristic, not medical). */
+function buildScaleCues(daily: DayData[], key: MetricKey): string[] {
+  const lines: string[] = []
+
+  if (key === "calories") {
+    const rows: { val: number; delta: number; label: string }[] = []
+    for (let i = 0; i < daily.length; i++) {
+      const d = daily[i]!
+      const delta = forwardDeltaLb(daily, i)
+      if (delta == null) continue
+      rows.push({ val: d.calories, delta, label: d.label })
+    }
+    if (rows.length < 4) {
+      lines.push("Need a few more next-day weigh-ins after logged intake to read bounce patterns.")
+      return lines
+    }
+    const sorted = [...rows].sort((a, b) => a.val - b.val)
+    const idx = (q: number) => Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * q)))
+    const p25 = sorted[idx(0.25)]!.val
+    const p75 = sorted[idx(0.75)]!.val
+    const high = rows.filter((r) => r.val >= p75)
+    const low = rows.filter((r) => r.val <= p25 && r.val > 0)
+    if (high.length && low.length) {
+      const hi = mean(high.map((r) => r.delta))
+      const lo = mean(low.map((r) => r.delta))
+      const gap = Math.round((hi - lo) * 10) / 10
+      if (gap >= 0.4) {
+        lines.push(
+          `After your bigger intake days, the next weigh-in ran about ${gap} lb higher on average than after lighter days — that’s often fluid and glycogen, not “real” fat that fast.`
+        )
+      } else if (gap <= -0.2) {
+        lines.push(
+          "Big eating days didn’t consistently show a higher next weigh-in — calmer scale behavior this month."
+        )
+      }
+    }
+    const topIntake = [...rows].sort((a, b) => b.val - a.val).slice(0, Math.max(1, Math.ceil(rows.length * 0.15)))
+    if (topIntake.length) {
+      const spike = topIntake.reduce((a, b) => (b.delta > a.delta ? b : a))
+      if (spike.delta >= 1.0) {
+        lines.push(
+          `Largest jump after a peak intake day: about +${spike.delta} lb by the next weigh-in (day ${spike.label}). Sharp spikes usually ease over a few days.`
+        )
+      }
+    }
+    if (lines.length === 0) {
+      lines.push("No big intake-vs-next-weigh-in swing stood out — your scale looked fairly steady around calories.")
+    }
+    return lines.slice(0, 3)
+  }
+
+  if (key === "steps") {
+    const rows: { val: number; delta: number; label: string }[] = []
+    for (let i = 0; i < daily.length; i++) {
+      const d = daily[i]!
+      const delta = forwardDeltaLb(daily, i)
+      if (delta == null) continue
+      rows.push({ val: d.steps, delta, label: d.label })
+    }
+    if (rows.length < 4) {
+      lines.push("Need more paired step days with a follow-up weigh-in to compare movement vs the scale.")
+      return lines
+    }
+    const sorted = [...rows].sort((a, b) => a.val - b.val)
+    const idx = (q: number) => Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * q)))
+    const p25 = sorted[idx(0.25)]!.val
+    const p75 = sorted[idx(0.75)]!.val
+    const high = rows.filter((r) => r.val >= p75)
+    const low = rows.filter((r) => r.val <= p25)
+    if (high.length && low.length) {
+      const hi = mean(high.map((r) => r.delta))
+      const lo = mean(low.map((r) => r.delta))
+      const gap = Math.round((lo - hi) * 10) / 10
+      if (gap >= 0.35) {
+        lines.push(
+          `Low-step days averaged about ${gap} lb heavier on the next weigh-in than your highest-step days — could be water, food timing, or rest, not steps alone.`
+        )
+      } else if (gap <= -0.35) {
+        lines.push(
+          "Your busiest movement days tended to precede a slightly heavier next weigh-in — worth eyeing fueling and sodium if that’s not what you expected."
+        )
+      }
+    }
+    if (lines.length === 0) {
+      lines.push("Steps and the next weigh-in didn’t show a strong split between high and low movement this month.")
+    }
+    return lines.slice(0, 3)
+  }
+
+  if (key === "sleepHrs") {
+    const paired = daily.filter((d) => d.weight != null && d.sleepHrs != null)
+    if (paired.length < 4) {
+      lines.push("Log a few more nights with sleep and weight the same day to compare short vs long sleep.")
+      return lines
+    }
+    const longN = paired.filter((d) => d.sleepHrs! >= 8)
+    const shortN = paired.filter((d) => d.sleepHrs! <= 6.5)
+    if (longN.length && shortN.length) {
+      const wl = mean(longN.map((d) => d.weight!))
+      const ws = mean(shortN.map((d) => d.weight!))
+      const gap = Math.round((wl - ws) * 10) / 10
+      if (Math.abs(gap) >= 0.35) {
+        lines.push(
+          gap > 0
+            ? `Mornings after 8h+ sleep averaged about ${gap} lb heavier than after 6.5h or less — same-day weight catches salt, late meals, and how you slept, not just time in bed.`
+            : `Mornings after longer sleep averaged about ${Math.abs(gap)} lb lighter than short-sleep nights — a soft signal, but it’s there this month.`
+        )
+      }
+    }
+    if (lines.length === 0) {
+      lines.push("Short vs longer sleep didn’t split your scale much this month — recovery still matters beyond the number.")
+    }
+    return lines.slice(0, 3)
+  }
+
+  // bowel
+  lines.push(
+    "Bowel frequency rarely drives big scale shifts alone; pair it with intake and movement when you’re troubleshooting weight jumps."
+  )
+  const rows: { val: number; delta: number }[] = []
+  for (let i = 0; i < daily.length; i++) {
+    const d = daily[i]!
+    const delta = forwardDeltaLb(daily, i)
+    if (delta == null) continue
+    rows.push({ val: d.bowel, delta })
+  }
+  if (rows.length >= 5) {
+    const withLogs = rows.filter((r) => r.val > 0)
+    const none = rows.filter((r) => r.val === 0)
+    if (withLogs.length && none.length) {
+      const a = mean(withLogs.map((r) => r.delta))
+      const b = mean(none.map((r) => r.delta))
+      if (Math.abs(a - b) >= 0.5) {
+        lines.push(
+          `Next weigh-in shifted about ${Math.abs(Math.round((a - b) * 10) / 10)} lb on average between days with vs without a log — small sample, but interesting if you’re tracking gut rhythm.`
+        )
+      }
+    }
+  }
+  return lines.slice(0, 3)
 }
 
 function CorrelationTooltip({
@@ -209,17 +465,19 @@ function CorrelationTooltip({
   payload,
   label,
   metricKey,
+  weightLineKey,
 }: {
   active?: boolean
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   payload?: any[]
   label?: string
   metricKey: MetricKey
+  weightLineKey: "weight" | "weightForward"
 }) {
   if (!active || !payload?.length) return null
   const meta = METRIC_META[metricKey]
   const metricVal = payload.find((p) => p.dataKey === metricKey)?.value as number | null | undefined
-  const weightVal = payload.find((p) => p.dataKey === "weight")?.value as number | null | undefined
+  const weightVal = payload.find((p) => p.dataKey === weightLineKey)?.value as number | null | undefined
   return (
     <div className="glass rounded-lg border border-border px-3 py-2 font-mono text-[10px] space-y-0.5 min-w-[7rem]">
       <div className="text-muted-foreground/70 mb-1">{label}</div>
@@ -234,19 +492,63 @@ function CorrelationTooltip({
       {weightVal != null && (
         <div className="flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#14b8a6" }} />
-          <span className="font-semibold">{weightVal} lbs</span>
+          <span className="font-semibold">
+            {weightVal} lbs
+            {weightLineKey === "weightForward" && (
+              <span className="font-normal text-muted-foreground/70"> · next weigh-in</span>
+            )}
+          </span>
         </div>
       )}
     </div>
   )
 }
 
+const METRIC_Y_AXIS = 0
+const WEIGHT_Y_AXIS = 1
+
 function CorrelationPanel({ daily }: { daily: DayData[] }) {
   const [active, setActive] = useState<MetricKey>("steps")
 
+  const weightLineKey: "weight" | "weightForward" =
+    METRIC_META[active].correlationMode === "sameDay" ? "weight" : "weightForward"
+
+  /** Left axis must match only the active metric; explicit domain avoids wrong scale when dual Y-axes bind. */
+  const metricAxisDomain = useMemo((): [number, number] => {
+    const vals: number[] = []
+    for (const row of daily) {
+      const v = row[active]
+      if (typeof v === "number" && !Number.isNaN(v)) vals.push(v)
+    }
+    if (vals.length === 0) return [0, 1]
+    const min = Math.min(...vals)
+    const max = Math.max(...vals)
+    const span = max - min
+    const pad = span > 0 ? span * 0.08 : max > 0 ? max * 0.08 : 1
+    const low = Math.max(0, min - pad)
+    const high = max + pad
+    return low < high ? [low, high] : [0, Math.max(1, high)]
+  }, [daily, active])
+
+  const metricTickFormatter = useCallback(
+    (v: number) => {
+      if (active === "sleepHrs") return Number(v).toFixed(1)
+      return Math.round(v).toLocaleString()
+    },
+    [active]
+  )
+
+  const laggedPairCount = useMemo(
+    () => daily.filter((d) => d.weightForward != null).length,
+    [daily]
+  )
+
+  const sameDaySleepPairCount = useMemo(
+    () => daily.filter((d) => d.weight != null && d.sleepHrs != null).length,
+    [daily]
+  )
+
   const correlations = useMemo(() => {
-    const paired = daily.filter((d) => d.weight != null)
-    const weightArr = paired.map((d) => d.weight!)
     const out: Record<MetricKey, number | null> = {
       steps: null,
       calories: null,
@@ -254,74 +556,88 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
       bowel: null,
     }
     for (const k of METRIC_KEYS) {
-      const vals = paired.map((d) => {
-        const v = d[k]
-        return v ?? 0
-      })
-      out[k] = pearson(vals, weightArr)
+      const mode = METRIC_META[k].correlationMode
+      if (mode === "sameDay") {
+        const paired = daily.filter((d) => d.weight != null && d.sleepHrs != null)
+        const xs = paired.map((d) => d.sleepHrs!)
+        const ys = paired.map((d) => d.weight!)
+        out[k] = pearson(xs, ys)
+      } else {
+        const paired = daily.filter((d) => d.weightForward != null)
+        const xs = paired.map((d) => {
+          const v = d[k]
+          return typeof v === "number" ? v : 0
+        })
+        const ys = paired.map((d) => d.weightForward!)
+        out[k] = pearson(xs, ys)
+      }
     }
     return out
   }, [daily])
 
   const meta = METRIC_META[active]
-  const hasWeight = daily.some((d) => d.weight != null)
+  const hasWeight = daily.some((d) => d.weight != null || d.weightForward != null)
+
+  const pairCountForActive =
+    meta.correlationMode === "sameDay" ? sameDaySleepPairCount : laggedPairCount
+  const rActive = correlations[active]
+  const activeCopy = useMemo(
+    () => correlationCardCopy(active, rActive, pairCountForActive, meta.correlationMode),
+    [active, rActive, pairCountForActive, meta.correlationMode]
+  )
+  const scaleCues = useMemo(() => buildScaleCues(daily, active), [daily, active])
 
   if (!hasWeight) return null
 
+  const ActiveIcon = meta.icon
+
   return (
-    <div className="glass animate-fade-up space-y-4 rounded-2xl p-4 lg:p-5">
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#14b8a6]/15">
-          <Activity className="h-3.5 w-3.5 text-[#14b8a6]" />
-        </div>
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-[0.12em]">
+    <div className="glass animate-fade-up space-y-3 rounded-2xl p-4 sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#14b8a6]/15">
+            <Activity className="h-4 w-4 text-[#14b8a6]" />
+          </div>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-foreground/95">
             Weight Correlation
           </h2>
-          <p className="text-[9px] text-muted-foreground/55 tracking-wide mt-0.5">
-            How your metrics relate to weight changes
-          </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5 sm:justify-end sm:max-w-[min(100%,28rem)]">
+          {METRIC_KEYS.map((k) => {
+            const m = METRIC_META[k]
+            const Icon = m.icon
+            const isActive = k === active
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setActive(k)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition-all duration-150",
+                  isActive
+                    ? "bg-background/80 text-foreground shadow-sm ring-1"
+                    : "glass-subtle text-muted-foreground/70 hover:text-foreground hover:bg-glass-highlight/25"
+                )}
+                style={
+                  isActive
+                    ? {
+                        ["--tw-ring-color" as string]: `${m.color}55`,
+                        boxShadow: `0 0 12px ${m.color}18`,
+                      }
+                    : undefined
+                }
+              >
+                <Icon className="h-3 w-3 shrink-0" style={isActive ? { color: m.color } : undefined} />
+                {m.label}
+              </button>
+            )
+          })}
         </div>
       </div>
 
-      {/* Toggle pills */}
-      <div className="flex flex-wrap gap-1.5">
-        {METRIC_KEYS.map((k) => {
-          const m = METRIC_META[k]
-          const Icon = m.icon
-          const isActive = k === active
-          return (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setActive(k)}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] transition-all duration-150",
-                isActive
-                  ? "bg-background/80 text-foreground shadow-sm ring-1"
-                  : "glass-subtle text-muted-foreground/70 hover:text-foreground hover:bg-glass-highlight/25"
-              )}
-              style={
-                isActive
-                  ? {
-                      ["--tw-ring-color" as string]: `${m.color}55`,
-                      boxShadow: `0 0 12px ${m.color}18`,
-                    }
-                  : undefined
-              }
-            >
-              <Icon className="h-3 w-3" style={isActive ? { color: m.color } : undefined} />
-              {m.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Composed chart */}
-      <div className="h-56 sm:h-64 lg:h-72 w-full min-w-0">
+      <div className="h-56 sm:h-64 lg:h-72 w-full min-w-0 -mx-0.5 sm:mx-0 shrink-0">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={daily} margin={{ top: 8, right: 4, left: -12, bottom: 0 }}>
+          <ComposedChart data={daily} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
             <defs>
               <linearGradient id="corrMetricFill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={meta.color} stopOpacity={0.25} />
@@ -337,31 +653,37 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
               interval={4}
             />
             <YAxis
-              yAxisId="metric"
+              yAxisId={METRIC_Y_AXIS}
+              type="number"
+              domain={metricAxisDomain}
+              tickFormatter={metricTickFormatter}
               tick={{ fontSize: 9, fill: "oklch(0.55 0.01 250)", fontFamily: "var(--font-mono)" }}
               tickLine={false}
               axisLine={false}
-              width={36}
+              width={48}
             />
             <YAxis
-              yAxisId="weight"
+              yAxisId={WEIGHT_Y_AXIS}
               orientation="right"
+              type="number"
               tick={{ fontSize: 9, fill: "#14b8a6", fontFamily: "var(--font-mono)" }}
               tickLine={false}
               axisLine={false}
-              width={36}
+              width={40}
               domain={["dataMin - 2", "dataMax + 2"]}
             />
-            <Tooltip content={<CorrelationTooltip metricKey={active} />} />
+            <Tooltip content={<CorrelationTooltip metricKey={active} weightLineKey={weightLineKey} />} />
             <Legend
               wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
               iconSize={8}
-              formatter={(value: string) =>
-                value === "weight" ? "Weight (lbs)" : `${meta.label} (${meta.unit})`
-              }
+              formatter={(value: string) => {
+                if (value === "weight_lagged") return "Next weigh-in (lbs)"
+                if (value === "weight_same") return "Weight that day (lbs)"
+                return `${meta.label} (${meta.unit})`
+              }}
             />
             <Area
-              yAxisId="metric"
+              yAxisId={METRIC_Y_AXIS}
               type="monotone"
               dataKey={active}
               stroke={meta.color}
@@ -372,70 +694,77 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
               name={active}
             />
             <Line
-              yAxisId="weight"
+              yAxisId={WEIGHT_Y_AXIS}
               type="monotone"
-              dataKey="weight"
+              dataKey={weightLineKey}
               stroke="#14b8a6"
               strokeWidth={2.5}
               dot={{ r: 2.5, fill: "#14b8a6", strokeWidth: 0 }}
               connectNulls
-              name="weight"
+              name={weightLineKey === "weightForward" ? "weight_lagged" : "weight_same"}
             />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Correlation badges */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {METRIC_KEYS.map((k) => {
-          const m = METRIC_META[k]
-          const r = correlations[k]
-          const Icon = m.icon
-          const isActive = k === active
-          const TrendIcon =
-            r == null || Math.abs(r) < 0.15
-              ? Minus
-              : r > 0
-                ? TrendingUp
-                : TrendingDown
-          return (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setActive(k)}
-              className={cn(
-                "glass-subtle rounded-xl p-2.5 text-left transition-all duration-150",
-                isActive && "ring-1 ring-primary/30"
-              )}
-            >
-              <div className="flex items-center gap-1.5 mb-1">
-                <Icon className="h-3 w-3" style={{ color: m.color }} />
-                <span className="text-[9px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
-                  {m.label}
-                </span>
+      <div className="rounded-xl border border-border/50 overflow-hidden min-w-0 bg-muted/5 h-[19rem] lg:h-[14.5rem] flex flex-col shrink-0">
+        <p className="text-[10px] leading-snug text-muted-foreground/75 px-3 py-2 border-b border-border/40 shrink-0">
+          <span className="text-foreground/80 font-medium">Note.</span> r vs weight, not cause. Not calorie or
+          step totals.
+        </p>
+        <div className="flex-1 min-h-0 grid grid-rows-2 lg:grid-rows-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border/40">
+          <section className="min-h-0 flex flex-col px-3 py-2.5 lg:px-4 lg:py-3 overflow-hidden">
+            <div className="flex items-start gap-2.5 shrink-0">
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                style={{ backgroundColor: `${meta.color}20` }}
+              >
+                <ActiveIcon className="h-4 w-4" style={{ color: meta.color }} />
               </div>
-              <div className="flex items-center gap-1.5">
-                <TrendIcon
-                  className="h-3.5 w-3.5"
-                  style={{
-                    color:
-                      r == null || Math.abs(r) < 0.15
-                        ? "oklch(0.5 0.01 250)"
-                        : r > 0
-                          ? "#ef4444"
-                          : "#22c55e",
-                  }}
-                />
-                <span className="text-sm font-bold tabular-nums">
-                  {r != null ? (r > 0 ? "+" : "") + r.toFixed(2) : "—"}
-                </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground leading-tight">
+                  {meta.label}
+                  <span className="font-normal text-muted-foreground/50 normal-case tracking-normal">
+                    {" "}
+                    · correlation
+                  </span>
+                </h3>
+                <p className="text-[10px] text-muted-foreground/65 leading-snug mt-0.5">
+                  {meta.correlationMode === "sameDay"
+                    ? "Same calendar day."
+                    : "Vs next weigh-in (~2d)."}
+                </p>
               </div>
-              <div className="text-[8px] text-muted-foreground/50 tracking-wide mt-0.5">
-                {r != null ? correlationLabel(r) : "Not enough data"}
-              </div>
-            </button>
-          )
-        })}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain mt-2 pt-2 border-t border-border/25 pr-1">
+              <p className="text-[11px] sm:text-xs font-semibold leading-snug text-foreground">
+                {activeCopy.title}
+              </p>
+              <p className="text-[10px] sm:text-[11px] leading-relaxed text-muted-foreground mt-1">
+                {activeCopy.sub}
+              </p>
+            </div>
+            <p className="text-[9px] text-muted-foreground/55 tabular-nums shrink-0 pt-2 border-t border-border/25">
+              {pairCountForActive} paired day{pairCountForActive !== 1 ? "s" : ""}
+            </p>
+          </section>
+
+          <section className="min-h-0 flex flex-col px-3 py-2.5 lg:px-4 lg:py-3 overflow-hidden">
+            <div className="shrink-0 space-y-0.5">
+              <h3 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Scale cues
+              </h3>
+              <p className="text-[9px] text-muted-foreground/55 leading-snug">Heuristic — not medical advice.</p>
+            </div>
+            <ul className="text-[10px] sm:text-[11px] leading-relaxed text-foreground/90 space-y-2 list-none m-0 mt-2 flex-1 min-h-0 overflow-y-auto overscroll-y-contain pr-1">
+              {scaleCues.map((line, i) => (
+                <li key={i} className="pl-2.5 border-l-[3px] border-[#14b8a6]/40 text-pretty">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
       </div>
     </div>
   )

@@ -30,6 +30,9 @@ model User {
   alcoholEntries  AlcoholEntry[]
   bowelEntries    BowelEntry[]
   journalEntries  JournalEntry[]
+  recoveryDailyEntries RecoveryDailyEntry[]
+  injuryRecords        InjuryRecord[]
+  treatmentLogs        TreatmentLog[]
 }
 
 model CalorieEntry {
@@ -214,6 +217,7 @@ model HabitCompletion {
 model SavedMeal {
   id        String   @id @default(cuid())
   name      String
+  /// One tag, or comma-separated tags: breakfast, lunch, dinner, snack
   mealType  String
   calories  Int
   protein   Float?
@@ -268,6 +272,78 @@ model JournalEntry {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  @@index([date])
+  @@index([userId])
+}
+
+/// One row per calendar day per user: subjective recovery metrics (1–10 scales).
+model RecoveryDailyEntry {
+  id         String   @id @default(cuid())
+  date       DateTime
+  /// Higher = more pain
+  pain       Int      @default(5)
+  energy     Int      @default(5)
+  mood       Int      @default(5)
+  /// Higher = more muscle/joint soreness
+  soreness   Int      @default(5)
+  stress     Int      @default(5)
+  mobility   Int      @default(5)
+  /// Subjective “how rested / sleep quality feels today”
+  sleepFeel  Int      @default(5)
+  /// JSON array: { "key": interactionKey, "score": 1–10 } per muscle segment (DOMS).
+  domsJson   String   @default("[]")
+  notes      String?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([date])
+  @@index([userId])
+}
+
+model InjuryRecord {
+  id           String         @id @default(cuid())
+  /// Key from recovery catalog or "custom"
+  conditionKey String
+  customLabel  String?
+  /// "injury" | "illness"
+  kind         String         @default("injury")
+  bodyRegion   String?
+  /// JSON string[] of body segment interaction keys (same format as DOMS); empty = infer from bodyRegion / catalog.
+  bodySegmentKeysJson String @default("[]")
+  onsetDate    DateTime
+  resolvedAt   DateTime?
+  /// mild | moderate | severe
+  severity     String         @default("mild")
+  /// active | improving | recovered
+  status       String         @default("active")
+  notes        String?
+  userId       String?
+  user         User?          @relation(fields: [userId], references: [id])
+  treatments   TreatmentLog[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model TreatmentLog {
+  id           String       @id @default(cuid())
+  injuryId     String
+  injury       InjuryRecord @relation(fields: [injuryId], references: [id], onDelete: Cascade)
+  date         DateTime
+  /// Key from treatment catalog
+  treatmentKey String
+  notes        String?
+  completed    Boolean      @default(true)
+  userId       String?
+  user         User?        @relation(fields: [userId], references: [id])
+  createdAt    DateTime     @default(now())
+
+  @@index([injuryId])
   @@index([date])
   @@index([userId])
 }

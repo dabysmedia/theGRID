@@ -622,6 +622,17 @@ html {
   to   { transform: scaleX(1); }
 }
 
+@keyframes nav-dock-item {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 @layer utilities {
   .animate-fade-up {
     animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -650,6 +661,16 @@ html {
 
   .animate-nav-indicator {
     animation: nav-indicator 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-nav-dock-item {
+    animation: nav-dock-item 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-nav-dock-item {
+      animation: none;
+    }
   }
 
   /* Stagger delay utilities */
