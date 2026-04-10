@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { BottomNav } from "@/components/BottomNav"
+import { HeaderProfileControl } from "@/components/HeaderProfileControl"
 import { Providers } from "@/components/Providers"
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister"
 import "./globals.css"
@@ -72,15 +73,19 @@ export default function RootLayout({
             <div className="flex min-h-dvh flex-1 flex-col">
               <main
                 className="
-              mx-auto flex w-full max-w-full flex-1 flex-col
-              ps-[max(0.75rem,env(safe-area-inset-left,0px))] pe-[max(0.75rem,env(safe-area-inset-right,0px))]
+              relative mx-auto flex w-full max-w-full flex-1 flex-col
+              ps-[max(0.75rem,env(safe-area-inset-left,0px))]
+              pe-[max(3rem,max(0.75rem,env(safe-area-inset-right,0px)))]
               pt-[calc(env(safe-area-inset-top,0px)+2rem)] pb-[calc(6rem+env(safe-area-inset-bottom,0px))]
-              sm:ps-4 sm:pe-4 md:ps-6 md:pe-6
+              sm:ps-4 sm:pe-[max(3rem,1rem,env(safe-area-inset-right,0px))]
+              md:ps-6 md:pe-[max(3rem,1.5rem,env(safe-area-inset-right,0px))]
               md:max-w-2xl lg:max-w-3xl xl:max-w-5xl
-              lg:px-8 xl:px-10
+              lg:ps-8 lg:pe-[max(3rem,2rem,env(safe-area-inset-right,0px))]
+              xl:ps-10 xl:pe-[max(3rem,2.5rem,env(safe-area-inset-right,0px))]
               animate-fade-in
             "
               >
+                <HeaderProfileControl />
                 {children}
               </main>
 

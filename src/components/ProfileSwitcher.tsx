@@ -5,8 +5,15 @@ import { useUser, type UserProfile } from "@/context/UserContext"
 import { Plus, Lock, Check, UserCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-function Avatar({ user, size = "md" }: { user: UserProfile; size?: "sm" | "md" | "lg" }) {
-  const sizeClass = size === "lg" ? "w-14 h-14 text-xl" : size === "md" ? "w-10 h-10 text-base" : "w-8 h-8 text-sm"
+export function UserProfileAvatar({
+  user,
+  size = "md",
+}: {
+  user: UserProfile
+  size?: "sm" | "md" | "lg"
+}) {
+  const sizeClass =
+    size === "lg" ? "w-14 h-14 text-xl" : size === "md" ? "w-10 h-10 text-base" : "w-8 h-8 text-sm"
   return (
     <div
       className={cn("rounded-full flex items-center justify-center font-bold text-white shrink-0", sizeClass)}
@@ -106,7 +113,7 @@ export function ProfileSwitcher() {
                   : "hover:bg-glass-highlight/30 press-scale"
               )}
             >
-              <Avatar user={u} />
+              <UserProfileAvatar user={u} />
               <span className="flex-1 font-medium text-sm tracking-wide">{u.name}</span>
               {isActive && <Check className="h-4 w-4 text-primary" />}
             </button>
