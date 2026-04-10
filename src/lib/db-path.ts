@@ -1,5 +1,9 @@
 import path from "node:path"
 import fs from "node:fs"
+import { fileURLToPath } from "node:url"
+
+/** Repo root — do not use process.cwd() alone; Next/Turbopack may run API routes from another cwd. */
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
 
 /**
  * Resolves the SQLite file path for production (Railway volume) and local dev.
@@ -11,7 +15,7 @@ import fs from "node:fs"
 export function resolveSqliteFilePath(): string {
   const raw = process.env.DATABASE_PATH ?? process.env.DATA_DIR
   if (!raw) {
-    return path.resolve(process.cwd(), "prisma", "dev.db")
+    return path.join(REPO_ROOT, "prisma", "dev.db")
   }
 
   let s = raw.trim()

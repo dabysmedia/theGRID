@@ -14,7 +14,8 @@ export async function GET() {
       orderBy: { createdAt: "asc" },
     })
     return NextResponse.json(users)
-  } catch {
+  } catch (e) {
+    console.error("[users GET]", e)
     return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 })
   }
 }
@@ -43,7 +44,8 @@ export async function POST(req: NextRequest) {
       select: { id: true, name: true, avatarColor: true, avatarUrl: true },
     })
     return NextResponse.json(user, { status: 201 })
-  } catch {
+  } catch (e) {
+    console.error("[users POST]", e)
     return NextResponse.json({ error: "Failed to create user" }, { status: 500 })
   }
 }

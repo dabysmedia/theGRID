@@ -3,11 +3,14 @@
  */
 import path from "node:path"
 import fs from "node:fs"
+import { fileURLToPath } from "node:url"
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 export function resolveSqliteFilePath() {
   const raw = process.env.DATABASE_PATH ?? process.env.DATA_DIR
   if (!raw) {
-    return path.resolve(process.cwd(), "prisma", "dev.db")
+    return path.join(REPO_ROOT, "prisma", "dev.db")
   }
 
   let s = raw.trim()

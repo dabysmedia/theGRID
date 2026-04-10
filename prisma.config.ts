@@ -1,13 +1,16 @@
 import "dotenv/config"
 import path from "node:path"
 import fs from "node:fs"
+import { fileURLToPath } from "node:url"
 import { defineConfig } from "prisma/config"
+
+const PRISMA_CONFIG_DIR = path.dirname(fileURLToPath(import.meta.url))
 
 /** Same rules as src/lib/db-path.ts (Prisma CLI cannot import app code reliably). */
 function resolveSqliteFilePathForPrisma(): string {
   const raw = process.env["DATABASE_PATH"] ?? process.env["DATA_DIR"]
   if (!raw) {
-    return path.resolve(__dirname, "prisma", "dev.db")
+    return path.join(PRISMA_CONFIG_DIR, "prisma", "dev.db")
   }
   let s = raw.trim()
   if (s.startsWith("file:")) s = s.slice(5)
