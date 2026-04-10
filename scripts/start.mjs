@@ -20,18 +20,26 @@ function exitChild(code) {
 
 /** Absolute path to the primary SQLite database (already synced by `prisma db push`). */
 function buildEnv() {
-  const railwayDataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH
-  // Only inject DATABASE_URL when not already set (e.g. PostgreSQL in production cloud).
-  if (
-    process.env.DATABASE_URL ||
+  const dataDirRaw =
     process.env.DATABASE_PATH ||
     process.env.DATA_DIR ||
-    railwayDataDir
-  ) {
-    // Ensure Railway volume mount variable is respected by app + Prisma config.
-    if (railwayDataDir && !process.env.DATABASE_PATH && !process.env.DATA_DIR) {
-      return { ...process.env, DATABASE_PATH: railwayDataDir }
+    process.env.RAILWAY_VOLUME_MOUNT_PATH
+
+  // If running with volume-backed SQLite, normalize and force DATABASE_URL.
+  // This prevents stale env DATABASE_URL from pointing to a non-persistent file.
+  if (dataDirRaw) {
+    const trimmed = dataDirRaw.replace(/\/+$/, "")
+    const isFile = /\.(db|sqlite|sqlite3)$/i.test(trimmed)
+    const dbPath = isFile ? trimmed : `${trimmed}/thegrid.db`
+    return {
+      ...process.env,
+      DATABASE_PATH: dataDirRaw,
+      DATABASE_URL: `file:${dbPath}`,
     }
+  }
+
+  // Otherwise keep explicit DATABASE_URL untouched (e.g. postgres).
+  if (process.env.DATABASE_URL) {
     return process.env
   }
   const dbPath = resolve(root, "prisma", "dev.db")

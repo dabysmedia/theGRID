@@ -28,6 +28,14 @@ function resolveSqliteFilePathForPrisma(): string {
 }
 
 function resolveDbUrl(): string {
+  // Prefer mounted SQLite volume path when any data-dir env is present.
+  if (
+    process.env["DATABASE_PATH"] ||
+    process.env["DATA_DIR"] ||
+    process.env["RAILWAY_VOLUME_MOUNT_PATH"]
+  ) {
+    return `file:${resolveSqliteFilePathForPrisma()}`
+  }
   if (process.env["DATABASE_URL"]) return process.env["DATABASE_URL"]
   return `file:${resolveSqliteFilePathForPrisma()}`
 }
