@@ -3,9 +3,51 @@ import fs from "node:fs"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "journal")
 const MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"])
+
+/**
+ * Resolve the persistent data root from environment variables, mirroring the
+ * logic in scripts/prepare-volume.mjs so uploads land on the same volume that
+ * prepare-volume.mjs symlinks into public/uploads/*.
+ */
+function dataRoot(): string | null {
+  const dir = process.env.DATA_DIR?.trim()
+  if (dir) return dir.replace(/\/+$/, "")
+
+  const p = process.env.DATABASE_PATH?.trim()
+  if (p) {
+    const s = p.replace(/^file:/, "").replace(/\/+$/, "")
+    const resolved = path.resolve(s)
+    try {
+      if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+        return resolved
+      }
+    } catch {
+      /* ignore */
+    }
+    return path.dirname(resolved)
+  }
+
+  const url = process.env.DATABASE_URL?.trim()
+  if (url?.startsWith("file:")) {
+    const f = url.slice(5).trim()
+    const resolved = path.resolve(f)
+    return path.dirname(resolved)
+  }
+
+  return null
+}
+
+function getUploadDir(): string {
+  const root = dataRoot()
+  if (root) {
+    return path.join(root, "uploads", "journal")
+  }
+  return path.join(process.cwd(), "public", "uploads", "journal")
+}
+
+const UPLOAD_DIR = getUploadDir()
 
 function ensureUploadDir() {
   if (!fs.existsSync(UPLOAD_DIR)) {
