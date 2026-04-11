@@ -165,3 +165,67 @@
   stroke-width: 2px;
   filter: drop-shadow(0 0 5px var(--anatomy-hover-glow));
 }
+
+/* Injury leader lines + labels (SVG user space) */
+.anatomy-injury-callout-layer {
+  pointer-events: none;
+}
+
+.anatomy-injury-callout__line {
+  stroke: oklch(0.78 0.11 72 / 0.92);
+  stroke-width: 2.75px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 3px oklch(0.55 0.12 70 / 0.35));
+}
+
+.anatomy-injury-callout__dot {
+  fill: oklch(0.82 0.13 70 / 0.98);
+  stroke: oklch(0.12 0.02 250 / 0.88);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px oklch(0.65 0.14 65 / 0.45));
+}
+
+/* fill comes from SVG gradient on the element */
+.anatomy-injury-callout__text {
+  font-family: ui-sans-serif, system-ui, "Segoe UI", "Inter", sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  paint-order: stroke fill;
+  stroke: oklch(0.05 0.02 250 / 0.96);
+  stroke-width: 6px;
+  filter: drop-shadow(0 2px 6px oklch(0 0 0 / 0.55)) drop-shadow(0 0 14px oklch(0.55 0.1 75 / 0.2));
+}
+
+/* Tarkov-style condition tags (HUD strip) */
+.anatomy-tarkov-tags {
+  text-align: right;
+}
+
+.anatomy-tarkov-tag {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  font-size: 8.5px;
+  line-height: 1.25;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: oklch(0.7 0.06 95);
+  background: linear-gradient(
+    165deg,
+    oklch(0.24 0.03 95 / 0.94) 0%,
+    oklch(0.12 0.02 250 / 0.96) 100%
+  );
+  border: 1px solid oklch(0.4 0.06 95 / 0.45);
+  padding: 5px 9px 4px 10px;
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.07),
+    0 0 0 1px oklch(0 0 0 / 0.55),
+    0 2px 8px oklch(0 0 0 / 0.35);
+  clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%);
+}

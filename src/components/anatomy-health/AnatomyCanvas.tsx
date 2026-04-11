@@ -1,9 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { AnatomyHealthState, BodyRegionId, BodyView, SeverityLevel } from "@/lib/anatomy-health/model"
 import { slugToBodyRegion } from "@/lib/anatomy-health/body-highlighter"
 import { parseBodySegmentKey } from "@/lib/anatomy-health/segment-labels"
+import {
+  activeConditionTags,
+  buildInjuryCalloutsForView,
+  type InjuryRowLike,
+} from "@/lib/anatomy-health/derive-from-recovery"
 import { BodySilhouetteSvg } from "./BodySilhouetteSvg"
 import { ActiveIssuesPanel } from "./ActiveIssuesPanel"
 import { InjuryLegend } from "./InjuryLegend"
@@ -25,6 +30,8 @@ export interface AnatomyCanvasProps {
   injurySegmentSeverity?: Record<string, SeverityLevel> | null
   /** When false, hides PAIN / NRG / MOOD / etc. readouts in the header row. */
   showVitalsReadouts?: boolean
+  /** Active injury / illness rows — drives leader lines on the SVG and the condition tag strip. */
+  diagramInjuries?: InjuryRowLike[] | null
 }
 
 export function AnatomyCanvas({
@@ -37,6 +44,7 @@ export function AnatomyCanvas({
   domsScores = null,
   injurySegmentSeverity = null,
   showVitalsReadouts = true,
+  diagramInjuries = null,
 }: AnatomyCanvasProps) {
   const [view, setView] = useState<BodyView>("front")
   const [selectedRegionId, setSelectedRegionId] = useState<BodyRegionId | null>(defaultSelectedRegion)
@@ -60,6 +68,12 @@ export function AnatomyCanvas({
       setSelectedRegionId(slugToBodyRegion(p.slug, p.side, view))
     }
   }
+
+  const injuryCallouts = useMemo(
+    () => buildInjuryCalloutsForView(diagramInjuries ?? [], view),
+    [diagramInjuries, view]
+  )
+  const conditionTags = useMemo(() => activeConditionTags(diagramInjuries ?? []), [diagramInjuries])
 
   return (
     <div className={cn("anatomy-health-root", className)}>
@@ -131,6 +145,18 @@ export function AnatomyCanvas({
                     aria-hidden
                   />
                   <div className="relative z-[1] flex h-full min-h-[180px] w-full items-center justify-center">
+                    {conditionTags.length > 0 ? (
+                      <div
+                        className="anatomy-tarkov-tags pointer-events-none absolute top-1 right-1 z-20 flex max-w-[min(46%,11rem)] flex-col items-end gap-1"
+                        aria-label="Active conditions"
+                      >
+                        {conditionTags.map((tag, i) => (
+                          <span key={`${i}-${tag}`} className="anatomy-tarkov-tag">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                     <BodySilhouetteSvg
                       view={view}
                       state={state}
@@ -140,6 +166,7 @@ export function AnatomyCanvas({
                       onHoverSegment={setHoveredSegmentKey}
                       domsScores={domsScores}
                       injurySegmentSeverity={injurySegmentSeverity}
+                      injuryCallouts={injuryCallouts}
                       className="max-h-[min(58vh,440px)] max-w-full"
                     />
                   </div>

@@ -9,6 +9,7 @@ import { parseBodySegmentKey } from "./segment-labels"
 import type {
   AnatomyHealthState,
   BodyRegionId,
+  BodyView,
   GlobalCondition,
   LocalizedCondition,
   SeverityLevel,
@@ -125,6 +126,66 @@ export interface InjuryRowLike {
 function injuryTitle(row: InjuryRowLike): string {
   if (row.conditionKey === "custom") return row.customLabel || "Custom"
   return getConditionById(row.conditionKey)?.name ?? row.customLabel ?? row.conditionKey
+}
+
+/** Short label for UI tags / callouts (same as localized title). */
+export function injuryDisplayTitle(row: InjuryRowLike): string {
+  return injuryTitle(row)
+}
+
+/** Unique display titles for active (non-recovered) conditions — Tarkov-style tag strip. */
+export function activeConditionTags(injuries: InjuryRowLike[]): string[] {
+  const active = injuries.filter((i) => i.status !== "recovered")
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const row of active) {
+    const title = injuryTitle(row)
+    const key = title.trim().toLowerCase()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(title.length > 36 ? `${title.slice(0, 33)}…` : title)
+  }
+  return out
+}
+
+/** Segment keys used for diagram injury tinting (same rules as `buildInjurySegmentSeverityMap`). */
+export function highlightSegmentKeysForInjury(row: InjuryRowLike): string[] {
+  let keys = parseBodySegmentKeysJson(row.bodySegmentKeysJson ?? null)
+  if (keys.length === 0) {
+    keys = inferHighlightKeysFromCatalogSlugs(row)
+    if (keys.length === 0) {
+      const regions = resolveBodyRegionsForInjury(row)
+      if (regions.length === 0) return []
+      keys = segmentKeysForBodyRegions(regions)
+    }
+  }
+  return keys
+}
+
+/**
+ * Leader-line targets for the current diagram view: localized injuries only.
+ * One callout per injury row — if it spans multiple segments in this view, a single representative
+ * segment is chosen so the label is not duplicated.
+ */
+export function buildInjuryCalloutsForView(
+  injuries: InjuryRowLike[],
+  view: BodyView
+): { injuryId: string; segmentKey: string; label: string }[] {
+  const active = injuries.filter((i) => i.status !== "recovered")
+  const out: { injuryId: string; segmentKey: string; label: string }[] = []
+  for (const row of active) {
+    const regions = resolveBodyRegionsForInjury(row)
+    if (regions.length === 0) continue
+    const viewKeys = highlightSegmentKeysForInjury(row).filter((k) => {
+      const p = parseBodySegmentKey(k)
+      return p != null && p.view === view
+    })
+    if (viewKeys.length === 0) continue
+    viewKeys.sort((a, b) => a.localeCompare(b))
+    out.push({ injuryId: row.id, segmentKey: viewKeys[0], label: injuryTitle(row) })
+  }
+  out.sort((a, b) => a.segmentKey.localeCompare(b.segmentKey))
+  return out
 }
 
 function toLocalized(row: InjuryRowLike): LocalizedCondition {
@@ -254,15 +315,7 @@ export function buildInjurySegmentSeverityMap(injuries: InjuryRowLike[]): Record
   const active = injuries.filter((i) => i.status !== "recovered")
   for (const row of active) {
     const sev = injurySeverityToLevel(row.severity)
-    let keys = parseBodySegmentKeysJson(row.bodySegmentKeysJson ?? null)
-    if (keys.length === 0) {
-      keys = inferHighlightKeysFromCatalogSlugs(row)
-      if (keys.length === 0) {
-        const regions = resolveBodyRegionsForInjury(row)
-        if (regions.length === 0) continue
-        keys = segmentKeysForBodyRegions(regions)
-      }
-    }
+    const keys = highlightSegmentKeysForInjury(row)
     for (const k of keys) {
       out[k] = maxSeverity(out[k] ?? "none", sev)
     }

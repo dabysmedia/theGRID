@@ -367,6 +367,7 @@ export default function RecoveryPage() {
         state={anatomyState}
         domsScores={domsScoresMap}
         injurySegmentSeverity={injurySegmentSeverityMap}
+        diagramInjuries={injuries}
         showVitalsReadouts={false}
         headerActions={
           <Button
