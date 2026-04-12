@@ -9,6 +9,7 @@ import {
   utcCalendarDayRangeInclusive,
 } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
+import { sleepDurationHours } from "@/lib/sleepDuration"
 
 interface GoalRow {
   category: string
@@ -187,12 +188,8 @@ export async function GET(req: NextRequest) {
     const workoutLast7 = legacyWorkoutLast7.map((v, i) => v + sessionWorkoutLast7[i])
     const sleepLast7 = dailyTotals(sleepEntries, (items) => {
       if (!items.length) return 0
-      const entry = items[0]
-      return (
-        (new Date(entry.wakeTime).getTime() -
-          new Date(entry.bedtime).getTime()) /
-        3600000
-      )
+      const hrs = items.map((e) => sleepDurationHours(e.bedtime, e.wakeTime))
+      return Math.round((hrs.reduce((s, v) => s + v, 0) / hrs.length) * 10) / 10
     })
     const alcoholLast7 = dailyTotals(alcoholEntries, (items) =>
       items.reduce((s, e) => s + e.units, 0)

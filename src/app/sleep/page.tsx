@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
 import { formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
+import { sleepDurationHours } from "@/lib/sleepDuration"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 
 const sleepGoalPresets: GoalPreset[] = [
@@ -39,16 +40,8 @@ interface SleepEntry {
   notes: string | null
 }
 
-function durationHours(bed: string, wake: string): number {
-  const b = new Date(bed)
-  const w = new Date(wake)
-  let hours = (w.getTime() - b.getTime()) / 3600000
-  if (hours < 0) hours += 24
-  return Math.round(hours * 10) / 10
-}
-
 function calcDuration(bed: string, wake: string): string {
-  return `${durationHours(bed, wake)}h`
+  return `${sleepDurationHours(bed, wake)}h`
 }
 
 function formatTimeRange(bed: string, wake: string): string {
@@ -119,7 +112,7 @@ export default function SleepPage() {
       const k = entryDateKey(e)
       if (!byNight.has(k)) byNight.set(k, { hrs: [], qual: [] })
       const g = byNight.get(k)!
-      g.hrs.push(durationHours(e.bedtime, e.wakeTime))
+      g.hrs.push(sleepDurationHours(e.bedtime, e.wakeTime))
       g.qual.push(e.quality)
     }
     const nightHrAvgs = [...byNight.values()].map(
@@ -144,7 +137,7 @@ export default function SleepPage() {
     let best = "—"
     if (entries.length > 0) {
       const bestEntry = entries.reduce((a, e) =>
-        durationHours(e.bedtime, e.wakeTime) > durationHours(a.bedtime, a.wakeTime)
+        sleepDurationHours(e.bedtime, e.wakeTime) > sleepDurationHours(a.bedtime, a.wakeTime)
           ? e
           : a
       )
@@ -159,7 +152,7 @@ export default function SleepPage() {
   const todayHours = useMemo(() => {
     const todayEntry = entries.find((e) => entryDateKey(e) === today)
     if (!todayEntry) return 0
-    return durationHours(todayEntry.bedtime, todayEntry.wakeTime)
+    return sleepDurationHours(todayEntry.bedtime, todayEntry.wakeTime)
   }, [entries, today])
 
   const cutoff =
@@ -179,7 +172,7 @@ export default function SleepPage() {
   const chartData = useMemo(() => {
     return chartEntries.map((e) => ({
       label: format(new Date(e.date), "MMM d"),
-      hours: durationHours(e.bedtime, e.wakeTime),
+      hours: sleepDurationHours(e.bedtime, e.wakeTime),
       quality: e.quality,
     }))
   }, [chartEntries])
