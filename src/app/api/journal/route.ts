@@ -15,15 +15,16 @@ export async function GET(req: NextRequest) {
   const monthParam = searchParams.get("month")
 
   try {
-    let where = {}
+    const userId = await resolveUserId(req)
+    const where: Record<string, unknown> = { userId }
 
     if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
-      where = { date: utcRangeWhereForCalendarDay(dateParam) }
+      where.date = utcRangeWhereForCalendarDay(dateParam)
     } else if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
       const [y, m] = monthParam.split("-").map(Number)
       const start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0))
       const end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999))
-      where = { date: { gte: start, lte: end } }
+      where.date = { gte: start, lte: end }
     }
 
     const entries = await prisma.journalEntry.findMany({
@@ -35,6 +36,7 @@ export async function GET(req: NextRequest) {
     })
     return NextResponse.json(entries)
   } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     console.error("[journal GET]", e)
     const dev = process.env.NODE_ENV === "development"
     return NextResponse.json(

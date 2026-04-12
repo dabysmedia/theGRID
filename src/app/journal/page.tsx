@@ -891,7 +891,7 @@ export default function JournalPage() {
   const fetchEntries = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await apiFetch(`/api/journal?date=${encodeURIComponent(activeDate)}`)
+      const res = await apiFetch("/api/journal")
       const data: RawJournalEntry[] = await res.json()
       const parsed = Array.isArray(data) ? data.map(parseEntry) : []
       parsed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -901,7 +901,7 @@ export default function JournalPage() {
     } finally {
       setLoading(false)
     }
-  }, [activeDate])
+  }, [user?.id])
 
   useEffect(() => {
     fetchEntries()
