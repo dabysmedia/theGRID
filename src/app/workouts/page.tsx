@@ -133,6 +133,8 @@ interface WorkoutSession {
   status: string
   exercises: string | SessionExercise[]
   bodyWeightLb?: number | null
+  /** Routine cover when started from a template with art (`/uploads/routine-covers/…`). */
+  coverImageUrl?: string | null
 }
 
 function parseExercises<T>(raw: string | T[]): T[] {
@@ -1316,6 +1318,14 @@ function ActiveWorkout({
     () => new Set(),
   )
   const weighInPrefilledRef = useRef(false)
+  const setSwipeDragRef = useRef<{
+    pointerId: number
+    key: string
+    exId: string
+    setId: string
+    startX: number
+  } | null>(null)
+  const [setSwipeVisual, setSetSwipeVisual] = useState<{ key: string; dx: number } | null>(null)
 
   useEffect(() => {
     const start = new Date(session.startedAt).getTime()
@@ -1515,6 +1525,15 @@ function ActiveWorkout({
     onUpdate(exercises.filter((e) => e.id !== exId))
   }
 
+  function toggleExerciseCollapsed(exId: string) {
+    setCollapsedExerciseIds((p) => {
+      const next = new Set(p)
+      if (next.has(exId)) next.delete(exId)
+      else next.add(exId)
+      return next
+    })
+  }
+
   function addSet(exId: string) {
     setCollapsedExerciseIds((p) => {
       const next = new Set(p)
@@ -1565,6 +1584,62 @@ function ActiveWorkout({
       })
     }
     onUpdate(updated)
+  }
+
+  function setSwipeRowKey(exId: string, setId: string) {
+    return `${exId}:${setId}`
+  }
+
+  function onSetRowPointerDown(
+    ex: SessionExercise,
+    set: ExerciseSet,
+    e: React.PointerEvent<HTMLDivElement>,
+  ) {
+    const t = e.target as HTMLElement
+    if (t.closest("input, button")) return
+    if (ex.sets.length <= 1) return
+    const key = setSwipeRowKey(ex.id, set.id)
+    setSwipeDragRef.current = {
+      pointerId: e.pointerId,
+      key,
+      exId: ex.id,
+      setId: set.id,
+      startX: e.clientX,
+    }
+    setSetSwipeVisual({ key, dx: 0 })
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  function onSetRowPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const r = setSwipeDragRef.current
+    if (!r || e.pointerId !== r.pointerId) return
+    const dx = Math.min(0, Math.max(-120, e.clientX - r.startX))
+    setSetSwipeVisual({ key: r.key, dx })
+  }
+
+  function onSetRowPointerEnd(e: React.PointerEvent<HTMLDivElement>) {
+    const r = setSwipeDragRef.current
+    const el = e.currentTarget as HTMLDivElement
+    if (el.hasPointerCapture?.(e.pointerId)) {
+      try {
+        el.releasePointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
+    }
+    if (!r || e.pointerId !== r.pointerId) {
+      setSwipeDragRef.current = null
+      setSetSwipeVisual(null)
+      return
+    }
+    const dx = e.clientX - r.startX
+    const { exId, setId } = r
+    setSwipeDragRef.current = null
+    setSetSwipeVisual(null)
+    const ex = exercisesRef.current.find((x) => x.id === exId)
+    if (dx < -64 && ex && ex.sets.length > 1) {
+      removeSet(exId, setId)
+    }
   }
 
   function updateSet(
@@ -1675,6 +1750,8 @@ function ActiveWorkout({
       ? Math.min(1, Math.max(0, 1 - restRemainingSec / restTotalSec))
       : 0
 
+  const heroCover = session.coverImageUrl?.trim() ?? ""
+
   return (
     <>
       <div
@@ -1685,9 +1762,24 @@ function ActiveWorkout({
       >
         <div
           className={cn(
-            "glass-frost flex min-h-0 w-full flex-1 flex-col overflow-hidden border-border/20 sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:max-w-lg sm:flex-none sm:rounded-2xl sm:border sm:shadow-2xl sm:shadow-black/30",
+            "glass-frost relative flex min-h-0 w-full flex-1 flex-col overflow-hidden border-border/20 sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:max-w-lg sm:flex-none sm:rounded-2xl sm:border sm:shadow-2xl sm:shadow-black/30",
           )}
         >
+          {heroCover ? (
+            <>
+              {/* Hero band only — top of panel, not full scroll height */}
+              <div
+                className="pointer-events-none absolute left-0 right-0 top-0 z-0 h-[min(36dvh,15rem)] bg-cover bg-[center_top] bg-no-repeat opacity-[0.26] dark:opacity-[0.32] sm:rounded-t-2xl"
+                style={{ backgroundImage: `url(${heroCover})` }}
+                aria-hidden
+              />
+              <div
+                className="pointer-events-none absolute left-0 right-0 top-0 z-[1] h-[min(36dvh,15rem)] bg-gradient-to-b from-background/88 via-background/45 to-transparent dark:from-background/92 dark:via-background/50 dark:to-transparent sm:rounded-t-2xl"
+                aria-hidden
+              />
+            </>
+          ) : null}
+          <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col overflow-hidden">
           {/* Title row — matches routine dialog header */}
           <div className="shrink-0 border-b border-border/15 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-4">
             <div className="flex items-start justify-between gap-3">
@@ -1918,8 +2010,15 @@ function ActiveWorkout({
                       <div className="flex gap-3 pt-0.5">
                         <div className="min-w-0 flex-1 space-y-2">
                           <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <h3 className="text-sm font-semibold text-foreground">{ex.name}</h3>
+                            <button
+                              type="button"
+                              onClick={() => toggleExerciseCollapsed(ex.id)}
+                              className="min-w-0 flex-1 rounded-xl border border-transparent px-1.5 py-1.5 -mx-1.5 text-left transition-colors hover:bg-muted/20 hover:border-border/15 active:bg-muted/30 touch-manipulation"
+                              aria-expanded={!collapsed}
+                            >
+                              <h3 className="m-0 text-sm font-semibold text-foreground break-words">
+                                {ex.name}
+                              </h3>
                               {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
                                 <div className="mt-1 flex flex-wrap items-center gap-1">
                                   {ex.primaryMuscles.map((m) => (
@@ -1938,8 +2037,8 @@ function ActiveWorkout({
                                   )}
                                 </div>
                               )}
-                            </div>
-                            <div className="flex shrink-0 items-start gap-0.5">
+                            </button>
+                            <div className="flex min-h-[3rem] min-w-0 max-w-[42%] flex-1 basis-24 shrink-0 self-stretch pl-1 sm:max-w-[38%] sm:basis-28">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1947,18 +2046,10 @@ function ActiveWorkout({
                                   setSwapExerciseId(ex.id)
                                   setShowPicker(true)
                                 }}
-                                className="rounded-lg p-2 text-muted-foreground/40 transition-colors hover:bg-primary/10 hover:text-primary touch-manipulation"
+                                className="flex h-full w-full flex-col items-center justify-center gap-0.5 rounded-xl border border-border/20 bg-muted/15 px-2 text-muted-foreground/50 transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary touch-manipulation"
                                 aria-label={`Swap ${ex.name} for another exercise`}
                               >
-                                <ArrowLeftRight className="size-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => removeExercise(ex.id)}
-                                className="rounded-lg p-2 text-muted-foreground/35 transition-colors hover:bg-red-500/10 hover:text-red-400 touch-manipulation"
-                                aria-label={`Remove ${ex.name}`}
-                              >
-                                <Trash2 className="size-3.5" />
+                                <ArrowLeftRight className="size-5 shrink-0" />
                               </button>
                             </div>
                           </div>
@@ -1984,14 +2075,37 @@ function ActiveWorkout({
                         {ex.sets.map((set) => {
                           const prevSet = prev?.[set.setNumber - 1]
                           const typeInfo = SET_TYPE_LABELS[set.type]
+                          const swipeKey = setSwipeRowKey(ex.id, set.id)
+                          const swipeDx =
+                            setSwipeVisual?.key === swipeKey ? setSwipeVisual.dx : 0
                           return (
                             <div
                               key={set.id}
-                              className={cn(
-                                "grid grid-cols-[2rem_1fr_4.5rem_4.5rem_2.5rem] gap-1.5 items-center rounded-lg px-0.5 py-0.5 transition-colors",
-                                set.completed && "bg-primary/8",
-                              )}
+                              className="relative select-none overflow-hidden rounded-lg"
+                              onPointerDown={(e) => onSetRowPointerDown(ex, set, e)}
+                              onPointerMove={onSetRowPointerMove}
+                              onPointerUp={onSetRowPointerEnd}
+                              onPointerCancel={onSetRowPointerEnd}
                             >
+                              {swipeDx < -24 && ex.sets.length > 1 ? (
+                                <div
+                                  className="pointer-events-none absolute inset-y-0.5 right-0.5 z-[1] flex w-9 items-center justify-center rounded-md bg-destructive/18"
+                                  aria-hidden
+                                >
+                                  <X className="size-4 text-destructive" />
+                                </div>
+                              ) : null}
+                              <div
+                                className={cn(
+                                  "grid grid-cols-[2rem_1fr_4.5rem_4.5rem_2.5rem] gap-1.5 items-center rounded-lg px-0.5 py-0.5 transition-colors",
+                                  set.completed && "bg-primary/8",
+                                )}
+                                style={{
+                                  transform: swipeDx !== 0 ? `translateX(${swipeDx}px)` : undefined,
+                                  transition:
+                                    swipeDx !== 0 ? "none" : "transform 0.2s ease-out",
+                                }}
+                              >
                               <button
                                 type="button"
                                 onClick={() => cycleSetType(ex.id, set.id)}
@@ -2062,6 +2176,7 @@ function ActiveWorkout({
                               >
                                 <Check className="size-3.5" />
                               </button>
+                              </div>
                             </div>
                           )
                         })}
@@ -2075,16 +2190,14 @@ function ActiveWorkout({
                             <Plus className="size-3" />
                             Add set
                           </button>
-                          {ex.sets.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeSet(ex.id, ex.sets[ex.sets.length - 1].id)}
-                              className="flex items-center justify-center rounded-lg border border-dashed border-border/30 px-2.5 py-2 text-muted-foreground/35 transition-colors hover:border-red-500/30 hover:text-red-400 touch-manipulation"
-                              aria-label="Remove last set"
-                            >
-                              <X className="size-3" />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeExercise(ex.id)}
+                            className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-border/30 text-muted-foreground/35 transition-colors hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-400 touch-manipulation sm:size-11"
+                            aria-label={`Remove ${ex.name}`}
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
                           </div>
                         </div>
                       </div>
@@ -2111,29 +2224,31 @@ function ActiveWorkout({
             </div>
           </div>
 
-          {/* Footer — routine-style primary action */}
+          {/* Footer — square discard + full-width finish */}
           <div className="shrink-0 border-t border-border/15 px-4 py-3 pb-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom)))]">
-            <div className="flex gap-2">
+            <div className="flex items-stretch gap-2">
               <Button
                 type="button"
                 variant="outline"
-                size="lg"
-                className="h-12 flex-1 touch-manipulation border-red-500/25 text-red-400 hover:bg-red-500/10"
+                size="icon-lg"
+                className="h-12 w-12 min-h-12 min-w-12 shrink-0 touch-manipulation rounded-xl border-red-500/25 text-red-400 hover:bg-red-500/10 sm:h-12 sm:min-h-12 sm:w-12 sm:min-w-12"
+                aria-label="Discard workout"
                 onClick={() => setConfirmEndAction("discard")}
               >
-                Discard
+                <X className="size-5" aria-hidden />
               </Button>
               <Button
                 type="button"
                 variant="glass"
                 size="lg"
-                className="h-12 flex-[1.4] gap-2 press-scale touch-manipulation"
+                className="h-12 min-h-12 min-w-0 flex-1 gap-2 press-scale touch-manipulation sm:h-12 sm:min-h-12"
                 onClick={() => setConfirmEndAction("finish")}
               >
                 <Check className="size-4 shrink-0" />
                 Finish workout
               </Button>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -2395,6 +2510,7 @@ export default function WorkoutsPage() {
   async function startSession(
     name: string,
     templateExercises?: TemplateExercise[],
+    routineCoverUrl?: string | null,
   ) {
     setStartError(null)
     const exercises: SessionExercise[] = templateExercises
@@ -2416,7 +2532,12 @@ export default function WorkoutsPage() {
         ...noStore,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, date: today, exercises }),
+        body: JSON.stringify({
+          name,
+          date: today,
+          exercises,
+          coverImageUrl: routineCoverUrl ?? null,
+        }),
       })
 
       const rawText = await res.text()
@@ -3246,7 +3367,9 @@ export default function WorkoutsPage() {
                             "mt-auto h-8 w-full shrink-0 gap-1 px-2 text-[11px] press-scale touch-manipulation sm:h-9 sm:text-xs",
                             routineRearrangeMode && "pointer-events-none",
                           )}
-                          onClick={() => startSession(tmpl.name, exs)}
+                          onClick={() =>
+                            startSession(tmpl.name, exs, tmpl.coverImageUrl?.trim() ?? null)
+                          }
                         >
                           <Play className="size-3 shrink-0" />
                           Start

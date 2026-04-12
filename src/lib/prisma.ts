@@ -6,8 +6,12 @@ import path from "node:path"
 import fs from "node:fs"
 import { resolveSqliteFilePath } from "@/lib/db-path"
 
+/** Increment when Prisma schema changes require a fresh client (dev HMR keeps `globalThis.prisma` otherwise). */
+const PRISMA_CLIENT_CACHE_REV = 2
+
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
+  prismaClientCacheRev?: number
 }
 
 /**
@@ -44,11 +48,18 @@ function clientHasRecoveryModels(client: PrismaClient): boolean {
 
 function getPrismaClient(): PrismaClient {
   const cached = globalForPrisma.prisma
-  if (cached && clientHasRecoveryModels(cached)) return cached
+  if (
+    cached &&
+    globalForPrisma.prismaClientCacheRev === PRISMA_CLIENT_CACHE_REV &&
+    clientHasRecoveryModels(cached)
+  ) {
+    return cached
+  }
   if (cached) {
     void cached.$disconnect().catch(() => {})
   }
   const fresh = createPrismaClient()
+  globalForPrisma.prismaClientCacheRev = PRISMA_CLIENT_CACHE_REV
   globalForPrisma.prisma = fresh
   return fresh
 }

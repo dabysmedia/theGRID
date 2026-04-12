@@ -119,6 +119,7 @@ model WorkoutSession {
   status         String    @default("active")
   exercises      String    @default("[]")
   bodyWeightLb   Float?
+  coverImageUrl  String?
   userId         String?
   user           User?     @relation(fields: [userId], references: [id])
   createdAt      DateTime  @default(now())

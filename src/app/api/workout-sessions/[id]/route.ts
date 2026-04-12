@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { normalizeRoutineCoverUrl } from "@/lib/routine-cover-url"
 import { resolveUserId, UserError } from "@/lib/current-user"
 
 export async function GET(
@@ -60,6 +61,9 @@ export async function PUT(
         const n = Number(raw)
         data.bodyWeightLb = Number.isFinite(n) && n > 0 ? n : null
       }
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "coverImageUrl")) {
+      data.coverImageUrl = normalizeRoutineCoverUrl(body.coverImageUrl) ?? null
     }
 
     const session = await prisma.workoutSession.update({ where: { id }, data })

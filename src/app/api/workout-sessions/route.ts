@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { parseYyyyMmDdToStoredDate } from "@/lib/dateStorage"
+import { normalizeRoutineCoverUrl } from "@/lib/routine-cover-url"
 import { resolveUserId, UserError } from "@/lib/current-user"
 
 export async function GET(req: NextRequest) {
@@ -71,6 +72,8 @@ export async function POST(req: NextRequest) {
       if (Number.isFinite(n) && n > 0) bw = n
     }
 
+    const coverImageUrl = normalizeRoutineCoverUrl(body.coverImageUrl)
+
     const session = await prisma.workoutSession.create({
       data: {
         name: (name || "Workout").trim(),
@@ -79,6 +82,7 @@ export async function POST(req: NextRequest) {
         bodyWeightLb: bw,
         status: "active",
         userId,
+        ...(coverImageUrl != null ? { coverImageUrl } : {}),
       },
     })
     return NextResponse.json(session, {

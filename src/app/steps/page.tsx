@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Calendar, Footprints, Trash2 } from "lucide-react"
 import {
   Bar,
@@ -176,8 +176,24 @@ export default function StepsPage() {
   const [runEntries, setRunEntries] = useState<RunEntry[]>([])
   const [count, setCount] = useState("")
   const [inputMode, setInputMode] = useState<"steps" | "miles">("steps")
+  const [dailyStepTarget, setDailyStepTarget] = useState<number | null>(null)
 
   const today = activeDate
+
+  const fetchDailyStepGoal = useCallback(async () => {
+    try {
+      const r = await apiFetch("/api/goals?category=steps")
+      const data = await r.json()
+      if (!data?.id || data.goalType !== "daily" || data.direction === "down") {
+        setDailyStepTarget(null)
+        return
+      }
+      const t = Number(data.target)
+      setDailyStepTarget(Number.isFinite(t) && t > 0 ? Math.round(t) : null)
+    } catch {
+      setDailyStepTarget(null)
+    }
+  }, [])
 
   useEffect(() => {
     Promise.all([
@@ -199,6 +215,19 @@ export default function StepsPage() {
         setRunEntries([])
       })
   }, [])
+
+  useEffect(() => {
+    void fetchDailyStepGoal()
+  }, [fetchDailyStepGoal])
+
+  useEffect(() => {
+    function onGoalsUpdated(e: Event) {
+      const d = (e as CustomEvent<{ category?: string }>).detail
+      if (d?.category === "steps") void fetchDailyStepGoal()
+    }
+    window.addEventListener("grid:goals-updated", onGoalsUpdated)
+    return () => window.removeEventListener("grid:goals-updated", onGoalsUpdated)
+  }, [fetchDailyStepGoal])
 
   const byDay = useMemo(() => {
     const m = new Map<string, number>()
@@ -298,6 +327,14 @@ export default function StepsPage() {
     () => partitionHistoryDayGroups(historyGroups, (g) => g.dayKey, today),
     [historyGroups, today]
   )
+
+  const milesRemainingToDailyGoal = useMemo(() => {
+    if (dailyStepTarget == null) return null
+    const todaySteps = byDay.get(today) ?? 0
+    const remainingSteps = Math.max(0, dailyStepTarget - todaySteps)
+    const miles = remainingSteps / STEPS_PER_MILE
+    return { remainingSteps, miles }
+  }, [dailyStepTarget, byDay, today])
 
   function switchInputMode(next: "steps" | "miles") {
     if (next === inputMode) return
@@ -424,6 +461,25 @@ export default function StepsPage() {
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today&apos;s Total</p>
             <p className="text-4xl font-bold tabular-nums tracking-tight">{todayTotal.toLocaleString()}</p>
             <p className="text-sm text-muted-foreground">steps</p>
+            {milesRemainingToDailyGoal != null && (
+              <p className="text-[11px] text-muted-foreground/90 mt-1.5">
+                {milesRemainingToDailyGoal.remainingSteps === 0 ? (
+                  <span className="font-medium text-emerald-600/90 dark:text-emerald-400/90">
+                    Daily goal reached
+                  </span>
+                ) : (
+                  <>
+                    <span className="font-semibold tabular-nums text-foreground/90">
+                      {(Math.round(milesRemainingToDailyGoal.miles * 100) / 100).toLocaleString(undefined, {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>{" "}
+                    mi remaining to hit your daily goal
+                  </>
+                )}
+              </p>
+            )}
             {stepsFromRunsToday > 0 && (
               <p className="text-[11px] text-muted-foreground/80 mt-1.5">
                 Includes {stepsFromRunsToday.toLocaleString()} steps from runs (

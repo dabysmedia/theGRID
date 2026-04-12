@@ -160,6 +160,9 @@ export function CategoryGoal({
       setEditing(false)
       setPicking(false)
       setSelectedPreset(null)
+      window.dispatchEvent(
+        new CustomEvent("grid:goals-updated", { detail: { category } })
+      )
     }
   }
 
@@ -172,6 +175,9 @@ export function CategoryGoal({
       setEditing(false)
       setPicking(false)
       setSelectedPreset(null)
+      window.dispatchEvent(
+        new CustomEvent("grid:goals-updated", { detail: { category } })
+      )
     }
   }
 

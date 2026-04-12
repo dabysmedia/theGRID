@@ -3,10 +3,9 @@ import fs from "node:fs"
 import path from "node:path"
 import { prisma } from "@/lib/prisma"
 import { getRoutineCoversUploadDir } from "@/lib/uploads-path"
+import { normalizeRoutineCoverUrl, ROUTINE_COVER_PREFIX } from "@/lib/routine-cover-url"
 import { ensureSequentialWorkoutTemplateSortOrders } from "@/lib/workout-template-sort"
 import { resolveUserId, UserError } from "@/lib/current-user"
-
-const ROUTINE_COVER_PREFIX = "/uploads/routine-covers/"
 
 const MAX_TAGS = 12
 const MAX_TAG_LEN = 40
@@ -45,15 +44,6 @@ function normalizeTagsJson(raw: unknown): string {
     if (out.length >= MAX_TAGS) break
   }
   return JSON.stringify(out)
-}
-
-function normalizeRoutineCoverUrl(raw: unknown): string | null {
-  if (raw == null || raw === "") return null
-  if (typeof raw !== "string") return null
-  const t = raw.trim()
-  if (!t) return null
-  if (!t.startsWith(ROUTINE_COVER_PREFIX)) return null
-  return t
 }
 
 function tryUnlinkRoutineCoverFile(url: string | null | undefined) {
