@@ -2038,20 +2038,18 @@ function ActiveWorkout({
                                 </div>
                               )}
                             </button>
-                            <div className="flex min-h-[3rem] min-w-0 max-w-[42%] flex-1 basis-24 shrink-0 self-stretch pl-1 sm:max-w-[38%] sm:basis-28">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  swapTargetRef.current = ex.id
-                                  setSwapExerciseId(ex.id)
-                                  setShowPicker(true)
-                                }}
-                                className="flex h-full w-full flex-col items-center justify-center gap-0.5 rounded-xl border border-border/20 bg-muted/15 px-2 text-muted-foreground/50 transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary touch-manipulation"
-                                aria-label={`Swap ${ex.name} for another exercise`}
-                              >
-                                <ArrowLeftRight className="size-5 shrink-0" />
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                swapTargetRef.current = ex.id
+                                setSwapExerciseId(ex.id)
+                                setShowPicker(true)
+                              }}
+                              className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/20 bg-muted/15 text-muted-foreground/50 transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary touch-manipulation sm:size-11"
+                              aria-label={`Swap ${ex.name} for another exercise`}
+                            >
+                              <ArrowLeftRight className="size-4 shrink-0" aria-hidden />
+                            </button>
                           </div>
 
                           <div className="grid grid-cols-[2rem_1fr_4.5rem_4.5rem_2.5rem] gap-1.5 px-0.5">
