@@ -242,9 +242,9 @@ html {
 }
 
 @layer utilities {
-  /* Google Fonts: Iceberg (loaded via link in root layout) */
-  .font-iceberg {
-    font-family: "Iceberg", sans-serif;
+  /* Google Fonts: Kelly Slab (loaded via link in root layout) */
+  .font-kelly-slab {
+    font-family: "Kelly Slab", serif;
   }
 
   /**

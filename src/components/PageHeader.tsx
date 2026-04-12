@@ -19,7 +19,7 @@ export function PageHeader({ title }: PageHeaderProps) {
             >
               <div className="status-dot translate-y-px" />
             </div>
-            <h1 className="font-iceberg min-w-0 flex-1 text-2xl font-semibold leading-tight tracking-[-0.03em] sm:text-3xl sm:leading-none">
+            <h1 className="font-kelly-slab min-w-0 flex-1 text-2xl font-semibold leading-tight tracking-[-0.03em] sm:text-3xl sm:leading-none">
               <span className="text-gradient-glass title-underline-accent block truncate">
                 {title}
               </span>

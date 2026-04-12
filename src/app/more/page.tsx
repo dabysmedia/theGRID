@@ -25,7 +25,7 @@ export default function MorePage() {
         <div className="flex items-center gap-3">
           <div className="status-dot" />
           <h2 className="text-base font-bold tracking-[0.18em] uppercase sm:text-lg">
-            <span className="text-gradient-glass title-underline-accent font-iceberg inline-block">
+            <span className="text-gradient-glass title-underline-accent inline-block">
               THEGRID
             </span>
           </h2>

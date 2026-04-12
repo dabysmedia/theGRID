@@ -31,6 +31,7 @@ import { cn, formatDate } from "@/lib/utils"
 import { kmToMiles, DEFAULT_WEIGHT_UNIT } from "@/lib/units"
 import { apiFetch } from "@/lib/api-fetch"
 import { useUser } from "@/context/UserContext"
+import { useActiveDate } from "@/context/DateContext"
 import { PageHeader } from "@/components/PageHeader"
 import { UserProfileAvatar } from "@/components/ProfileSwitcher"
 import { Button } from "@/components/ui/button"
@@ -306,7 +307,7 @@ function EntryCard({
           </div>
         </div>
 
-        {entry.images.length > 0 ? (
+        {entry.images.length > 0 && (
           <div className="grid gap-0.5 bg-black/25">
             {entry.images.map((url, i) => (
               <button
@@ -323,10 +324,6 @@ function EntryCard({
                 />
               </button>
             ))}
-          </div>
-        ) : (
-          <div className="mx-3.5 mb-3 rounded-xl border border-dashed border-border/35 bg-muted/25 p-5 text-center text-xs text-muted-foreground">
-            No image attached
           </div>
         )}
 
@@ -405,6 +402,12 @@ function StatsPicker({
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
   const fetched = useRef(false)
+
+  useEffect(() => {
+    fetched.current = false
+    setAvailable({})
+    setOpen(false)
+  }, [date])
 
   const fetchStats = useCallback(async () => {
     if (fetched.current) return
@@ -532,7 +535,7 @@ function StatsPicker({
       >
         <span className="flex items-center gap-2">
           <Dumbbell className="size-4 text-primary" />
-          Attach today&apos;s stats
+          Attach day stats
           {Object.keys(selected).length > 0 && (
             <span className="inline-flex items-center justify-center rounded-full bg-primary/15 text-primary text-[10px] font-semibold w-4 h-4">
               {Object.keys(selected).length}
@@ -546,7 +549,7 @@ function StatsPicker({
         <div className="border-t border-border/30 px-3 py-3">
           {loading ? (
             <p className="text-xs text-muted-foreground text-center py-2 animate-pulse">
-              Loading today&apos;s stats…
+              Loading stats…
             </p>
           ) : !hasAny ? (
             <p className="text-xs text-muted-foreground text-center py-2">
@@ -877,19 +880,18 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
 
 export default function JournalPage() {
   const { user } = useUser()
+  const { activeDate } = useActiveDate()
   const [entries, setEntries] = useState<JournalEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [composeOpen, setComposeOpen] = useState(false)
-  const [composeDate, setComposeDate] = useState<string>(formatDate(new Date()))
+  const [composeDate, setComposeDate] = useState<string>(activeDate)
   const [editEntry, setEditEntry] = useState<JournalEntry | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-
-  const todayStr = formatDate(new Date())
 
   const fetchEntries = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await apiFetch("/api/journal")
+      const res = await apiFetch(`/api/journal?date=${encodeURIComponent(activeDate)}`)
       const data: RawJournalEntry[] = await res.json()
       const parsed = Array.isArray(data) ? data.map(parseEntry) : []
       parsed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -899,7 +901,7 @@ export default function JournalPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeDate])
 
   useEffect(() => {
     fetchEntries()
@@ -958,7 +960,7 @@ export default function JournalPage() {
           <Button
             variant="glass"
             size="sm"
-            onClick={() => openCompose(todayStr)}
+            onClick={() => openCompose(activeDate)}
           >
             <Plus className="size-4" />
             Write entry
@@ -980,7 +982,7 @@ export default function JournalPage() {
 
       {/* FAB */}
       <button
-        onClick={() => openCompose(todayStr)}
+        onClick={() => openCompose(activeDate)}
         className={cn(
           "fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,1rem))]",
           "flex h-14 w-14 items-center justify-center rounded-2xl shadow-xl shadow-black/30",

@@ -248,8 +248,10 @@ const CORR_VOICE: Record<
     sleepNeg: "Better sleep tended to match a lighter number that same day.",
   },
   bowel: {
-    lagPos: "These logs and your weight often climbed in the same direction within a couple days.",
-    lagNeg: "They tended to drift opposite over the next day or two.",
+    lagPos:
+      "More bowel logs and a heavier next weigh-in moved together this month — a weaker fit for the “emptying lightens the scale” story; sodium, carbs, and training still drive a lot of short noise.",
+    lagNeg:
+      "More logged bowel days tended to come before a lighter next weigh-in — that matches food volume and GI contents nudging the scale, not necessarily fat change overnight.",
     sleepPos: "",
     sleepNeg: "",
   },
@@ -291,7 +293,10 @@ function correlationCardCopy(
         ? v.lagPos
         : v.lagNeg
 
-  const sub = `${strengthShort(r)} signal · r ${formatR(r)}`
+  let sub = `${strengthShort(r)} signal · r ${formatR(r)}`
+  if (metricKey === "bowel" && mode === "lagged1to2" && r < -0.15) {
+    sub = `${sub} · negative r here supports transit/volume showing up on the scale`
+  }
 
   return { title, sub }
 }
@@ -433,29 +438,45 @@ function buildScaleCues(daily: DayData[], key: MetricKey): string[] {
     return lines.slice(0, 3)
   }
 
-  // bowel
-  lines.push(
-    "Bowel frequency rarely drives big scale shifts alone; pair it with intake and movement when you’re troubleshooting weight jumps."
-  )
-  const rows: { val: number; delta: number }[] = []
+  // bowel — interpret no-log days + spikes as possible retained volume on the scale
+  const rows: { val: number; delta: number; label: string }[] = []
   for (let i = 0; i < daily.length; i++) {
     const d = daily[i]!
     const delta = forwardDeltaLb(daily, i)
     if (delta == null) continue
-    rows.push({ val: d.bowel, delta })
+    rows.push({ val: d.bowel, delta, label: d.label })
   }
-  if (rows.length >= 5) {
-    const withLogs = rows.filter((r) => r.val > 0)
-    const none = rows.filter((r) => r.val === 0)
-    if (withLogs.length && none.length) {
-      const a = mean(withLogs.map((r) => r.delta))
-      const b = mean(none.map((r) => r.delta))
-      if (Math.abs(a - b) >= 0.5) {
-        lines.push(
-          `Next weigh-in shifted about ${Math.abs(Math.round((a - b) * 10) / 10)} lb on average between days with vs without a log — small sample, but interesting if you’re tracking gut rhythm.`
-        )
-      }
+  if (rows.length < 5) {
+    lines.push("Log a few more days with bowel notes and a follow-up weigh-in to compare transit vs the scale.")
+    return lines
+  }
+  const withLogs = rows.filter((r) => r.val > 0)
+  const none = rows.filter((r) => r.val === 0)
+  if (withLogs.length && none.length) {
+    const meanAfterLog = mean(withLogs.map((r) => r.delta))
+    const meanAfterNone = mean(none.map((r) => r.delta))
+    const gap = Math.round((meanAfterNone - meanAfterLog) * 10) / 10
+    if (gap >= 0.35) {
+      lines.push(
+        `Days with no bowel log averaged about ${gap} lb heavier on the next weigh-in than days with at least one — consistent with food volume and contents still sitting in the pipeline when you step on the scale.`
+      )
+    } else if (gap <= -0.35) {
+      lines.push(
+        "No-log days didn’t reliably run heavier before the next weigh-in — other drivers may be louder than transit this month."
+      )
     }
+  }
+  const spikesNoBowel = rows.filter((r) => r.val === 0 && r.delta >= 0.8)
+  if (spikesNoBowel.length) {
+    const worst = spikesNoBowel.reduce((a, b) => (b.delta > a.delta ? b : a))
+    lines.push(
+      `After at least one day with no bowel entry, the next weigh-in jumped up to +${worst.delta} lb (day ${worst.label}) — a pattern that often lines up with meal volume and GI load, not a sudden fat gain.`
+    )
+  }
+  if (lines.length === 0) {
+    lines.push(
+      "Bowel logging vs the next weigh-in stayed fairly flat — when the scale jumps, still cross-check calories, sodium, and sleep alongside gut rhythm."
+    )
   }
   return lines.slice(0, 3)
 }

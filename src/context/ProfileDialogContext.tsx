@@ -56,7 +56,7 @@ export function ProfileDialogProvider({ children }: { children: ReactNode }) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="glass-frost max-h-[min(32rem,85dvh)] max-w-md w-[calc(100vw-2rem)] flex flex-col overflow-hidden sm:w-full">
           <DialogHeader>
-            <DialogTitle className="font-iceberg text-lg tracking-tight">
+            <DialogTitle className="text-lg tracking-tight">
               {user ? "Profiles" : "Pick your profile"}
             </DialogTitle>
             <DialogDescription className="text-xs">
