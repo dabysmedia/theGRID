@@ -7,16 +7,35 @@ const AVATAR_COLORS = [
   "#ec4899", "#6366f1", "#14b8a6", "#f97316", "#06b6d4",
 ]
 
+const userListBaseSelect = {
+  id: true,
+  name: true,
+  avatarColor: true,
+  avatarUrl: true,
+} as const
+
 export async function GET() {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, name: true, avatarColor: true, avatarUrl: true },
+      select: { ...userListBaseSelect, vacationResumeDate: true },
       orderBy: { createdAt: "asc" },
     })
     return NextResponse.json(users)
   } catch (e) {
-    console.error("[users GET]", e)
-    return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 })
+    // DB may be behind schema (e.g. vacation column not migrated yet)
+    console.error("[users GET] with vacationResumeDate failed, retrying without it", e)
+    try {
+      const users = await prisma.user.findMany({
+        select: { ...userListBaseSelect },
+        orderBy: { createdAt: "asc" },
+      })
+      return NextResponse.json(
+        users.map((u) => ({ ...u, vacationResumeDate: null as string | null }))
+      )
+    } catch (e2) {
+      console.error("[users GET]", e2)
+      return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 })
+    }
   }
 }
 

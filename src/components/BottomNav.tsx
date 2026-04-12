@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useState,
   type CSSProperties,
 } from "react"
@@ -14,7 +15,7 @@ import {
   NotebookPen,
   BarChart3,
   CheckSquare,
-  MoreHorizontal,
+  Settings,
   Menu,
   ChevronRight,
   Utensils,
@@ -22,9 +23,12 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
+import { useUser } from "@/context/UserContext"
+import { useActiveDate } from "@/context/DateContext"
+import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 
 const navItems = [
-  { href: "/more", label: "More", icon: MoreHorizontal },
+  { href: "/more", label: "Settings", icon: Settings },
   { href: "/habits", label: "Habits", icon: CheckSquare },
   { href: "/journal", label: "Journal", icon: NotebookPen },
   { href: "/stats", label: "Stats", icon: BarChart3 },
@@ -45,6 +49,12 @@ const PANEL_WIDTH = "min(calc(100vw - 5.25rem), 42rem)"
 
 export function BottomNav() {
   const pathname = usePathname()
+  const { user } = useUser()
+  const { activeDate } = useActiveDate()
+  const vacationBlocksCaloriesQuick = useMemo(
+    () => isVacationBlockingCalendarDay(user?.vacationResumeDate, activeDate),
+    [user?.vacationResumeDate, activeDate]
+  )
   const [open, setOpen] = useState(false)
   const panelId = useId()
   const quickPanelId = useId()
@@ -113,16 +123,26 @@ export function BottomNav() {
                 {quickActions.map((item, idx) => {
                   const pathPrefix = item.href.split("?")[0] ?? item.href
                   const isActive = pathname.startsWith(pathPrefix)
+                  const logMealVacation =
+                    pathPrefix === "/calories" && vacationBlocksCaloriesQuick
                   return (
                     <Link
                       key={item.href}
-                      href={item.href}
-                      onClick={close}
+                      href={logMealVacation ? "#" : item.href}
+                      aria-disabled={logMealVacation}
+                      onClick={(e) => {
+                        if (logMealVacation) {
+                          e.preventDefault()
+                          return
+                        }
+                        close()
+                      }}
                       className={cn(
                         "relative flex touch-manipulation items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left text-[11px] font-medium tracking-wide transition-colors duration-150 sm:text-xs",
                         isActive
                           ? "text-primary"
                           : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+                        logMealVacation && "cursor-not-allowed opacity-40",
                         open &&
                           "motion-safe:animate-nav-dock-item motion-reduce:opacity-100 motion-reduce:transform-none"
                       )}
@@ -131,6 +151,7 @@ export function BottomNav() {
                           ? { animationDelay: `${40 + idx * 40}ms` }
                           : undefined
                       }
+                      title={logMealVacation ? "Calories paused (vacation mode)" : undefined}
                     >
                       {isActive && (
                         <span className="pointer-events-none absolute inset-0.5 rounded-md bg-grid-accent-dim/60" />

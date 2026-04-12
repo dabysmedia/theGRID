@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { parseYyyyMmDdToStoredDate, utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
+import { assertNotVacationBlocked } from "@/lib/vacation-block-server"
 
 export async function GET(req: NextRequest) {
   try {
@@ -48,6 +49,8 @@ export async function POST(req: NextRequest) {
     } catch {
       return NextResponse.json({ error: "Invalid date." }, { status: 400 })
     }
+
+    await assertNotVacationBlocked(userId, dateStr.slice(0, 10))
 
     const calories = Math.round(parseFloat(String(body.calories ?? "").trim()))
     if (!Number.isFinite(calories) || calories < 0) {
@@ -107,6 +110,8 @@ export async function PUT(req: NextRequest) {
     } catch {
       return NextResponse.json({ error: "Invalid date." }, { status: 400 })
     }
+
+    await assertNotVacationBlocked(userId, dateStr.slice(0, 10))
 
     const calories = Math.round(parseFloat(String(body.calories ?? "").trim()))
     if (!Number.isFinite(calories) || calories < 0) {

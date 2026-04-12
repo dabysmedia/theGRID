@@ -7,7 +7,7 @@ import fs from "node:fs"
 import { resolveSqliteFilePath } from "@/lib/db-path"
 
 /** Increment when Prisma schema changes require a fresh client (dev HMR keeps `globalThis.prisma` otherwise). */
-const PRISMA_CLIENT_CACHE_REV = 2
+const PRISMA_CLIENT_CACHE_REV = 3
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined

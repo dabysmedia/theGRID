@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { BodyView } from "@/lib/anatomy-health/model"
 import {
   bodyHighlighterViewBox,
@@ -35,6 +35,22 @@ export interface BodySilhouetteSvgProps {
   injuryCallouts?: { injuryId: string; segmentKey: string; label: string }[] | null
 }
 
+/** Injury tag chip beside leader line (SVG user units). */
+const CALLOUT_TAG_FS = 30
+const CALLOUT_TAG_PAD_X = 12
+const CALLOUT_TAG_PAD_Y = 7
+/** Gap below the horizontal connector before the tag rect (tag top anchors under line end). */
+const CALLOUT_TAG_LINE_GAP = 6
+
+/** Hinge / line terminal sits this far inside the viewBox edge (user units). */
+const CALLOUT_HINGE_EDGE_PAD = 2
+/** Min inset when clamping tag rect to the viewBox (avoids stroke clip). */
+const CALLOUT_VIEW_EDGE_CLAMP = 2
+/**
+ * Elbow along (cx → hingeEnd): lower = elbow nearer the body = longer horizontal stub.
+ */
+const CALLOUT_ELBOW_FRACTION = 0.22
+
 function segmentKeyHandler(
   e: React.KeyboardEvent,
   key: string,
@@ -44,6 +60,95 @@ function segmentKeyHandler(
     e.preventDefault()
     onSelect(key)
   }
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg"
+
+function breakLongWordForTag(
+  measureEl: SVGTextElement,
+  word: string,
+  maxLineWidth: number
+): string[] {
+  const out: string[] = []
+  let chunk = ""
+  for (let i = 0; i < word.length; i++) {
+    const ch = word[i]!
+    const next = chunk + ch
+    measureEl.textContent = next
+    const len = measureEl.getComputedTextLength()
+    if (len <= maxLineWidth || chunk === "") {
+      chunk = next
+    } else {
+      out.push(chunk)
+      chunk = ch
+    }
+  }
+  if (chunk) out.push(chunk)
+  return out
+}
+
+/** Word-wrap + measure using the same SVG font metrics as the visible tag. */
+function measureInjuryTagWrap(
+  svg: SVGSVGElement,
+  label: string,
+  maxLineWidth: number
+): { lines: string[]; textWidth: number; lineHeight: number } {
+  const display = label.toUpperCase()
+  const lineHeight = CALLOUT_TAG_FS * 1.2
+  const measureEl = document.createElementNS(SVG_NS, "text")
+  measureEl.setAttribute("class", "anatomy-injury-callout__tag-text")
+  measureEl.setAttribute("font-size", String(CALLOUT_TAG_FS))
+  measureEl.setAttribute("visibility", "hidden")
+  measureEl.setAttribute("aria-hidden", "true")
+  svg.appendChild(measureEl)
+
+  const widthOf = (s: string) => {
+    measureEl.textContent = s
+    return measureEl.getComputedTextLength()
+  }
+
+  const words = display.split(/\s+/).filter(Boolean)
+  const lines: string[] = []
+  let cur = ""
+
+  try {
+    if (words.length === 0) {
+      measureEl.textContent = "—"
+      return { lines: ["—"], textWidth: measureEl.getComputedTextLength(), lineHeight }
+    }
+    for (const w of words) {
+      const trial = cur ? `${cur} ${w}` : w
+      if (widthOf(trial) <= maxLineWidth) {
+        cur = trial
+      } else {
+        if (cur) {
+          lines.push(cur)
+          cur = ""
+        }
+        if (widthOf(w) <= maxLineWidth) {
+          cur = w
+        } else {
+          lines.push(...breakLongWordForTag(measureEl, w, maxLineWidth))
+        }
+      }
+    }
+    if (cur) lines.push(cur)
+
+    let textWidth = 0
+    for (const line of lines) {
+      textWidth = Math.max(textWidth, widthOf(line))
+    }
+    const minW = CALLOUT_TAG_FS * 2
+    textWidth = Math.max(minW, textWidth)
+    return { lines, textWidth, lineHeight }
+  } finally {
+    svg.removeChild(measureEl)
+  }
+}
+
+/** Leader: body dot → elbow on row → horizontal to margin (tag sits below this segment). */
+function injuryLeaderPath(c: { cx: number; cy: number; elbowX: number; labelY: number; hingeEndX: number }): string {
+  return `M ${c.cx} ${c.cy} L ${c.elbowX} ${c.labelY} L ${c.hingeEndX} ${c.labelY}`
 }
 
 export function BodySilhouetteSvg({
@@ -62,7 +167,6 @@ export function BodySilhouetteSvg({
   injuryCallouts = null,
 }: BodySilhouetteSvgProps) {
   const svgRef = useRef<SVGSVGElement>(null)
-  const labelGradientId = `anatomy-callout-label-${useId().replace(/:/g, "")}`
   const vb = bodyHighlighterViewBox(view)
 
   const segments = useMemo(() => bodySegmentsForView(view), [view])
@@ -81,10 +185,18 @@ export function BodySilhouetteSvg({
     label: string
     cx: number
     cy: number
-    labelX: number
+    /** Inner margin X where the horizontal leader ends. */
+    hingeEndX: number
     labelY: number
     elbowX: number
     placeRight: boolean
+    tagX: number
+    tagY: number
+    tagW: number
+    tagH: number
+    lines: string[]
+    lineHeight: number
+    firstBaselineY: number
   }
 
   const [calloutLayout, setCalloutLayout] = useState<CalloutLayout[]>([])
@@ -102,7 +214,6 @@ export function BodySilhouetteSvg({
       const { minX, minY, width, height } = parseBodyHighlighterViewBox(view)
       const midX = minX + width / 2
       const vbMaxY = minY + height
-      const pad = 18
 
       type Raw = {
         injuryId: string
@@ -110,7 +221,7 @@ export function BodySilhouetteSvg({
         label: string
         cx: number
         cy: number
-        labelX: number
+        hingeEndX: number
         labelY: number
         placeRight: boolean
       }
@@ -135,25 +246,38 @@ export function BodySilhouetteSvg({
         const cx = bbox.x + bbox.width / 2
         const cy = bbox.y + bbox.height / 2
         const placeRight = cx >= midX
-        const labelX = placeRight ? minX + width - pad : minX + pad
+        const hingeEndX = placeRight
+          ? minX + width - CALLOUT_HINGE_EDGE_PAD
+          : minX + CALLOUT_HINGE_EDGE_PAD
         const shortLabel = c.label.length > 52 ? `${c.label.slice(0, 49)}…` : c.label
         raw.push({
-        injuryId: c.injuryId,
-        segmentKey: c.segmentKey,
-        label: shortLabel,
-        cx,
-        cy,
-        labelX,
-        labelY: cy,
-        placeRight,
-      })
+          injuryId: c.injuryId,
+          segmentKey: c.segmentKey,
+          label: shortLabel,
+          cx,
+          cy,
+          hingeEndX,
+          labelY: cy,
+          placeRight,
+        })
       }
 
       raw.sort((a, b) => a.cy - b.cy)
-      const minGap = 28
+
+      const maxLineInnerW = Math.max(CALLOUT_TAG_FS * 4, Math.floor(width * 0.42))
+      const wrapped = raw.map((r) => ({
+        r,
+        ...measureInjuryTagWrap(svg, r.label, maxLineInnerW),
+      }))
+      const tagHeights = wrapped.map(
+        ({ lines, lineHeight }) => lineHeight * lines.length + CALLOUT_TAG_PAD_Y * 2
+      )
+      const maxTagH = Math.max(CALLOUT_TAG_FS * 1.35 + CALLOUT_TAG_PAD_Y * 2, ...tagHeights)
+      const stackGap = Math.max(30, Math.ceil(maxTagH + CALLOUT_TAG_LINE_GAP + 14))
+
       for (let i = 1; i < raw.length; i++) {
-        if (raw[i].labelY - raw[i - 1].labelY < minGap) {
-          raw[i].labelY = raw[i - 1].labelY + minGap
+        if (raw[i].labelY - raw[i - 1].labelY < stackGap) {
+          raw[i].labelY = raw[i - 1].labelY + stackGap
         }
       }
       for (const r of raw) {
@@ -162,10 +286,45 @@ export function BodySilhouetteSvg({
 
       if (!cancelled) {
         setCalloutLayout(
-          raw.map((r) => ({
-            ...r,
-            elbowX: r.cx + (r.labelX - r.cx) * 0.52,
-          }))
+          wrapped.map(({ r, lines, textWidth, lineHeight }) => {
+            const elbowX = r.cx + (r.hingeEndX - r.cx) * CALLOUT_ELBOW_FRACTION
+            const innerTextH = lineHeight * lines.length
+            const tagW = textWidth + CALLOUT_TAG_PAD_X * 2
+            const tagH = innerTextH + CALLOUT_TAG_PAD_Y * 2
+            /* Margin-side edge of tag flush with horizontal line end (hingeEndX). */
+            let tagX = r.placeRight ? r.hingeEndX - tagW : r.hingeEndX
+            tagX = Math.max(
+              minX + CALLOUT_VIEW_EDGE_CLAMP,
+              Math.min(tagX, minX + width - tagW - CALLOUT_VIEW_EDGE_CLAMP)
+            )
+            const tagY = r.labelY + CALLOUT_TAG_LINE_GAP
+            const maxTagY = vbMaxY - tagH - 6
+            const tagYClamped = Math.min(tagY, maxTagY)
+
+            const innerBoxH = tagH - 2 * CALLOUT_TAG_PAD_Y
+            const leadingSlack = Math.max(0, (innerBoxH - innerTextH) / 2)
+            const firstBaselineY =
+              tagYClamped + CALLOUT_TAG_PAD_Y + leadingSlack + CALLOUT_TAG_FS * 0.88
+
+            return {
+              injuryId: r.injuryId,
+              segmentKey: r.segmentKey,
+              label: r.label,
+              cx: r.cx,
+              cy: r.cy,
+              hingeEndX: r.hingeEndX,
+              labelY: r.labelY,
+              elbowX,
+              placeRight: r.placeRight,
+              tagX,
+              tagY: tagYClamped,
+              tagW,
+              tagH,
+              lines,
+              lineHeight,
+              firstBaselineY,
+            }
+          })
         )
       }
     })
@@ -248,39 +407,42 @@ export function BodySilhouetteSvg({
       })}
       {calloutLayout.length > 0 ? (
         <g className="anatomy-injury-callout-layer pointer-events-none" aria-hidden>
-          <defs>
-            <linearGradient
-              id={labelGradientId}
-              x1="0%"
-              y1="0%"
-              x2="100%"
-              y2="100%"
-              gradientUnits="objectBoundingBox"
-            >
-              <stop offset="0%" stopColor="oklch(0.97 0.025 95)" />
-              <stop offset="50%" stopColor="oklch(0.9 0.06 82)" />
-              <stop offset="100%" stopColor="oklch(0.78 0.1 72)" />
-            </linearGradient>
-          </defs>
           {calloutLayout.map((c) => (
             <g key={c.injuryId} className="anatomy-injury-callout">
-              {/* Outer stub along labelY to elbow, then to the dot. Text sits on that corner (inner end of the horizontal run). */}
               <path
-                d={`M ${c.labelX} ${c.labelY} L ${c.elbowX} ${c.labelY} L ${c.cx} ${c.cy}`}
                 fill="none"
                 className="anatomy-injury-callout__line"
+                d={injuryLeaderPath({
+                  cx: c.cx,
+                  cy: c.cy,
+                  elbowX: c.elbowX,
+                  labelY: c.labelY,
+                  hingeEndX: c.hingeEndX,
+                })}
+              />
+              <rect
+                x={c.tagX}
+                y={c.tagY}
+                width={c.tagW}
+                height={c.tagH}
+                rx={5}
+                ry={5}
+                className="anatomy-injury-callout__tag-bg"
               />
               <text
-                x={c.elbowX}
-                y={c.labelY}
-                textAnchor={c.placeRight ? "start" : "end"}
-                dominantBaseline="middle"
-                fill={`url(#${labelGradientId})`}
-                className="anatomy-injury-callout__text"
+                x={c.tagX + c.tagW / 2}
+                y={c.firstBaselineY}
+                fontSize={CALLOUT_TAG_FS}
+                textAnchor="middle"
+                className="anatomy-injury-callout__tag-text"
               >
-                {c.label}
+                {c.lines.map((line, i) => (
+                  <tspan key={i} x={c.tagX + c.tagW / 2} dy={i === 0 ? 0 : c.lineHeight}>
+                    {line}
+                  </tspan>
+                ))}
               </text>
-              <circle cx={c.cx} cy={c.cy} r={6.5} className="anatomy-injury-callout__dot" />
+              <circle cx={c.cx} cy={c.cy} r={7} className="anatomy-injury-callout__dot" />
             </g>
           ))}
         </g>

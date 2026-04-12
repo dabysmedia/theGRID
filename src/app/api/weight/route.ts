@@ -4,6 +4,8 @@ import { formatDate } from "@/lib/utils"
 import { subDays } from "date-fns"
 import { parseYyyyMmDdToStoredDate, utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
+import { assertNotVacationBlocked } from "@/lib/vacation-block-server"
+import { normalizeDayKey } from "@/lib/vacation-mode"
 
 async function getOrCreateGoal(userId: string) {
   let goal = await prisma.longGoal.findFirst({
@@ -111,6 +113,8 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
     const body = await req.json()
+    const dayKey = normalizeDayKey(String(body.date ?? ""))
+    if (dayKey) await assertNotVacationBlocked(userId, dayKey)
     const goal = await getOrCreateGoal(userId)
     const date = parseYyyyMmDdToStoredDate(String(body.date))
 

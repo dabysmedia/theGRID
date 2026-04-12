@@ -15,6 +15,9 @@ interface DailySummaryCardProps {
   href: string
   chartData: { value: number }[]
   color?: string
+  /** When set, card is not a link and calorie-style UI is muted (e.g. vacation mode). */
+  disabled?: boolean
+  disabledHint?: string
 }
 
 export function DailySummaryCard({
@@ -26,6 +29,8 @@ export function DailySummaryCard({
   href,
   chartData,
   color = "oklch(0.82 0.18 110)",
+  disabled = false,
+  disabledHint,
 }: DailySummaryCardProps) {
   const numericValue = typeof value === "string" ? parseFloat(value) || 0 : value
   const numericGoal = goal
@@ -35,14 +40,18 @@ export function DailySummaryCard({
     : null
 
   const progress =
-    numericGoal && numericGoal > 0
+    !disabled && numericGoal && numericGoal > 0
       ? Math.min((numericValue / numericGoal) * 100, 100)
       : null
 
-  return (
-    <Link href={href} className="group flex h-full min-h-0 touch-manipulation">
+  const inner = (
       <div
-        className="glass hud-corners flex h-full min-h-0 w-full flex-col rounded-2xl p-3 sm:p-4 press-scale hover:bg-glass-highlight/40 hover:shadow-lg hover:shadow-black/10 cursor-pointer relative overflow-hidden transition-[background-color,box-shadow] duration-200"
+        className={cn(
+          "glass hud-corners flex h-full min-h-0 w-full flex-col rounded-2xl p-3 sm:p-4 relative overflow-hidden transition-[background-color,box-shadow] duration-200",
+          disabled
+            ? "cursor-not-allowed opacity-[0.48] saturate-[0.35]"
+            : "press-scale hover:bg-glass-highlight/40 hover:shadow-lg hover:shadow-black/10 cursor-pointer"
+        )}
       >
         <div
           className="absolute top-0 right-0 w-24 h-24 opacity-[0.03] -translate-y-8 translate-x-8"
@@ -59,18 +68,26 @@ export function DailySummaryCard({
             </div>
             <span className="type-hud-label truncate">{title}</span>
           </div>
-          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" />
+          {!disabled && (
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" />
+          )}
         </div>
+
+        {disabled && disabledHint && (
+          <p className="text-[9px] font-medium uppercase tracking-wider text-amber-200/70 mb-1">
+            {disabledHint}
+          </p>
+        )}
 
         <div className="flex shrink-0 items-baseline gap-1.5">
           <span className="type-hud-value-lg">
             {typeof value === "number" ? value.toLocaleString() : value}
           </span>
-          {unit && <span className="type-hud-unit">{unit}</span>}
+          {unit && !disabled && <span className="type-hud-unit">{unit}</span>}
         </div>
 
         <div className="flex min-h-[2.25rem] flex-1 flex-col justify-end gap-1.5">
-          {numericGoal != null && (
+          {numericGoal != null && !disabled && (
             <p className="type-hud-target-line">/ {typeof goal === "number" ? goal.toLocaleString() : goal} TARGET</p>
           )}
           {progress != null && (
@@ -94,6 +111,19 @@ export function DailySummaryCard({
           <MiniChart data={chartData} color={color} />
         </div>
       </div>
+  )
+
+  if (disabled) {
+    return (
+      <div className="flex h-full min-h-0 touch-manipulation" aria-label={`${title} (paused)`}>
+        {inner}
+      </div>
+    )
+  }
+
+  return (
+    <Link href={href} className="group flex h-full min-h-0 touch-manipulation">
+      {inner}
     </Link>
   )
 }

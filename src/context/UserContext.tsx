@@ -17,6 +17,8 @@ export interface UserProfile {
   name: string
   avatarColor: string
   avatarUrl?: string | null
+  /** yyyy-MM-dd — first day calorie & weight logging resume; omitted/null = off */
+  vacationResumeDate?: string | null
 }
 
 interface UserContextValue {
@@ -25,7 +27,8 @@ interface UserContextValue {
   loading: boolean
   switchUser: (user: UserProfile) => void
   logout: () => void
-  refreshUsers: () => Promise<UserProfile[] | void>
+  /** Returns users on success, or `undefined` if the request failed (state is left unchanged). */
+  refreshUsers: () => Promise<UserProfile[] | undefined>
 }
 
 const UserContext = createContext<UserContextValue | null>(null)
@@ -70,7 +73,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         return list
       }
     } catch {}
-    return []
+    return undefined
   }, [])
 
   useEffect(() => {
@@ -78,8 +81,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
     let cancelled = false
 
     async function init() {
-      const list = await refreshUsers() as UserProfile[] | undefined
-      if (cancelled || !list) return
+      const list = await refreshUsers()
+      if (cancelled) return
+      if (list === undefined) {
+        setLoading(false)
+        return
+      }
 
       if (list.length === 1 && !user) {
         const solo = list[0]
@@ -103,7 +110,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const nameSame = f.name === user.name
     const colorSame = f.avatarColor === user.avatarColor
     const urlSame = (f.avatarUrl ?? null) === (user.avatarUrl ?? null)
-    if (nameSame && colorSame && urlSame) return
+    const vacationSame = (f.vacationResumeDate ?? null) === (user.vacationResumeDate ?? null)
+    if (nameSame && colorSame && urlSame && vacationSame) return
     setUser(f)
     storeUser(f)
   }, [users, user])

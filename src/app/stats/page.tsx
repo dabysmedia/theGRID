@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react"
 import Link from "next/link"
 import { PageHeader } from "@/components/PageHeader"
-import { format, subMonths, addMonths } from "date-fns"
+import { format, subMonths, addMonths, addDays, parseISO, startOfISOWeek } from "date-fns"
 import {
   ResponsiveContainer,
   AreaChart,
@@ -31,9 +31,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Activity,
+  TrendingDown,
+  TrendingUp,
+  Minus,
 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, formatDate, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
+import { useUser } from "@/context/UserContext"
+import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 
 interface DayData {
   date: string
@@ -49,6 +54,30 @@ interface DayData {
   weight: number | null
   /** Bodyweight on day+1, else day+2 (from extended fetch); null if neither logged */
   weightForward: number | null
+}
+
+function weightForwardSourceDayKey(
+  rowDate: string,
+  dailyByDate: Map<string, DayData>
+): string | null {
+  const k1 = formatDate(addDays(parseLocalDate(rowDate), 1))
+  const k2 = formatDate(addDays(parseLocalDate(rowDate), 2))
+  if (dailyByDate.get(k1)?.weight != null) return k1
+  if (dailyByDate.get(k2)?.weight != null) return k2
+  return null
+}
+
+/** Lagged metric vs next weigh-in: skip predictor or outcome day inside vacation window. */
+function includeLaggedWeightCorrelationRow(
+  vacationResumeDate: string | null | undefined,
+  d: DayData,
+  dailyByDate: Map<string, DayData>
+): boolean {
+  if (d.weightForward == null) return false
+  if (isVacationBlockingCalendarDay(vacationResumeDate, d.date)) return false
+  const fwd = weightForwardSourceDayKey(d.date, dailyByDate)
+  if (fwd != null && isVacationBlockingCalendarDay(vacationResumeDate, fwd)) return false
+  return true
 }
 
 interface Summary {
@@ -185,6 +214,63 @@ const METRIC_META: Record<
 
 const METRIC_KEYS: MetricKey[] = ["steps", "calories", "sleepHrs", "bowel"]
 
+/** Max |lb| difference to call "maintaining" vs mean of weekly averages. */
+const WEEKLY_WEIGHT_MAINTAIN_LB = 0.45
+
+type WeeklyWeightInsight = {
+  weekCount: number
+  /** Mean of each ISO week’s average weight (only weeks with ≥1 weigh-in). */
+  grandMeanOfWeeklyAverages: number
+  /** Most recent ISO week in range (by calendar). */
+  lastWeekAverage: number
+  /** lastWeekAverage − grandMeanOfWeeklyAverages */
+  vsBaselineLb: number
+  /** lastWeekAverage − previous week’s average; null if only one week. */
+  weekOverWeekLb: number | null
+  /** Based on last week vs baseline (lower weight = losing). */
+  baselineTrend: "losing" | "maintaining" | "gaining"
+}
+
+function computeWeeklyWeightInsight(
+  daily: DayData[],
+  vacationResumeDate?: string | null
+): WeeklyWeightInsight | null {
+  const byWeekStart = new Map<number, number[]>()
+  for (const d of daily) {
+    if (d.weight == null) continue
+    if (isVacationBlockingCalendarDay(vacationResumeDate, d.date)) continue
+    const t = startOfISOWeek(parseISO(d.date)).getTime()
+    if (!byWeekStart.has(t)) byWeekStart.set(t, [])
+    byWeekStart.get(t)!.push(d.weight)
+  }
+  if (byWeekStart.size === 0) return null
+
+  const weeks = [...byWeekStart.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, vals]) => vals.reduce((s, v) => s + v, 0) / vals.length)
+
+  const round1 = (n: number) => Math.round(n * 10) / 10
+  const grandMean = weeks.reduce((s, v) => s + v, 0) / weeks.length
+  const lastWeekAverage = weeks[weeks.length - 1]!
+  const prev =
+    weeks.length >= 2 ? weeks[weeks.length - 2]! : null
+  const vsBaselineLb = lastWeekAverage - grandMean
+  const weekOverWeekLb = prev != null ? lastWeekAverage - prev : null
+
+  let baselineTrend: WeeklyWeightInsight["baselineTrend"] = "maintaining"
+  if (vsBaselineLb < -WEEKLY_WEIGHT_MAINTAIN_LB) baselineTrend = "losing"
+  else if (vsBaselineLb > WEEKLY_WEIGHT_MAINTAIN_LB) baselineTrend = "gaining"
+
+  return {
+    weekCount: weeks.length,
+    grandMeanOfWeeklyAverages: round1(grandMean),
+    lastWeekAverage: round1(lastWeekAverage),
+    vsBaselineLb: round1(vsBaselineLb),
+    weekOverWeekLb: weekOverWeekLb != null ? round1(weekOverWeekLb) : null,
+    baselineTrend,
+  }
+}
+
 function pearson(xs: number[], ys: number[]): number | null {
   if (xs.length < 3 || xs.length !== ys.length) return null
   const n = xs.length
@@ -301,19 +387,29 @@ function correlationCardCopy(
   return { title, sub }
 }
 
-function lastWeightAtOrBefore(daily: DayData[], index: number): number | null {
+function lastWeightAtOrBefore(
+  daily: DayData[],
+  index: number,
+  vacationResumeDate?: string | null
+): number | null {
   for (let i = index; i >= 0; i--) {
-    const w = daily[i]!.weight
-    if (w != null) return w
+    const row = daily[i]!
+    if (row.weight == null) continue
+    if (isVacationBlockingCalendarDay(vacationResumeDate, row.date)) continue
+    return row.weight
   }
   return null
 }
 
 /** Forward weigh-in vs last known weight at/before that day (lagged metrics). */
-function forwardDeltaLb(daily: DayData[], i: number): number | null {
+function forwardDeltaLb(
+  daily: DayData[],
+  i: number,
+  vacationResumeDate?: string | null
+): number | null {
   const wf = daily[i]!.weightForward
   if (wf == null) return null
-  const prev = lastWeightAtOrBefore(daily, i)
+  const prev = lastWeightAtOrBefore(daily, i, vacationResumeDate)
   if (prev == null) return null
   return Math.round((wf - prev) * 10) / 10
 }
@@ -324,14 +420,21 @@ function mean(nums: number[]): number {
 }
 
 /** Metric-aware scale cues merged into the correlation summary (heuristic, not medical). */
-function buildScaleCues(daily: DayData[], key: MetricKey): string[] {
+function buildScaleCues(
+  daily: DayData[],
+  key: MetricKey,
+  vacationResumeDate?: string | null,
+  dailyByDate?: Map<string, DayData>
+): string[] {
   const lines: string[] = []
+  const byDate = dailyByDate ?? new Map(daily.map((x) => [x.date, x]))
 
   if (key === "calories") {
     const rows: { val: number; delta: number; label: string }[] = []
     for (let i = 0; i < daily.length; i++) {
       const d = daily[i]!
-      const delta = forwardDeltaLb(daily, i)
+      if (!includeLaggedWeightCorrelationRow(vacationResumeDate, d, byDate)) continue
+      const delta = forwardDeltaLb(daily, i, vacationResumeDate)
       if (delta == null) continue
       rows.push({ val: d.calories, delta, label: d.label })
     }
@@ -378,7 +481,8 @@ function buildScaleCues(daily: DayData[], key: MetricKey): string[] {
     const rows: { val: number; delta: number; label: string }[] = []
     for (let i = 0; i < daily.length; i++) {
       const d = daily[i]!
-      const delta = forwardDeltaLb(daily, i)
+      if (!includeLaggedWeightCorrelationRow(vacationResumeDate, d, byDate)) continue
+      const delta = forwardDeltaLb(daily, i, vacationResumeDate)
       if (delta == null) continue
       rows.push({ val: d.steps, delta, label: d.label })
     }
@@ -413,7 +517,12 @@ function buildScaleCues(daily: DayData[], key: MetricKey): string[] {
   }
 
   if (key === "sleepHrs") {
-    const paired = daily.filter((d) => d.weight != null && d.sleepHrs != null)
+    const paired = daily.filter(
+      (d) =>
+        d.weight != null &&
+        d.sleepHrs != null &&
+        !isVacationBlockingCalendarDay(vacationResumeDate, d.date)
+    )
     if (paired.length < 4) {
       lines.push("Log a few more nights with sleep and weight the same day to compare short vs long sleep.")
       return lines
@@ -442,7 +551,8 @@ function buildScaleCues(daily: DayData[], key: MetricKey): string[] {
   const rows: { val: number; delta: number; label: string }[] = []
   for (let i = 0; i < daily.length; i++) {
     const d = daily[i]!
-    const delta = forwardDeltaLb(daily, i)
+    if (!includeLaggedWeightCorrelationRow(vacationResumeDate, d, byDate)) continue
+    const delta = forwardDeltaLb(daily, i, vacationResumeDate)
     if (delta == null) continue
     rows.push({ val: d.bowel, delta, label: d.label })
   }
@@ -529,6 +639,10 @@ const METRIC_Y_AXIS = 0
 const WEIGHT_Y_AXIS = 1
 
 function CorrelationPanel({ daily }: { daily: DayData[] }) {
+  const { user } = useUser()
+  const vacationResumeDate = user?.vacationResumeDate
+  const dailyByDate = useMemo(() => new Map(daily.map((x) => [x.date, x])), [daily])
+
   const [active, setActive] = useState<MetricKey>("steps")
 
   const weightLineKey: "weight" | "weightForward" =
@@ -560,13 +674,21 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
   )
 
   const laggedPairCount = useMemo(
-    () => daily.filter((d) => d.weightForward != null).length,
-    [daily]
+    () =>
+      daily.filter((d) => includeLaggedWeightCorrelationRow(vacationResumeDate, d, dailyByDate))
+        .length,
+    [daily, vacationResumeDate, dailyByDate]
   )
 
   const sameDaySleepPairCount = useMemo(
-    () => daily.filter((d) => d.weight != null && d.sleepHrs != null).length,
-    [daily]
+    () =>
+      daily.filter(
+        (d) =>
+          d.weight != null &&
+          d.sleepHrs != null &&
+          !isVacationBlockingCalendarDay(vacationResumeDate, d.date)
+      ).length,
+    [daily, vacationResumeDate]
   )
 
   const correlations = useMemo(() => {
@@ -579,12 +701,19 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
     for (const k of METRIC_KEYS) {
       const mode = METRIC_META[k].correlationMode
       if (mode === "sameDay") {
-        const paired = daily.filter((d) => d.weight != null && d.sleepHrs != null)
+        const paired = daily.filter(
+          (d) =>
+            d.weight != null &&
+            d.sleepHrs != null &&
+            !isVacationBlockingCalendarDay(vacationResumeDate, d.date)
+        )
         const xs = paired.map((d) => d.sleepHrs!)
         const ys = paired.map((d) => d.weight!)
         out[k] = pearson(xs, ys)
       } else {
-        const paired = daily.filter((d) => d.weightForward != null)
+        const paired = daily.filter((d) =>
+          includeLaggedWeightCorrelationRow(vacationResumeDate, d, dailyByDate)
+        )
         const xs = paired.map((d) => {
           const v = d[k]
           return typeof v === "number" ? v : 0
@@ -594,7 +723,7 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
       }
     }
     return out
-  }, [daily])
+  }, [daily, vacationResumeDate, dailyByDate])
 
   const meta = METRIC_META[active]
   const hasWeight = daily.some((d) => d.weight != null || d.weightForward != null)
@@ -606,7 +735,15 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
     () => correlationCardCopy(active, rActive, pairCountForActive, meta.correlationMode),
     [active, rActive, pairCountForActive, meta.correlationMode]
   )
-  const scaleCues = useMemo(() => buildScaleCues(daily, active), [daily, active])
+  const scaleCues = useMemo(
+    () => buildScaleCues(daily, active, vacationResumeDate, dailyByDate),
+    [daily, active, vacationResumeDate, dailyByDate]
+  )
+
+  const weeklyWeightInsight = useMemo(
+    () => computeWeeklyWeightInsight(daily, vacationResumeDate),
+    [daily, vacationResumeDate]
+  )
 
   if (!hasWeight) return null
 
@@ -748,6 +885,104 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
           {activeCopy.title} {activeCopy.sub}
           {scaleCues.length > 0 ? ` ${scaleCues.join(" ")}` : ""}
         </p>
+      </div>
+
+      {weeklyWeightInsight && (
+        <WeeklyWeightPaceSection insight={weeklyWeightInsight} />
+      )}
+    </div>
+  )
+}
+
+function WeeklyWeightPaceSection({ insight }: { insight: WeeklyWeightInsight }) {
+  const TrendIcon =
+    insight.baselineTrend === "losing"
+      ? TrendingDown
+      : insight.baselineTrend === "gaining"
+        ? TrendingUp
+        : Minus
+  const trendLabel =
+    insight.baselineTrend === "losing"
+      ? "Losing"
+      : insight.baselineTrend === "gaining"
+        ? "Gaining"
+        : "Maintaining"
+  const trendClass =
+    insight.baselineTrend === "losing"
+      ? "text-[#22c55e]"
+      : insight.baselineTrend === "gaining"
+        ? "text-red-400"
+        : "text-muted-foreground"
+  const signedBaseline =
+    insight.vsBaselineLb > 0
+      ? `+${insight.vsBaselineLb}`
+      : `${insight.vsBaselineLb}`
+  const wow = insight.weekOverWeekLb
+  const signedWow =
+    wow == null ? null : wow > 0 ? `+${wow}` : `${wow}`
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-muted/5 px-3 py-3 sm:px-4 sm:py-3.5 space-y-3 shrink-0">
+      <div className="flex items-center gap-2">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#14b8a6]/15">
+          <Weight className="h-3.5 w-3.5 text-[#14b8a6]" />
+        </div>
+        <h3 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-foreground/90">
+          Weekly weight vs baseline
+        </h3>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-muted-foreground/75 mb-0.5">
+            Avg of weekly avgs
+          </p>
+          <p className="text-base font-bold tabular-nums text-[#14b8a6]">
+            {insight.grandMeanOfWeeklyAverages}
+            <span className="text-[10px] font-medium text-muted-foreground ml-1">lbs</span>
+          </p>
+          <p className="text-[9px] text-muted-foreground/60 mt-0.5">
+            {insight.weekCount} ISO week{insight.weekCount === 1 ? "" : "s"} with a log
+          </p>
+        </div>
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-muted-foreground/75 mb-0.5">
+            Last week (avg)
+          </p>
+          <p className="text-base font-bold tabular-nums text-foreground">
+            {insight.lastWeekAverage}
+            <span className="text-[10px] font-medium text-muted-foreground ml-1">lbs</span>
+          </p>
+        </div>
+        <div className="col-span-2 sm:col-span-1 flex flex-col justify-center rounded-lg border border-border/40 bg-background/25 px-2.5 py-2">
+          <p className="text-[9px] uppercase tracking-wider text-muted-foreground/75 mb-1">Vs baseline</p>
+          <div className="flex items-center gap-2">
+            <TrendIcon className={cn("h-4 w-4 shrink-0", trendClass)} aria-hidden />
+            <div>
+              <p className={cn("text-sm font-bold tabular-nums", trendClass)}>{trendLabel}</p>
+              <p className="text-[10px] text-muted-foreground tabular-nums">
+                {signedBaseline} lb this week vs typical
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="col-span-2 sm:col-span-1 flex flex-col justify-center rounded-lg border border-border/40 bg-background/25 px-2.5 py-2">
+          <p className="text-[9px] uppercase tracking-wider text-muted-foreground/75 mb-1">
+            Pace (lb / week)
+          </p>
+          {wow != null ? (
+            <p className="text-sm font-bold tabular-nums text-foreground">
+              {signedWow}
+              <span className="text-[10px] font-medium text-muted-foreground ml-1">lb</span>
+              <span className="text-[10px] font-normal text-muted-foreground/80 block mt-0.5">
+                Week-over-week change
+              </span>
+            </p>
+          ) : (
+            <p className="text-[10px] text-muted-foreground leading-snug">
+              Log weight in a second calendar week to see week-over-week lb/week.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )

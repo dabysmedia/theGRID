@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import { DailyWeighIn } from "@/components/DailyWeighIn"
 import { useActiveDate } from "@/context/DateContext"
-import { parseLocalDate } from "@/lib/utils"
+import { cn, parseLocalDate } from "@/lib/utils"
 
 /** Show today’s weigh-in prompt on the hub only from this local hour onward (inclusive). */
 const WEIGH_IN_PROMPT_FROM_HOUR = 4
@@ -39,14 +39,27 @@ interface ProgressRingProps {
   unit: string
   color: string
   icon: React.ReactNode
+  /** Muted ring; center shows `centerLabel` instead of value (e.g. vacation). */
+  disabled?: boolean
+  centerLabel?: string
 }
 
-function ProgressRing({ value, max, label, unit, color, icon }: ProgressRingProps) {
+function ProgressRing({
+  value,
+  max,
+  label,
+  unit,
+  color,
+  icon,
+  disabled,
+  centerLabel,
+}: ProgressRingProps) {
   const radius = 38
   const stroke = 3
   const circumference = 2 * Math.PI * radius
-  const pct = max > 0 ? Math.min(value / max, 1) : 0
+  const pct = disabled ? 0 : max > 0 ? Math.min(value / max, 1) : 0
   const offset = circumference - pct * circumference
+  const strokeColor = disabled ? "oklch(0.45 0.01 250 / 35%)" : color
 
   return (
     <div className="flex flex-col items-center gap-1.5">
@@ -66,45 +79,53 @@ function ProgressRing({ value, max, label, unit, color, icon }: ProgressRingProp
             cy="44"
             r={radius}
             fill="none"
-            stroke={color}
+            stroke={strokeColor}
             strokeWidth={stroke}
             strokeLinecap="butt"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
-            style={{
-              filter: `drop-shadow(0 0 6px ${color}50)`,
-              animation: `draw-ring 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both`,
-              // @ts-expect-error CSS custom properties
-              "--ring-circumference": circumference,
-              "--ring-offset": offset,
-            }}
+            style={
+              disabled
+                ? undefined
+                : {
+                    filter: `drop-shadow(0 0 6px ${color}50)`,
+                    animation: `draw-ring 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both`,
+                    // @ts-expect-error CSS custom properties
+                    "--ring-circumference": circumference,
+                    "--ring-offset": offset,
+                  }
+            }
           />
-          {/* Tick marks */}
-          {[0, 90, 180, 270].map((deg) => (
-            <line
-              key={deg}
-              x1="44"
-              y1="3"
-              x2="44"
-              y2="5"
-              stroke={color}
-              strokeWidth="0.5"
-              opacity="0.3"
-              transform={`rotate(${deg} 44 44)`}
-            />
-          ))}
+          {!disabled &&
+            [0, 90, 180, 270].map((deg) => (
+              <line
+                key={deg}
+                x1="44"
+                y1="3"
+                x2="44"
+                y2="5"
+                stroke={color}
+                strokeWidth="0.5"
+                opacity="0.3"
+                transform={`rotate(${deg} 44 44)`}
+              />
+            ))}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          {icon}
-          <span className="type-hud-stat mt-0.5">
-            {value >= 1000 ? `${(value / 1000).toFixed(1)}k` : Math.round(value)}
+          <span className={disabled ? "opacity-40" : undefined}>{icon}</span>
+          <span className={cn("type-hud-stat mt-0.5", disabled && "text-muted-foreground/50 tabular-nums")}>
+            {disabled && centerLabel != null
+              ? centerLabel
+              : value >= 1000
+                ? `${(value / 1000).toFixed(1)}k`
+                : Math.round(value)}
           </span>
         </div>
       </div>
       <div className="text-center">
-        <p className="type-hud-label">{label}</p>
-        <p className="type-hud-caption">
-          / {max >= 1000 ? `${(max / 1000).toFixed(max % 1000 === 0 ? 0 : 1)}k` : max} {unit}
+        <p className={cn("type-hud-label", disabled && "text-muted-foreground/55")}>{label}</p>
+        <p className={cn("type-hud-caption", disabled && "text-muted-foreground/40")}>
+          {disabled ? "Vacation" : `/ ${max >= 1000 ? `${(max / 1000).toFixed(max % 1000 === 0 ? 0 : 1)}k` : max} ${unit}`}
         </p>
       </div>
     </div>
@@ -114,6 +135,8 @@ function ProgressRing({ value, max, label, unit, color, icon }: ProgressRingProp
 interface WeeklyHeroProps {
   data: DashboardData
   loading: boolean
+  /** Hub day is in vacation — hide calories ring from scoring and show paused UI. */
+  vacationBlocksCalories?: boolean
 }
 
 /** Mean over days with logged data only (0 = no data for that day in dashboard aggregates). */
@@ -133,8 +156,11 @@ function clamp01(n: number): number {
   return Math.min(n, 1)
 }
 
-/** Weekly score 0–100: equal weight on calories avg vs goal, steps avg vs goal, and avg of running + workout vs goals */
-function computeWeeklyScore(d: DashboardData): number {
+/**
+ * Weekly score 0–100: equal weight on calories avg vs goal, steps avg vs goal, and avg of
+ * running + workout vs goals. When `skipCalories`, calories are omitted (vacation on hub day).
+ */
+function computeWeeklyScore(d: DashboardData, skipCalories: boolean): number {
   const calGoal = d.calories.goal ?? 2000
   const stepsGoal = d.steps.goal ?? 10000
   const calAvg = weekAvgFromLoggedDays(d.calories.last7)
@@ -153,10 +179,13 @@ function computeWeeklyScore(d: DashboardData): number {
     workoutGoalDaily > 0 ? clamp01(workoutAvg / workoutGoalDaily) : 0
 
   const activityScore = (runScore + workoutScore) / 2
+  if (skipCalories) {
+    return Math.round(((stepsScore + activityScore) / 2) * 100)
+  }
   return Math.round(((calScore + stepsScore + activityScore) / 3) * 100)
 }
 
-export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
+export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: WeeklyHeroProps) {
   const { activeDate, isToday } = useActiveDate()
   const [showWeighInPrompt, setShowWeighInPrompt] = useState(false)
 
@@ -179,7 +208,7 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
   const stepsGoal = data.steps.goal ?? 10000
   const sleepGoal = data.sleep.goal ?? 8
 
-  const weeklyScore = computeWeeklyScore(data)
+  const weeklyScore = computeWeeklyScore(data, vacationBlocksCalories)
 
   const secondaryStats = [
     {
@@ -245,6 +274,8 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
           unit="avg"
           color="#ef4444"
           icon={<Flame className="h-3.5 w-3.5 text-[#ef4444]" />}
+          disabled={vacationBlocksCalories}
+          centerLabel="—"
         />
         <ProgressRing
           value={stepsAvg}

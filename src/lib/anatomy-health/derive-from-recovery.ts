@@ -148,6 +148,21 @@ export function activeConditionTags(injuries: InjuryRowLike[]): string[] {
   return out
 }
 
+/** Active illness rows only — for the illness HUD (deduped titles). */
+export function activeIllnessTags(injuries: InjuryRowLike[]): string[] {
+  const active = injuries.filter((i) => i.status !== "recovered" && i.kind === "illness")
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const row of active) {
+    const title = injuryTitle(row)
+    const key = title.trim().toLowerCase()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(title.length > 36 ? `${title.slice(0, 33)}…` : title)
+  }
+  return out
+}
+
 /** Segment keys used for diagram injury tinting (same rules as `buildInjurySegmentSeverityMap`). */
 export function highlightSegmentKeysForInjury(row: InjuryRowLike): string[] {
   let keys = parseBodySegmentKeysJson(row.bodySegmentKeysJson ?? null)
@@ -171,7 +186,7 @@ export function buildInjuryCalloutsForView(
   injuries: InjuryRowLike[],
   view: BodyView
 ): { injuryId: string; segmentKey: string; label: string }[] {
-  const active = injuries.filter((i) => i.status !== "recovered")
+  const active = injuries.filter((i) => i.status !== "recovered" && i.kind !== "illness")
   const out: { injuryId: string; segmentKey: string; label: string }[] = []
   for (const row of active) {
     const regions = resolveBodyRegionsForInjury(row)

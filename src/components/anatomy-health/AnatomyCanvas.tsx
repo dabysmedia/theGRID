@@ -5,7 +5,7 @@ import type { AnatomyHealthState, BodyRegionId, BodyView, SeverityLevel } from "
 import { slugToBodyRegion } from "@/lib/anatomy-health/body-highlighter"
 import { parseBodySegmentKey } from "@/lib/anatomy-health/segment-labels"
 import {
-  activeConditionTags,
+  activeIllnessTags,
   buildInjuryCalloutsForView,
   type InjuryRowLike,
 } from "@/lib/anatomy-health/derive-from-recovery"
@@ -73,7 +73,7 @@ export function AnatomyCanvas({
     () => buildInjuryCalloutsForView(diagramInjuries ?? [], view),
     [diagramInjuries, view]
   )
-  const conditionTags = useMemo(() => activeConditionTags(diagramInjuries ?? []), [diagramInjuries])
+  const illnessTags = useMemo(() => activeIllnessTags(diagramInjuries ?? []), [diagramInjuries])
 
   return (
     <div className={cn("anatomy-health-root", className)}>
@@ -107,25 +107,9 @@ export function AnatomyCanvas({
               </div>
             ) : null}
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {(["front", "back"] as const).map((v) => (
-              <Button
-                key={v}
-                type="button"
-                size="sm"
-                variant={view === v ? "glass" : "outline"}
-                onClick={() => setView(v)}
-                className={cn(
-                  "type-hud-chip h-7 min-h-0 px-2 py-0 font-sans",
-                  view !== v && "border-border/50 bg-background/30 text-muted-foreground hover:text-foreground"
-                )}
-                aria-pressed={view === v}
-              >
-                {v}
-              </Button>
-            ))}
-            {headerActions}
-          </div>
+          {headerActions ? (
+            <div className="flex items-center gap-1.5 shrink-0">{headerActions}</div>
+          ) : null}
         </div>
 
         <div className="grid lg:grid-cols-12 lg:items-stretch">
@@ -144,19 +128,44 @@ export function AnatomyCanvas({
                     className="anatomy-svg-viewport-backdrop pointer-events-none absolute inset-0 rounded-md"
                     aria-hidden
                   />
-                  <div className="relative z-[1] flex h-full min-h-[180px] w-full items-center justify-center">
-                    {conditionTags.length > 0 ? (
-                      <div
-                        className="anatomy-tarkov-tags pointer-events-none absolute top-1 right-1 z-20 flex max-w-[min(46%,11rem)] flex-col items-end gap-1"
-                        aria-label="Active conditions"
-                      >
-                        {conditionTags.map((tag, i) => (
+                  <div
+                    className="absolute right-2 top-2 z-30 flex max-w-[min(13rem,52%)] flex-col items-end gap-1 pointer-events-none"
+                    aria-label="Illness"
+                  >
+                    <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground text-right w-full">
+                      Illness
+                    </p>
+                    {illnessTags.length === 0 ? (
+                      <p className="text-[10px] text-muted-foreground text-right">No illness</p>
+                    ) : (
+                      <div className="mt-0.5 flex flex-col items-end gap-1">
+                        {illnessTags.map((tag, i) => (
                           <span key={`${i}-${tag}`} className="anatomy-tarkov-tag">
                             {tag}
                           </span>
                         ))}
                       </div>
-                    ) : null}
+                    )}
+                  </div>
+                  <div className="absolute left-2 top-2 z-30 flex items-center gap-1" role="group" aria-label="Body view">
+                    {(["front", "back"] as const).map((v) => (
+                      <Button
+                        key={v}
+                        type="button"
+                        size="sm"
+                        variant={view === v ? "glass" : "outline"}
+                        onClick={() => setView(v)}
+                        className={cn(
+                          "type-hud-chip h-7 min-h-0 px-2 py-0 font-sans",
+                          view !== v && "border-border/50 bg-background/30 text-muted-foreground hover:text-foreground"
+                        )}
+                        aria-pressed={view === v}
+                      >
+                        {v}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="relative z-[1] flex h-full min-h-[180px] w-full items-center justify-center">
                     <BodySilhouetteSvg
                       view={view}
                       state={state}

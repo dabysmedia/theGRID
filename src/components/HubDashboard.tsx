@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Flame,
   Footprints,
@@ -18,8 +18,10 @@ import { WeeklyHero } from "./WeeklyHero"
 import { FastingTimer } from "./FastingTimer"
 import { FastingHubTile } from "./FastingHubTile"
 import { useActiveDate } from "@/context/DateContext"
+import { useUser } from "@/context/UserContext"
 import { cn } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
+import { isVacationBlockingCalendarDay, vacationCalorieDayMask } from "@/lib/vacation-mode"
 
 interface CategorySummary {
   todayValue: number
@@ -68,9 +70,31 @@ const alcoholCategory = categories.find((c) => c.key === "alcohol")!
 
 export function HubDashboard() {
   const { activeDate } = useActiveDate()
+  const { user } = useUser()
   const [data, setData] = useState<DashboardData>(defaultData)
   const [loading, setLoading] = useState(true)
   const [othersOpen, setOthersOpen] = useState(false)
+
+  const vacationBlocksCalLog = useMemo(
+    () => isVacationBlockingCalendarDay(user?.vacationResumeDate, activeDate),
+    [user?.vacationResumeDate, activeDate]
+  )
+
+  const calorieDayMask = useMemo(
+    () => vacationCalorieDayMask(user?.vacationResumeDate, activeDate),
+    [user?.vacationResumeDate, activeDate]
+  )
+
+  const dashboardForHero = useMemo(() => {
+    if (!calorieDayMask.some(Boolean)) return data
+    return {
+      ...data,
+      calories: {
+        ...data.calories,
+        last7: data.calories.last7.map((v, i) => (calorieDayMask[i] ? 0 : v)),
+      },
+    }
+  }, [data, calorieDayMask])
 
   useEffect(() => {
     let cancelled = false
@@ -100,7 +124,11 @@ export function HubDashboard() {
       <PageHeader title="THEGRID" />
 
       <div className="animate-fade-up stagger-2">
-        <WeeklyHero data={data} loading={loading} />
+        <WeeklyHero
+          data={dashboardForHero}
+          loading={loading}
+          vacationBlocksCalories={vacationBlocksCalLog}
+        />
       </div>
 
       <div className="animate-fade-up stagger-3">
@@ -121,6 +149,10 @@ export function HubDashboard() {
         >
           {mainCategories.map((cat, i) => {
             const summary = data[cat.key]
+            const chartData =
+              cat.key === "calories"
+                ? summary.last7.map((v, j) => ({ value: calorieDayMask[j] ? 0 : v }))
+                : summary.last7.map((v) => ({ value: v }))
             return (
               <div
                 key={cat.key}
@@ -128,13 +160,17 @@ export function HubDashboard() {
               >
                 <DailySummaryCard
                   title={cat.title}
-                  value={summary.todayValue}
+                  value={
+                    cat.key === "calories" && vacationBlocksCalLog ? "—" : summary.todayValue
+                  }
                   goal={summary.goal ?? undefined}
                   unit={summary.unit}
                   icon={cat.icon}
                   href={cat.href}
-                  chartData={summary.last7.map((v) => ({ value: v }))}
+                  chartData={chartData}
                   color={cat.color}
+                  disabled={cat.key === "calories" && vacationBlocksCalLog}
+                  disabledHint={cat.key === "calories" && vacationBlocksCalLog ? "Vacation mode" : undefined}
                 />
               </div>
             )

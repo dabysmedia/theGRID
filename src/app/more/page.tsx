@@ -4,6 +4,7 @@ import { Settings } from "lucide-react"
 import { PageHeader } from "@/components/PageHeader"
 import { ProfileSwitcher } from "@/components/ProfileSwitcher"
 import { ProfilePhotoSettings } from "@/components/ProfilePhotoSettings"
+import { VacationModeSettings } from "@/components/VacationModeSettings"
 
 export default function MorePage() {
   return (
@@ -19,6 +20,13 @@ export default function MorePage() {
         <ProfilePhotoSettings />
         <div className="hud-divider" />
         <ProfileSwitcher />
+        <div className="hud-divider" />
+        <div className="space-y-1">
+          <h2 className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground/55">
+            Settings
+          </h2>
+          <VacationModeSettings />
+        </div>
       </div>
 
       <div className="glass hud-corners space-y-4 rounded-2xl p-6 lg:max-w-md">

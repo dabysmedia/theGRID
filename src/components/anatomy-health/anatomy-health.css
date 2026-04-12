@@ -28,15 +28,17 @@
   --anatomy-doms-critical-fill: oklch(0.42 0.15 88 / 0.62);
   --anatomy-doms-critical-stroke: oklch(0.86 0.14 88 / 0.58);
 
-  /* Active injury — red ladder */
-  --anatomy-injury-low-fill: oklch(0.36 0.14 25 / 0.52);
-  --anatomy-injury-low-stroke: oklch(0.62 0.2 25 / 0.5);
-  --anatomy-injury-moderate-fill: oklch(0.36 0.17 22 / 0.58);
-  --anatomy-injury-moderate-stroke: oklch(0.66 0.21 22 / 0.55);
-  --anatomy-injury-high-fill: oklch(0.35 0.19 20 / 0.62);
-  --anatomy-injury-high-stroke: oklch(0.64 0.22 20 / 0.58);
-  --anatomy-injury-critical-fill: oklch(0.34 0.2 18 / 0.65);
-  --anatomy-injury-critical-stroke: oklch(0.62 0.22 18 / 0.62);
+  /* Leader line + tag chip (reference red) */
+  --anatomy-injury-callout-stroke: oklch(0.62 0.18 22 / 0.88);
+  /* Body highlights — same hue, higher L + alpha so injured segments read clearly on the figure */
+  --anatomy-injury-low-fill: oklch(0.72 0.2 22 / 0.58);
+  --anatomy-injury-low-stroke: oklch(0.8 0.18 22 / 0.85);
+  --anatomy-injury-moderate-fill: oklch(0.74 0.2 22 / 0.68);
+  --anatomy-injury-moderate-stroke: oklch(0.84 0.17 22 / 0.9);
+  --anatomy-injury-high-fill: oklch(0.77 0.2 22 / 0.78);
+  --anatomy-injury-high-stroke: oklch(0.88 0.16 22 / 0.92);
+  --anatomy-injury-critical-fill: oklch(0.8 0.2 22 / 0.88);
+  --anatomy-injury-critical-stroke: oklch(0.92 0.14 22 / 0.96);
 
   --anatomy-hover-glow: oklch(0.82 0.18 110 / 0.38);
   /* Ladder yellow (hue 110, same family as --primary) — layered selection ring */
@@ -166,38 +168,42 @@
   filter: drop-shadow(0 0 5px var(--anatomy-hover-glow));
 }
 
-/* Injury leader lines + labels (SVG user space) */
+/* Injury leader lines + labels (SVG user space); stroke inherits --anatomy-injury-callout-stroke from .anatomy-health-root */
 .anatomy-injury-callout-layer {
   pointer-events: none;
 }
 
 .anatomy-injury-callout__line {
-  stroke: oklch(0.78 0.11 72 / 0.92);
-  stroke-width: 2.75px;
+  stroke: var(--anatomy-injury-callout-stroke);
+  stroke-width: 9;
   stroke-linecap: round;
   stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-  filter: drop-shadow(0 0 3px oklch(0.55 0.12 70 / 0.35));
+  filter: drop-shadow(0 0 5px oklch(0.45 0.16 22 / 0.35));
 }
 
 .anatomy-injury-callout__dot {
-  fill: oklch(0.82 0.13 70 / 0.98);
-  stroke: oklch(0.12 0.02 250 / 0.88);
-  stroke-width: 1.5px;
-  vector-effect: non-scaling-stroke;
-  filter: drop-shadow(0 0 4px oklch(0.65 0.14 65 / 0.45));
+  fill: var(--anatomy-injury-callout-stroke);
+  stroke: oklch(0.92 0.03 250 / 0.55);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 5px oklch(0.45 0.16 22 / 0.35));
 }
 
-/* fill comes from SVG gradient on the element */
-.anatomy-injury-callout__text {
-  font-family: ui-sans-serif, system-ui, "Segoe UI", "Inter", sans-serif;
-  font-size: 34px;
-  font-weight: 700;
-  letter-spacing: 0.045em;
+.anatomy-injury-callout__tag-bg {
+  fill: var(--anatomy-injury-callout-stroke);
+  stroke: oklch(0.48 0.17 22 / 0.92);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 5px oklch(0.45 0.16 22 / 0.35));
+}
+
+.anatomy-injury-callout__tag-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  fill: oklch(0.97 0.01 250);
   paint-order: stroke fill;
-  stroke: oklch(0.05 0.02 250 / 0.96);
-  stroke-width: 6px;
-  filter: drop-shadow(0 2px 6px oklch(0 0 0 / 0.55)) drop-shadow(0 0 14px oklch(0.55 0.1 75 / 0.2));
+  stroke: oklch(0.12 0.03 250 / 0.85);
+  stroke-width: 1.75;
 }
 
 /* Tarkov-style condition tags (HUD strip) */

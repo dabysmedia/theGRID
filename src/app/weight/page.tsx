@@ -1,6 +1,8 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
+import { format } from "date-fns"
 import {
   Weight,
   Trash2,
@@ -24,11 +26,13 @@ import {
 import { PageHeader } from "@/components/PageHeader"
 import { apiFetch } from "@/lib/api-fetch"
 import { PageStatTile } from "@/components/PageStatTile"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
-import { parseLocalDate } from "@/lib/utils"
+import { useUser } from "@/context/UserContext"
+import { cn, parseLocalDate } from "@/lib/utils"
+import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
@@ -190,6 +194,7 @@ function StatCard({
 
 export default function WeightPage() {
   const { activeDate } = useActiveDate()
+  const { user } = useUser()
   const [data, setData] = useState<WeightData | null>(null)
   const [loading, setLoading] = useState(true)
   const [weight, setWeight] = useState("")
@@ -198,6 +203,16 @@ export default function WeightPage() {
   const [chartRange, setChartRange] = useState<"7d" | "30d" | "all">("30d")
 
   const today = activeDate
+
+  const vacationBlocksLog = useMemo(
+    () => isVacationBlockingCalendarDay(user?.vacationResumeDate, today),
+    [user?.vacationResumeDate, today]
+  )
+
+  const vacationResumeLabel =
+    user?.vacationResumeDate != null && user.vacationResumeDate !== ""
+      ? format(parseLocalDate(user.vacationResumeDate), "MMM d, yyyy")
+      : null
 
   useEffect(() => {
     apiFetch("/api/weight")
@@ -210,7 +225,7 @@ export default function WeightPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!weight || submitting) return
+    if (vacationBlocksLog || !weight || submitting) return
     setSubmitting(true)
 
     try {
@@ -259,6 +274,29 @@ export default function WeightPage() {
         <PageHeader title="Weight" />
         <div className="h-32 glass rounded-2xl" />
         <div className="h-48 glass rounded-2xl" />
+      </div>
+    )
+  }
+
+  if (vacationBlocksLog && vacationResumeLabel) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Weight" />
+        <div className="glass rounded-2xl border border-amber-500/20 bg-amber-500/5 p-8 text-center space-y-4 max-w-lg mx-auto">
+          <p className="text-sm text-amber-100/95 leading-relaxed">
+            Vacation mode is on for this day. Weight and the scale log are hidden until{" "}
+            <span className="font-semibold tabular-nums">{vacationResumeLabel}</span>.
+          </p>
+          <p className="text-xs text-muted-foreground/80">
+            Adjust your return date or turn vacation off in Settings.
+          </p>
+          <Link
+            href="/more"
+            className={cn(buttonVariants({ variant: "glass", size: "sm" }), "mt-2 inline-flex")}
+          >
+            Open Settings
+          </Link>
+        </div>
       </div>
     )
   }

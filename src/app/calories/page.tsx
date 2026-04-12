@@ -8,6 +8,7 @@ import {
   useCallback,
 } from "react"
 import { createPortal } from "react-dom"
+import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { addDays, differenceInCalendarDays, endOfWeek, format, startOfWeek, subDays } from "date-fns"
 import { ChevronDown, Search, Trash2, Plus, Star, X, Pencil, Target, Check } from "lucide-react"
@@ -21,10 +22,11 @@ import {
   YAxis,
 } from "recharts"
 import { useActiveDate } from "@/context/DateContext"
+import { useUser } from "@/context/UserContext"
 import { PageHeader } from "@/components/PageHeader"
 import { PageStatTile } from "@/components/PageStatTile"
 import { FoodSearch } from "@/components/FoodSearch"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { averageOnLoggedDays, cn, formatDate, parseLocalDate } from "@/lib/utils"
@@ -39,6 +41,7 @@ import {
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
 import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
+import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 
 interface CalorieEntry {
   id: string
@@ -467,9 +470,31 @@ export default function CaloriesPage() {
   }, [])
 
   const { activeDate } = useActiveDate()
+  const { user } = useUser()
   const today = activeDate
   const yesterday = formatDate(subDays(parseLocalDate(activeDate), 1))
   const realToday = formatDate(new Date())
+
+  const vacationBlocksLog = useMemo(
+    () => isVacationBlockingCalendarDay(user?.vacationResumeDate, today),
+    [user?.vacationResumeDate, today]
+  )
+
+  const vacationBlocksEditingEntry = useMemo(
+    () =>
+      editingEntry
+        ? isVacationBlockingCalendarDay(
+            user?.vacationResumeDate,
+            editingEntry.date.split("T")[0]
+          )
+        : false,
+    [user?.vacationResumeDate, editingEntry]
+  )
+
+  const vacationResumeLabel =
+    user?.vacationResumeDate != null && user.vacationResumeDate !== ""
+      ? format(parseLocalDate(user.vacationResumeDate), "MMM d, yyyy")
+      : null
 
   const fetchSavedMeals = useCallback(async () => {
     try {
@@ -625,6 +650,7 @@ export default function CaloriesPage() {
   }
 
   function addCurrentItemToMeal() {
+    if (vacationBlocksLog) return
     const cal = parseFloat(calories)
     if (!Number.isFinite(cal) || cal <= 0) return
 
@@ -669,6 +695,7 @@ export default function CaloriesPage() {
     if (!calories) return
 
     if (editingEntry) {
+      if (vacationBlocksEditingEntry) return
       const res = await apiFetch("/api/calories", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -739,6 +766,7 @@ export default function CaloriesPage() {
   }
 
   function handleUseSavedMeal(meal: SavedMeal) {
+    if (vacationBlocksLog) return
     const alreadyIn = draftMealItems.some((i) => i.savedMealId === meal.id)
     if (alreadyIn) {
       setDraftMealItems((prev) => prev.filter((i) => i.savedMealId !== meal.id))
@@ -824,7 +852,7 @@ export default function CaloriesPage() {
   }
 
   async function handlePostMealToDay() {
-    if (draftMealItems.length === 0 || postingMeal) return
+    if (vacationBlocksLog || draftMealItems.length === 0 || postingMeal) return
     setPostingMeal(true)
     try {
       const created: CalorieEntry[] = []
@@ -1043,6 +1071,34 @@ export default function CaloriesPage() {
           stroke: todayProgressRingStrokeHex(weekPlan.consumedToday, weekPlan.todayTarget),
         }
       : null
+
+  if (vacationBlocksLog && vacationResumeLabel) {
+    return (
+      <>
+        <Suspense fallback={null}>
+          <OpenLogFoodFromQuery setOpen={setLogFoodOpen} />
+        </Suspense>
+        <div className="space-y-6">
+          <PageHeader title="Calories" />
+          <div className="glass rounded-2xl border border-amber-500/20 bg-amber-500/5 p-8 text-center space-y-4 max-w-lg mx-auto">
+            <p className="text-sm text-amber-100/95 leading-relaxed">
+              Vacation mode is on for this day. The calories log is hidden until{" "}
+              <span className="font-semibold tabular-nums">{vacationResumeLabel}</span>.
+            </p>
+            <p className="text-xs text-muted-foreground/80">
+              Adjust your return date or turn vacation off in Settings.
+            </p>
+            <Link
+              href="/more"
+              className={cn(buttonVariants({ variant: "glass", size: "sm" }), "mt-2 inline-flex")}
+            >
+              Open Settings
+            </Link>
+          </div>
+        </div>
+      </>
+    )
+  }
 
   return (
     <>
@@ -1267,6 +1323,7 @@ export default function CaloriesPage() {
                   variant="glass"
                   size="lg"
                   className="w-full gap-2"
+                  disabled={vacationBlocksLog && draftMealItems.length === 0}
                   onClick={() => setLogFoodOpen(true)}
                 >
                   <Plus className="h-4 w-4 shrink-0" />
@@ -1304,6 +1361,7 @@ export default function CaloriesPage() {
               variant="glass"
               size="lg"
               className="mt-4 w-full gap-2"
+              disabled={vacationBlocksLog && draftMealItems.length === 0}
               onClick={() => setLogFoodOpen(true)}
             >
               <Plus className="h-4 w-4 shrink-0" />
@@ -1343,17 +1401,33 @@ export default function CaloriesPage() {
                     {editingEntry.description && <> · {editingEntry.description}</>}
                   </p>
                 )}
+                {vacationBlocksLog && !editingEntry && vacationResumeLabel && (
+                  <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] leading-snug text-amber-100/85">
+                    Vacation mode until{" "}
+                    <span className="font-semibold tabular-nums">{vacationResumeLabel}</span>. Clear the
+                    draft or wait until then to post.
+                  </p>
+                )}
+                {editingEntry && vacationBlocksEditingEntry && vacationResumeLabel && (
+                  <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] leading-snug text-amber-100/85">
+                    This day is in vacation mode (before{" "}
+                    <span className="font-semibold tabular-nums">{vacationResumeLabel}</span>). Editing is
+                    disabled.
+                  </p>
+                )}
                 <div className="mt-3 flex rounded-lg bg-muted/20 p-0.5">
                   {mealTypes.map((m) => (
                     <button
                       key={m}
                       type="button"
+                      disabled={vacationBlocksLog && !editingEntry}
                       onClick={() => setMealType(m)}
                       className={cn(
                         "flex-1 rounded-md py-2.5 text-xs font-medium capitalize transition-all duration-150",
                         mealType === m
                           ? "bg-background text-foreground shadow-sm shadow-black/10"
-                          : "text-muted-foreground/50 hover:text-muted-foreground"
+                          : "text-muted-foreground/50 hover:text-muted-foreground",
+                        vacationBlocksLog && !editingEntry && "opacity-45"
                       )}
                     >
                       {m}
@@ -1366,8 +1440,9 @@ export default function CaloriesPage() {
               <div className="relative z-20 shrink-0 border-y border-border/20 px-4 py-2.5">
                 <button
                   type="button"
+                  disabled={vacationBlocksLog && !editingEntry}
                   onClick={() => setLogFoodSearchOpen((v) => !v)}
-                  className="flex w-full items-center justify-between gap-2 rounded-lg py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  className="flex w-full items-center justify-between gap-2 rounded-lg py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-45"
                 >
                   <span className="flex items-center gap-2 min-w-0">
                     <Search className="h-3.5 w-3.5 shrink-0 opacity-60" />
@@ -1725,8 +1800,9 @@ export default function CaloriesPage() {
                   {!editingEntry && (
                     <button
                       type="button"
+                      disabled={vacationBlocksLog && !editingEntry}
                       onClick={() => setLogFoodManualOpen((v) => !v)}
-                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-border/25 bg-glass-highlight/[0.04] py-2.5 px-3 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-glass-highlight/10"
+                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-border/25 bg-glass-highlight/[0.04] py-2.5 px-3 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-glass-highlight/10 disabled:pointer-events-none disabled:opacity-45"
                     >
                       <span className="flex items-center gap-2 min-w-0">
                         <Target className="h-3.5 w-3.5 shrink-0 opacity-50" />
@@ -1755,6 +1831,7 @@ export default function CaloriesPage() {
                           onChange={(e) => setCalories(e.target.value)}
                           className="flex-1 min-w-0 h-11"
                           required
+                          disabled={vacationBlocksLog && !editingEntry ? true : vacationBlocksEditingEntry}
                         />
                         {([
                           { n: 250, label: "+250" },
@@ -1764,8 +1841,11 @@ export default function CaloriesPage() {
                           <button
                             key={n}
                             type="button"
+                            disabled={
+                              (vacationBlocksLog && !editingEntry) || vacationBlocksEditingEntry
+                            }
                             onClick={() => addCalories(n)}
-                            className="h-11 rounded-md border border-glass-border px-3 text-xs font-medium tabular-nums text-muted-foreground/50 hover:bg-glass-highlight/15 hover:text-foreground transition-colors touch-manipulation"
+                            className="h-11 rounded-md border border-glass-border px-3 text-xs font-medium tabular-nums text-muted-foreground/50 hover:bg-glass-highlight/15 hover:text-foreground transition-colors touch-manipulation disabled:pointer-events-none disabled:opacity-40"
                             title={`Add ${n.toLocaleString()} cal`}
                           >
                             {label}
@@ -1784,7 +1864,13 @@ export default function CaloriesPage() {
                           </button>
                         )}
                         {!editingEntry && (
-                          <Button type="submit" variant="glass" size="sm" className="flex-1 h-11 text-sm">
+                          <Button
+                            type="submit"
+                            variant="glass"
+                            size="sm"
+                            className="flex-1 h-11 text-sm"
+                            disabled={vacationBlocksLog}
+                          >
                             {estimateCalDisplay != null
                               ? `Add ${estimateCalDisplay.toLocaleString()} cal`
                               : "Add to meal"}
@@ -1843,7 +1929,14 @@ export default function CaloriesPage() {
                       <Button type="button" variant="outline" className="flex-1 h-11" size="default" onClick={cancelEdit}>
                         Cancel
                       </Button>
-                      <Button type="submit" variant="glass" form="log-food-form" className="flex-1 press-scale h-11" size="default">
+                      <Button
+                        type="submit"
+                        variant="glass"
+                        form="log-food-form"
+                        className="flex-1 press-scale h-11"
+                        size="default"
+                        disabled={vacationBlocksEditingEntry}
+                      >
                         Save
                       </Button>
                     </div>
@@ -1853,7 +1946,7 @@ export default function CaloriesPage() {
                       variant="glass"
                       className="w-full press-scale h-11 text-sm"
                       size="default"
-                      disabled={postingMeal}
+                      disabled={postingMeal || vacationBlocksLog}
                       onClick={handlePostMealToDay}
                     >
                       {postingMeal

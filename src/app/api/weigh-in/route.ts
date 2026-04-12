@@ -4,6 +4,7 @@ import { DEFAULT_WEIGHT_UNIT } from "@/lib/units"
 import { formatDate } from "@/lib/utils"
 import { parseYyyyMmDdToStoredDate } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
+import { assertNotVacationBlocked } from "@/lib/vacation-block-server"
 
 async function findOrCreateBodyweightGoal(userId: string) {
   let goal = await prisma.longGoal.findFirst({
@@ -86,6 +87,12 @@ export async function POST(req: NextRequest) {
     const goal = await findOrCreateBodyweightGoal(userId)
 
     const dateParam = body.date
+    const dayKey =
+      typeof dateParam === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateParam.trim().slice(0, 10))
+        ? dateParam.trim().slice(0, 10)
+        : formatDate(new Date())
+    await assertNotVacationBlocked(userId, dayKey)
+
     const targetDay = dateParam
       ? parseYyyyMmDdToStoredDate(String(dateParam).trim())
       : parseYyyyMmDdToStoredDate(formatDate(new Date()))

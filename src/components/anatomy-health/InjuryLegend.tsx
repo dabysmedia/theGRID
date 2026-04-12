@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils"
 
 /**
- * Matches BodySilhouetteSvg: baseline steel, DOMS yellow ladder, injury red ladder.
+ * Matches BodySilhouetteSvg: baseline steel, DOMS yellow ladder, injury (same accent as callout tag).
  */
 export function InjuryLegend({ className }: { className?: string }) {
   return (

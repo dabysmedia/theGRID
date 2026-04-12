@@ -13,6 +13,8 @@ model User {
   pinHash     String   @default("")
   avatarColor String   @default("#22c55e")
   avatarUrl   String?
+  /** yyyy-MM-dd — first calendar day calorie & weight logging are allowed again; null = off */
+  vacationResumeDate String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

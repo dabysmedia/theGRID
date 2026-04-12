@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef, useCallback } from "react"
+import { useEffect, useState, useRef, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { ArrowDown, ArrowUp, ChevronRight } from "lucide-react"
 import { apiFetch } from "@/lib/api-fetch"
@@ -9,6 +9,10 @@ import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { DEFAULT_WEIGHT_UNIT } from "@/lib/units"
 import { useActiveDate } from "@/context/DateContext"
+import { useUser } from "@/context/UserContext"
+import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
+import { format } from "date-fns"
+import { parseLocalDate } from "@/lib/utils"
 
 type Status = "loading" | "ready"
 
@@ -58,6 +62,7 @@ interface DailyWeighInProps {
 
 export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
   const { activeDate } = useActiveDate()
+  const { user } = useUser()
   const [status, setStatus] = useState<Status>("loading")
   const [value, setValue] = useState("")
   const [dayWeight, setDayWeight] = useState<number | null>(null)
@@ -66,6 +71,16 @@ export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
   const [unit, setUnit] = useState(DEFAULT_WEIGHT_UNIT)
   const [submitting, setSubmitting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const vacationBlocksLog = useMemo(
+    () => isVacationBlockingCalendarDay(user?.vacationResumeDate, activeDate),
+    [user?.vacationResumeDate, activeDate]
+  )
+
+  const vacationResumeLabel =
+    user?.vacationResumeDate != null && user.vacationResumeDate !== ""
+      ? format(parseLocalDate(user.vacationResumeDate), "MMM d, yyyy")
+      : null
 
   const load = useCallback(async () => {
     setStatus("loading")
@@ -86,8 +101,16 @@ export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
   }, [activeDate])
 
   useEffect(() => {
+    if (vacationBlocksLog) {
+      setDayWeight(null)
+      setLatestWeight(null)
+      setPreviousWeight(null)
+      setValue("")
+      setStatus("ready")
+      return
+    }
     load().catch(() => setStatus("ready"))
-  }, [load])
+  }, [load, vacationBlocksLog])
 
   useEffect(() => {
     if (status === "ready" && dayWeight == null) {
@@ -104,7 +127,7 @@ export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (logged) return
-    if (!value.trim() || submitting) return
+    if (vacationBlocksLog || !value.trim() || submitting) return
     setSubmitting(true)
 
     try {
@@ -133,6 +156,41 @@ export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
   }
 
   if (status === "loading") return null
+
+  if (vacationBlocksLog && vacationResumeLabel) {
+    const vacationBody = (
+      <div className="space-y-3">
+        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+          Weigh-in
+        </p>
+        <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-[11px] leading-relaxed text-amber-100/90">
+          Vacation until{" "}
+          <span className="font-semibold tabular-nums">{vacationResumeLabel}</span>. Weight is hidden
+          and logging is paused.
+        </p>
+        <Link
+          href="/more"
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "sm" }),
+            "inline-flex w-fit gap-1 text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Settings
+          <ChevronRight className="size-3.5 opacity-60" />
+        </Link>
+      </div>
+    )
+    if (embedded) {
+      return (
+        <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">{vacationBody}</div>
+      )
+    }
+    return (
+      <div className="glass rounded-2xl p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+        {vacationBody}
+      </div>
+    )
+  }
 
   const delta =
     logged && previousWeight != null && dayWeight != null
