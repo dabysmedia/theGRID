@@ -25,8 +25,8 @@ import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
 
 const navItems = [
   { href: "/more", label: "More", icon: MoreHorizontal },
-  { href: "/journal", label: "Journal", icon: NotebookPen },
   { href: "/habits", label: "Habits", icon: CheckSquare },
+  { href: "/journal", label: "Journal", icon: NotebookPen },
   { href: "/stats", label: "Stats", icon: BarChart3 },
   { href: "/", label: "Home", icon: Home },
 ]
