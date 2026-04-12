@@ -100,6 +100,7 @@ model WorkoutTemplate {
   exercises      String   @default("[]")
   tags           String   @default("[]")
   coverImageUrl  String?
+  sortOrder      Int      @default(0)
   userId         String?
   user           User?    @relation(fields: [userId], references: [id])
   createdAt      DateTime @default(now())

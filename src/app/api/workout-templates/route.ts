@@ -3,6 +3,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { prisma } from "@/lib/prisma"
 import { getRoutineCoversUploadDir } from "@/lib/uploads-path"
+import { ensureSequentialWorkoutTemplateSortOrders } from "@/lib/workout-template-sort"
 import { resolveUserId, UserError } from "@/lib/current-user"
 
 const ROUTINE_COVER_PREFIX = "/uploads/routine-covers/"
@@ -70,9 +71,10 @@ function tryUnlinkRoutineCoverFile(url: string | null | undefined) {
 export async function GET(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
+    await ensureSequentialWorkoutTemplateSortOrders(userId)
     const templates = await prisma.workoutTemplate.findMany({
       where: { userId },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     })
     return NextResponse.json(templates)
   } catch (e) {
@@ -89,6 +91,12 @@ export async function POST(req: NextRequest) {
     if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 })
     }
+    await ensureSequentialWorkoutTemplateSortOrders(userId)
+    const maxSort = await prisma.workoutTemplate.aggregate({
+      _max: { sortOrder: true },
+      where: { userId },
+    })
+    const nextSortOrder = (maxSort._max.sortOrder ?? -1) + 1
     const coverImageUrl = normalizeRoutineCoverUrl(body.coverImageUrl)
     const tagsJson = normalizeTagsJson(body.tags)
     const template = await prisma.workoutTemplate.create({
@@ -97,6 +105,7 @@ export async function POST(req: NextRequest) {
         exercises: JSON.stringify(Array.isArray(exercises) ? exercises : []),
         tags: tagsJson,
         coverImageUrl,
+        sortOrder: nextSortOrder,
         userId,
       },
     })
@@ -158,5 +167,46 @@ export async function DELETE(req: NextRequest) {
   } catch (e) {
     if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 })
+  }
+}
+
+/** Body: `{ orderedIds: string[] }` — full permutation of this user's template ids. */
+export async function PATCH(req: NextRequest) {
+  try {
+    const userId = await resolveUserId(req)
+    const body = await req.json()
+    const orderedIds = body?.orderedIds
+    if (!Array.isArray(orderedIds) || !orderedIds.every((id: unknown) => typeof id === "string")) {
+      return NextResponse.json({ error: "orderedIds must be an array of strings" }, { status: 400 })
+    }
+    const existing = await prisma.workoutTemplate.findMany({
+      where: { userId },
+      select: { id: true },
+    })
+    const idSet = new Set(existing.map((e) => e.id))
+    if (orderedIds.length !== idSet.size) {
+      return NextResponse.json({ error: "orderedIds length must match template count" }, { status: 400 })
+    }
+    for (const id of orderedIds) {
+      if (!idSet.has(id)) {
+        return NextResponse.json({ error: "Unknown template id in orderedIds" }, { status: 400 })
+      }
+    }
+    await prisma.$transaction(
+      orderedIds.map((id: string, i: number) =>
+        prisma.workoutTemplate.update({
+          where: { id },
+          data: { sortOrder: i },
+        }),
+      ),
+    )
+    const templates = await prisma.workoutTemplate.findMany({
+      where: { userId },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    })
+    return NextResponse.json(templates)
+  } catch (e) {
+    if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
+    return NextResponse.json({ error: "Failed to reorder" }, { status: 500 })
   }
 }

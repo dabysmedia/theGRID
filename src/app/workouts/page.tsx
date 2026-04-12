@@ -118,6 +118,7 @@ interface WorkoutTemplate {
   /** JSON string array from API */
   tags?: string | null
   coverImageUrl?: string | null
+  sortOrder?: number
   createdAt: string
 }
 
@@ -793,6 +794,26 @@ function RoutineEditor({
     return () => clearTimeout(t)
   }, [open, showPicker])
 
+  /** Keep page from scrolling behind the routine flow (dialog + exercise picker swap). */
+  useEffect(() => {
+    if (!open) return undefined
+    const html = document.documentElement
+    const body = document.body
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      htmlOverscroll: html.style.overscrollBehavior,
+      bodyOverflow: body.style.overflow,
+    }
+    html.style.overflow = "hidden"
+    html.style.overscrollBehavior = "contain"
+    body.style.overflow = "hidden"
+    return () => {
+      html.style.overflow = prev.htmlOverflow
+      html.style.overscrollBehavior = prev.htmlOverscroll
+      body.style.overflow = prev.bodyOverflow
+    }
+  }, [open])
+
   function addExercise(picked: PickedExercise) {
     setExercises((prev) => [
       ...prev,
@@ -923,7 +944,7 @@ function RoutineEditor({
         <DialogContent
           showCloseButton
           className={cn(
-            "glass-frost flex min-h-0 w-[min(100%,calc(100vw-1rem))] max-w-lg flex-col gap-0 overflow-hidden p-0",
+            "glass-frost flex min-h-0 w-[min(100%,calc(100vw-1rem))] max-w-lg flex-col gap-0 overflow-hidden overscroll-contain p-0",
             "max-h-[min(88dvh,calc(100dvh-1rem))] sm:max-h-[85vh]",
             "[&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3",
           )}
@@ -2215,6 +2236,32 @@ function ActiveWorkout({
   )
 }
 
+function reorderRoutineIds(
+  ids: readonly string[],
+  dragId: string,
+  insertBeforeId: string,
+): string[] {
+  if (dragId === insertBeforeId) return [...ids]
+  const without = ids.filter((id) => id !== dragId)
+  const at = without.indexOf(insertBeforeId)
+  if (at < 0) return [...ids]
+  return [...without.slice(0, at), dragId, ...without.slice(at)]
+}
+
+function moveRoutineIdToEnd(ids: readonly string[], dragId: string): string[] {
+  return [...ids.filter((id) => id !== dragId), dragId]
+}
+
+const ROUTINE_REORDER_DROP_END = "__routine_drop_end__"
+
+function hitTestRoutineReorderTarget(clientX: number, clientY: number): string | null {
+  const under = document.elementFromPoint(clientX, clientY)
+  if (!under) return null
+  if (under.closest("[data-routine-drop-end]")) return ROUTINE_REORDER_DROP_END
+  const tile = under.closest("[data-routine-tile]") as HTMLElement | null
+  return tile?.dataset.routineTile ?? null
+}
+
 /** Safari can cache GET /api/workout-sessions and serve a stale list after POST — breaks active workout. */
 const noStore: RequestInit = { cache: "no-store" }
 
@@ -2236,8 +2283,19 @@ export default function WorkoutsPage() {
   const [showRoutineEditor, setShowRoutineEditor] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<WorkoutTemplate | null>(null)
   const [templateMenuId, setTemplateMenuId] = useState<string | null>(null)
+  const [routineRearrangeMode, setRoutineRearrangeMode] = useState(false)
+  const [routinePointerDrag, setRoutinePointerDrag] = useState<string | null>(null)
+  const [routineDragOverId, setRoutineDragOverId] = useState<string | null>(null)
+  const templatesRef = useRef<WorkoutTemplate[]>([])
+  const routineDragSessionRef = useRef<{
+    pointerId: number
+    activeId: string
+    overId: string | null
+  } | null>(null)
   const [startError, setStartError] = useState<string | null>(null)
   const [startingWorkout, setStartingWorkout] = useState(false)
+
+  templatesRef.current = templates
 
   const { activeDate } = useActiveDate()
   const today = activeDate
@@ -2528,7 +2586,7 @@ export default function WorkoutsPage() {
       if (id) {
         setTemplates((prev) => prev.map((t) => (t.id === id ? row : t)))
       } else {
-        setTemplates((prev) => [row, ...prev])
+        setTemplates((prev) => [...prev, row])
       }
       return true
     } catch (e) {
@@ -2543,6 +2601,101 @@ export default function WorkoutsPage() {
     })
     if (res.ok) setTemplates((prev) => prev.filter((t) => t.id !== id))
     setTemplateMenuId(null)
+  }
+
+  async function persistRoutineOrder(orderedIds: string[]) {
+    setTemplates((prev) => {
+      const m = new Map(prev.map((t) => [t.id, t]))
+      return orderedIds.map((id) => m.get(id)).filter((t): t is WorkoutTemplate => t != null)
+    })
+    try {
+      const res = await apiFetch("/api/workout-templates", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderedIds }),
+      })
+      if (res.ok) {
+        const refreshed = await res.json()
+        if (Array.isArray(refreshed)) setTemplates(refreshed)
+      } else {
+        const r = await apiFetch(`/api/workout-templates?_=${Date.now()}`, noStore)
+        if (r.ok) {
+          const t = await r.json()
+          if (Array.isArray(t)) setTemplates(t)
+        }
+      }
+    } catch {
+      const r = await apiFetch(`/api/workout-templates?_=${Date.now()}`, noStore)
+      if (r.ok) {
+        const t = await r.json()
+        if (Array.isArray(t)) setTemplates(t)
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (templates.length >= 2) return
+    setRoutineRearrangeMode(false)
+    routineDragSessionRef.current = null
+    setRoutinePointerDrag(null)
+    setRoutineDragOverId(null)
+  }, [templates.length])
+
+  useEffect(() => {
+    if (routineRearrangeMode) return
+    routineDragSessionRef.current = null
+    setRoutinePointerDrag(null)
+    setRoutineDragOverId(null)
+  }, [routineRearrangeMode])
+
+  function handleRoutineTilePointerDown(tmplId: string, e: React.PointerEvent<HTMLDivElement>) {
+    if (!routineRearrangeMode) return
+    if (e.button !== 0) return
+    e.preventDefault()
+    const el = e.currentTarget
+    routineDragSessionRef.current = {
+      pointerId: e.pointerId,
+      activeId: tmplId,
+      overId: tmplId,
+    }
+    setRoutinePointerDrag(tmplId)
+    setRoutineDragOverId(tmplId)
+    el.setPointerCapture(e.pointerId)
+  }
+
+  function handleRoutineTilePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const s = routineDragSessionRef.current
+    if (!s || e.pointerId !== s.pointerId) return
+    const over = hitTestRoutineReorderTarget(e.clientX, e.clientY)
+    if (over !== s.overId) {
+      s.overId = over
+      setRoutineDragOverId(over)
+    }
+  }
+
+  function handleRoutineTilePointerEnd(e: React.PointerEvent<HTMLDivElement>) {
+    const s = routineDragSessionRef.current
+    if (!s || e.pointerId !== s.pointerId) return
+    const el = e.currentTarget
+    if (el.hasPointerCapture(e.pointerId)) {
+      try {
+        el.releasePointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
+    }
+    const { activeId, overId } = s
+    routineDragSessionRef.current = null
+    setRoutinePointerDrag(null)
+    setRoutineDragOverId(null)
+
+    if (overId == null || overId === activeId) return
+    const ids = templatesRef.current.map((t) => t.id)
+    if (overId === ROUTINE_REORDER_DROP_END) {
+      void persistRoutineOrder(moveRoutineIdToEnd(ids, activeId))
+      return
+    }
+    void persistRoutineOrder(reorderRoutineIds(ids, activeId, overId))
   }
 
   function toggleDay(key: string) {
@@ -2771,11 +2924,22 @@ export default function WorkoutsPage() {
               <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
                 This Week
               </p>
-              <span className="text-lg lg:text-xl font-bold tabular-nums">
-                {stats.weekCount}
+              <span className="sr-only">
+                {stats.weekCount} completed workout{stats.weekCount === 1 ? "" : "s"} this week
               </span>
+              {stats.weekCount > 0 ? (
+                <Check
+                  className="size-[1.35rem] lg:size-6 text-emerald-500 shrink-0"
+                  strokeWidth={2.75}
+                  aria-hidden
+                />
+              ) : (
+                <span className="text-lg lg:text-xl font-bold tabular-nums text-muted-foreground/35">
+                  —
+                </span>
+              )}
               <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                session{stats.weekCount === 1 ? "" : "s"}
+                {stats.weekCount > 0 ? "Logged" : "Not yet"}
               </p>
             </PageStatTile>
             <PageStatTile className="flex-1 min-w-0">
@@ -2915,7 +3079,29 @@ export default function WorkoutsPage() {
             )}
 
             {templates.length > 0 && (
-              <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 sm:gap-3.5">
+              <>
+              {routineRearrangeMode ? (
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/8 px-3 py-2.5">
+                  <p className="min-w-0 text-xs font-medium text-muted-foreground">
+                    Drag tiles to reorder. Drop on the strip below to move to the end.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 shrink-0 touch-manipulation text-xs"
+                    onClick={() => setRoutineRearrangeMode(false)}
+                  >
+                    Done
+                  </Button>
+                </div>
+              ) : null}
+              <div
+                className={cn(
+                  "grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 sm:gap-3.5",
+                  routineRearrangeMode && "touch-none select-none",
+                )}
+              >
                 {templates.map((tmpl) => {
                   const exs = parseExercises<TemplateExercise>(tmpl.exercises)
                   const tmplTags = parseTemplateTags(tmpl.tags)
@@ -2926,24 +3112,44 @@ export default function WorkoutsPage() {
                       : exs.length <= 2
                         ? exs.map((e) => e.name).join(" · ")
                         : `${exs[0].name} · ${exs[1].name} +${exs.length - 2}`
+                  const isDragSource = routinePointerDrag === tmpl.id
+                  const isDropTarget =
+                    routinePointerDrag != null &&
+                    routineDragOverId === tmpl.id &&
+                    routinePointerDrag !== tmpl.id
                   return (
                     <div
                       key={tmpl.id}
-                      className="glass group flex h-full min-h-0 flex-col overflow-hidden rounded-2xl"
+                      data-routine-tile={tmpl.id}
+                      onPointerDown={(e) => handleRoutineTilePointerDown(tmpl.id, e)}
+                      onPointerMove={handleRoutineTilePointerMove}
+                      onPointerUp={handleRoutineTilePointerEnd}
+                      onPointerCancel={handleRoutineTilePointerEnd}
+                      className={cn(
+                        "glass group flex h-full min-h-0 flex-col overflow-hidden rounded-2xl transition-[opacity,transform,box-shadow]",
+                        routineRearrangeMode && "cursor-grab active:cursor-grabbing",
+                        isDragSource && "pointer-events-none opacity-50 scale-[0.98] z-30 shadow-lg",
+                        isDropTarget && "ring-2 ring-primary/55 ring-offset-2 ring-offset-background",
+                      )}
                     >
                       <div className="relative aspect-square w-full shrink-0 border-b border-border/10 bg-muted/20">
                         {cover ? (
                           <img
                             src={cover}
                             alt=""
-                            className="absolute inset-0 size-full object-cover"
+                            className="absolute inset-0 size-full object-cover pointer-events-none"
                           />
                         ) : (
-                          <div className="flex size-full items-center justify-center bg-gradient-to-br from-muted/30 to-muted/10">
+                          <div className="flex size-full items-center justify-center bg-gradient-to-br from-muted/30 to-muted/10 pointer-events-none">
                             <Dumbbell className="size-[clamp(2rem,32%,2.75rem)] text-muted-foreground/15" />
                           </div>
                         )}
-                        <div className="absolute left-1.5 top-1.5 z-20 sm:left-2 sm:top-2">
+                        <div
+                          className={cn(
+                            "absolute left-1.5 top-1.5 z-20 sm:left-2 sm:top-2",
+                            routineRearrangeMode && "pointer-events-none opacity-0",
+                          )}
+                        >
                           <div className="relative">
                             <button
                               type="button"
@@ -2958,7 +3164,7 @@ export default function WorkoutsPage() {
                               <MoreHorizontal className="size-4" />
                             </button>
                             {templateMenuId === tmpl.id && (
-                              <div className="absolute left-0 top-full z-30 mt-1 min-w-[112px] rounded-xl border border-border/25 bg-popover p-1 shadow-xl animate-in fade-in slide-in-from-top-1 duration-100">
+                              <div className="absolute left-0 top-full z-30 mt-1 min-w-[148px] rounded-xl border border-border/25 bg-popover p-1 shadow-xl animate-in fade-in slide-in-from-top-1 duration-100">
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -2970,6 +3176,23 @@ export default function WorkoutsPage() {
                                 >
                                   <Pencil className="size-3.5" />
                                   Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={templates.length < 2}
+                                  title={
+                                    templates.length < 2
+                                      ? "Add another routine to reorder"
+                                      : undefined
+                                  }
+                                  onClick={() => {
+                                    setRoutineRearrangeMode(true)
+                                    setTemplateMenuId(null)
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs hover:bg-muted/20 transition-colors disabled:pointer-events-none disabled:opacity-40"
+                                >
+                                  <ArrowLeftRight className="size-3.5" />
+                                  Rearrange tile
                                 </button>
                                 <button
                                   type="button"
@@ -2985,7 +3208,12 @@ export default function WorkoutsPage() {
                         </div>
                       </div>
                       <div className="flex min-h-[6.5rem] flex-1 flex-col gap-1.5 p-2.5 pt-2 sm:min-h-[7rem] sm:p-3">
-                        <div className="min-h-0 min-w-0 flex-1 space-y-1">
+                        <div
+                          className={cn(
+                            "min-h-0 min-w-0 flex-1 space-y-1",
+                            routineRearrangeMode && "pointer-events-none",
+                          )}
+                        >
                           <div className="flex items-center gap-1.5 min-w-0">
                             <h3 className="line-clamp-2 min-w-0 flex-1 text-left text-sm font-semibold leading-snug text-foreground sm:text-base">
                               {tmpl.name}
@@ -3013,7 +3241,11 @@ export default function WorkoutsPage() {
                         <Button
                           variant="glass"
                           size="sm"
-                          className="mt-auto h-8 w-full shrink-0 gap-1 px-2 text-[11px] press-scale touch-manipulation sm:h-9 sm:text-xs"
+                          disabled={routineRearrangeMode || startingWorkout}
+                          className={cn(
+                            "mt-auto h-8 w-full shrink-0 gap-1 px-2 text-[11px] press-scale touch-manipulation sm:h-9 sm:text-xs",
+                            routineRearrangeMode && "pointer-events-none",
+                          )}
                           onClick={() => startSession(tmpl.name, exs)}
                         >
                           <Play className="size-3 shrink-0" />
@@ -3024,6 +3256,20 @@ export default function WorkoutsPage() {
                   )
                 })}
               </div>
+              {routineRearrangeMode && routinePointerDrag && templates.length > 1 ? (
+                <div
+                  data-routine-drop-end
+                  className={cn(
+                    "mt-2 rounded-xl border border-dashed px-3 py-3 text-center text-xs transition-colors pointer-events-auto",
+                    routineDragOverId === ROUTINE_REORDER_DROP_END
+                      ? "border-primary/60 bg-primary/15 text-foreground"
+                      : "border-primary/35 bg-primary/5 text-muted-foreground",
+                  )}
+                >
+                  Drop here to move to end
+                </div>
+              ) : null}
+              </>
             )}
           </div>
 

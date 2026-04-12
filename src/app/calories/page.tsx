@@ -1,7 +1,14 @@
 "use client"
 
-import { useEffect, useMemo, useState, useCallback } from "react"
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+} from "react"
 import { createPortal } from "react-dom"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { addDays, differenceInCalendarDays, endOfWeek, format, startOfWeek, subDays } from "date-fns"
 import { ChevronDown, Search, Trash2, Plus, Star, X, Pencil, Target, Check } from "lucide-react"
 import {
@@ -31,6 +38,7 @@ import {
 } from "@/components/ui/dialog"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
+import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
 
 interface CalorieEntry {
   id: string
@@ -78,6 +86,24 @@ type PendingDelete =
 
 const mealTypes = ["breakfast", "lunch", "dinner", "snack"] as const
 const mealTypeSet = new Set<string>(mealTypes)
+
+function OpenLogFoodFromQuery({ setOpen }: { setOpen: (open: boolean) => void }) {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  useEffect(() => {
+    const v = searchParams.get(CALORIES_LOG_FOOD_QUERY)
+    if (v !== "1" && v?.toLowerCase() !== "true") return
+    setOpen(true)
+    const next = new URLSearchParams(searchParams.toString())
+    next.delete(CALORIES_LOG_FOOD_QUERY)
+    const qs = next.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [pathname, router, searchParams, setOpen])
+
+  return null
+}
 
 function savedMealTagList(meal: Pick<SavedMeal, "mealType">): string[] {
   if (!meal.mealType?.trim()) return []
@@ -1019,7 +1045,11 @@ export default function CaloriesPage() {
       : null
 
   return (
-    <div className="space-y-6">
+    <>
+      <Suspense fallback={null}>
+        <OpenLogFoodFromQuery setOpen={setLogFoodOpen} />
+      </Suspense>
+      <div className="space-y-6">
       <PageHeader title="Calories" />
 
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
@@ -2012,6 +2042,7 @@ export default function CaloriesPage() {
           </div>,
           document.body
         )}
-    </div>
+      </div>
+    </>
   )
 }
