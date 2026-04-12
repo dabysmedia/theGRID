@@ -191,7 +191,7 @@ export function InjuryFullscreenPicker({
               size="sm"
               variant={view === v ? "glass" : "outline"}
               className={cn(
-                "h-8 px-2 text-[10px] font-mono uppercase",
+                "type-hud-chip h-8 px-2 font-sans",
                 view !== v && "border-border/50 bg-background/40"
               )}
               onClick={() => {

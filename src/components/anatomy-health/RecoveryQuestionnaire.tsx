@@ -283,7 +283,7 @@ export function RecoveryQuestionnaire({
             {needsFollowUp.map((inj) => (
               <div key={inj.id} className="rounded-lg border border-border/40 bg-black/20 p-3 space-y-2">
                 <p className="text-sm font-medium text-foreground">{injuryRowTitle(inj)}</p>
-                <p className="text-[10px] font-mono text-muted-foreground uppercase">
+                <p className="text-[10px] font-sans uppercase tracking-wide text-muted-foreground">
                   {inj.kind} · was {inj.severity}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -301,7 +301,7 @@ export function RecoveryQuestionnaire({
                       size="sm"
                       variant={followUps[inj.id] === outcome ? "glass" : "outline"}
                       className={cn(
-                        "text-[10px] uppercase font-mono h-8",
+                        "type-hud-chip h-8 font-sans",
                         followUps[inj.id] !== outcome && "border-border/50 bg-background/30"
                       )}
                       onClick={() =>
@@ -542,7 +542,7 @@ function NewEventStep({
       {form.enabled && (
         <>
           <div className="space-y-1.5">
-            <Label className="text-[10px] font-mono uppercase text-muted-foreground">Search</Label>
+            <Label className="type-hud-label">Search</Label>
             <Input
               value={form.search}
               onChange={(e) => setForm((f) => ({ ...f, search: e.target.value }))}

@@ -21,7 +21,7 @@ export default function RecoveryAnatomyExamplesPage() {
     <div className="space-y-4 pb-8">
       <div className="glass-subtle hud-corners rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border border-border/35">
         <div>
-          <h1 className="text-lg font-mono uppercase tracking-[0.2em] text-foreground flex items-center gap-2">
+          <h1 className="text-lg font-sans font-semibold uppercase tracking-[0.2em] text-foreground flex items-center gap-2">
             <span className="status-dot" style={{ width: 5, height: 5 }} />
             Anatomy fixtures
           </h1>
@@ -41,7 +41,7 @@ export default function RecoveryAnatomyExamplesPage() {
               size="sm"
               variant={key === k ? "glass" : "outline"}
               className={cn(
-                "font-mono text-[10px] uppercase",
+                "type-hud-chip font-sans",
                 key !== k && "border-border/50 bg-background/30"
               )}
               onClick={() => setKey(k)}

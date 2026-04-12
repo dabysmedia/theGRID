@@ -99,7 +99,7 @@ function ChartTooltipContent({ active, payload, label, unit, formatter }: {
   const val = payload[0].value
   const display = formatter ? formatter(val) : `${val}`
   return (
-    <div className="glass rounded-lg border border-border px-2.5 py-1.5 font-mono text-[10px]">
+    <div className="glass rounded-lg border border-border px-2.5 py-1.5 font-sans text-[10px] tabular-nums">
       <div className="text-muted-foreground/70">{label}</div>
       <div className="font-semibold">{display}{unit ? ` ${unit}` : ""}</div>
     </div>
@@ -479,7 +479,7 @@ function CorrelationTooltip({
   const metricVal = payload.find((p) => p.dataKey === metricKey)?.value as number | null | undefined
   const weightVal = payload.find((p) => p.dataKey === weightLineKey)?.value as number | null | undefined
   return (
-    <div className="glass rounded-lg border border-border px-3 py-2 font-mono text-[10px] space-y-0.5 min-w-[7rem]">
+    <div className="glass rounded-lg border border-border px-3 py-2 font-sans text-[10px] tabular-nums space-y-0.5 min-w-[7rem]">
       <div className="text-muted-foreground/70 mb-1">{label}</div>
       {metricVal != null && (
         <div className="flex items-center gap-1.5">
@@ -647,7 +647,12 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
             <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 5%)" vertical={false} />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 9, fill: "oklch(0.55 0.01 250)", fontFamily: "var(--font-mono)" }}
+              tick={{
+                fontSize: 9,
+                fill: "oklch(0.55 0.01 250)",
+                fontFamily:
+                  "var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif",
+              }}
               tickLine={false}
               axisLine={false}
               interval={4}
@@ -657,7 +662,12 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
               type="number"
               domain={metricAxisDomain}
               tickFormatter={metricTickFormatter}
-              tick={{ fontSize: 9, fill: "oklch(0.55 0.01 250)", fontFamily: "var(--font-mono)" }}
+              tick={{
+                fontSize: 9,
+                fill: "oklch(0.55 0.01 250)",
+                fontFamily:
+                  "var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif",
+              }}
               tickLine={false}
               axisLine={false}
               width={48}
@@ -666,7 +676,12 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
               yAxisId={WEIGHT_Y_AXIS}
               orientation="right"
               type="number"
-              tick={{ fontSize: 9, fill: "#14b8a6", fontFamily: "var(--font-mono)" }}
+              tick={{
+                fontSize: 9,
+                fill: "#14b8a6",
+                fontFamily:
+                  "var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif",
+              }}
               tickLine={false}
               axisLine={false}
               width={40}
@@ -794,7 +809,8 @@ export default function StatsPage() {
   const chartAxisStyle = useMemo(() => ({
     fontSize: 9,
     fill: "oklch(0.55 0.01 250)",
-    fontFamily: "var(--font-mono)",
+    fontFamily:
+      "var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif",
   }), [])
 
   const gridStroke = "oklch(1 0 0 / 5%)"

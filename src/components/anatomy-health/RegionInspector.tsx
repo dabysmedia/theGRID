@@ -71,7 +71,7 @@ export function RegionInspector({
           <p
             className={cn(
               "text-[10px] text-muted-foreground tabular-nums",
-              plain ? "mt-0.5" : "mt-1 font-mono"
+              plain ? "mt-0.5" : "mt-1 font-sans"
             )}
           >
             {plain ? (

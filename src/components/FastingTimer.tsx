@@ -149,11 +149,11 @@ function FastingRing({
             style={inactive ? undefined : { color }}
           >
             <PhaseIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-            <span className="text-[10px] font-semibold uppercase tracking-[0.2em]">{phaseLabel}</span>
+            <span className="type-hud-chip">{phaseLabel}</span>
           </div>
           <span
             className={cn(
-              "mt-1.5 text-3xl font-bold tabular-nums leading-none tracking-tight sm:text-4xl",
+              "type-hud-value-xl mt-1.5",
               inactive && "text-muted-foreground/90",
             )}
           >
@@ -235,9 +235,7 @@ function FastingSettingsDialog({
 
         <div className="space-y-4">
           <div>
-            <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground mb-2">
-              Ratio presets
-            </p>
+            <p className="type-hud-label mb-2">Ratio presets</p>
             <div className="grid grid-cols-3 gap-2">
               {PRESETS.map((p) => (
                 <button
@@ -249,10 +247,8 @@ function FastingSettingsDialog({
                     selected === p.name && "ring-1 ring-primary bg-primary/10"
                   )}
                 >
-                  <span className="block text-sm font-bold tabular-nums">{p.name}</span>
-                  <span className="block text-[10px] text-muted-foreground/60 tracking-wider">
-                    {p.fastHours}h / {p.eatHours}h
-                  </span>
+                  <span className="type-hud-stat block">{p.name}</span>
+                  <span className="type-hud-caption block">{p.fastHours}h / {p.eatHours}h</span>
                 </button>
               ))}
               <button
@@ -263,19 +259,15 @@ function FastingSettingsDialog({
                   selected === "Custom" && "ring-1 ring-primary bg-primary/10"
                 )}
               >
-                <span className="block text-sm font-bold">Custom</span>
-                <span className="block text-[10px] text-muted-foreground/60 tracking-wider">
-                  hours
-                </span>
+                <span className="type-hud-stat block">Custom</span>
+                <span className="type-hud-caption block">hours</span>
               </button>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-                Fast (h)
-              </Label>
+              <Label className="type-hud-label">Fast (h)</Label>
               <Input
                 type="number"
                 min={1}
@@ -289,9 +281,7 @@ function FastingSettingsDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-                Eat (h)
-              </Label>
+              <Label className="type-hud-label">Eat (h)</Label>
               <Input
                 type="number"
                 min={1}
@@ -307,9 +297,7 @@ function FastingSettingsDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-              Eating window opens (local time)
-            </Label>
+            <Label className="type-hud-label">Eating window opens (local time)</Label>
             <Input
               type="time"
               value={timeValue}
@@ -317,14 +305,12 @@ function FastingSettingsDialog({
                 setEatStartMinutes(timeInputValueToMinutes(e.target.value))
                 setSelected("Custom")
               }}
-              className="tabular-nums font-mono"
+              className="tabular-nums"
             />
           </div>
 
           <div>
-            <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground mb-2">
-              Quick starts
-            </p>
+            <p className="type-hud-label mb-2">Quick starts</p>
             <div className="flex flex-wrap gap-2">
               {[
                 { label: "10am", m: 10 * 60 },
@@ -451,9 +437,7 @@ export function FastingTimer() {
         <div className="relative z-10">
           <div className="flex items-center gap-2">
             <Timer className="h-3.5 w-3.5 text-muted-foreground/50" />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground/50">
-              Fasting
-            </span>
+            <span className="type-hud-title text-muted-foreground/50">Fasting</span>
           </div>
           <div className="flex justify-center py-8">
             <div className="h-[200px] w-[200px] rounded-full bg-muted/10 animate-pulse" />
@@ -516,7 +500,7 @@ export function FastingTimer() {
           />
           <h2
             className={cn(
-              "truncate text-[11px] font-semibold uppercase tracking-[0.2em]",
+              "type-hud-title truncate",
               timerDisabled && "text-muted-foreground/80",
             )}
           >
@@ -585,10 +569,10 @@ export function FastingTimer() {
                 style={timerDisabled ? undefined : { color: COLORS.eating }}
               />
               <div className="min-w-0">
-                <p className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground/65">Eat window</p>
+                <p className="type-hud-micro">Eat window</p>
                 <p
                   className={cn(
-                    "text-[10px] font-semibold tabular-nums leading-snug sm:text-[11px]",
+                    "type-hud-readout",
                     timerDisabled ? "text-muted-foreground/70" : "text-foreground",
                   )}
                 >
@@ -614,12 +598,12 @@ export function FastingTimer() {
                 style={timerDisabled ? undefined : { color: COLORS.fasting }}
               />
               <div className="min-w-0">
-                <p className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground/65">
+                <p className="type-hud-micro">
                   {timerDisabled ? "Phase" : snapshot.phase === "fasting" ? "Next eat" : "Next fast"}
                 </p>
                 <p
                   className={cn(
-                    "text-[10px] font-semibold tabular-nums sm:text-[11px]",
+                    "type-hud-readout",
                     timerDisabled ? "text-muted-foreground/70" : "text-foreground",
                   )}
                 >

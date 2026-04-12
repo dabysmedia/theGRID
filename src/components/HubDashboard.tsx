@@ -110,9 +110,7 @@ export function HubDashboard() {
       <div className="animate-fade-up stagger-4">
         <div className="flex items-center gap-2 mb-4">
           <div className="hud-divider flex-1" />
-          <span className="text-[10px] tracking-[0.2em] uppercase text-muted-foreground/50 shrink-0">
-            SYSTEMS
-          </span>
+          <span className="type-hud-rail shrink-0">SYSTEMS</span>
           <div className="hud-divider flex-1" />
         </div>
 

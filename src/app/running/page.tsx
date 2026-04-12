@@ -180,7 +180,7 @@ export default function RunningPage() {
   }, [entries, today])
 
   const nativeInputClass =
-    "h-10 w-full min-w-0 rounded-[3px] border border-glass-border bg-glass-highlight/30 px-3 py-2 text-base font-mono tracking-wide backdrop-blur-sm transition-all outline-none placeholder:text-muted-foreground/60 focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:bg-glass-highlight/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+    "h-10 w-full min-w-0 rounded-[3px] border border-glass-border bg-glass-highlight/30 px-3 py-2 text-base font-sans tabular-nums tracking-normal backdrop-blur-sm transition-all outline-none placeholder:text-muted-foreground/60 focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:bg-glass-highlight/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
 
   const stats = useMemo(() => {
     const totalKm = entries.reduce((s, e) => s + e.distance, 0)

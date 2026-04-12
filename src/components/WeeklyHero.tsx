@@ -96,16 +96,14 @@ function ProgressRing({ value, max, label, unit, color, icon }: ProgressRingProp
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           {icon}
-          <span className="text-sm font-bold tabular-nums mt-0.5">
+          <span className="type-hud-stat mt-0.5">
             {value >= 1000 ? `${(value / 1000).toFixed(1)}k` : Math.round(value)}
           </span>
         </div>
       </div>
       <div className="text-center">
-        <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
-          {label}
-        </p>
-        <p className="text-[10px] text-muted-foreground/60 tracking-wider">
+        <p className="type-hud-label">{label}</p>
+        <p className="type-hud-caption">
           / {max >= 1000 ? `${(max / 1000).toFixed(max % 1000 === 0 ? 0 : 1)}k` : max} {unit}
         </p>
       </div>
@@ -233,9 +231,9 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
       <div className="flex items-center justify-between mb-5 relative z-10">
         <div className="flex items-center gap-2">
           <div className="status-dot" />
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.25em]">Weekly Overview</h2>
+          <h2 className="type-hud-title">Weekly Overview</h2>
         </div>
-          <span className="text-[10px] text-muted-foreground/70 font-medium tracking-[0.12em]">{dateRange}</span>
+          <span className="type-hud-eyebrow">{dateRange}</span>
       </div>
 
       {/* Progress rings row */}
@@ -269,10 +267,8 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
       {/* Weekly score */}
       <div className="mb-5 relative z-10 animate-fade-up stagger-2">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-[0.15em]">
-            Weekly score
-          </span>
-          <span className="text-[10px] font-bold tabular-nums text-primary tracking-wider">
+          <span className="type-hud-label-soft">Weekly score</span>
+          <span className="type-hud-stat-xs text-primary tracking-wider">
             {weeklyScore}%
           </span>
         </div>
@@ -289,9 +285,7 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
 
       {/* Weekly activity bars */}
       <div className="mb-4 relative z-10 animate-fade-up stagger-3">
-        <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-[0.15em] mb-2">
-          Steps Activity
-        </p>
+        <p className="type-hud-subsection mb-2">Steps Activity</p>
         <div className="flex items-end justify-between gap-1.5 h-10">
           {data.steps.last7.map((val, i) => {
             const pct = stepsMax > 0 ? (val / stepsMax) * 100 : 0
@@ -328,10 +322,8 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
           >
             {stat.icon}
             <div className="min-w-0">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-[0.12em] truncate">
-                {stat.label}
-              </p>
-              <p className="text-[11px] font-semibold tabular-nums">{stat.value}</p>
+              <p className="type-hud-caption-tight truncate">{stat.label}</p>
+              <p className="type-hud-stat-sm">{stat.value}</p>
             </div>
           </div>
         ))}

@@ -141,7 +141,9 @@ function RecoveryLogHistoryRow({
       <div className="flex gap-2 min-w-0">
         <Calendar className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
         <div className="min-w-0 text-sm">
-          <p className="font-mono text-[11px] text-muted-foreground">{headerLabel}</p>
+          <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground">
+            {headerLabel}
+          </p>
           <p className="text-foreground tabular-nums mt-0.5">
             CMP {recoveryComposite(entry).toFixed(1)} · NRG {entry.energy} · PAIN {entry.pain}
           </p>
@@ -416,7 +418,7 @@ export default function RecoveryPage() {
             type="button"
             variant="outline"
             size="sm"
-            className="font-mono text-[10px] uppercase tracking-wider border-border/50 bg-background/30 text-foreground"
+            className="type-hud-chip border-border/50 bg-background/30 font-sans text-foreground"
             onClick={() => setQuestionnaireOpen(true)}
           >
             <ClipboardList className="h-3.5 w-3.5 mr-1.5 opacity-80" />
@@ -459,7 +461,7 @@ export default function RecoveryPage() {
                   size="sm"
                   variant={chartRange === r ? "glass" : "outline"}
                   className={cn(
-                    "h-8 font-mono text-[10px] uppercase tracking-wider",
+                    "type-hud-chip h-8 font-sans",
                     chartRange !== r && "border-border/50 bg-background/30 text-muted-foreground hover:text-foreground"
                   )}
                   onClick={() => setChartRange(r)}

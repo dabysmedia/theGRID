@@ -126,7 +126,7 @@ export function DomsFullscreenPicker({
               size="sm"
               variant={view === v ? "glass" : "outline"}
               className={cn(
-                "h-8 px-2 text-[10px] font-mono uppercase",
+                "type-hud-chip h-8 px-2 font-sans",
                 view !== v && "border-border/50 bg-background/40"
               )}
               onClick={() => {
@@ -219,7 +219,7 @@ export function DomsFullscreenPicker({
                     onClick={() => applySoreness(value)}
                   >
                     {label}
-                    <span className="ml-auto font-mono text-xs text-muted-foreground tabular-nums">{value}</span>
+                    <span className="ml-auto font-sans text-xs text-muted-foreground tabular-nums">{value}</span>
                   </Button>
                 ))}
               </div>
@@ -258,7 +258,7 @@ export function DomsFullscreenPicker({
                     className="shrink-0 rounded-md border border-border/50 bg-background/60 px-2 py-1 text-left text-[10px] text-foreground backdrop-blur-sm"
                   >
                     <span className="line-clamp-1">{name}</span>
-                    <span className="font-mono text-muted-foreground tabular-nums"> · {val}</span>
+                    <span className="font-sans text-muted-foreground tabular-nums"> · {val}</span>
                   </button>
                 )
               })}

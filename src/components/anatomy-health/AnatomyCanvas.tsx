@@ -116,7 +116,7 @@ export function AnatomyCanvas({
                 variant={view === v ? "glass" : "outline"}
                 onClick={() => setView(v)}
                 className={cn(
-                  "h-7 min-h-0 px-2 py-0 text-[10px] font-mono uppercase tracking-wider",
+                  "type-hud-chip h-7 min-h-0 px-2 py-0 font-sans",
                   view !== v && "border-border/50 bg-background/30 text-muted-foreground hover:text-foreground"
                 )}
                 aria-pressed={view === v}

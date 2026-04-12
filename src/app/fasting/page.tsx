@@ -38,7 +38,7 @@ function BarTip({
   if (!active || !payload?.length) return null
   const v = payload[0].value
   return (
-    <div className="glass rounded-sm px-2.5 py-1.5 text-[10px] font-mono border border-border">
+    <div className="glass rounded-sm px-2.5 py-1.5 text-[10px] font-sans tabular-nums border border-border">
       <div className="text-muted-foreground/70">{label}</div>
       <div className="font-semibold tabular-nums">{v.toFixed(1)} h fast</div>
     </div>
@@ -55,7 +55,7 @@ function AreaTip({
   if (!active || !payload?.length) return null
   const p = payload[0].payload
   return (
-    <div className="glass rounded-sm px-2.5 py-1.5 text-[10px] font-mono border border-border">
+    <div className="glass rounded-sm px-2.5 py-1.5 text-[10px] font-sans tabular-nums border border-border">
       <div className="text-muted-foreground/70">{p.label}</div>
       <div className="font-semibold tabular-nums">{p.hours.toFixed(1)} h fast</div>
     </div>

@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -197,10 +197,10 @@ html {
     touch-action: manipulation;
   }
   html {
-    @apply font-mono;
+    @apply font-sans;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    letter-spacing: 0.005em;
+    letter-spacing: 0.01em;
     line-height: 1.625;
   }
   input[type="number"]::-webkit-inner-spin-button,
@@ -235,8 +235,9 @@ html {
   }
 
   input[type="time"] {
-    font-family: var(--font-geist-mono), ui-monospace, monospace;
-    letter-spacing: 0.05em;
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
   }
 }
 
@@ -244,6 +245,66 @@ html {
   /* Google Fonts: Iceberg (loaded via link in root layout) */
   .font-iceberg {
     font-family: "Iceberg", sans-serif;
+  }
+
+  /**
+   * HUD typography — matches Weekly overview + Fasting widgets (Geist Sans, caps scale).
+   * Use on dashboard tiles, dialog section labels, and hub rails.
+   */
+  .type-hud-title {
+    @apply text-[11px] font-semibold uppercase tracking-[0.22em] text-foreground;
+  }
+  .type-hud-chip {
+    @apply text-[10px] font-semibold uppercase tracking-[0.2em];
+  }
+  .type-hud-label {
+    @apply text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground;
+  }
+  .type-hud-label-soft {
+    @apply text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/70;
+  }
+  .type-hud-subsection {
+    @apply text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/60;
+  }
+  .type-hud-eyebrow {
+    @apply text-[10px] font-medium tracking-[0.12em] text-muted-foreground/70;
+  }
+  .type-hud-caption {
+    @apply text-[10px] text-muted-foreground/60 tracking-wider;
+  }
+  .type-hud-caption-tight {
+    @apply text-[10px] text-muted-foreground/60 uppercase tracking-[0.12em];
+  }
+  .type-hud-micro {
+    @apply text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground/65;
+  }
+  .type-hud-rail {
+    @apply text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/50;
+  }
+  .type-hud-stat {
+    @apply text-sm font-bold tabular-nums text-foreground;
+  }
+  .type-hud-stat-sm {
+    @apply text-[11px] font-semibold tabular-nums text-foreground;
+  }
+  .type-hud-stat-xs {
+    @apply text-[10px] font-bold tabular-nums;
+  }
+  /** Compact time/range readouts (fasting side panels) */
+  .type-hud-readout {
+    @apply text-[10px] font-semibold tabular-nums leading-snug sm:text-[11px];
+  }
+  .type-hud-value-xl {
+    @apply text-3xl font-bold tabular-nums leading-none tracking-tight sm:text-4xl;
+  }
+  .type-hud-value-lg {
+    @apply truncate text-xl font-bold tabular-nums tracking-tight text-foreground sm:text-2xl;
+  }
+  .type-hud-unit {
+    @apply shrink-0 text-[10px] font-medium uppercase tracking-wider text-muted-foreground;
+  }
+  .type-hud-target-line {
+    @apply text-[10px] uppercase tracking-wider text-muted-foreground/65;
   }
 
   /* Full-viewport background: grid + ambient — fixed layer so every route shows the same pattern */
@@ -254,59 +315,28 @@ html {
     pointer-events: none;
     background-color: var(--background);
     background-image:
-      radial-gradient(ellipse 100% 55% at 50% -18%, oklch(0.82 0.18 110 / 7%), transparent 52%),
-      radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.82 0.18 110 / 5%), transparent),
+      radial-gradient(ellipse 120% 70% at 50% -25%, oklch(0.82 0.18 110 / 9%), transparent 55%),
+      radial-gradient(ellipse 90% 55% at 50% -18%, oklch(0.82 0.18 110 / 6%), transparent),
+      radial-gradient(ellipse 100% 80% at 50% 120%, oklch(0.96 0.006 250 / 35%), transparent 45%),
       linear-gradient(var(--grid-line, transparent) 1px, transparent 1px),
       linear-gradient(90deg, var(--grid-line, transparent) 1px, transparent 1px);
-    background-size: auto, auto, 32px 32px, 32px 32px;
-    background-position: center top, center top, 0 0, 0 0;
-    background-repeat: no-repeat, no-repeat, repeat, repeat;
+    background-size: auto, auto, auto, 32px 32px, 32px 32px;
+    background-position: center top, center top, center bottom, 0 0, 0 0;
+    background-repeat: no-repeat, no-repeat, no-repeat, repeat, repeat;
     background-attachment: scroll;
   }
 
-  /* ── Glass panels — translucent steel with frosted blur ─── */
-  .glass {
-    position: relative;
-    isolation: isolate;
-    background: var(--glass);
-    backdrop-filter: blur(44px) saturate(1.55);
-    -webkit-backdrop-filter: blur(44px) saturate(1.55);
-    border: 1px solid var(--glass-border);
-    box-shadow:
-      inset 0 1px 0 oklch(1 0 0 / 38%),
-      0 1px 2px oklch(0.25 0.02 250 / 6%),
-      0 20px 48px -18px oklch(0.35 0.04 250 / 14%);
+  .dark .page-bg {
+    background-image:
+      radial-gradient(ellipse 120% 70% at 50% -25%, oklch(0.82 0.18 110 / 10%), transparent 55%),
+      radial-gradient(ellipse 90% 55% at 50% -18%, oklch(0.82 0.18 110 / 6%), transparent),
+      radial-gradient(ellipse 100% 85% at 50% 115%, oklch(0.22 0.014 250 / 28%), transparent 48%),
+      linear-gradient(var(--grid-line, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line, transparent) 1px, transparent 1px);
   }
 
-  .dark .glass {
-    border-color: oklch(1 0 0 / 10%);
-    box-shadow:
-      inset 0 1px 0 oklch(1 0 0 / 10%),
-      0 1px 0 oklch(1 0 0 / 4%),
-      0 28px 72px -24px oklch(0 0 0 / 58%);
-  }
-
-  .glass-strong {
-    position: relative;
-    isolation: isolate;
-    background: var(--glass);
-    backdrop-filter: blur(52px) saturate(1.68);
-    -webkit-backdrop-filter: blur(52px) saturate(1.68);
-    border: 1px solid oklch(1 0 0 / 12%);
-    box-shadow:
-      inset 0 1px 0 oklch(1 0 0 / 42%),
-      0 1px 2px oklch(0.25 0.02 250 / 6%),
-      0 24px 56px -20px oklch(0.35 0.04 250 / 12%);
-  }
-
-  .dark .glass-strong {
-    border-color: oklch(1 0 0 / 12%);
-    box-shadow:
-      inset 0 1px 0 oklch(1 0 0 / 12%),
-      0 1px 0 oklch(1 0 0 / 4%),
-      0 32px 80px -26px oklch(0 0 0 / 62%);
-  }
-
+  /* ── Glass panels — same frosted recipe as routine / active workout dialogs ─── */
+  .glass,
   .glass-frost {
     position: relative;
     isolation: isolate;
@@ -324,6 +354,7 @@ html {
       0 1px 0 0 oklch(1 0 0 / 14%);
   }
 
+  .dark .glass,
   .dark .glass-frost {
     background: linear-gradient(
       180deg,
@@ -340,16 +371,69 @@ html {
       0 0 0 1px oklch(0 0 0 / 12%);
   }
 
+  /** Slightly brighter / deeper stack — hero tiles, emphasis */
+  .glass-strong {
+    position: relative;
+    isolation: isolate;
+    background: linear-gradient(
+      180deg,
+      oklch(1 0 0 / 95%) 0%,
+      oklch(0.95 0.006 250 / 90%) 100%
+    );
+    backdrop-filter: blur(76px) saturate(1.88);
+    -webkit-backdrop-filter: blur(76px) saturate(1.88);
+    border: 1px solid oklch(1 0 0 / 52%);
+    box-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 42%),
+      0 12px 48px oklch(0.25 0.02 250 / 18%),
+      0 1px 0 0 oklch(1 0 0 / 16%);
+  }
+
+  .dark .glass-strong {
+    background: linear-gradient(
+      180deg,
+      oklch(0.24 0.015 250 / 90%) 0%,
+      oklch(0.15 0.011 250 / 86%) 100%
+    );
+    backdrop-filter: blur(78px) saturate(1.9);
+    -webkit-backdrop-filter: blur(78px) saturate(1.9);
+    border: 1px solid oklch(1 0 0 / 16%);
+    box-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 10%),
+      0 0 32px oklch(0.82 0.18 110 / 5%),
+      0 14px 48px oklch(0 0 0 / 52%),
+      0 0 0 1px oklch(0 0 0 / 14%);
+  }
+
+  /** Nested / inset fields — same family, softer stack */
   .glass-subtle {
     position: relative;
     isolation: isolate;
-    background: oklch(0.19 0.012 250 / 54%);
-    backdrop-filter: blur(36px) saturate(1.45);
-    -webkit-backdrop-filter: blur(36px) saturate(1.45);
-    border: 1px solid oklch(1 0 0 / 11%);
+    background: linear-gradient(
+      180deg,
+      oklch(1 0 0 / 78%) 0%,
+      oklch(0.96 0.006 250 / 70%) 100%
+    );
+    backdrop-filter: blur(40px) saturate(1.55);
+    -webkit-backdrop-filter: blur(40px) saturate(1.55);
+    border: 1px solid oklch(1 0 0 / 32%);
     box-shadow:
-      inset 0 1px 0 oklch(1 0 0 / 6%),
-      0 18px 44px -18px oklch(0 0 0 / 48%);
+      inset 0 1px 0 oklch(1 0 0 / 28%),
+      0 8px 28px oklch(0.25 0.02 250 / 10%);
+  }
+
+  .dark .glass-subtle {
+    background: linear-gradient(
+      180deg,
+      oklch(0.20 0.013 250 / 78%) 0%,
+      oklch(0.14 0.01 250 / 72%) 100%
+    );
+    backdrop-filter: blur(44px) saturate(1.6);
+    -webkit-backdrop-filter: blur(44px) saturate(1.6);
+    border: 1px solid oklch(1 0 0 / 10%);
+    box-shadow:
+      inset 0 1px 0 oklch(1 0 0 / 7%),
+      0 10px 36px oklch(0 0 0 / 40%);
   }
 
   /* ── Accent glows — ladder yellow ──────────────────────── */

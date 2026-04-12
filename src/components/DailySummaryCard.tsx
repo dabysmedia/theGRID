@@ -57,29 +57,21 @@ export function DailySummaryCard({
             >
               <Icon className="h-3.5 w-3.5" style={{ color }} />
             </div>
-            <span className="truncate text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
-              {title}
-            </span>
+            <span className="type-hud-label truncate">{title}</span>
           </div>
           <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" />
         </div>
 
         <div className="flex shrink-0 items-baseline gap-1.5">
-          <span className="truncate text-xl font-bold tabular-nums tracking-tight sm:text-2xl">
+          <span className="type-hud-value-lg">
             {typeof value === "number" ? value.toLocaleString() : value}
           </span>
-          {unit && (
-            <span className="shrink-0 text-[10px] text-muted-foreground font-medium tracking-wider uppercase">
-              {unit}
-            </span>
-          )}
+          {unit && <span className="type-hud-unit">{unit}</span>}
         </div>
 
         <div className="flex min-h-[2.25rem] flex-1 flex-col justify-end gap-1.5">
           {numericGoal != null && (
-            <p className="text-[10px] text-muted-foreground/65 tracking-wider">
-              / {typeof goal === "number" ? goal.toLocaleString() : goal} TARGET
-            </p>
+            <p className="type-hud-target-line">/ {typeof goal === "number" ? goal.toLocaleString() : goal} TARGET</p>
           )}
           {progress != null && (
             <div className="h-0.5 w-full shrink-0 bg-muted/30 overflow-hidden">

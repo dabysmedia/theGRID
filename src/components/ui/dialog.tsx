@@ -53,10 +53,9 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed z-[110] grid w-full max-w-none gap-4 rounded-2xl border border-border/30 bg-popover p-4 pb-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom)))] text-sm text-popover-foreground shadow-2xl shadow-black/25 ring-1 ring-foreground/10 outline-none duration-100",
+          "glass fixed z-[110] grid w-full max-w-none gap-4 rounded-2xl p-4 pb-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom)))] text-sm text-foreground outline-none duration-100",
           "overflow-y-auto overscroll-contain",
           "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
-          "dark:shadow-black/50",
           className
         )}
         {...props}
