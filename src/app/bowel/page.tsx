@@ -21,6 +21,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formatDate, last7Days, parseLocalDate } from "@/lib/utils"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
+import { partitionHistoryDayGroups } from "@/lib/history-display"
 
 const bowelGoalPresets: GoalPreset[] = [
   { type: "daily", label: "Daily Regularity", unit: "entries", placeholder: "2" },
@@ -53,6 +55,76 @@ function dateGroupLabel(dateKey: string, todayStr: string, yesterdayStr: string)
   if (dateKey === todayStr) return "Today"
   if (dateKey === yesterdayStr) return "Yesterday"
   return format(parseLocalDate(dateKey), "EEEE, MMMM d")
+}
+
+function BowelHistoryDayGroup({
+  dateKey,
+  items,
+  today,
+  yesterday,
+  showCalendarHeader,
+  onDelete,
+}: {
+  dateKey: string
+  items: BowelEntry[]
+  today: string
+  yesterday: string
+  showCalendarHeader: boolean
+  onDelete: (id: string) => void
+}) {
+  return (
+    <div className="space-y-2">
+      {showCalendarHeader && (
+        <div className="flex items-center gap-2 mb-1.5 px-1">
+          <Calendar className="h-3 w-3 text-muted-foreground/40 shrink-0" />
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
+            {dateGroupLabel(dateKey, today, yesterday)}
+          </span>
+        </div>
+      )}
+      <div className="space-y-2">
+        {items.map((entry) => (
+          <div
+            key={entry.id}
+            className="glass-subtle rounded-xl p-3.5 flex items-center justify-between gap-3 group"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[#78716c]/15 shrink-0">
+                <span className="text-xl font-bold tabular-nums text-[#78716c]">
+                  {entry.bristolScale === 0 ? "—" : entry.bristolScale}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold leading-snug">{bristolLabels[entry.bristolScale]}</p>
+                    <p className="text-xs font-medium text-muted-foreground mt-0.5">
+                      {entry.bristolScale === 0 ? "Logged" : `Type ${entry.bristolScale}`}
+                    </p>
+                  </div>
+                  <time
+                    dateTime={entry.time}
+                    className="text-xs text-muted-foreground tabular-nums shrink-0 pt-0.5"
+                  >
+                    {format(new Date(entry.time), "p")}
+                  </time>
+                </div>
+                {entry.notes && <p className="text-xs text-muted-foreground/70 mt-1">{entry.notes}</p>}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onDelete(entry.id)}
+              className="history-row-delete"
+              aria-label="Delete entry"
+            >
+              <Trash2 />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function BowelPage() {
@@ -130,6 +202,11 @@ export default function BowelPage() {
     const keys = [...map.keys()].sort((a, b) => b.localeCompare(a))
     return keys.map((dateKey) => ({ dateKey, items: map.get(dateKey)! }))
   }, [entries])
+
+  const historyDisplay = useMemo(
+    () => partitionHistoryDayGroups(historyGroups, (g) => g.dateKey, today),
+    [historyGroups, today]
+  )
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -310,61 +387,40 @@ export default function BowelPage() {
               <p className="text-sm text-muted-foreground">No entries yet</p>
             </div>
           )}
-          {historyGroups.map(({ dateKey, items }) => (
-            <div key={dateKey} className="space-y-2">
-              <div className="flex items-center gap-2 mb-1.5 px-1">
-                <Calendar className="h-3 w-3 text-muted-foreground/40 shrink-0" />
-                <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                  {dateGroupLabel(dateKey, today, yesterday)}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {items.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="glass-subtle rounded-xl p-3.5 flex items-center justify-between gap-3 group"
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[#78716c]/15 shrink-0">
-                        <span className="text-xl font-bold tabular-nums text-[#78716c]">
-                          {entry.bristolScale === 0 ? "—" : entry.bristolScale}
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-lg font-semibold leading-snug">
-                              {bristolLabels[entry.bristolScale]}
-                            </p>
-                            <p className="text-xs font-medium text-muted-foreground mt-0.5">
-                              {entry.bristolScale === 0 ? "Logged" : `Type ${entry.bristolScale}`}
-                            </p>
-                          </div>
-                          <time
-                            dateTime={entry.time}
-                            className="text-xs text-muted-foreground tabular-nums shrink-0 pt-0.5"
-                          >
-                            {format(new Date(entry.time), "p")}
-                          </time>
-                        </div>
-                        {entry.notes && (
-                          <p className="text-xs text-muted-foreground/70 mt-1">{entry.notes}</p>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(entry.id)}
-                      className="history-row-delete"
-                      aria-label="Delete entry"
-                    >
-                      <Trash2 />
-                    </button>
-                  </div>
-                ))}
-              </div>
+          {historyDisplay.todayGroups.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
+                Today
+              </p>
+              {historyDisplay.todayGroups.map(({ dateKey, items }) => (
+                <BowelHistoryDayGroup
+                  key={dateKey}
+                  dateKey={dateKey}
+                  items={items}
+                  today={today}
+                  yesterday={yesterday}
+                  showCalendarHeader={false}
+                  onDelete={handleDelete}
+                />
+              ))}
             </div>
-          ))}
+          )}
+          {historyDisplay.earlierGroups.length > 0 && (
+            <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+              {historyDisplay.earlierGroups.map(({ dateKey, items }) => (
+                <BowelHistoryDayGroup
+                  key={dateKey}
+                  dateKey={dateKey}
+                  items={items}
+                  today={today}
+                  yesterday={yesterday}
+                  showCalendarHeader
+                  onDelete={handleDelete}
+                />
+              ))}
+            </HistoryEarlierSection>
+          )}
+          <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
       </div>
     </div>
   )

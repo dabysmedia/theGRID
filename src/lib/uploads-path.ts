@@ -35,7 +35,7 @@ function legacyDataRoot(): string | null {
 }
 
 /**
- * Persistent upload subdirectory: `journal` | `avatars`
+ * Persistent upload subdirectory: `journal` | `avatars` | `routine-covers`
  * - UPLOADS_PATH=/app/uploads → .../app/uploads/<segment>
  * - Legacy data root → <root>/uploads/<segment>
  * - Local dev → public/uploads/<segment> under cwd
@@ -59,4 +59,8 @@ export function getJournalUploadDir(): string {
 
 export function getAvatarsUploadDir(): string {
   return getUploadSegmentDir("avatars")
+}
+
+export function getRoutineCoversUploadDir(): string {
+  return getUploadSegmentDir("routine-covers")
 }

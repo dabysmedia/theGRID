@@ -29,6 +29,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
+import { partitionHistoryDayGroups } from "@/lib/history-display"
 
 interface CalorieEntry {
   id: string
@@ -187,6 +189,203 @@ function summarizeDay(items: CalorieEntry[]) {
     fat: hasF ? round(fat) : null,
     count: items.length,
   }
+}
+
+function CaloriesHistoryDayAccordion({
+  dateKey,
+  items,
+  today,
+  yesterday,
+  realToday,
+  expandedDays,
+  onToggleDay,
+  lockOpen,
+  weeklyGoal,
+  dailyTotals,
+  startEdit,
+  requestDeleteCalorieEntry,
+}: {
+  dateKey: string
+  items: CalorieEntry[]
+  today: string
+  yesterday: string
+  realToday: string
+  expandedDays: ReadonlySet<string>
+  onToggleDay: (dateKey: string) => void
+  lockOpen: boolean
+  weeklyGoal: WeeklyGoal | null
+  dailyTotals: Map<string, number>
+  startEdit: (entry: CalorieEntry) => void
+  requestDeleteCalorieEntry: (id: string, label: string) => void
+}) {
+  const summary = summarizeDay(items)
+  const open = lockOpen || expandedDays.has(dateKey)
+  const label = dateGroupLabel(dateKey, today, yesterday, realToday)
+  const subDate =
+    dateKey === today || dateKey === yesterday ? format(parseLocalDate(dateKey), "EEE, MMM d") : null
+  const dayTarget =
+    weeklyGoal != null ? adaptiveDayTargetForDate(dateKey, weeklyGoal.weeklyTarget, dailyTotals) : 0
+  const historyDayCalClass =
+    weeklyGoal != null && dayTarget > 0
+      ? calorieTargetTextClass(summary.calories, dayTarget)
+      : "text-foreground"
+
+  return (
+    <div className="rounded-lg overflow-hidden border border-glass-border/30 bg-glass-highlight/5 transition-colors">
+      <button
+        type="button"
+        onClick={() => {
+          if (!lockOpen) onToggleDay(dateKey)
+        }}
+        aria-expanded={open}
+        className="w-full text-left px-3.5 py-3 flex items-start gap-3 transition-colors hover:bg-glass-highlight/25 active:bg-glass-highlight/35"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 space-y-0.5">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-sm font-semibold tracking-tight text-foreground">{label}</span>
+                {subDate && (
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/55 tabular-nums">
+                    {subDate}
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                {summary.count} {summary.count === 1 ? "entry" : "entries"}
+                {(summary.protein != null || summary.carbs != null || summary.fat != null) && (
+                  <>
+                    <span className="text-muted-foreground/25"> · </span>
+                    <span className="normal-case font-normal tracking-normal text-muted-foreground/65">
+                      {summary.protein != null && <span className="tabular-nums">P {summary.protein}g</span>}
+                      {summary.protein != null && (summary.carbs != null || summary.fat != null) && (
+                        <span className="text-muted-foreground/30"> · </span>
+                      )}
+                      {summary.carbs != null && <span className="tabular-nums">C {summary.carbs}g</span>}
+                      {summary.carbs != null && summary.fat != null && (
+                        <span className="text-muted-foreground/30"> · </span>
+                      )}
+                      {summary.fat != null && <span className="tabular-nums">F {summary.fat}g</span>}
+                    </span>
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="flex items-start gap-2 shrink-0">
+              <div className="text-right">
+                <p
+                  className={cn(
+                    "text-lg font-bold tabular-nums leading-none transition-colors",
+                    historyDayCalClass
+                  )}
+                >
+                  {summary.calories.toLocaleString()}
+                </p>
+                <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/45 mt-1">
+                  kcal
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] border border-glass-border/50 bg-background/30 transition-transform duration-200",
+                  open && "bg-primary/10 border-primary/25"
+                )}
+              >
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground/50 transition-transform duration-200",
+                    open && "rotate-180 text-primary/80"
+                  )}
+                />
+              </span>
+            </div>
+          </div>
+        </div>
+      </button>
+
+      {open && (
+        <div className="border-t border-glass-border/30 bg-muted/15">
+          <ul className="divide-y divide-glass-border/20">
+            {items.map((entry) => (
+              <li
+                key={entry.id}
+                className="flex items-stretch gap-3 px-3 py-2.5 transition-colors hover:bg-glass-highlight/10 group/row"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-glass-border/40 bg-[#ef4444]/8">
+                  <span className="text-sm font-semibold capitalize text-[#ef4444]">
+                    {entry.mealType.charAt(0)}
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1 py-0.5">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
+                    <span
+                      className={cn("text-sm font-semibold tabular-nums transition-colors", historyDayCalClass)}
+                    >
+                      {entry.calories}{" "}
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
+                        cal
+                      </span>
+                    </span>
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/55 capitalize">
+                      {entry.mealType}
+                    </span>
+                  </div>
+                  {(entry.protein != null || entry.carbs != null || entry.fat != null) && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {entry.protein != null && (
+                        <span className="text-[10px] font-medium tabular-nums rounded-[3px] border border-glass-border/35 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">
+                          P {entry.protein}g
+                        </span>
+                      )}
+                      {entry.carbs != null && (
+                        <span className="text-[10px] font-medium tabular-nums rounded-[3px] border border-glass-border/35 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">
+                          C {entry.carbs}g
+                        </span>
+                      )}
+                      {entry.fat != null && (
+                        <span className="text-[10px] font-medium tabular-nums rounded-[3px] border border-glass-border/35 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">
+                          F {entry.fat}g
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {entry.description && (
+                    <p className="mt-1 text-xs leading-snug text-muted-foreground/75 line-clamp-2">
+                      {entry.description}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-4 shrink-0 self-center opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={() => startEdit(entry)}
+                    className="history-row-edit"
+                    title="Edit"
+                    aria-label="Edit entry"
+                  >
+                    <Pencil />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      requestDeleteCalorieEntry(
+                        entry.id,
+                        entry.description?.trim() || `${entry.calories} cal · ${entry.mealType}`
+                      )
+                    }
+                    className="history-row-delete-row"
+                    aria-label="Delete entry"
+                  >
+                    <Trash2 />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function CaloriesPage() {
@@ -368,6 +567,11 @@ export default function CaloriesPage() {
     const keys = [...map.keys()].sort((a, b) => b.localeCompare(a))
     return keys.map((dateKey) => ({ dateKey, items: map.get(dateKey)! }))
   }, [entries])
+
+  const historyDisplay = useMemo(
+    () => partitionHistoryDayGroups(historyGroups, (g) => g.dateKey, today),
+    [historyGroups, today]
+  )
 
   function handleFoodSelect(food: { food_name: string; brand_name: string | null; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) {
     const label = food.brand_name ? `${food.food_name} (${food.brand_name})` : food.food_name
@@ -1697,192 +1901,50 @@ export default function CaloriesPage() {
             </div>
           ) : (
           <div className="space-y-2">
-            {historyGroups.map(({ dateKey, items }) => {
-              const summary = summarizeDay(items)
-              const open = expandedDays.has(dateKey)
-              const label = dateGroupLabel(dateKey, today, yesterday, realToday)
-              const subDate =
-                dateKey === today || dateKey === yesterday
-                  ? format(parseLocalDate(dateKey), "EEE, MMM d")
-                  : null
-              const dayTarget =
-                weeklyGoal != null
-                  ? adaptiveDayTargetForDate(dateKey, weeklyGoal.weeklyTarget, dailyTotals)
-                  : 0
-              const historyDayCalClass =
-                weeklyGoal != null && dayTarget > 0
-                  ? calorieTargetTextClass(summary.calories, dayTarget)
-                  : "text-foreground"
-              return (
-                <div
-                  key={dateKey}
-                  className="rounded-lg overflow-hidden border border-glass-border/30 bg-glass-highlight/5 transition-colors"
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleHistoryDay(dateKey)}
-                    aria-expanded={open}
-                    className="w-full text-left px-3.5 py-3 flex items-start gap-3 transition-colors hover:bg-glass-highlight/25 active:bg-glass-highlight/35"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 space-y-0.5">
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                            <span className="text-sm font-semibold tracking-tight text-foreground">
-                              {label}
-                            </span>
-                            {subDate && (
-                              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/55 tabular-nums">
-                                {subDate}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
-                            {summary.count} {summary.count === 1 ? "entry" : "entries"}
-                            {(summary.protein != null || summary.carbs != null || summary.fat != null) && (
-                              <>
-                                <span className="text-muted-foreground/25"> · </span>
-                                <span className="normal-case font-normal tracking-normal text-muted-foreground/65">
-                                  {summary.protein != null && (
-                                    <span className="tabular-nums">P {summary.protein}g</span>
-                                  )}
-                                  {summary.protein != null && (summary.carbs != null || summary.fat != null) && (
-                                    <span className="text-muted-foreground/30"> · </span>
-                                  )}
-                                  {summary.carbs != null && (
-                                    <span className="tabular-nums">C {summary.carbs}g</span>
-                                  )}
-                                  {summary.carbs != null && summary.fat != null && (
-                                    <span className="text-muted-foreground/30"> · </span>
-                                  )}
-                                  {summary.fat != null && <span className="tabular-nums">F {summary.fat}g</span>}
-                                </span>
-                              </>
-                            )}
-                          </p>
-                        </div>
-                        <div className="flex items-start gap-2 shrink-0">
-                          <div className="text-right">
-                            <p
-                              className={cn(
-                                "text-lg font-bold tabular-nums leading-none transition-colors",
-                                historyDayCalClass
-                              )}
-                            >
-                              {summary.calories.toLocaleString()}
-                            </p>
-                            <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/45 mt-1">
-                              kcal
-                            </p>
-                          </div>
-                          <span
-                            className={cn(
-                              "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] border border-glass-border/50 bg-background/30 transition-transform duration-200",
-                              open && "bg-primary/10 border-primary/25"
-                            )}
-                          >
-                            <ChevronDown
-                              className={cn(
-                                "h-4 w-4 text-muted-foreground/50 transition-transform duration-200",
-                                open && "rotate-180 text-primary/80"
-                              )}
-                            />
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-
-                  {open && (
-                    <div className="border-t border-glass-border/30 bg-muted/15">
-                      <ul className="divide-y divide-glass-border/20">
-                        {items.map((entry) => (
-                          <li
-                            key={entry.id}
-                            className="flex items-stretch gap-3 px-3 py-2.5 transition-colors hover:bg-glass-highlight/10 group/row"
-                          >
-                            <div
-                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-glass-border/40 bg-[#ef4444]/8"
-                            >
-                              <span className="text-sm font-semibold capitalize text-[#ef4444]">
-                                {entry.mealType.charAt(0)}
-                              </span>
-                            </div>
-                            <div className="min-w-0 flex-1 py-0.5">
-                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
-                                <span
-                                  className={cn(
-                                    "text-sm font-semibold tabular-nums transition-colors",
-                                    historyDayCalClass
-                                  )}
-                                >
-                                  {entry.calories}{" "}
-                                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
-                                    cal
-                                  </span>
-                                </span>
-                                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/55 capitalize">
-                                  {entry.mealType}
-                                </span>
-                              </div>
-                              {(entry.protein != null || entry.carbs != null || entry.fat != null) && (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {entry.protein != null && (
-                                    <span className="text-[10px] font-medium tabular-nums rounded-[3px] border border-glass-border/35 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">
-                                      P {entry.protein}g
-                                    </span>
-                                  )}
-                                  {entry.carbs != null && (
-                                    <span className="text-[10px] font-medium tabular-nums rounded-[3px] border border-glass-border/35 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">
-                                      C {entry.carbs}g
-                                    </span>
-                                  )}
-                                  {entry.fat != null && (
-                                    <span className="text-[10px] font-medium tabular-nums rounded-[3px] border border-glass-border/35 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">
-                                      F {entry.fat}g
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                              {entry.description && (
-                                <p className="mt-1 text-xs leading-snug text-muted-foreground/75 line-clamp-2">
-                                  {entry.description}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-4 shrink-0 self-center opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity">
-                              <button
-                                type="button"
-                                onClick={() => startEdit(entry)}
-                                className="history-row-edit"
-                                title="Edit"
-                                aria-label="Edit entry"
-                              >
-                                <Pencil />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  requestDeleteCalorieEntry(
-                                    entry.id,
-                                    entry.description?.trim() ||
-                                      `${entry.calories} cal · ${entry.mealType}`
-                                  )
-                                }
-                                className="history-row-delete-row"
-                                aria-label="Delete entry"
-                              >
-                                <Trash2 />
-                              </button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+            {historyDisplay.todayGroups.length > 0 && (
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Today
+              </p>
+            )}
+            {historyDisplay.todayGroups.map(({ dateKey, items }) => (
+              <CaloriesHistoryDayAccordion
+                key={dateKey}
+                dateKey={dateKey}
+                items={items}
+                today={today}
+                yesterday={yesterday}
+                realToday={realToday}
+                expandedDays={expandedDays}
+                onToggleDay={toggleHistoryDay}
+                lockOpen
+                weeklyGoal={weeklyGoal}
+                dailyTotals={dailyTotals}
+                startEdit={startEdit}
+                requestDeleteCalorieEntry={requestDeleteCalorieEntry}
+              />
+            ))}
+            {historyDisplay.earlierGroups.length > 0 && (
+              <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+                {historyDisplay.earlierGroups.map(({ dateKey, items }) => (
+                  <CaloriesHistoryDayAccordion
+                    key={dateKey}
+                    dateKey={dateKey}
+                    items={items}
+                    today={today}
+                    yesterday={yesterday}
+                    realToday={realToday}
+                    expandedDays={expandedDays}
+                    onToggleDay={toggleHistoryDay}
+                    lockOpen={false}
+                    weeklyGoal={weeklyGoal}
+                    dailyTotals={dailyTotals}
+                    startEdit={startEdit}
+                    requestDeleteCalorieEntry={requestDeleteCalorieEntry}
+                  />
+                ))}
+              </HistoryEarlierSection>
+            )}
+            <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
           </div>
           )}
         </div>

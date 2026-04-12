@@ -2,21 +2,28 @@
 
 import { useEffect, useMemo, useState, useRef } from "react"
 import {
+  ArrowLeftRight,
   Check,
   ChevronDown,
+  ChevronRight,
   Clock,
   Copy,
   Dumbbell,
+  ImagePlus,
   MoreHorizontal,
   Pencil,
   Play,
   Plus,
   Search,
+  Settings2,
+  Timer,
   Trash2,
   X,
 } from "lucide-react"
-import { format, subDays } from "date-fns"
+import { addDays, format, startOfWeek, subDays } from "date-fns"
 import { PageHeader } from "@/components/PageHeader"
+import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
+import { partitionHistoryDayGroups } from "@/lib/history-display"
 import { apiFetch } from "@/lib/api-fetch"
 import { PageStatTile } from "@/components/PageStatTile"
 import { Button } from "@/components/ui/button"
@@ -29,6 +36,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useActiveDate } from "@/context/DateContext"
+import { useFullscreenOverlay } from "@/context/FullscreenOverlayContext"
+import {
+  DEFAULT_WORKOUT_REST,
+  loadWorkoutRestConfig,
+  saveWorkoutRestConfig,
+  type WorkoutRestConfig,
+} from "@/lib/workout-rest-config"
 import { cn, formatDate, parseLocalDate } from "@/lib/utils"
 
 /* ──────────────────────────────────────────────────────────
@@ -60,13 +74,23 @@ interface SessionExercise {
   category?: string
 }
 
+interface TemplateSetRow {
+  id: string
+  /** Target weight in lb (empty = leave blank when starting workout) */
+  weight: string
+  /** Target reps, e.g. "10" or "8-12" (ranges start empty in workout) */
+  reps: string
+}
+
 interface TemplateExercise {
   id: string
   name: string
-  targetSets: number
-  targetReps: string
   notes: string
   primaryMuscles?: MuscleTag[]
+  setRows: TemplateSetRow[]
+  /** Legacy templates only — migrated to `setRows` on load */
+  targetSets?: number
+  targetReps?: string
 }
 
 interface PickedExercise {
@@ -91,6 +115,9 @@ interface WorkoutTemplate {
   id: string
   name: string
   exercises: string | TemplateExercise[]
+  /** JSON string array from API */
+  tags?: string | null
+  coverImageUrl?: string | null
   createdAt: string
 }
 
@@ -104,6 +131,7 @@ interface WorkoutSession {
   notes: string | null
   status: string
   exercises: string | SessionExercise[]
+  bodyWeightLb?: number | null
 }
 
 function parseExercises<T>(raw: string | T[]): T[] {
@@ -113,6 +141,117 @@ function parseExercises<T>(raw: string | T[]): T[] {
   } catch {
     return []
   }
+}
+
+const ROUTINE_TAG_PRESETS = [
+  "Crossfit",
+  "Strength",
+  "Hypertrophy",
+  "Endurance",
+  "Mobility",
+  "Cardio",
+  "Powerlifting",
+  "Olympic",
+] as const
+
+function parseTemplateTags(raw: string | string[] | null | undefined): string[] {
+  if (Array.isArray(raw)) {
+    return [...new Set(raw.map((t) => String(t).trim()).filter(Boolean))].slice(0, 12)
+  }
+  if (raw == null || raw === "") return []
+  try {
+    const a = JSON.parse(raw) as unknown
+    if (Array.isArray(a)) {
+      return parseTemplateTags(a as string[])
+    }
+  } catch {
+    /* fall through */
+  }
+  if (raw.includes(",")) {
+    return [
+      ...new Set(
+        raw
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ),
+    ].slice(0, 12)
+  }
+  return []
+}
+
+function migrateTemplateExercise(raw: TemplateExercise): TemplateExercise {
+  const ex = raw as TemplateExercise & { setRows?: TemplateSetRow[] }
+  const rows = ex.setRows
+  if (Array.isArray(rows) && rows.length > 0) {
+    return {
+      id: ex.id,
+      name: ex.name,
+      notes: ex.notes ?? "",
+      primaryMuscles: ex.primaryMuscles,
+      setRows: rows.map((r) => ({
+        id: r.id || uid(),
+        weight: r.weight != null && r.weight !== "" ? String(r.weight) : "",
+        reps: r.reps != null && r.reps !== "" ? String(r.reps) : "",
+      })),
+    }
+  }
+  const n = Math.max(
+    1,
+    typeof ex.targetSets === "number" && Number.isFinite(ex.targetSets) ? ex.targetSets : 3,
+  )
+  const reps = ex.targetReps != null && String(ex.targetReps).trim() ? String(ex.targetReps) : "10"
+  return {
+    id: ex.id,
+    name: ex.name,
+    notes: ex.notes ?? "",
+    primaryMuscles: ex.primaryMuscles,
+    setRows: Array.from({ length: n }, () => ({
+      id: uid(),
+      reps,
+      weight: "",
+    })),
+  }
+}
+
+function templateExerciseToPersist(ex: TemplateExercise): TemplateExercise {
+  return {
+    id: ex.id,
+    name: ex.name,
+    notes: ex.notes ?? "",
+    primaryMuscles: ex.primaryMuscles,
+    setRows: ex.setRows.map((r) => ({
+      id: r.id,
+      weight: r.weight,
+      reps: r.reps,
+    })),
+  }
+}
+
+function parseTemplateWeightToNumber(s: string): number | null {
+  const t = String(s ?? "").trim()
+  if (!t) return null
+  const n = parseFloat(t)
+  return Number.isFinite(n) ? n : null
+}
+
+function parseTemplateRepsToNumber(s: string): number | null {
+  const t = String(s ?? "").trim()
+  if (!t) return null
+  if (/[-–—]/.test(t)) return null
+  const n = parseInt(t, 10)
+  return Number.isFinite(n) ? n : null
+}
+
+function sessionSetsFromTemplate(m: TemplateExercise): ExerciseSet[] {
+  return m.setRows.map((row, i) => ({
+    id: uid(),
+    setNumber: i + 1,
+    weight: parseTemplateWeightToNumber(row.weight),
+    reps: parseTemplateRepsToNumber(row.reps),
+    type: "working" as const,
+    completed: false,
+  }))
 }
 
 function applyPrefillFromPrevious(
@@ -231,6 +370,30 @@ function normalizeDateKey(d: string): string {
   return d.split("T")[0]
 }
 
+/** Weigh-in / bodyweight goal values may be stored in kg or lb. */
+function goalWeightToLb(value: number, unit: string | undefined): number {
+  const u = (unit ?? "lbs").toLowerCase()
+  if (u === "kg" || u === "kgs" || u === "kilogram" || u === "kilograms") {
+    return value * 2.2046226218
+  }
+  return value
+}
+
+/** Muscle/API hex swatch, or theme ladder yellow (`--primary`) when missing. */
+function muscleSwatchStyles(hex: string | undefined): { soft: string; dot: string } {
+  const c = hex?.trim()
+  if (c && /^#[0-9A-Fa-f]{6}$/.test(c)) {
+    return { soft: `${c}20`, dot: c }
+  }
+  return {
+    soft: "color-mix(in oklch, var(--primary) 14%, transparent)",
+    dot: "var(--primary)",
+  }
+}
+
+/** Column headers for a Monday-start calendar week (matches `startOfWeek(..., { weekStartsOn: 1 })`). */
+const CAL_WEEKDAY_LABELS_MON = ["M", "T", "W", "T", "F", "S", "S"] as const
+
 function normalizeSessionStatus(s: WorkoutSession): WorkoutSession {
   const status = String(s.status ?? "").trim().toLowerCase()
   return { ...s, status: status || "active" }
@@ -243,6 +406,22 @@ function formatTimer(seconds: number): string {
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
   return `${m}:${String(s).padStart(2, "0")}`
 }
+
+function formatRestCountdown(totalSeconds: number): string {
+  const sec = Math.max(0, Math.ceil(totalSeconds))
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return `${m}:${String(s).padStart(2, "0")}`
+}
+
+const REST_PRESETS = [
+  { sec: 45, label: "45s" },
+  { sec: 60, label: "1m" },
+  { sec: 90, label: "1:30" },
+  { sec: 120, label: "2m" },
+  { sec: 180, label: "3m" },
+  { sec: 240, label: "4m" },
+] as const
 
 function totalVolume(exercises: SessionExercise[]): number {
   let vol = 0
@@ -278,10 +457,19 @@ function ExercisePicker({
   open,
   onClose,
   onSelect,
+  title = "Add Exercise",
+  description = "Search or filter by muscle group, then pick an exercise",
+  initialMuscleGroup,
 }: {
   open: boolean
   onClose: () => void
   onSelect: (exercise: PickedExercise) => void
+  /** Dialog title (e.g. "Swap exercise"). */
+  title?: string
+  /** `DialogDescription` text (screen-reader). */
+  description?: string
+  /** Swap flow: pre-select this muscle chip when it exists in the library list. */
+  initialMuscleGroup?: string | null
 }) {
   const [exercises, setExercises] = useState<ApiExercise[]>(exerciseListCache ?? [])
   const [loading, setLoading] = useState(false)
@@ -293,7 +481,8 @@ function ExercisePicker({
   useEffect(() => {
     if (!open) return
     setSearch("")
-    setMuscleFilter("All")
+    const g = initialMuscleGroup?.trim()
+    setMuscleFilter(g && g.length > 0 ? g : "All")
     setTimeout(() => inputRef.current?.focus(), 100)
 
     if (exerciseListCache) {
@@ -319,7 +508,7 @@ function ExercisePicker({
         setUsingFallback(true)
       })
       .finally(() => setLoading(false))
-  }, [open])
+  }, [open, initialMuscleGroup])
 
   const allMuscles = useMemo(() => {
     const seen = new Set<string>()
@@ -328,6 +517,12 @@ function ExercisePicker({
     }
     return ["All", ...Array.from(seen).sort()]
   }, [exercises])
+
+  useEffect(() => {
+    if (!open || loading) return
+    if (muscleFilter === "All") return
+    if (!allMuscles.includes(muscleFilter)) setMuscleFilter("All")
+  }, [open, loading, allMuscles, muscleFilter])
 
   const results = useMemo(() => {
     const q = search.toLowerCase().trim()
@@ -364,10 +559,8 @@ function ExercisePicker({
       >
         <div className="shrink-0 border-b border-border/15 px-4 pb-3 pt-4 pr-12">
           <DialogHeader className="space-y-0">
-            <DialogTitle>Add Exercise</DialogTitle>
-            <DialogDescription className="sr-only">
-              Search or filter by muscle group, then pick an exercise
-            </DialogDescription>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription className="sr-only">{description}</DialogDescription>
           </DialogHeader>
         </div>
 
@@ -393,7 +586,7 @@ function ExercisePicker({
                   className={cn(
                     "shrink-0 rounded-lg px-2.5 py-2 text-[10px] font-medium uppercase tracking-wider transition-colors touch-manipulation sm:py-1.5",
                     muscleFilter === mg
-                      ? "bg-[#a855f7]/20 text-[#a855f7] ring-1 ring-[#a855f7]/35"
+                      ? "bg-primary/20 text-primary ring-1 ring-primary/35"
                       : "bg-muted/25 text-muted-foreground/70 hover:bg-muted/40 active:bg-muted/50",
                   )}
                 >
@@ -443,7 +636,8 @@ function ExercisePicker({
                 size="sm"
                 variant="outline"
                 className="touch-manipulation"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation()
                   onSelect({
                     name: search.trim(),
                     primaryMuscles: [],
@@ -466,12 +660,13 @@ function ExercisePicker({
                   {muscle}
                 </p>
                 {exList.map((ex) => {
-                  const primaryColor = ex.primaryMuscles[0]?.color ?? "#a855f7"
+                  const swatch = muscleSwatchStyles(ex.primaryMuscles[0]?.color)
                   return (
                     <button
                       key={ex.id}
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation()
                         onSelect({
                           name: ex.name,
                           primaryMuscles: ex.primaryMuscles.map((m) => ({
@@ -492,11 +687,11 @@ function ExercisePicker({
                     >
                       <div
                         className="flex size-9 shrink-0 items-center justify-center rounded-lg sm:size-8"
-                        style={{ backgroundColor: `${primaryColor}20` }}
+                        style={{ backgroundColor: swatch.soft }}
                       >
                         <div
                           className="size-2 rounded-full"
-                          style={{ backgroundColor: primaryColor }}
+                          style={{ backgroundColor: swatch.dot }}
                         />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -550,18 +745,53 @@ function RoutineEditor({
   open: boolean
   onClose: () => void
   initial?: WorkoutTemplate | null
-  onSave: (name: string, exercises: TemplateExercise[], id?: string) => void
+  onSave: (
+    name: string,
+    exercises: TemplateExercise[],
+    id?: string,
+    coverImageUrl?: string | null,
+    tags?: string[],
+  ) => Promise<boolean>
 }) {
   const [name, setName] = useState("")
   const [exercises, setExercises] = useState<TemplateExercise[]>([])
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState("")
   const [showPicker, setShowPicker] = useState(false)
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null)
+  const [coverUploading, setCoverUploading] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const nameInputRef = useRef<HTMLInputElement>(null)
+  const coverInputRef = useRef<HTMLInputElement>(null)
+  /** Only re-hydrate from `initial` when the dialog opens or the template id changes — not when `initial` is a new object reference for the same row (that was wiping tag edits). */
+  const hydratedTemplateIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (open) {
-      setName(initial?.name ?? "")
-      setExercises(initial ? parseExercises<TemplateExercise>(initial.exercises) : [])
+    if (!open) {
+      hydratedTemplateIdRef.current = null
+      setSaveError(null)
+      return
     }
+    const templateId = initial?.id ?? "new"
+    if (hydratedTemplateIdRef.current === templateId) return
+    hydratedTemplateIdRef.current = templateId
+
+    setName(initial?.name ?? "")
+    setExercises(
+      initial
+        ? parseExercises<TemplateExercise>(initial.exercises).map(migrateTemplateExercise)
+        : [],
+    )
+    setTags(parseTemplateTags(initial?.tags))
+    setTagInput("")
+    setCoverImageUrl(initial?.coverImageUrl?.trim() ? initial.coverImageUrl.trim() : null)
   }, [open, initial])
+
+  useEffect(() => {
+    if (!open || showPicker) return
+    const t = setTimeout(() => nameInputRef.current?.focus(), 100)
+    return () => clearTimeout(t)
+  }, [open, showPicker])
 
   function addExercise(picked: PickedExercise) {
     setExercises((prev) => [
@@ -569,10 +799,13 @@ function RoutineEditor({
       {
         id: uid(),
         name: picked.name,
-        targetSets: 3,
-        targetReps: "10",
         notes: "",
         primaryMuscles: picked.primaryMuscles,
+        setRows: [
+          { id: uid(), reps: "10", weight: "" },
+          { id: uid(), reps: "10", weight: "" },
+          { id: uid(), reps: "10", weight: "" },
+        ],
       },
     ])
   }
@@ -581,45 +814,309 @@ function RoutineEditor({
     setExercises((prev) => prev.filter((e) => e.id !== id))
   }
 
-  function updateExercise(id: string, field: string, value: string | number) {
+  function updateTemplateSetRow(
+    exId: string,
+    rowId: string,
+    field: "weight" | "reps",
+    value: string,
+  ) {
     setExercises((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, [field]: value } : e)),
+      prev.map((e) =>
+        e.id !== exId
+          ? e
+          : {
+              ...e,
+              setRows: e.setRows.map((r) => (r.id === rowId ? { ...r, [field]: value } : r)),
+            },
+      ),
     )
+  }
+
+  function addTemplateSetRow(exId: string) {
+    setExercises((prev) =>
+      prev.map((e) => {
+        if (e.id !== exId) return e
+        const last = e.setRows[e.setRows.length - 1]
+        return {
+          ...e,
+          setRows: [
+            ...e.setRows,
+            {
+              id: uid(),
+              reps: last?.reps ?? "10",
+              weight: last?.weight ?? "",
+            },
+          ],
+        }
+      }),
+    )
+  }
+
+  function removeTemplateSetRow(exId: string, rowId: string) {
+    setExercises((prev) =>
+      prev.map((e) => {
+        if (e.id !== exId || e.setRows.length <= 1) return e
+        return { ...e, setRows: e.setRows.filter((r) => r.id !== rowId) }
+      }),
+    )
+  }
+
+  function tagKey(t: string) {
+    return t.toLowerCase()
+  }
+
+  function togglePresetTag(label: string) {
+    setTags((prev) => {
+      const k = tagKey(label)
+      if (prev.some((t) => tagKey(t) === k)) {
+        return prev.filter((t) => tagKey(t) !== k)
+      }
+      if (prev.length >= 12) return prev
+      return [...prev, label]
+    })
+  }
+
+  function addTagFromInput() {
+    const t = tagInput.trim().slice(0, 40)
+    if (!t) return
+    setTags((prev) => {
+      if (prev.some((x) => tagKey(x) === tagKey(t))) return prev
+      if (prev.length >= 12) return prev
+      return [...prev, t]
+    })
+    setTagInput("")
+  }
+
+  function removeTag(label: string) {
+    setTags((prev) => prev.filter((x) => tagKey(x) !== tagKey(label)))
+  }
+
+  async function handleCoverFile(file: File | null) {
+    if (!file) return
+    setCoverUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await apiFetch("/api/workout-templates/cover", { method: "POST", body: fd })
+      if (!res.ok) return
+      const data = (await res.json()) as { url?: string }
+      const url = typeof data.url === "string" ? data.url : ""
+      if (!url.startsWith("/uploads/routine-covers/")) return
+      if (
+        coverImageUrl?.startsWith("/uploads/routine-covers/") &&
+        coverImageUrl !== initial?.coverImageUrl
+      ) {
+        await apiFetch(`/api/workout-templates/cover?url=${encodeURIComponent(coverImageUrl)}`, {
+          method: "DELETE",
+        }).catch(() => {})
+      }
+      setCoverImageUrl(url)
+    } finally {
+      setCoverUploading(false)
+      if (coverInputRef.current) coverInputRef.current.value = ""
+    }
   }
 
   return (
     <>
       <Dialog open={open && !showPicker} onOpenChange={(o) => !o && onClose()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{initial ? "Edit Routine" : "New Routine"}</DialogTitle>
-          </DialogHeader>
+        <DialogContent
+          showCloseButton
+          className={cn(
+            "glass-frost flex min-h-0 w-[min(100%,calc(100vw-1rem))] max-w-lg flex-col gap-0 overflow-hidden p-0",
+            "max-h-[min(88dvh,calc(100dvh-1rem))] sm:max-h-[85vh]",
+            "[&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3",
+          )}
+        >
+          <div className="shrink-0 border-b border-border/15 px-4 pb-3 pt-4 pr-12">
+            <DialogHeader className="space-y-0">
+              <DialogTitle>{initial ? "Edit Routine" : "New Routine"}</DialogTitle>
+              <DialogDescription className="sr-only">
+                Name your routine and add exercises from the library
+              </DialogDescription>
+            </DialogHeader>
+          </div>
 
-          <div className="space-y-4">
+          <div className="shrink-0 px-4 pb-3 pt-3">
             <Input
+              ref={nameInputRef}
               placeholder="Routine name (e.g. Push Day)"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              autoFocus
+              className="h-11 border-primary/15 bg-background/40 text-base sm:text-sm"
             />
+          </div>
 
-            <div className="space-y-2">
-              {exercises.map((ex, i) => (
+          <div className="shrink-0 space-y-2 border-b border-border/10 px-4 pb-3">
+            <p className="text-[10px] font-medium text-muted-foreground/75">
+              Tags
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {ROUTINE_TAG_PRESETS.map((preset) => {
+                const on = tags.some((t) => tagKey(t) === tagKey(preset))
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => togglePresetTag(preset)}
+                    className={cn(
+                      "rounded-lg px-2 py-2 text-[10px] font-medium leading-snug tracking-normal transition-colors touch-manipulation sm:py-1.5 sm:text-[11px]",
+                      on
+                        ? "bg-cyan-500/25 text-cyan-950 ring-1 ring-cyan-600/45 dark:bg-cyan-400/22 dark:text-cyan-50 dark:ring-cyan-300/45"
+                        : "bg-muted/25 text-muted-foreground hover:bg-muted/40 hover:text-foreground/90 active:bg-muted/50",
+                    )}
+                  >
+                    {preset}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add tag…"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    addTagFromInput()
+                  }
+                }}
+                className="h-9 flex-1 border-primary/15 bg-background/40 text-sm"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 shrink-0 touch-manipulation"
+                onClick={() => addTagFromInput()}
+              >
+                Add
+              </Button>
+            </div>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {tags.map((t) => (
+                  <span
+                    key={t + tagKey(t)}
+                    className="inline-flex items-center gap-0.5 rounded-md border border-cyan-600/30 bg-cyan-500/15 py-0.5 pl-2 pr-0.5 text-[10px] font-medium leading-snug text-cyan-950 dark:border-cyan-300/35 dark:bg-cyan-400/15 dark:text-cyan-50 sm:text-[11px]"
+                  >
+                    {t}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(t)}
+                      className="rounded p-0.5 text-cyan-800/70 hover:bg-cyan-500/20 hover:text-cyan-950 dark:text-cyan-100/70 dark:hover:bg-cyan-400/25 dark:hover:text-cyan-50 touch-manipulation"
+                      aria-label={`Remove ${t}`}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="shrink-0 space-y-2 px-4 pb-3 pt-3">
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => void handleCoverFile(e.target.files?.[0] ?? null)}
+            />
+            <div className="relative aspect-[16/9] max-h-[132px] overflow-hidden rounded-xl border border-border/15 bg-muted/15">
+              {coverImageUrl ? (
+                <>
+                  <img
+                    src={coverImageUrl}
+                    alt=""
+                    className="absolute inset-0 size-full object-cover"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 flex justify-end gap-1.5 bg-gradient-to-t from-black/55 to-transparent p-2 pt-8">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-8 touch-manipulation border-0 bg-white/90 text-foreground hover:bg-white"
+                      disabled={coverUploading}
+                      onClick={() => coverInputRef.current?.click()}
+                    >
+                      Change
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-8 touch-manipulation border-0 bg-white/15 text-white hover:bg-white/25"
+                      disabled={coverUploading}
+                      onClick={() => setCoverImageUrl(null)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  disabled={coverUploading}
+                  onClick={() => coverInputRef.current?.click()}
+                  className="flex size-full min-h-[104px] w-full flex-col items-center justify-center gap-1.5 px-4 text-muted-foreground/70 transition-colors hover:bg-muted/25 hover:text-muted-foreground disabled:opacity-50 touch-manipulation"
+                >
+                  {coverUploading ? (
+                    <span className="text-xs">Uploading…</span>
+                  ) : (
+                    <>
+                      <ImagePlus className="size-7 opacity-60" />
+                      <span className="text-xs font-medium">Add cover image</span>
+                      <span className="text-[10px] text-muted-foreground/50">JPEG, PNG, or WebP · up to 8 MB</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div
+            className={cn(
+              "min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2",
+              "scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0",
+            )}
+          >
+            {exercises.length === 0 && (
+              <p className="px-4 pt-1 pb-2 text-center text-sm text-muted-foreground/70">
+                Add exercises to build this routine
+              </p>
+            )}
+
+            {exercises.map((ex, i) => {
+              const swatch = muscleSwatchStyles(ex.primaryMuscles?.[0]?.color)
+              return (
                 <div
                   key={ex.id}
-                  className="flex items-center gap-2 rounded-xl border border-border/25 bg-muted/10 px-3 py-2"
+                  className="flex gap-3 border-b border-border/10 px-4 py-3 transition-colors last:border-b-0 hover:bg-muted/25 sm:py-2.5"
                 >
-                  <span className="text-[10px] font-bold text-muted-foreground/40 tabular-nums w-4 shrink-0">
-                    {i + 1}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-center gap-1 pt-0.5">
+                    <div
+                      className="flex size-9 items-center justify-center rounded-lg sm:size-8"
+                      style={{ backgroundColor: swatch.soft }}
+                    >
+                      <div
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: swatch.dot }}
+                      />
+                    </div>
+                    <span className="text-[9px] font-bold tabular-nums text-muted-foreground/45">
+                      {i + 1}
+                    </span>
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{ex.name}</p>
+                    <p className="text-sm font-medium leading-snug">{ex.name}</p>
                     {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
-                      <div className="flex gap-1 mt-0.5 mb-1 flex-wrap">
+                      <div className="mt-0.5 flex flex-wrap gap-1">
                         {ex.primaryMuscles.map((m) => (
                           <span
                             key={m.code}
-                            className="text-[9px] font-medium rounded px-1.5 py-0.5"
+                            className="rounded px-1.5 py-0.5 text-[9px] font-medium"
                             style={{ backgroundColor: `${m.color}22`, color: m.color }}
                           >
                             {m.name}
@@ -627,56 +1124,115 @@ function RoutineEditor({
                         ))}
                       </div>
                     )}
-                    <div className="flex items-center gap-2 mt-1">
-                      <Input
-                        className="h-7 w-14 px-2 text-xs text-center"
-                        type="number"
-                        min="1"
-                        value={ex.targetSets}
-                        onChange={(e) =>
-                          updateExercise(ex.id, "targetSets", parseInt(e.target.value) || 1)
-                        }
-                      />
-                      <span className="text-[10px] text-muted-foreground">sets ×</span>
-                      <Input
-                        className="h-7 w-16 px-2 text-xs text-center"
-                        placeholder="8-12"
-                        value={ex.targetReps}
-                        onChange={(e) =>
-                          updateExercise(ex.id, "targetReps", e.target.value)
-                        }
-                      />
-                      <span className="text-[10px] text-muted-foreground">reps</span>
+                    <div className="mt-2 space-y-1">
+                      <div className="grid grid-cols-[1.75rem_1fr_1fr_1.75rem] items-center gap-1 px-0.5">
+                        <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45 text-center">
+                          #
+                        </span>
+                        <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45 text-center">
+                          lb
+                        </span>
+                        <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45 text-center">
+                          Reps
+                        </span>
+                        <span className="sr-only">Remove</span>
+                      </div>
+                      {ex.setRows.map((row, si) => (
+                        <div
+                          key={row.id}
+                          className="grid grid-cols-[1.75rem_1fr_1fr_1.75rem] items-center gap-1"
+                        >
+                          <span className="text-center text-[10px] font-bold tabular-nums text-muted-foreground/50">
+                            {si + 1}
+                          </span>
+                          <Input
+                            className="h-8 border-primary/15 bg-background/40 px-1.5 text-center text-xs tabular-nums"
+                            inputMode="decimal"
+                            placeholder="—"
+                            value={row.weight}
+                            onChange={(e) =>
+                              updateTemplateSetRow(ex.id, row.id, "weight", e.target.value)
+                            }
+                          />
+                          <Input
+                            className="h-8 border-primary/15 bg-background/40 px-1.5 text-center text-xs"
+                            placeholder="10"
+                            value={row.reps}
+                            onChange={(e) =>
+                              updateTemplateSetRow(ex.id, row.id, "reps", e.target.value)
+                            }
+                          />
+                          <button
+                            type="button"
+                            disabled={ex.setRows.length <= 1}
+                            onClick={() => removeTemplateSetRow(ex.id, row.id)}
+                            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground/35 transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:pointer-events-none disabled:opacity-25 touch-manipulation"
+                            aria-label={`Remove set ${si + 1}`}
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => addTemplateSetRow(ex.id)}
+                        className="mt-1 flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-border/25 py-1.5 text-[10px] font-medium text-muted-foreground/60 transition-colors hover:bg-muted/20 hover:text-muted-foreground touch-manipulation"
+                      >
+                        <Plus className="size-3" />
+                        Add set
+                      </button>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => removeExercise(ex.id)}
-                    className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    className="h-9 shrink-0 self-start rounded-lg p-2 text-muted-foreground/40 transition-colors hover:bg-red-500/10 hover:text-red-400 touch-manipulation"
+                    aria-label={`Remove ${ex.name}`}
                   >
                     <X className="size-3.5" />
                   </button>
                 </div>
-              ))}
+              )
+            })}
 
+            <div className="px-4 pt-1">
               <button
                 type="button"
                 onClick={() => setShowPicker(true)}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/30 py-3 text-sm text-muted-foreground/60 hover:bg-muted/15 hover:text-muted-foreground transition-colors touch-manipulation"
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/30 py-3 text-sm text-muted-foreground/60 transition-colors hover:bg-muted/15 hover:text-muted-foreground touch-manipulation"
               >
                 <Plus className="size-4" />
                 Add exercise
               </button>
             </div>
+          </div>
 
+          <div className="shrink-0 border-t border-border/15 px-4 py-3 pb-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom)))]">
+            {saveError && (
+              <p className="mb-2 text-center text-xs text-destructive" role="alert">
+                {saveError}
+              </p>
+            )}
             <Button
               variant="glass"
               className="w-full press-scale"
               size="lg"
               disabled={!name.trim() || exercises.length === 0}
-              onClick={() => {
-                onSave(name.trim(), exercises, initial?.id)
-                onClose()
+              onClick={async () => {
+                setSaveError(null)
+                const tagPayload = [...tags]
+                const ok = await onSave(
+                  name.trim(),
+                  exercises.map(templateExerciseToPersist),
+                  initial?.id,
+                  coverImageUrl,
+                  tagPayload,
+                )
+                if (ok) onClose()
+                else
+                  setSaveError(
+                    "Could not save this routine. If it keeps failing, check the browser network tab for the /api/workout-templates response.",
+                  )
               }}
             >
               {initial ? "Save Changes" : "Create Routine"}
@@ -706,17 +1262,39 @@ function ActiveWorkout({
   previousSessions,
 }: {
   session: WorkoutSession
-  onUpdate: (exercises: SessionExercise[], name?: string) => void
+  onUpdate: (
+    exercises: SessionExercise[],
+    name?: string,
+    bodyWeightLb?: number | null,
+  ) => void
   onFinish: () => void
   onDiscard: () => void
   previousSessions: WorkoutSession[]
 }) {
+  const { activeDate } = useActiveDate()
+  const { setFullscreen } = useFullscreenOverlay()
   const exercises = parseExercises<SessionExercise>(session.exercises)
+  const exercisesRef = useRef(exercises)
+  exercisesRef.current = exercises
   const [showPicker, setShowPicker] = useState(false)
-  const [workoutName, setWorkoutName] = useState(session.name)
+  const [confirmEndAction, setConfirmEndAction] = useState<
+    null | "discard" | "finish"
+  >(null)
+  const [restConfig, setRestConfig] =
+    useState<WorkoutRestConfig>(DEFAULT_WORKOUT_REST)
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null)
+  /** Total seconds for the current rest (config at start, +15s bumps this) — drives progress bar. */
+  const [restTotalSec, setRestTotalSec] = useState(DEFAULT_WORKOUT_REST.seconds)
+  const [, setRestTick] = useState(0)
+  const [restSettingsOpen, setRestSettingsOpen] = useState(false)
+  /** Survives dialog close racing React state — see swap picker `onClose` / `onSelect`. */
+  const swapTargetRef = useRef<string | null>(null)
+  const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
-  const [editingName, setEditingName] = useState(false)
-  const nameInputRef = useRef<HTMLInputElement>(null)
+  const [collapsedExerciseIds, setCollapsedExerciseIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const weighInPrefilledRef = useRef(false)
 
   useEffect(() => {
     const start = new Date(session.startedAt).getTime()
@@ -727,8 +1305,73 @@ function ActiveWorkout({
   }, [session.startedAt])
 
   useEffect(() => {
-    if (editingName) nameInputRef.current?.focus()
-  }, [editingName])
+    const prev = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  useEffect(() => {
+    setFullscreen(true)
+    return () => setFullscreen(false)
+  }, [setFullscreen])
+
+  useEffect(() => {
+    setRestConfig(loadWorkoutRestConfig())
+  }, [])
+
+  useEffect(() => {
+    if (restEndsAt == null) return
+    const id = window.setInterval(() => {
+      setRestTick((t) => t + 1)
+      setRestEndsAt((end) => {
+        if (end == null || Date.now() < end) return end
+        return null
+      })
+    }, 250)
+    return () => clearInterval(id)
+  }, [restEndsAt])
+
+  useEffect(() => {
+    const list = parseExercises<SessionExercise>(session.exercises)
+    const c = new Set<string>()
+    for (const ex of list) {
+      if (ex.sets.length > 0 && ex.sets.every((s) => s.completed)) c.add(ex.id)
+    }
+    setCollapsedExerciseIds(c)
+    weighInPrefilledRef.current = false
+  }, [session.id])
+
+  useEffect(() => {
+    if (weighInPrefilledRef.current) return
+    if (session.bodyWeightLb != null && Number.isFinite(session.bodyWeightLb)) return
+    let cancelled = false
+    void apiFetch(`/api/weigh-in?d=${encodeURIComponent(activeDate)}`, {
+      cache: "no-store",
+    })
+      .then((r) => r.json())
+      .then(
+        (data: {
+          latestEntry?: { value: number } | null
+          unit?: string
+        }) => {
+          if (cancelled || weighInPrefilledRef.current) return
+          const v = data.latestEntry?.value
+          if (v == null || !Number.isFinite(v)) return
+          const lb = goalWeightToLb(v, data.unit)
+          if (!Number.isFinite(lb) || lb <= 0) return
+          const rounded = Math.round(lb * 10) / 10
+          weighInPrefilledRef.current = true
+          onUpdate(exercisesRef.current, undefined, rounded)
+        },
+      )
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onUpdate is stable enough; avoid refetch loops
+  }, [session.id, session.bodyWeightLb, activeDate])
 
   /** Most recent completed session wins per exercise name (for pre-fill + "Previous" column). */
   const previousByExercise = useMemo(() => {
@@ -810,11 +1453,53 @@ function ActiveWorkout({
     onUpdate(updated)
   }
 
+  function swapExercise(exId: string, picked: PickedExercise) {
+    const list = exercisesRef.current
+    const newExId = uid()
+    const updated = list.map((ex) => {
+      if (ex.id !== exId) return ex
+      const n = Math.max(1, ex.sets.length)
+      const sets: ExerciseSet[] = Array.from({ length: n }, (_, i) => ({
+        id: uid(),
+        setNumber: i + 1,
+        weight: null,
+        reps: null,
+        type: "working",
+        completed: false,
+      }))
+      return {
+        id: newExId,
+        name: picked.name,
+        notes: "",
+        primaryMuscles: picked.primaryMuscles,
+        secondaryMuscles: picked.secondaryMuscles,
+        category: picked.category,
+        sets,
+      }
+    })
+    setCollapsedExerciseIds((p) => {
+      const next = new Set(p)
+      next.delete(exId)
+      return next
+    })
+    onUpdate(updated)
+  }
+
   function removeExercise(exId: string) {
+    setCollapsedExerciseIds((p) => {
+      const next = new Set(p)
+      next.delete(exId)
+      return next
+    })
     onUpdate(exercises.filter((e) => e.id !== exId))
   }
 
   function addSet(exId: string) {
+    setCollapsedExerciseIds((p) => {
+      const next = new Set(p)
+      next.delete(exId)
+      return next
+    })
     onUpdate(
       exercises.map((ex) => {
         if (ex.id !== exId) return ex
@@ -838,16 +1523,27 @@ function ActiveWorkout({
   }
 
   function removeSet(exId: string, setId: string) {
-    onUpdate(
-      exercises.map((ex) => {
-        if (ex.id !== exId) return ex
-        const filtered = ex.sets.filter((s) => s.id !== setId)
-        return {
-          ...ex,
-          sets: filtered.map((s, i) => ({ ...s, setNumber: i + 1 })),
-        }
-      }),
-    )
+    const updated = exercises.map((ex) => {
+      if (ex.id !== exId) return ex
+      const filtered = ex.sets.filter((s) => s.id !== setId)
+      return {
+        ...ex,
+        sets: filtered.map((s, i) => ({ ...s, setNumber: i + 1 })),
+      }
+    })
+    const exAfter = updated.find((e) => e.id === exId)
+    if (
+      !exAfter ||
+      exAfter.sets.length === 0 ||
+      !exAfter.sets.every((s) => s.completed)
+    ) {
+      setCollapsedExerciseIds((p) => {
+        const next = new Set(p)
+        next.delete(exId)
+        return next
+      })
+    }
+    onUpdate(updated)
   }
 
   function updateSet(
@@ -888,17 +1584,37 @@ function ActiveWorkout({
   }
 
   function toggleSetComplete(exId: string, setId: string) {
-    onUpdate(
-      exercises.map((ex) => {
-        if (ex.id !== exId) return ex
-        return {
-          ...ex,
-          sets: ex.sets.map((s) =>
-            s.id === setId ? { ...s, completed: !s.completed } : s,
-          ),
-        }
-      }),
-    )
+    const exBefore = exercises.find((e) => e.id === exId)
+    const setBefore = exBefore?.sets.find((s) => s.id === setId)
+    const wasCompleted = setBefore?.completed ?? false
+
+    const updated = exercises.map((ex) => {
+      if (ex.id !== exId) return ex
+      return {
+        ...ex,
+        sets: ex.sets.map((s) =>
+          s.id === setId ? { ...s, completed: !s.completed } : s,
+        ),
+      }
+    })
+    const exAfter = updated.find((e) => e.id === exId)
+    if (exAfter && exAfter.sets.length > 0 && exAfter.sets.every((s) => s.completed)) {
+      setCollapsedExerciseIds((p) => new Set(p).add(exId))
+    } else {
+      setCollapsedExerciseIds((p) => {
+        const next = new Set(p)
+        next.delete(exId)
+        return next
+      })
+    }
+    if (wasCompleted) {
+      setRestEndsAt(null)
+    } else if (restConfig.enabled) {
+      const sec = restConfig.seconds
+      setRestTotalSec(sec)
+      setRestEndsAt(Date.now() + sec * 1000)
+    }
+    onUpdate(updated)
   }
 
   function cycleSetType(exId: string, setId: string) {
@@ -925,277 +1641,575 @@ function ActiveWorkout({
 
   const completedSets = totalSetsCompleted(exercises)
   const vol = totalVolume(exercises)
+  const restRemainingSec =
+    restEndsAt == null
+      ? null
+      : Math.max(0, (restEndsAt - Date.now()) / 1000)
+  const restCountdownActive =
+    restRemainingSec != null && restRemainingSec > 0
+  const restProgress =
+    restRemainingSec != null &&
+    restCountdownActive &&
+    restTotalSec > 0
+      ? Math.min(1, Math.max(0, 1 - restRemainingSec / restTotalSec))
+      : 0
 
   return (
     <>
-      {/* Timer bar */}
-      <div className="glass sticky top-0 z-30 rounded-2xl border border-[#a855f7]/20 bg-background/80 px-4 py-3 backdrop-blur-xl animate-fade-up">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-[#a855f7]/15">
-              <Clock className="size-4 text-[#a855f7]" />
-            </div>
-            <div>
-              {editingName ? (
-                <Input
-                  ref={nameInputRef}
-                  className="h-7 text-sm font-semibold px-1.5"
-                  value={workoutName}
-                  onChange={(e) => setWorkoutName(e.target.value)}
-                  onBlur={() => {
-                    setEditingName(false)
-                    if (workoutName.trim() && workoutName !== session.name) {
-                      onUpdate(exercises, workoutName.trim())
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      setEditingName(false)
-                      if (workoutName.trim() && workoutName !== session.name) {
-                        onUpdate(exercises, workoutName.trim())
-                      }
-                    }
-                  }}
-                />
-              ) : (
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 text-sm font-semibold hover:text-[#a855f7] transition-colors"
-                  onClick={() => setEditingName(true)}
-                >
-                  {workoutName || "Workout"}
-                  <Pencil className="size-3 text-muted-foreground/40" />
-                </button>
-              )}
-              <p className="text-lg font-bold tabular-nums text-[#a855f7] leading-tight">
-                {formatTimer(elapsed)}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 text-red-400 border-red-500/25 hover:bg-red-500/10 touch-manipulation"
-              onClick={onDiscard}
-            >
-              Discard
-            </Button>
-            <Button
-              variant="glass"
-              size="sm"
-              className="h-9 gap-1.5 press-scale touch-manipulation"
-              onClick={onFinish}
-            >
-              <Check className="size-3.5" />
-              Finish
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex gap-4 mt-2 pt-2 border-t border-border/15">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-            Exercises <span className="font-bold text-foreground/80">{exercises.length}</span>
-          </span>
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-            Sets <span className="font-bold text-foreground/80">{completedSets}</span>
-          </span>
-          {vol > 0 && (
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
-              Volume{" "}
-              <span className="font-bold text-foreground/80">
-                {vol >= 1000 ? `${(vol / 1000).toFixed(1)}k` : vol}
-                <span className="text-muted-foreground/40 ml-0.5">lb</span>
-              </span>
-            </span>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="active-workout-heading"
+        className="fixed inset-0 z-[120] flex flex-col bg-background/92 backdrop-blur-md supports-backdrop-filter:bg-background/85 sm:items-center sm:justify-center sm:p-4"
+      >
+        <div
+          className={cn(
+            "glass-frost flex min-h-0 w-full flex-1 flex-col overflow-hidden border-border/20 sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:max-w-lg sm:flex-none sm:rounded-2xl sm:border sm:shadow-2xl sm:shadow-black/30",
           )}
-        </div>
-      </div>
-
-      {/* Exercise list */}
-      <div className="space-y-3">
-        {exercises.map((ex) => {
-          const prev = previousByExercise.get(ex.name.toLowerCase())
-          return (
-            <div
-              key={ex.id}
-              className="glass rounded-2xl p-4 animate-fade-up"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-[#a855f7]">{ex.name}</h3>
-                  {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
-                    <div className="flex items-center gap-1 mt-1 flex-wrap">
-                      {ex.primaryMuscles.map((m) => (
-                        <span
-                          key={m.code}
-                          className="text-[9px] font-medium rounded px-1.5 py-0.5"
-                          style={{ backgroundColor: `${m.color}22`, color: m.color }}
-                        >
-                          {m.name}
-                        </span>
-                      ))}
-                      {ex.category && (
-                        <span className="text-[9px] text-muted-foreground/40">
-                          · {ex.category}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeExercise(ex.id)}
-                  className="shrink-0 p-1.5 rounded-lg text-muted-foreground/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+        >
+          {/* Title row — matches routine dialog header */}
+          <div className="shrink-0 border-b border-border/15 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 pr-2">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                  In progress
+                </p>
+                <h2
+                  id="active-workout-heading"
+                  className="font-heading mt-1 text-base font-medium leading-tight text-foreground"
                 >
-                  <Trash2 className="size-3.5" />
-                </button>
+                  Active workout
+                </h2>
               </div>
-
-              {/* Set header */}
-              <div className="grid grid-cols-[2rem_1fr_4.5rem_4.5rem_2.5rem] gap-1.5 mb-1 px-1">
-                <span className="text-[9px] font-medium uppercase text-muted-foreground/40 text-center">
-                  Set
+              <div className="flex shrink-0 flex-col items-end gap-0.5 rounded-xl border border-primary/20 bg-primary/10 px-3 py-2">
+                <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                  Time
                 </span>
-                <span className="text-[9px] font-medium uppercase text-muted-foreground/40">
-                  Previous
-                </span>
-                <span className="text-[9px] font-medium uppercase text-muted-foreground/40 text-center">
-                  lb
-                </span>
-                <span className="text-[9px] font-medium uppercase text-muted-foreground/40 text-center">
-                  Reps
-                </span>
-                <span className="text-[9px] font-medium uppercase text-muted-foreground/40 text-center">
-                  ✓
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="size-3.5 text-primary/80" aria-hidden />
+                  <span className="font-heading text-lg font-semibold tabular-nums text-primary leading-none sm:text-xl">
+                    {formatTimer(elapsed)}
+                  </span>
+                </div>
               </div>
+            </div>
+          </div>
 
-              {/* Set rows */}
-              {ex.sets.map((set) => {
-                const prevSet = prev?.[set.setNumber - 1]
-                const typeInfo = SET_TYPE_LABELS[set.type]
-                return (
+          <div className="shrink-0 px-4 pb-3 pt-3">
+            <div className="flex h-11 w-full items-center rounded-xl border border-border/15 bg-muted/10 px-3">
+              <span className="min-w-0 truncate text-base font-medium text-foreground sm:text-sm">
+                {session.name?.trim() || "Workout"}
+              </span>
+            </div>
+          </div>
+
+          {/* Session stats — compact strip like routine sections */}
+          <div className="shrink-0 space-y-2 border-b border-border/10 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                Moves <span className="font-bold text-foreground/90">{exercises.length}</span>
+              </span>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                Sets done{" "}
+                <span className="font-bold text-foreground/90">{completedSets}</span>
+              </span>
+              {vol > 0 && (
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                  Vol{" "}
+                  <span className="font-bold text-foreground/90">
+                    {vol >= 1000 ? `${(vol / 1000).toFixed(1)}k` : vol}
+                  </span>
+                  <span className="text-muted-foreground/40"> lb</span>
+                </span>
+              )}
+              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                Body weight{" "}
+                <span className="font-bold text-foreground/90 tabular-nums">
+                  {session.bodyWeightLb != null && Number.isFinite(session.bodyWeightLb)
+                    ? `${session.bodyWeightLb} lb`
+                    : "—"}
+                </span>
+              </span>
+            </div>
+          </div>
+
+          {/* Rest timer — starts when a set is checked done; duration persisted locally */}
+          <div className="shrink-0 border-b border-border/10 px-4 py-2.5">
+            {restCountdownActive && restRemainingSec != null ? (
+              <div
+                className="flex items-center gap-3 py-0.5"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <span className="font-heading w-[2.85rem] shrink-0 text-right text-lg font-semibold tabular-nums tracking-tight text-primary sm:text-xl">
+                  {formatRestCountdown(restRemainingSec)}
+                </span>
+                <div
+                  className="relative h-[5px] min-w-0 flex-1 overflow-hidden rounded-full bg-muted/30 shadow-[inset_0_1px_2px_oklch(0_0_0/12%)] ring-1 ring-inset ring-border/15"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(restProgress * 100)}
+                  aria-label={`Rest ${formatRestCountdown(restRemainingSec)} remaining`}
+                >
                   <div
-                    key={set.id}
-                    className={cn(
-                      "grid grid-cols-[2rem_1fr_4.5rem_4.5rem_2.5rem] gap-1.5 items-center rounded-lg px-1 py-1 transition-colors",
-                      set.completed && "bg-[#a855f7]/5",
-                    )}
+                    className="will-change-transform absolute inset-y-0 left-0 w-full origin-left rounded-full bg-gradient-to-r from-primary/40 via-primary to-primary/90 shadow-[0_0_12px_-2px] shadow-primary/35"
+                    style={{
+                      transform: `scaleX(${restProgress})`,
+                      transition: "transform 160ms linear",
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                  <Timer
+                    className="size-3.5 shrink-0 text-muted-foreground/50"
+                    aria-hidden
+                  />
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                    Rest after set
+                  </span>
+                  <span className="text-[10px] tabular-nums font-semibold text-foreground/85">
+                    {formatRestCountdown(restConfig.seconds)}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    className="h-7 min-h-7 touch-manipulation px-2.5 text-[10px]"
+                    onClick={() => {
+                      const next = saveWorkoutRestConfig({
+                        enabled: !restConfig.enabled,
+                      })
+                      setRestConfig(next)
+                      if (!next.enabled) setRestEndsAt(null)
+                    }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => cycleSetType(ex.id, set.id)}
-                      className={cn(
-                        "text-xs font-bold tabular-nums text-center transition-colors",
-                        typeInfo.color,
-                      )}
-                      title={`Type: ${set.type} (tap to change)`}
+                    {restConfig.enabled ? "On" : "Off"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="touch-manipulation"
+                    aria-label={
+                      restSettingsOpen
+                        ? "Hide rest timer length options"
+                        : "Choose rest timer length"
+                    }
+                    aria-expanded={restSettingsOpen}
+                    onClick={() => setRestSettingsOpen((o) => !o)}
+                  >
+                    <Settings2 className="size-3.5" />
+                  </Button>
+                </div>
+                {restSettingsOpen && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {REST_PRESETS.map(({ sec, label }) => (
+                      <button
+                        key={sec}
+                        type="button"
+                        onClick={() => {
+                          const next = saveWorkoutRestConfig({ seconds: sec })
+                          setRestConfig(next)
+                        }}
+                        className={cn(
+                          "rounded-lg px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors touch-manipulation",
+                          restConfig.seconds === sec
+                            ? "bg-primary/20 text-primary ring-1 ring-primary/35"
+                            : "bg-muted/25 text-muted-foreground/75 hover:bg-muted/40",
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Scrollable log */}
+          <div
+            className={cn(
+              "min-h-0 flex-1 overflow-y-auto overscroll-contain",
+              "scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0",
+            )}
+          >
+            {exercises.length === 0 && (
+              <p className="px-4 py-6 text-center text-sm text-muted-foreground/70">
+                Add an exercise to start logging sets.
+              </p>
+            )}
+
+            <div className="divide-y divide-border/10">
+              {exercises.map((ex) => {
+                const prev = previousByExercise.get(ex.name.toLowerCase())
+                const collapsed = collapsedExerciseIds.has(ex.id)
+                const setCount = ex.sets.length
+                const doneCount = ex.sets.filter((s) => s.completed).length
+                const collapseAnim =
+                  "grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none"
+                return (
+                  <div key={ex.id} className="px-4 py-3">
+                    <div
+                      className={cn(collapseAnim, collapsed ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}
                     >
-                      {set.type === "working"
-                        ? set.setNumber
-                        : typeInfo.short}
-                    </button>
-
-                    <span className="text-[11px] text-muted-foreground/40 tabular-nums truncate">
-                      {prevSet
-                        ? `${prevSet.weight ?? "–"}×${prevSet.reps ?? "–"}`
-                        : "–"}
-                    </span>
-
-                    <Input
-                      type="number"
-                      className={cn(
-                        "h-8 text-center text-xs tabular-nums px-1",
-                        ghostSetIds.has(set.id) &&
-                          "border-muted-foreground/20 bg-muted/10 text-muted-foreground/50",
-                      )}
-                      placeholder="0"
-                      value={set.weight ?? ""}
-                      onFocus={() => clearGhostForSet(set.id)}
-                      onChange={(e) =>
-                        updateSet(
-                          ex.id,
-                          set.id,
-                          "weight",
-                          e.target.value ? parseFloat(e.target.value) : null,
-                        )
-                      }
-                    />
-
-                    <Input
-                      type="number"
-                      className={cn(
-                        "h-8 text-center text-xs tabular-nums px-1",
-                        ghostSetIds.has(set.id) &&
-                          "border-muted-foreground/20 bg-muted/10 text-muted-foreground/50",
-                      )}
-                      placeholder="0"
-                      value={set.reps ?? ""}
-                      onFocus={() => clearGhostForSet(set.id)}
-                      onChange={(e) =>
-                        updateSet(
-                          ex.id,
-                          set.id,
-                          "reps",
-                          e.target.value ? parseInt(e.target.value) : null,
-                        )
-                      }
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => toggleSetComplete(ex.id, set.id)}
-                      className={cn(
-                        "flex items-center justify-center size-8 rounded-lg transition-all touch-manipulation",
-                        set.completed
-                          ? "bg-[#a855f7] text-white shadow-sm shadow-[#a855f7]/30"
-                          : "bg-muted/15 text-muted-foreground/30 hover:bg-muted/30",
-                      )}
+                      <div
+                        className="min-h-0 overflow-hidden"
+                        inert={collapsed ? undefined : true}
+                      >
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between gap-3 rounded-xl border border-border/10 bg-muted/10 px-3 py-2.5 text-left transition-colors hover:bg-muted/18 touch-manipulation"
+                          onClick={() =>
+                            setCollapsedExerciseIds((p) => {
+                              const next = new Set(p)
+                              next.delete(ex.id)
+                              return next
+                            })
+                          }
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-foreground">
+                              {ex.name}
+                            </p>
+                            <p className="mt-0.5 text-[10px] text-muted-foreground/55">
+                              {doneCount}/{setCount} sets · Tap to expand
+                            </p>
+                          </div>
+                          <ChevronRight
+                            className="size-4 shrink-0 text-muted-foreground/40"
+                            aria-hidden
+                          />
+                        </button>
+                      </div>
+                    </div>
+                    <div
+                      className={cn(collapseAnim, collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]")}
                     >
-                      <Check className="size-3.5" />
-                    </button>
+                      <div
+                        className="min-h-0 overflow-hidden"
+                        inert={collapsed ? true : undefined}
+                      >
+                      <div className="flex gap-3 pt-0.5">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <h3 className="text-sm font-semibold text-foreground">{ex.name}</h3>
+                              {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
+                                <div className="mt-1 flex flex-wrap items-center gap-1">
+                                  {ex.primaryMuscles.map((m) => (
+                                    <span
+                                      key={m.code}
+                                      className="text-[9px] font-medium rounded-md px-1.5 py-0.5"
+                                      style={{ backgroundColor: `${m.color}22`, color: m.color }}
+                                    >
+                                      {m.name}
+                                    </span>
+                                  ))}
+                                  {ex.category && (
+                                    <span className="text-[9px] text-muted-foreground/45">
+                                      · {ex.category}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex shrink-0 items-start gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  swapTargetRef.current = ex.id
+                                  setSwapExerciseId(ex.id)
+                                  setShowPicker(true)
+                                }}
+                                className="rounded-lg p-2 text-muted-foreground/40 transition-colors hover:bg-primary/10 hover:text-primary touch-manipulation"
+                                aria-label={`Swap ${ex.name} for another exercise`}
+                              >
+                                <ArrowLeftRight className="size-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeExercise(ex.id)}
+                                className="rounded-lg p-2 text-muted-foreground/35 transition-colors hover:bg-red-500/10 hover:text-red-400 touch-manipulation"
+                                aria-label={`Remove ${ex.name}`}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-[2rem_1fr_4.5rem_4.5rem_2.5rem] gap-1.5 px-0.5">
+                          <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45 text-center">
+                            Set
+                          </span>
+                          <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45">
+                            Prev
+                          </span>
+                          <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45 text-center">
+                            lb
+                          </span>
+                          <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45 text-center">
+                            Reps
+                          </span>
+                          <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45 text-center">
+                            Done
+                          </span>
+                        </div>
+
+                        {ex.sets.map((set) => {
+                          const prevSet = prev?.[set.setNumber - 1]
+                          const typeInfo = SET_TYPE_LABELS[set.type]
+                          return (
+                            <div
+                              key={set.id}
+                              className={cn(
+                                "grid grid-cols-[2rem_1fr_4.5rem_4.5rem_2.5rem] gap-1.5 items-center rounded-lg px-0.5 py-0.5 transition-colors",
+                                set.completed && "bg-primary/8",
+                              )}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => cycleSetType(ex.id, set.id)}
+                                className={cn(
+                                  "text-xs font-bold tabular-nums text-center transition-colors touch-manipulation",
+                                  typeInfo.color,
+                                )}
+                                title={`Type: ${set.type} (tap to change)`}
+                              >
+                                {set.type === "working" ? set.setNumber : typeInfo.short}
+                              </button>
+
+                              <span className="text-[11px] text-muted-foreground/45 tabular-nums truncate">
+                                {prevSet
+                                  ? `${prevSet.weight ?? "–"}×${prevSet.reps ?? "–"}`
+                                  : "–"}
+                              </span>
+
+                              <Input
+                                type="number"
+                                className={cn(
+                                  "h-8 border-primary/15 bg-background/40 px-1 text-center text-xs tabular-nums",
+                                  ghostSetIds.has(set.id) &&
+                                    "border-muted-foreground/20 bg-muted/10 text-muted-foreground/50",
+                                )}
+                                placeholder="—"
+                                value={set.weight ?? ""}
+                                onFocus={() => clearGhostForSet(set.id)}
+                                onChange={(e) =>
+                                  updateSet(
+                                    ex.id,
+                                    set.id,
+                                    "weight",
+                                    e.target.value ? parseFloat(e.target.value) : null,
+                                  )
+                                }
+                              />
+
+                              <Input
+                                type="number"
+                                className={cn(
+                                  "h-8 border-primary/15 bg-background/40 px-1 text-center text-xs tabular-nums",
+                                  ghostSetIds.has(set.id) &&
+                                    "border-muted-foreground/20 bg-muted/10 text-muted-foreground/50",
+                                )}
+                                placeholder="—"
+                                value={set.reps ?? ""}
+                                onFocus={() => clearGhostForSet(set.id)}
+                                onChange={(e) =>
+                                  updateSet(
+                                    ex.id,
+                                    set.id,
+                                    "reps",
+                                    e.target.value ? parseInt(e.target.value) : null,
+                                  )
+                                }
+                              />
+
+                              <button
+                                type="button"
+                                onClick={() => toggleSetComplete(ex.id, set.id)}
+                                className={cn(
+                                  "mx-auto flex size-8 items-center justify-center rounded-lg transition-all touch-manipulation",
+                                  set.completed
+                                    ? "bg-primary text-primary-foreground shadow-sm shadow-primary/25"
+                                    : "bg-muted/20 text-muted-foreground/35 hover:bg-muted/35",
+                                )}
+                              >
+                                <Check className="size-3.5" />
+                              </button>
+                            </div>
+                          )
+                        })}
+
+                        <div className="flex gap-2 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => addSet(ex.id)}
+                            className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-dashed border-border/30 py-2 text-[10px] font-medium text-muted-foreground/55 transition-colors hover:bg-muted/15 hover:text-muted-foreground touch-manipulation"
+                          >
+                            <Plus className="size-3" />
+                            Add set
+                          </button>
+                          {ex.sets.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeSet(ex.id, ex.sets[ex.sets.length - 1].id)}
+                              className="flex items-center justify-center rounded-lg border border-dashed border-border/30 px-2.5 py-2 text-muted-foreground/35 transition-colors hover:border-red-500/30 hover:text-red-400 touch-manipulation"
+                              aria-label="Remove last set"
+                            >
+                              <X className="size-3" />
+                            </button>
+                          )}
+                          </div>
+                        </div>
+                      </div>
+                      </div>
+                    </div>
                   </div>
                 )
               })}
-
-              <div className="flex gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={() => addSet(ex.id)}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/25 py-2 text-[11px] font-medium text-muted-foreground/50 hover:bg-muted/15 hover:text-muted-foreground transition-colors touch-manipulation"
-                >
-                  <Plus className="size-3" />
-                  Add Set
-                </button>
-                {ex.sets.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeSet(ex.id, ex.sets[ex.sets.length - 1].id)}
-                    className="flex items-center justify-center rounded-lg border border-dashed border-border/25 px-3 py-2 text-[11px] text-muted-foreground/30 hover:text-red-400 hover:border-red-500/25 transition-colors touch-manipulation"
-                  >
-                    <X className="size-3" />
-                  </button>
-                )}
-              </div>
             </div>
-          )
-        })}
+
+            <div className="px-4 pb-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  swapTargetRef.current = null
+                  setSwapExerciseId(null)
+                  setShowPicker(true)
+                }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/30 py-3 text-sm text-muted-foreground/60 transition-colors hover:bg-muted/15 hover:text-muted-foreground touch-manipulation"
+              >
+                <Plus className="size-4" />
+                Add exercise
+              </button>
+            </div>
+          </div>
+
+          {/* Footer — routine-style primary action */}
+          <div className="shrink-0 border-t border-border/15 px-4 py-3 pb-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom)))]">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="h-12 flex-1 touch-manipulation border-red-500/25 text-red-400 hover:bg-red-500/10"
+                onClick={() => setConfirmEndAction("discard")}
+              >
+                Discard
+              </Button>
+              <Button
+                type="button"
+                variant="glass"
+                size="lg"
+                className="h-12 flex-[1.4] gap-2 press-scale touch-manipulation"
+                onClick={() => setConfirmEndAction("finish")}
+              >
+                <Check className="size-4 shrink-0" />
+                Finish workout
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setShowPicker(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-[#a855f7]/25 py-5 text-sm font-medium text-[#a855f7]/70 hover:bg-[#a855f7]/5 hover:text-[#a855f7] transition-colors touch-manipulation"
+      <Dialog
+        open={confirmEndAction !== null}
+        onOpenChange={(o) => {
+          if (!o) setConfirmEndAction(null)
+        }}
       >
-        <Plus className="size-4" />
-        Add Exercise
-      </button>
+        <DialogContent
+          showCloseButton
+          className={cn(
+            "glass-frost max-w-sm gap-0 p-0",
+            "[&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3",
+          )}
+        >
+          <div className="space-y-2 px-4 pb-2 pt-4 pr-12">
+            <DialogHeader className="space-y-2 text-left">
+              <DialogTitle>
+                {confirmEndAction === "discard"
+                  ? "Discard this workout?"
+                  : "Finish this workout?"}
+              </DialogTitle>
+              <DialogDescription>
+                {confirmEndAction === "discard"
+                  ? "This session will be removed from your log. You can’t undo this."
+                  : "Save this session as completed and return to the workouts screen."}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="flex gap-2 border-t border-border/15 px-4 py-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="h-11 flex-1 touch-manipulation"
+              onClick={() => setConfirmEndAction(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant={confirmEndAction === "discard" ? "destructive" : "glass"}
+              size="lg"
+              className={cn(
+                "h-11 flex-1 touch-manipulation gap-2",
+                confirmEndAction === "finish" && "press-scale",
+              )}
+              onClick={() => {
+                if (confirmEndAction === "discard") onDiscard()
+                else if (confirmEndAction === "finish") onFinish()
+                setConfirmEndAction(null)
+              }}
+            >
+              {confirmEndAction === "finish" && (
+                <Check className="size-4 shrink-0" aria-hidden />
+              )}
+              {confirmEndAction === "discard" ? "Discard" : "Finish workout"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ExercisePicker
         open={showPicker}
-        onClose={() => setShowPicker(false)}
-        onSelect={(picked) => addExercise(picked)}
+        onClose={() => {
+          setShowPicker(false)
+          setSwapExerciseId(null)
+          /* Let a library row’s onSelect run in the same gesture before clearing swap target. */
+          queueMicrotask(() => {
+            swapTargetRef.current = null
+          })
+        }}
+        title={swapExerciseId ? "Swap exercise" : "Add Exercise"}
+        description={
+          swapExerciseId
+            ? "Pick a movement from the library to replace this one"
+            : "Search or filter by muscle group, then pick an exercise"
+        }
+        initialMuscleGroup={
+          swapExerciseId
+            ? exercises.find((ex) => ex.id === swapExerciseId)?.primaryMuscles?.[0]
+                ?.name ?? null
+            : null
+        }
+        onSelect={(picked) => {
+          const swapId = swapTargetRef.current
+          swapTargetRef.current = null
+          if (swapId != null) {
+            swapExercise(swapId, picked)
+          } else {
+            addExercise(picked)
+          }
+          setShowPicker(false)
+          setSwapExerciseId(null)
+        }}
       />
     </>
   )
@@ -1251,14 +2265,20 @@ export default function WorkoutsPage() {
     return sessions.find((s) => norm(s) === "active") ?? null
   }, [sessions])
 
-  const weekStart = formatDate(subDays(parseLocalDate(activeDate), 6))
-  const weekDayKeys = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, i) =>
-        formatDate(subDays(parseLocalDate(activeDate), 6 - i)),
-      ),
-    [activeDate],
-  )
+  const { weekStart, weekEnd, weekDayKeys } = useMemo(() => {
+    const ref = parseLocalDate(activeDate)
+    const start = startOfWeek(ref, { weekStartsOn: 1 })
+    const weekStartStr = formatDate(start)
+    const weekEndStr = formatDate(addDays(start, 6))
+    const keys = Array.from({ length: 7 }, (_, i) =>
+      formatDate(addDays(start, i)),
+    )
+    return {
+      weekStart: weekStartStr,
+      weekEnd: weekEndStr,
+      weekDayKeys: keys,
+    }
+  }, [activeDate])
 
   const completedSessions = useMemo(() => {
     const norm = (s: WorkoutSession) =>
@@ -1279,7 +2299,7 @@ export default function WorkoutsPage() {
   const stats = useMemo(() => {
     const weekSessions = completedSessions.filter((s) => {
       const k = normalizeDateKey(s.date)
-      return k >= weekStart && k <= today
+      return k >= weekStart && k <= weekEnd
     })
     const weekCount = weekSessions.length
     const weekVolume = weekSessions.reduce((sum, s) => {
@@ -1300,12 +2320,17 @@ export default function WorkoutsPage() {
     }
 
     return { weekCount, weekVolume, weekSets, streakDays }
-  }, [completedSessions, weekStart, today, byDay, activeDate])
+  }, [completedSessions, weekStart, weekEnd, byDay, activeDate])
 
   const historyByDate = useMemo(() => {
     const keys = Array.from(byDay.keys()).sort((a, b) => b.localeCompare(a))
     return keys.map((k) => [k, byDay.get(k)!] as const)
   }, [byDay])
+
+  const journalHistoryDisplay = useMemo(
+    () => partitionHistoryDayGroups(historyByDate, (tuple) => tuple[0], today),
+    [historyByDate, today]
+  )
 
   // ── Actions ───────────────────────────
 
@@ -1315,19 +2340,16 @@ export default function WorkoutsPage() {
   ) {
     setStartError(null)
     const exercises: SessionExercise[] = templateExercises
-      ? templateExercises.map((te) => ({
-          id: uid(),
-          name: te.name,
-          notes: te.notes,
-          sets: Array.from({ length: te.targetSets }, (_, i) => ({
+      ? templateExercises.map((te) => {
+          const m = migrateTemplateExercise(te)
+          return {
             id: uid(),
-            setNumber: i + 1,
-            weight: null,
-            reps: null,
-            type: "working" as const,
-            completed: false,
-          })),
-        }))
+            name: m.name,
+            notes: m.notes,
+            primaryMuscles: m.primaryMuscles,
+            sets: sessionSetsFromTemplate(m),
+          }
+        })
       : []
 
     setStartingWorkout(true)
@@ -1379,6 +2401,7 @@ export default function WorkoutsPage() {
   async function updateActiveSession(
     exercises: SessionExercise[],
     name?: string,
+    bodyWeightLb?: number | null,
   ) {
     if (!activeSession) return
     setSessions((prev) =>
@@ -1388,6 +2411,7 @@ export default function WorkoutsPage() {
               ...s,
               exercises: exercises as unknown as string,
               ...(name ? { name } : {}),
+              ...(bodyWeightLb !== undefined ? { bodyWeightLb } : {}),
             }
           : s,
       ),
@@ -1402,6 +2426,7 @@ export default function WorkoutsPage() {
         body: JSON.stringify({
           exercises,
           ...(name ? { name } : {}),
+          ...(bodyWeightLb !== undefined ? { bodyWeightLb } : {}),
         }),
       })
     }, 800)
@@ -1430,6 +2455,7 @@ export default function WorkoutsPage() {
         finishedAt: new Date().toISOString(),
         duration,
         exercises: exercisesPayload,
+        bodyWeightLb: sess?.bodyWeightLb ?? null,
       }),
     })
     if (res.ok) {
@@ -1463,27 +2489,51 @@ export default function WorkoutsPage() {
     name: string,
     exercises: TemplateExercise[],
     id?: string,
-  ) {
-    if (id) {
+    coverImageUrl?: string | null,
+    tags: string[] = [],
+  ): Promise<boolean> {
+    const tagList = Array.isArray(tags) ? [...tags] : []
+    const payload = id
+      ? {
+          id,
+          name,
+          exercises,
+          coverImageUrl: coverImageUrl ?? null,
+          tags: tagList,
+        }
+      : {
+          name,
+          exercises,
+          coverImageUrl: coverImageUrl ?? null,
+          tags: tagList,
+        }
+    try {
       const res = await apiFetch("/api/workout-templates", {
-        method: "PUT",
+        method: id ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, name, exercises }),
+        body: JSON.stringify(payload),
       })
-      if (res.ok) {
-        const updated = await res.json()
-        setTemplates((prev) => prev.map((t) => (t.id === id ? updated : t)))
+      const raw = await res.text()
+      if (!res.ok) {
+        console.error("[saveTemplate]", res.status, raw.slice(0, 500))
+        return false
       }
-    } else {
-      const res = await apiFetch("/api/workout-templates", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, exercises }),
-      })
-      if (res.ok) {
-        const created = await res.json()
-        setTemplates((prev) => [created, ...prev])
+      let row: WorkoutTemplate
+      try {
+        row = JSON.parse(raw) as WorkoutTemplate
+      } catch {
+        console.error("[saveTemplate] Invalid JSON from API", raw.slice(0, 200))
+        return false
       }
+      if (id) {
+        setTemplates((prev) => prev.map((t) => (t.id === id ? row : t)))
+      } else {
+        setTemplates((prev) => [row, ...prev])
+      }
+      return true
+    } catch (e) {
+      console.error("[saveTemplate]", e)
+      return false
     }
   }
 
@@ -1519,26 +2569,202 @@ export default function WorkoutsPage() {
     return format(new Date(dateKey + "T12:00:00"), "EEEE, MMM d")
   }
 
-  const dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
+  function WorkoutJournalDayCard({
+    dateKey,
+    daySessions,
+    alwaysExpanded,
+  }: {
+    dateKey: string
+    daySessions: WorkoutSession[]
+    alwaysExpanded: boolean
+  }) {
+    const isOpen = alwaysExpanded || expandedDays.has(dateKey)
+    const dayVolume = daySessions.reduce((s, sess) => {
+      const exs = parseExercises<SessionExercise>(sess.exercises)
+      return s + totalVolume(exs)
+    }, 0)
+    const dayDuration = daySessions.reduce((s, sess) => s + (sess.duration ?? 0), 0)
+
+    return (
+      <div className="glass rounded-2xl overflow-hidden">
+        <button
+          type="button"
+          onClick={() => {
+            if (!alwaysExpanded) toggleDay(dateKey)
+          }}
+          className="flex w-full items-center gap-3 px-4 py-3.5 text-left touch-manipulation transition-colors hover:bg-glass-highlight/20"
+        >
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+            <span className="text-sm font-bold tabular-nums text-primary">{daySessions.length}</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+              {sectionDateLabel(dateKey)}
+            </span>
+            <div className="flex items-center gap-3 mt-0.5">
+              {dayDuration > 0 && (
+                <span className="flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground/50">
+                  <Clock className="size-2.5" />
+                  {dayDuration} min
+                </span>
+              )}
+              {dayVolume > 0 && (
+                <span className="text-[10px] tabular-nums text-muted-foreground/50">
+                  {dayVolume >= 1000 ? `${(dayVolume / 1000).toFixed(1)}k lb` : `${dayVolume} lb`}
+                </span>
+              )}
+            </div>
+          </div>
+          <ChevronDown
+            className={cn(
+              "size-4 shrink-0 text-muted-foreground/40 transition-transform duration-200",
+              isOpen && "rotate-180",
+            )}
+          />
+        </button>
+
+        {isOpen && (
+          <div className="border-t border-border/20 px-3 pb-3 pt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
+            {[...daySessions]
+              .sort(
+                (a, b) =>
+                  new Date(b.finishedAt ?? b.startedAt).getTime() -
+                  new Date(a.finishedAt ?? a.startedAt).getTime(),
+              )
+              .map((sess) => {
+                const exs = parseExercises<SessionExercise>(sess.exercises)
+                const sessVol = totalVolume(exs)
+                const sessExpanded = expandedSessionIds.has(sess.id)
+                return (
+                  <div
+                    key={sess.id}
+                    className="rounded-xl border border-border/15 bg-muted/[0.06] overflow-hidden"
+                  >
+                    <div className="flex items-stretch gap-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleSessionExpand(sess.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-3 text-left touch-manipulation transition-colors hover:bg-glass-highlight/15"
+                      >
+                        <ChevronDown
+                          className={cn(
+                            "size-4 shrink-0 text-muted-foreground/45 transition-transform duration-200",
+                            sessExpanded && "rotate-180",
+                          )}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold">{sess.name}</p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            {sess.duration != null && (
+                              <span className="text-[10px] tabular-nums text-muted-foreground/50">
+                                {sess.duration} min
+                              </span>
+                            )}
+                            {sess.bodyWeightLb != null && Number.isFinite(sess.bodyWeightLb) && (
+                              <span className="text-[10px] tabular-nums text-muted-foreground/50">
+                                BW {sess.bodyWeightLb} lb
+                              </span>
+                            )}
+                            <span className="text-[10px] text-muted-foreground/40">
+                              {exs.length} exercise{exs.length !== 1 ? "s" : ""}
+                            </span>
+                            {sessVol > 0 && (
+                              <span className="text-[10px] tabular-nums text-muted-foreground/45">
+                                {sessVol >= 1000
+                                  ? `${(sessVol / 1000).toFixed(1)}k lb vol`
+                                  : `${sessVol} lb vol`}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteSession(sess.id)
+                        }}
+                        className="history-row-delete shrink-0 self-center mr-2"
+                        aria-label="Delete session"
+                      >
+                        <Trash2 />
+                      </button>
+                    </div>
+
+                    {sessExpanded && (
+                      <div className="border-t border-border/15 px-2.5 pb-2.5 pt-1 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
+                        {exs.map((ex) => (
+                          <div
+                            key={ex.id}
+                            className="rounded-lg border border-border/12 bg-background/30 px-2.5 py-2"
+                          >
+                            <p className="mb-1.5 text-[11px] font-semibold text-primary">{ex.name}</p>
+                            {ex.sets.length === 0 ? (
+                              <p className="text-[10px] text-muted-foreground/45">No sets logged</p>
+                            ) : (
+                              <>
+                                <div className="grid grid-cols-[2rem_1fr_1fr_1.75rem] gap-x-1.5 gap-y-1 text-[9px] uppercase tracking-wide text-muted-foreground/40">
+                                  <span className="text-center">#</span>
+                                  <span className="text-center">lb</span>
+                                  <span className="text-center">reps</span>
+                                  <span className="text-center" title="Logged">
+                                    ✓
+                                  </span>
+                                </div>
+                                {ex.sets.map((set) => (
+                                  <div
+                                    key={set.id}
+                                    className={cn(
+                                      "grid grid-cols-[2rem_1fr_1fr_1.75rem] items-center gap-x-1.5 gap-y-0.5 rounded-md py-1 text-[10px] tabular-nums",
+                                      set.completed
+                                        ? "text-muted-foreground/80"
+                                        : "text-muted-foreground/45",
+                                    )}
+                                  >
+                                    <span className="text-center font-medium text-muted-foreground/50">
+                                      {set.setNumber}
+                                    </span>
+                                    <span className="text-center">{set.weight ?? "–"}</span>
+                                    <span className="text-center">{set.reps ?? "–"}</span>
+                                    <span className="text-center text-[9px]">
+                                      {set.completed ? (
+                                        <Check className="mx-auto size-3 text-emerald-500/90" />
+                                      ) : (
+                                        <span className="text-muted-foreground/25">—</span>
+                                      )}
+                                    </span>
+                                  </div>
+                                ))}
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Workouts" />
-
-      {/* ── Active workout ───────────────────────── */}
-      {activeSession && (
+    <>
+      {activeSession ? (
         <ActiveWorkout
           session={activeSession}
-          onUpdate={updateActiveSession}
+          onUpdate={(ex, name, bw) => void updateActiveSession(ex, name, bw)}
           onFinish={finishActiveSession}
           onDiscard={discardActiveSession}
           previousSessions={completedSessions}
         />
-      )}
+      ) : (
+        <div className="space-y-6">
+          <PageHeader title="Workouts" />
 
-      {/* ── Home view (no active workout) ────────── */}
-      {!activeSession && (
-        <>
+          {/* ── Home view ─────────────────────────── */}
           {/* Stat tiles */}
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
             <PageStatTile className="flex-1 min-w-0">
@@ -1605,21 +2831,21 @@ export default function WorkoutsPage() {
                   const isActive = key === today
                   const has = count > 0
                   return (
-                    <div key={key} className="flex flex-1 flex-col items-center gap-2">
+                    <div key={key} className="flex min-w-0 flex-1 flex-col items-center gap-2">
                       <span
                         className={cn(
-                          "text-[10px] font-medium tracking-wider",
+                          "whitespace-nowrap text-[10px] font-semibold tracking-wider sm:text-[11px]",
                           isActive ? "text-foreground" : "text-muted-foreground/50",
                         )}
                       >
-                        {dayLabels[i]}
+                        {CAL_WEEKDAY_LABELS_MON[i]}
                       </span>
                       <div
                         className={cn(
                           "flex size-9 items-center justify-center rounded-xl transition-all duration-200 sm:size-10",
-                          has && isActive && "bg-[#a855f7] text-white shadow-md shadow-[#a855f7]/30",
-                          has && !isActive && "bg-[#a855f7]/20 text-[#c084fc]",
-                          !has && isActive && "ring-2 ring-[#a855f7]/40 bg-muted/15 text-muted-foreground/40",
+                          has && isActive && "bg-primary text-primary-foreground shadow-md shadow-primary/30",
+                          has && !isActive && "bg-primary/20 text-primary",
+                          !has && isActive && "ring-2 ring-primary/40 bg-muted/15 text-muted-foreground/40",
                           !has && !isActive && "bg-muted/10 text-muted-foreground/20",
                         )}
                       >
@@ -1641,12 +2867,12 @@ export default function WorkoutsPage() {
             <Button
               type="button"
               variant="glass"
-              size="lg"
+              size="sm"
               disabled={startingWorkout}
               onClick={() => void startSession("Workout")}
-              className="h-14 w-full gap-2.5 rounded-2xl press-scale text-base font-semibold"
+              className="h-8 w-full shrink-0 gap-1 px-2 text-[11px] press-scale touch-manipulation sm:h-9 sm:text-xs"
             >
-              <Play className="size-5 shrink-0 opacity-95" />
+              <Play className="size-3 shrink-0" />
               {startingWorkout ? "Starting…" : "Start Empty Workout"}
             </Button>
             {startError && (
@@ -1688,84 +2914,117 @@ export default function WorkoutsPage() {
               </div>
             )}
 
-            {templates.map((tmpl) => {
-              const exs = parseExercises<TemplateExercise>(tmpl.exercises)
-              return (
-                <div
-                  key={tmpl.id}
-                  className="glass rounded-2xl p-4 group"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-semibold">{tmpl.name}</h3>
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setTemplateMenuId(
-                            templateMenuId === tmpl.id ? null : tmpl.id,
-                          )
-                        }
-                        className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-muted-foreground hover:bg-muted/20 transition-colors touch-manipulation"
-                      >
-                        <MoreHorizontal className="size-4" />
-                      </button>
-                      {templateMenuId === tmpl.id && (
-                        <div className="absolute right-0 top-full mt-1 z-20 glass rounded-xl border border-border/25 p-1 min-w-[120px] shadow-xl animate-in fade-in slide-in-from-top-1 duration-100">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingTemplate(tmpl)
-                              setShowRoutineEditor(true)
-                              setTemplateMenuId(null)
-                            }}
-                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-muted/20 transition-colors"
-                          >
-                            <Pencil className="size-3.5" />
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteTemplate(tmpl.id)}
-                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
-                          >
-                            <Trash2 className="size-3.5" />
-                            Delete
-                          </button>
+            {templates.length > 0 && (
+              <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 sm:gap-3.5">
+                {templates.map((tmpl) => {
+                  const exs = parseExercises<TemplateExercise>(tmpl.exercises)
+                  const tmplTags = parseTemplateTags(tmpl.tags)
+                  const cover = tmpl.coverImageUrl?.trim()
+                  const preview =
+                    exs.length === 0
+                      ? "No exercises"
+                      : exs.length <= 2
+                        ? exs.map((e) => e.name).join(" · ")
+                        : `${exs[0].name} · ${exs[1].name} +${exs.length - 2}`
+                  return (
+                    <div
+                      key={tmpl.id}
+                      className="glass group flex h-full min-h-0 flex-col overflow-hidden rounded-2xl"
+                    >
+                      <div className="relative aspect-square w-full shrink-0 border-b border-border/10 bg-muted/20">
+                        {cover ? (
+                          <img
+                            src={cover}
+                            alt=""
+                            className="absolute inset-0 size-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex size-full items-center justify-center bg-gradient-to-br from-muted/30 to-muted/10">
+                            <Dumbbell className="size-[clamp(2rem,32%,2.75rem)] text-muted-foreground/15" />
+                          </div>
+                        )}
+                        <div className="absolute left-1.5 top-1.5 z-20 sm:left-2 sm:top-2">
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setTemplateMenuId(
+                                  templateMenuId === tmpl.id ? null : tmpl.id,
+                                )
+                              }
+                              className="rounded-lg border border-border/25 bg-background/80 p-1.5 text-muted-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-background hover:text-foreground touch-manipulation dark:border-white/10 dark:bg-background/55"
+                              aria-label="Routine options"
+                            >
+                              <MoreHorizontal className="size-4" />
+                            </button>
+                            {templateMenuId === tmpl.id && (
+                              <div className="absolute left-0 top-full z-30 mt-1 min-w-[112px] rounded-xl border border-border/25 bg-popover p-1 shadow-xl animate-in fade-in slide-in-from-top-1 duration-100">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingTemplate(tmpl)
+                                    setShowRoutineEditor(true)
+                                    setTemplateMenuId(null)
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs hover:bg-muted/20 transition-colors"
+                                >
+                                  <Pencil className="size-3.5" />
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteTemplate(tmpl.id)}
+                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
+                      </div>
+                      <div className="flex min-h-[6.5rem] flex-1 flex-col gap-1.5 p-2.5 pt-2 sm:min-h-[7rem] sm:p-3">
+                        <div className="min-h-0 min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <h3 className="line-clamp-2 min-w-0 flex-1 text-left text-sm font-semibold leading-snug text-foreground sm:text-base">
+                              {tmpl.name}
+                            </h3>
+                            {tmplTags.length > 0 ? (
+                              <div className="flex max-w-[38%] shrink-0 flex-wrap items-center justify-end gap-1 min-w-0 sm:max-w-[36%]">
+                                {tmplTags.map((tg, ti) => (
+                                  <span
+                                    key={`${tg}-${ti}`}
+                                    className="inline-flex min-w-0 max-w-[min(100%,3.75rem)] items-center truncate rounded-md border border-cyan-600/30 bg-cyan-500/18 px-1.5 py-0.5 text-left text-[8px] font-semibold leading-tight tracking-normal text-cyan-950 dark:border-cyan-300/35 dark:bg-cyan-400/18 dark:text-cyan-100 sm:max-w-[4.25rem] sm:px-2 sm:py-1 sm:text-[9px]"
+                                  >
+                                    {tg}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                          <p
+                            className="line-clamp-2 text-[9px] leading-relaxed text-muted-foreground/55 sm:text-[10px]"
+                            title={exs.map((e) => e.name).join(", ")}
+                          >
+                            {preview}
+                          </p>
+                        </div>
+                        <Button
+                          variant="glass"
+                          size="sm"
+                          className="mt-auto h-8 w-full shrink-0 gap-1 px-2 text-[11px] press-scale touch-manipulation sm:h-9 sm:text-xs"
+                          onClick={() => startSession(tmpl.name, exs)}
+                        >
+                          <Play className="size-3 shrink-0" />
+                          Start
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {exs.slice(0, 5).map((ex) => (
-                      <span
-                        key={ex.id}
-                        className="text-[10px] bg-muted/20 rounded-md px-2 py-0.5 text-muted-foreground/60"
-                      >
-                        {ex.name}
-                      </span>
-                    ))}
-                    {exs.length > 5 && (
-                      <span className="text-[10px] text-muted-foreground/40 px-1 py-0.5">
-                        +{exs.length - 5} more
-                      </span>
-                    )}
-                  </div>
-
-                  <Button
-                    variant="glass"
-                    size="sm"
-                    className="w-full gap-1.5 press-scale touch-manipulation"
-                    onClick={() =>
-                      startSession(tmpl.name, exs)
-                    }
-                  >
-                    <Play className="size-3.5" />
-                    Start Workout
-                  </Button>
-                </div>
-              )
-            })}
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {/* ── Journal ──────────────────────────── */}
@@ -1790,195 +3049,36 @@ export default function WorkoutsPage() {
               </div>
             )}
 
-            {historyByDate.map(([dateKey, daySessions]) => {
-              const isOpen = expandedDays.has(dateKey)
-              const dayVolume = daySessions.reduce((s, sess) => {
-                const exs = parseExercises<SessionExercise>(sess.exercises)
-                return s + totalVolume(exs)
-              }, 0)
-              const dayDuration = daySessions.reduce(
-                (s, sess) => s + (sess.duration ?? 0),
-                0,
-              )
-
-              return (
-                <div key={dateKey} className="glass rounded-2xl overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => toggleDay(dateKey)}
-                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left touch-manipulation transition-colors hover:bg-glass-highlight/20"
-                  >
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#a855f7]/10">
-                      <span className="text-sm font-bold tabular-nums text-[#a855f7]">
-                        {daySessions.length}
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
-                        {sectionDateLabel(dateKey)}
-                      </span>
-                      <div className="flex items-center gap-3 mt-0.5">
-                        {dayDuration > 0 && (
-                          <span className="flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground/50">
-                            <Clock className="size-2.5" />
-                            {dayDuration} min
-                          </span>
-                        )}
-                        {dayVolume > 0 && (
-                          <span className="text-[10px] tabular-nums text-muted-foreground/50">
-                            {dayVolume >= 1000
-                              ? `${(dayVolume / 1000).toFixed(1)}k lb`
-                              : `${dayVolume} lb`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <ChevronDown
-                      className={cn(
-                        "size-4 shrink-0 text-muted-foreground/40 transition-transform duration-200",
-                        isOpen && "rotate-180",
-                      )}
-                    />
-                  </button>
-
-                  {isOpen && (
-                    <div className="border-t border-border/20 px-3 pb-3 pt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
-                      {[...daySessions]
-                        .sort(
-                          (a, b) =>
-                            new Date(b.finishedAt ?? b.startedAt).getTime() -
-                            new Date(a.finishedAt ?? a.startedAt).getTime(),
-                        )
-                        .map((sess) => {
-                          const exs = parseExercises<SessionExercise>(
-                            sess.exercises,
-                          )
-                          const sessVol = totalVolume(exs)
-                          const sessExpanded = expandedSessionIds.has(sess.id)
-                          return (
-                            <div
-                              key={sess.id}
-                              className="rounded-xl border border-border/15 bg-muted/[0.06] overflow-hidden"
-                            >
-                              <div className="flex items-stretch gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleSessionExpand(sess.id)}
-                                  className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-3 text-left touch-manipulation transition-colors hover:bg-glass-highlight/15"
-                                >
-                                  <ChevronDown
-                                    className={cn(
-                                      "size-4 shrink-0 text-muted-foreground/45 transition-transform duration-200",
-                                      sessExpanded && "rotate-180",
-                                    )}
-                                  />
-                                  <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-semibold">
-                                      {sess.name}
-                                    </p>
-                                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                      {sess.duration != null && (
-                                        <span className="text-[10px] tabular-nums text-muted-foreground/50">
-                                          {sess.duration} min
-                                        </span>
-                                      )}
-                                      <span className="text-[10px] text-muted-foreground/40">
-                                        {exs.length} exercise
-                                        {exs.length !== 1 ? "s" : ""}
-                                      </span>
-                                      {sessVol > 0 && (
-                                        <span className="text-[10px] tabular-nums text-muted-foreground/45">
-                                          {sessVol >= 1000
-                                            ? `${(sessVol / 1000).toFixed(1)}k lb vol`
-                                            : `${sessVol} lb vol`}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    deleteSession(sess.id)
-                                  }}
-                                  className="history-row-delete shrink-0 self-center mr-2"
-                                  aria-label="Delete session"
-                                >
-                                  <Trash2 />
-                                </button>
-                              </div>
-
-                              {sessExpanded && (
-                                <div className="border-t border-border/15 px-2.5 pb-2.5 pt-1 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
-                                  {exs.map((ex) => (
-                                    <div
-                                      key={ex.id}
-                                      className="rounded-lg border border-border/12 bg-background/30 px-2.5 py-2"
-                                    >
-                                      <p className="mb-1.5 text-[11px] font-semibold text-[#a855f7]">
-                                        {ex.name}
-                                      </p>
-                                      {ex.sets.length === 0 ? (
-                                        <p className="text-[10px] text-muted-foreground/45">
-                                          No sets logged
-                                        </p>
-                                      ) : (
-                                        <>
-                                          <div className="grid grid-cols-[2rem_1fr_1fr_1.75rem] gap-x-1.5 gap-y-1 text-[9px] uppercase tracking-wide text-muted-foreground/40">
-                                            <span className="text-center">#</span>
-                                            <span className="text-center">lb</span>
-                                            <span className="text-center">reps</span>
-                                            <span className="text-center" title="Logged">
-                                              ✓
-                                            </span>
-                                          </div>
-                                          {ex.sets.map((set) => (
-                                            <div
-                                              key={set.id}
-                                              className={cn(
-                                                "grid grid-cols-[2rem_1fr_1fr_1.75rem] items-center gap-x-1.5 gap-y-0.5 rounded-md py-1 text-[10px] tabular-nums",
-                                                set.completed
-                                                  ? "text-muted-foreground/80"
-                                                  : "text-muted-foreground/45",
-                                              )}
-                                            >
-                                              <span className="text-center font-medium text-muted-foreground/50">
-                                                {set.setNumber}
-                                              </span>
-                                              <span className="text-center">
-                                                {set.weight ?? "–"}
-                                              </span>
-                                              <span className="text-center">
-                                                {set.reps ?? "–"}
-                                              </span>
-                                              <span className="text-center text-[9px]">
-                                                {set.completed ? (
-                                                  <Check className="mx-auto size-3 text-emerald-500/90" />
-                                                ) : (
-                                                  <span className="text-muted-foreground/25">
-                                                    —
-                                                  </span>
-                                                )}
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+            {journalHistoryDisplay.todayGroups.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
+                  Today
+                </p>
+                {journalHistoryDisplay.todayGroups.map(([dk, ds]) => (
+                  <WorkoutJournalDayCard
+                    key={dk}
+                    dateKey={dk}
+                    daySessions={ds}
+                    alwaysExpanded
+                  />
+                ))}
+              </div>
+            )}
+            {journalHistoryDisplay.earlierGroups.length > 0 && (
+              <HistoryEarlierSection dayCount={journalHistoryDisplay.earlierGroups.length}>
+                {journalHistoryDisplay.earlierGroups.map(([dk, ds]) => (
+                  <WorkoutJournalDayCard
+                    key={dk}
+                    dateKey={dk}
+                    daySessions={ds}
+                    alwaysExpanded={false}
+                  />
+                ))}
+              </HistoryEarlierSection>
+            )}
+            <HistoryArchivedNote archivedDayCount={journalHistoryDisplay.archivedDayCount} />
           </div>
-        </>
+        </div>
       )}
 
       {/* ── Routine editor dialog ────────────── */}
@@ -1991,6 +3091,6 @@ export default function WorkoutsPage() {
         initial={editingTemplate}
         onSave={saveTemplate}
       />
-    </div>
+    </>
   )
 }

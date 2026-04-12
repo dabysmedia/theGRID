@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Weight,
   Trash2,
@@ -30,6 +30,8 @@ import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
 import { parseLocalDate } from "@/lib/utils"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
+import { partitionHistoryDayGroups } from "@/lib/history-display"
 
 const weightGoalPresets: GoalPreset[] = [
   { type: "target", label: "Target Weight", unit: "lbs", placeholder: "180", direction: "down" },
@@ -62,6 +64,95 @@ interface WeightData {
   startValue: number | null
   entries: WeightEntry[]
   stats: WeightStats
+}
+
+function WeightHistoryDayGroup({
+  dateKey,
+  dayEntries,
+  unit,
+  allEntries,
+  today,
+  showCalendarHeader,
+  onDelete,
+}: {
+  dateKey: string
+  dayEntries: WeightEntry[]
+  unit: string
+  allEntries: WeightEntry[]
+  today: string
+  showCalendarHeader: boolean
+  onDelete: (id: string) => void
+}) {
+  const d = new Date(dateKey + "T12:00:00")
+  const isTodayRow = dateKey === today
+  const label = isTodayRow
+    ? "Today"
+    : d.toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      })
+
+  return (
+    <div>
+      {showCalendarHeader && (
+        <div className="flex items-center gap-2 mb-1.5 px-1">
+          <Calendar className="h-3 w-3 text-muted-foreground/40" />
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+            {label}
+          </span>
+        </div>
+      )}
+      {dayEntries.map((entry) => {
+        const prevEntry = allEntries[allEntries.indexOf(entry) + 1] ?? null
+        const delta = prevEntry ? Math.round((entry.value - prevEntry.value) * 10) / 10 : null
+
+        return (
+          <div
+            key={entry.id}
+            className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group mb-1.5"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-[#22c55e]/10">
+                <Weight className="h-4 w-4 text-[#22c55e]" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-base tabular-nums">{entry.value}</span>
+                  <span className="text-xs text-muted-foreground">{unit}</span>
+                  {delta != null && delta !== 0 && (
+                    <span
+                      className={`text-[11px] font-medium flex items-center gap-0.5 ${
+                        delta < 0 ? "text-[#22c55e]" : "text-red-400"
+                      }`}
+                    >
+                      {delta < 0 ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
+                      {Math.abs(delta)}
+                    </span>
+                  )}
+                  {delta === 0 && (
+                    <span className="text-[11px] text-muted-foreground/50 flex items-center gap-0.5">
+                      <Minus className="h-3 w-3" /> 0
+                    </span>
+                  )}
+                </div>
+                {entry.notes && (
+                  <p className="text-xs text-muted-foreground/60 mt-0.5">{entry.notes}</p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => onDelete(entry.id)}
+              className="history-row-delete"
+              aria-label="Delete weight entry"
+            >
+              <Trash2 />
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 function StatCard({
@@ -197,12 +288,21 @@ export default function WeightPage() {
     }),
   }))
 
-  const dateGrouped = new Map<string, WeightEntry[]>()
-  for (const entry of entries) {
-    const key = entry.date.split("T")[0]
-    if (!dateGrouped.has(key)) dateGrouped.set(key, [])
-    dateGrouped.get(key)!.push(entry)
-  }
+  const weightHistoryByDate = useMemo(() => {
+    const map = new Map<string, WeightEntry[]>()
+    for (const entry of entries) {
+      const key = entry.date.split("T")[0]
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(entry)
+    }
+    const keys = [...map.keys()].sort((a, b) => b.localeCompare(a))
+    return keys.map((dateKey) => ({ dateKey, dayEntries: map.get(dateKey)! }))
+  }, [entries])
+
+  const historyDisplay = useMemo(
+    () => partitionHistoryDayGroups(weightHistoryByDate, (g) => g.dateKey, today),
+    [weightHistoryByDate, today]
+  )
 
   return (
     <div className="space-y-6">
@@ -443,91 +543,42 @@ export default function WeightPage() {
               </p>
             </div>
           )}
-          {Array.from(dateGrouped.entries()).map(([dateKey, dayEntries]) => {
-            const d = new Date(dateKey + "T12:00:00")
-            const isToday = dateKey === today
-            const label = isToday
-              ? "Today"
-              : d.toLocaleDateString("en-US", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                })
-
-            return (
-              <div key={dateKey}>
-                <div className="flex items-center gap-2 mb-1.5 px-1">
-                  <Calendar className="h-3 w-3 text-muted-foreground/40" />
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
-                    {label}
-                  </span>
-                </div>
-                {dayEntries.map((entry, i) => {
-                  const prevEntry =
-                    entries[entries.indexOf(entry) + 1] ?? null
-                  const delta = prevEntry
-                    ? Math.round((entry.value - prevEntry.value) * 10) / 10
-                    : null
-
-                  return (
-                    <div
-                      key={entry.id}
-                      className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group mb-1.5"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-[#22c55e]/10">
-                          <Weight className="h-4 w-4 text-[#22c55e]" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-base tabular-nums">
-                              {entry.value}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {unit}
-                            </span>
-                            {delta != null && delta !== 0 && (
-                              <span
-                                className={`text-[11px] font-medium flex items-center gap-0.5 ${
-                                  delta < 0
-                                    ? "text-[#22c55e]"
-                                    : "text-red-400"
-                                }`}
-                              >
-                                {delta < 0 ? (
-                                  <ArrowDown className="h-3 w-3" />
-                                ) : (
-                                  <ArrowUp className="h-3 w-3" />
-                                )}
-                                {Math.abs(delta)}
-                              </span>
-                            )}
-                            {delta === 0 && (
-                              <span className="text-[11px] text-muted-foreground/50 flex items-center gap-0.5">
-                                <Minus className="h-3 w-3" /> 0
-                              </span>
-                            )}
-                          </div>
-                          {entry.notes && (
-                            <p className="text-xs text-muted-foreground/60 mt-0.5">
-                              {entry.notes}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleDelete(entry.id)}
-                        className="history-row-delete"
-                        aria-label="Delete weight entry"
-                      >
-                        <Trash2 />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })}
+          {historyDisplay.todayGroups.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
+                Today
+              </p>
+              {historyDisplay.todayGroups.map(({ dateKey, dayEntries }) => (
+                <WeightHistoryDayGroup
+                  key={dateKey}
+                  dateKey={dateKey}
+                  dayEntries={dayEntries}
+                  unit={unit}
+                  allEntries={entries}
+                  today={today}
+                  showCalendarHeader={false}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          )}
+          {historyDisplay.earlierGroups.length > 0 && (
+            <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+              {historyDisplay.earlierGroups.map(({ dateKey, dayEntries }) => (
+                <WeightHistoryDayGroup
+                  key={dateKey}
+                  dateKey={dateKey}
+                  dayEntries={dayEntries}
+                  unit={unit}
+                  allEntries={entries}
+                  today={today}
+                  showCalendarHeader
+                  onDelete={handleDelete}
+                />
+              ))}
+            </HistoryEarlierSection>
+          )}
+          <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
         </div>
       </div>
     </div>

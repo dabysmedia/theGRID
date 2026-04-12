@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
-import { BottomNav } from "@/components/BottomNav"
+import { AppChrome } from "@/components/AppChrome"
 import { Providers } from "@/components/Providers"
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister"
 import "./globals.css"
@@ -69,23 +69,7 @@ export default function RootLayout({
 
         <div className="relative z-0 flex min-h-dvh flex-1 flex-col">
           <Providers>
-            <div className="flex min-h-dvh flex-1 flex-col">
-              <main
-                className="
-              mx-auto flex w-full max-w-full flex-1 flex-col
-              ps-[max(0.75rem,env(safe-area-inset-left,0px))] pe-[max(0.75rem,env(safe-area-inset-right,0px))]
-              pt-[calc(env(safe-area-inset-top,0px)+2rem)] pb-[calc(6rem+env(safe-area-inset-bottom,0px))]
-              sm:ps-4 sm:pe-4 md:ps-6 md:pe-6
-              md:max-w-2xl lg:max-w-3xl xl:max-w-5xl
-              lg:px-8 xl:px-10
-              animate-fade-in
-            "
-              >
-                {children}
-              </main>
-
-              <BottomNav />
-            </div>
+            <AppChrome>{children}</AppChrome>
           </Providers>
         </div>
         <ServiceWorkerRegister />

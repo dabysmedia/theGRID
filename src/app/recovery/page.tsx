@@ -26,6 +26,8 @@ import {
   parseDomsSegments,
 } from "@/lib/anatomy-health/derive-from-recovery"
 import { bodyRegionForNewInjurySite } from "@/lib/anatomy-health/filter-injuries-by-segments"
+import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
+import { partitionHistoryDayGroups } from "@/lib/history-display"
 
 import "@/components/anatomy-health/anatomy-health.css"
 
@@ -122,6 +124,41 @@ function recoveryComposite(e: DailyEntry): number {
   return (
     (e.energy + e.mood + e.mobility + e.sleepFeel + inv(e.pain) + inv(e.soreness) + inv(e.stress)) /
     7
+  )
+}
+
+function RecoveryLogHistoryRow({
+  headerLabel,
+  entry,
+  onDelete,
+}: {
+  headerLabel: string
+  entry: DailyEntry
+  onDelete: (id: string) => void
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-lg border border-border/45 bg-black/20 px-3 py-2.5">
+      <div className="flex gap-2 min-w-0">
+        <Calendar className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+        <div className="min-w-0 text-sm">
+          <p className="font-mono text-[11px] text-muted-foreground">{headerLabel}</p>
+          <p className="text-foreground tabular-nums mt-0.5">
+            CMP {recoveryComposite(entry).toFixed(1)} · NRG {entry.energy} · PAIN {entry.pain}
+          </p>
+          {entry.notes && (
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{entry.notes}</p>
+          )}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => onDelete(entry.id)}
+        className="history-row-delete shrink-0"
+        aria-label="Delete log"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
   )
 }
 
@@ -359,6 +396,11 @@ export default function RecoveryPage() {
       }))
   }, [dailyEntries])
 
+  const historyDisplay = useMemo(
+    () => partitionHistoryDayGroups(historyByDate, (h) => h.dateKey, activeDate),
+    [historyByDate, activeDate]
+  )
+
   return (
     <div className="anatomy-health-root space-y-4 pb-6">
       <PageHeader title="Recovery" />
@@ -462,33 +504,36 @@ export default function RecoveryPage() {
               {historyByDate.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">No logs</p>
               ) : (
-                historyByDate.map(({ dateKey, headerLabel, entry }) => (
-                  <div
-                    key={dateKey}
-                    className="flex items-start justify-between gap-3 rounded-lg border border-border/45 bg-black/20 px-3 py-2.5"
-                  >
-                    <div className="flex gap-2 min-w-0">
-                      <Calendar className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                      <div className="min-w-0 text-sm">
-                        <p className="font-mono text-[11px] text-muted-foreground">{headerLabel}</p>
-                        <p className="text-foreground tabular-nums mt-0.5">
-                          CMP {recoveryComposite(entry).toFixed(1)} · NRG {entry.energy} · PAIN {entry.pain}
-                        </p>
-                        {entry.notes && (
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{entry.notes}</p>
-                        )}
-                      </div>
+                <>
+                  {historyDisplay.todayGroups.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground px-0.5">
+                        Today
+                      </p>
+                      {historyDisplay.todayGroups.map(({ dateKey, headerLabel, entry }) => (
+                        <RecoveryLogHistoryRow
+                          key={dateKey}
+                          headerLabel={headerLabel}
+                          entry={entry}
+                          onDelete={deleteDaily}
+                        />
+                      ))}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => deleteDaily(entry.id)}
-                      className="history-row-delete shrink-0"
-                      aria-label="Delete log"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))
+                  )}
+                  {historyDisplay.earlierGroups.length > 0 && (
+                    <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+                      {historyDisplay.earlierGroups.map(({ dateKey, headerLabel, entry }) => (
+                        <RecoveryLogHistoryRow
+                          key={dateKey}
+                          headerLabel={headerLabel}
+                          entry={entry}
+                          onDelete={deleteDaily}
+                        />
+                      ))}
+                    </HistoryEarlierSection>
+                  )}
+                  <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
+                </>
               )}
             </div>
           </div>

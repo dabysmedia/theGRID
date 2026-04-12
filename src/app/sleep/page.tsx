@@ -25,6 +25,8 @@ import { formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { sleepDurationHours } from "@/lib/sleepDuration"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
+import { partitionHistoryDayGroups } from "@/lib/history-display"
 
 const sleepGoalPresets: GoalPreset[] = [
   { type: "daily", label: "Nightly Hours", unit: "hrs", placeholder: "8" },
@@ -50,6 +52,73 @@ function formatTimeRange(bed: string, wake: string): string {
 
 function entryDateKey(entry: SleepEntry): string {
   return utcCalendarDayKeyFromIso(entry.date)
+}
+
+function SleepHistoryDayBlock({
+  headerLabel,
+  items,
+  showDayHeader,
+  onDelete,
+}: {
+  headerLabel: string
+  items: SleepEntry[]
+  showDayHeader: boolean
+  onDelete: (id: string) => void
+}) {
+  return (
+    <div className="space-y-2">
+      {showDayHeader && (
+        <div className="flex items-center gap-2 px-1 pt-1">
+          <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {headerLabel}
+          </span>
+        </div>
+      )}
+      {items.map((entry) => (
+        <div
+          key={entry.id}
+          className="glass-subtle group flex min-w-0 items-center justify-between gap-3 rounded-xl p-3.5"
+        >
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#6366f1]/10">
+              <Moon className="h-3.5 w-3.5 text-[#6366f1]" />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-medium leading-tight">{formatTimeRange(entry.bedtime, entry.wakeTime)}</p>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground tabular-nums">
+                  {calcDuration(entry.bedtime, entry.wakeTime)}
+                </span>
+                <span className="hidden sm:inline text-muted-foreground/50">·</span>
+                <span className="flex items-center gap-0.5" aria-label={`Quality ${entry.quality} of 5`}>
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <Star
+                      key={i}
+                      className={`h-3 w-3 shrink-0 ${
+                        i < entry.quality
+                          ? "fill-amber-400 text-amber-400"
+                          : "fill-transparent text-muted-foreground/35"
+                      }`}
+                    />
+                  ))}
+                </span>
+              </div>
+              {entry.notes && <p className="text-xs text-muted-foreground/70 line-clamp-2">{entry.notes}</p>}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onDelete(entry.id)}
+            className="history-row-delete"
+            aria-label="Delete sleep entry"
+          >
+            <Trash2 />
+          </button>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function StatCard({
@@ -194,6 +263,11 @@ export default function SleepPage() {
         ),
       }))
   }, [entries])
+
+  const historyDisplay = useMemo(
+    () => partitionHistoryDayGroups(historyByDate, (d) => d.dateKey, today),
+    [historyByDate, today]
+  )
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -410,62 +484,36 @@ export default function SleepPage() {
               <p className="text-sm text-muted-foreground">No sleep entries yet</p>
             </div>
           )}
-          {historyByDate.map(({ dateKey, headerLabel, items }) => (
-            <div key={dateKey} className="space-y-2">
-              <div className="flex items-center gap-2 px-1 pt-1">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {headerLabel}
-                </span>
-              </div>
-              {items.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="glass-subtle group flex min-w-0 items-center justify-between gap-3 rounded-xl p-3.5"
-                >
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#6366f1]/10">
-                      <Moon className="h-3.5 w-3.5 text-[#6366f1]" />
-                    </div>
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-sm font-medium leading-tight">
-                        {formatTimeRange(entry.bedtime, entry.wakeTime)}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                        <span className="font-semibold text-foreground tabular-nums">
-                          {calcDuration(entry.bedtime, entry.wakeTime)}
-                        </span>
-                        <span className="hidden sm:inline text-muted-foreground/50">·</span>
-                        <span className="flex items-center gap-0.5" aria-label={`Quality ${entry.quality} of 5`}>
-                          {Array.from({ length: 5 }, (_, i) => (
-                            <Star
-                              key={i}
-                              className={`h-3 w-3 shrink-0 ${
-                                i < entry.quality
-                                  ? "fill-amber-400 text-amber-400"
-                                  : "fill-transparent text-muted-foreground/35"
-                              }`}
-                            />
-                          ))}
-                        </span>
-                      </div>
-                      {entry.notes && (
-                        <p className="text-xs text-muted-foreground/70 line-clamp-2">{entry.notes}</p>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(entry.id)}
-                    className="history-row-delete"
-                    aria-label="Delete sleep entry"
-                  >
-                    <Trash2 />
-                  </button>
-                </div>
+          {historyDisplay.todayGroups.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
+                Today
+              </p>
+              {historyDisplay.todayGroups.map(({ dateKey, headerLabel, items }) => (
+                <SleepHistoryDayBlock
+                  key={dateKey}
+                  headerLabel={headerLabel}
+                  items={items}
+                  showDayHeader={false}
+                  onDelete={handleDelete}
+                />
               ))}
             </div>
-          ))}
+          )}
+          {historyDisplay.earlierGroups.length > 0 && (
+            <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+              {historyDisplay.earlierGroups.map(({ dateKey, headerLabel, items }) => (
+                <SleepHistoryDayBlock
+                  key={dateKey}
+                  headerLabel={headerLabel}
+                  items={items}
+                  showDayHeader
+                  onDelete={handleDelete}
+                />
+              ))}
+            </HistoryEarlierSection>
+          )}
+          <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
       </div>
     </div>
   )

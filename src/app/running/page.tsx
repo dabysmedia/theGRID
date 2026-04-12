@@ -24,6 +24,8 @@ import { Label } from "@/components/ui/label"
 import { parseLocalDate } from "@/lib/utils"
 import { kmToMiles, milesToKm } from "@/lib/units"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
+import { partitionHistoryDayGroups } from "@/lib/history-display"
 
 const runGoalPresets: GoalPreset[] = [
   { type: "weekly", label: "Weekly Distance", unit: "mi", placeholder: "15" },
@@ -40,11 +42,95 @@ interface RunEntry {
   notes: string | null
 }
 
+function formatPaceMinutes(paceMin: number): string {
+  const mins = Math.floor(paceMin)
+  const secs = Math.round((paceMin - mins) * 60)
+  return `${mins}:${secs.toString().padStart(2, "0")}`
+}
+
+function formatPaceMiles(distanceKm: number, durationMin: number): string {
+  const mi = kmToMiles(distanceKm)
+  if (mi === 0) return "-"
+  const paceMin = durationMin / mi
+  return `${formatPaceMinutes(paceMin)} /mi`
+}
+
 function formatGroupHeader(dateKey: string): string {
   const d = parseLocalDate(dateKey)
   if (isToday(d)) return "Today"
   if (isYesterday(d)) return "Yesterday"
   return format(d, "EEE, MMM d")
+}
+
+function RunningHistoryDayGroup({
+  dateKey,
+  dayEntries,
+  showDayHeader,
+  formatHeader,
+  onDelete,
+}: {
+  dateKey: string
+  dayEntries: RunEntry[]
+  showDayHeader: boolean
+  formatHeader: (dateKey: string) => string
+  onDelete: (id: string) => void
+}) {
+  return (
+    <div className="space-y-2">
+      {showDayHeader && (
+        <div className="flex items-center gap-2 px-1 pt-1">
+          <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {formatHeader(dateKey)}
+          </span>
+        </div>
+      )}
+      <div className="space-y-1.5">
+        {dayEntries.map((entry) => (
+          <div key={entry.id} className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#3b82f6]/10 shrink-0">
+                <PersonStanding className="h-3.5 w-3.5 text-[#3b82f6]" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-semibold">{kmToMiles(entry.distance).toFixed(1)} mi</span>
+                  <span className="text-muted-foreground">{entry.duration} min</span>
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] h-5 px-1.5 font-medium tabular-nums bg-[#3b82f6]/12 text-[#3b82f6] border-0"
+                  >
+                    {formatPaceMiles(entry.distance, entry.duration)}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className={`text-[9px] h-5 px-1.5 font-medium capitalize border-0 ${
+                      entry.environment === "treadmill"
+                        ? "bg-amber-500/10 text-amber-400/80"
+                        : "bg-emerald-500/10 text-emerald-400/80"
+                    }`}
+                  >
+                    {entry.environment === "treadmill" ? "Treadmill" : "Outdoor"}
+                  </Badge>
+                </div>
+                {entry.notes && (
+                  <p className="text-xs text-muted-foreground/70 mt-0.5 truncate">{entry.notes}</p>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onDelete(entry.id)}
+              className="history-row-delete"
+              aria-label="Delete run"
+            >
+              <Trash2 />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function RunningPage() {
@@ -151,6 +237,11 @@ export default function RunningPage() {
     )
   }, [entries])
 
+  const historyDisplay = useMemo(
+    () => partitionHistoryDayGroups(groupedByDate, (g) => g[0], today),
+    [groupedByDate, today]
+  )
+
   useEffect(() => {
     apiFetch("/api/running")
       .then(async (r) => {
@@ -228,19 +319,6 @@ export default function RunningPage() {
   async function handleDelete(id: string) {
     const res = await apiFetch(`/api/running?id=${id}`, { method: "DELETE" })
     if (res.ok) setEntries(entries.filter((e) => e.id !== id))
-  }
-
-  function formatPaceMiles(distanceKm: number, durationMin: number): string {
-    const mi = kmToMiles(distanceKm)
-    if (mi === 0) return "-"
-    const paceMin = durationMin / mi
-    return formatPaceMinutes(paceMin) + " /mi"
-  }
-
-  function formatPaceMinutes(paceMin: number): string {
-    const mins = Math.floor(paceMin)
-    const secs = Math.round((paceMin - mins) * 60)
-    return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
   const livePace = useMemo(() => {
@@ -549,62 +627,38 @@ export default function RunningPage() {
               <p className="text-sm text-muted-foreground">No runs yet</p>
             </div>
           )}
-          {groupedByDate.map(([dateKey, dayEntries]) => (
-            <div key={dateKey} className="space-y-2">
-              <div className="flex items-center gap-2 px-1 pt-1">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {formatGroupHeader(dateKey)}
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {dayEntries.map((entry) => (
-                  <div key={entry.id} className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#3b82f6]/10 shrink-0">
-                        <PersonStanding className="h-3.5 w-3.5 text-[#3b82f6]" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 text-sm">
-                          <span className="font-semibold">
-                            {kmToMiles(entry.distance).toFixed(1)} mi
-                          </span>
-                          <span className="text-muted-foreground">{entry.duration} min</span>
-                          <Badge
-                            variant="secondary"
-                            className="text-[10px] h-5 px-1.5 font-medium tabular-nums bg-[#3b82f6]/12 text-[#3b82f6] border-0"
-                          >
-                            {formatPaceMiles(entry.distance, entry.duration)}
-                          </Badge>
-                          <Badge
-                            variant="outline"
-                            className={`text-[9px] h-5 px-1.5 font-medium capitalize border-0 ${
-                              entry.environment === "treadmill"
-                                ? "bg-amber-500/10 text-amber-400/80"
-                                : "bg-emerald-500/10 text-emerald-400/80"
-                            }`}
-                          >
-                            {entry.environment === "treadmill" ? "Treadmill" : "Outdoor"}
-                          </Badge>
-                        </div>
-                        {entry.notes && (
-                          <p className="text-xs text-muted-foreground/70 mt-0.5 truncate">{entry.notes}</p>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(entry.id)}
-                      className="history-row-delete"
-                      aria-label="Delete run"
-                    >
-                      <Trash2 />
-                    </button>
-                  </div>
-                ))}
-              </div>
+          {historyDisplay.todayGroups.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
+                Today
+              </p>
+              {historyDisplay.todayGroups.map(([dateKey, dayEntries]) => (
+                <RunningHistoryDayGroup
+                  key={dateKey}
+                  dateKey={dateKey}
+                  dayEntries={dayEntries}
+                  showDayHeader={false}
+                  formatHeader={formatGroupHeader}
+                  onDelete={handleDelete}
+                />
+              ))}
             </div>
-          ))}
+          )}
+          {historyDisplay.earlierGroups.length > 0 && (
+            <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+              {historyDisplay.earlierGroups.map(([dateKey, dayEntries]) => (
+                <RunningHistoryDayGroup
+                  key={dateKey}
+                  dateKey={dateKey}
+                  dayEntries={dayEntries}
+                  showDayHeader
+                  formatHeader={formatGroupHeader}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </HistoryEarlierSection>
+          )}
+          <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
       </div>
     </div>
   )

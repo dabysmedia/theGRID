@@ -190,7 +190,7 @@ export function WeeklyHero({ data, loading }: WeeklyHeroProps) {
       value: `${(weekTotal(data.running.last7)).toFixed(1)} mi`,
     },
     {
-      icon: <Dumbbell className="h-3 w-3" style={{ color: "#a855f7" }} />,
+      icon: <Dumbbell className="h-3 w-3" style={{ color: "#c4d632" }} />,
       label: "Workouts",
       value: `${weekTotal(data.workouts.last7)}`,
     },

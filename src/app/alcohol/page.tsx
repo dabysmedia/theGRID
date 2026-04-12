@@ -21,6 +21,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { averageOnLoggedDays, formatDate, parseLocalDate } from "@/lib/utils"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
+import { partitionHistoryDayGroups } from "@/lib/history-display"
 
 const alcoholGoalPresets: GoalPreset[] = [
   { type: "daily", label: "Daily Max", unit: "units", placeholder: "2", direction: "down" },
@@ -41,6 +43,57 @@ const AMBER = "#f59e0b"
 
 function entryDateKey(dateStr: string): string {
   return dateStr.slice(0, 10)
+}
+
+function AlcoholHistoryDayGroup({
+  dateKey,
+  items,
+  showDayHeader,
+  onDelete,
+}: {
+  dateKey: string
+  items: AlcoholEntry[]
+  showDayHeader: boolean
+  onDelete: (id: string) => void
+}) {
+  return (
+    <div className="space-y-2">
+      {showDayHeader && (
+        <div className="flex items-center gap-2 px-1 text-muted-foreground">
+          <Calendar className="h-3.5 w-3.5 shrink-0" />
+          <span className="text-xs font-medium uppercase tracking-wider">
+            {format(parseLocalDate(dateKey), "EEEE, MMM d, yyyy")}
+          </span>
+        </div>
+      )}
+      <div className="space-y-2">
+        {items.map((entry) => (
+          <div key={entry.id} className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#f59e0b]/10">
+                <Beer className="h-3.5 w-3.5 text-[#f59e0b]" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-semibold capitalize">{entry.drinkType}</span>
+                  <span className="text-muted-foreground">{entry.quantity}x</span>
+                  <span className="text-xs text-muted-foreground">{entry.units} units</span>
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onDelete(entry.id)}
+              className="history-row-delete"
+              aria-label="Delete drink entry"
+            >
+              <Trash2 />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function AlcoholPage() {
@@ -121,6 +174,11 @@ export default function AlcoholPage() {
       items: groups.get(dateKey)!,
     }))
   }, [entries])
+
+  const historyDisplay = useMemo(
+    () => partitionHistoryDayGroups(entriesByDate, (g) => g.dateKey, today),
+    [entriesByDate, today]
+  )
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -289,42 +347,36 @@ export default function AlcoholPage() {
               <p className="text-sm text-muted-foreground">No entries yet</p>
             </div>
           )}
-          {entriesByDate.map(({ dateKey, items }) => (
-            <div key={dateKey} className="space-y-2">
-              <div className="flex items-center gap-2 px-1 text-muted-foreground">
-                <Calendar className="h-3.5 w-3.5 shrink-0" />
-                <span className="text-xs font-medium uppercase tracking-wider">
-                  {format(parseLocalDate(dateKey), "EEEE, MMM d, yyyy")}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {items.map((entry) => (
-                  <div key={entry.id} className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#f59e0b]/10">
-                        <Beer className="h-3.5 w-3.5 text-[#f59e0b]" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="font-semibold capitalize">{entry.drinkType}</span>
-                          <span className="text-muted-foreground">{entry.quantity}x</span>
-                          <span className="text-xs text-muted-foreground">{entry.units} units</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(entry.id)}
-                      className="history-row-delete"
-                      aria-label="Delete drink entry"
-                    >
-                      <Trash2 />
-                    </button>
-                  </div>
-                ))}
-              </div>
+          {historyDisplay.todayGroups.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
+                Today
+              </p>
+              {historyDisplay.todayGroups.map(({ dateKey, items }) => (
+                <AlcoholHistoryDayGroup
+                  key={dateKey}
+                  dateKey={dateKey}
+                  items={items}
+                  showDayHeader={false}
+                  onDelete={handleDelete}
+                />
+              ))}
             </div>
-          ))}
+          )}
+          {historyDisplay.earlierGroups.length > 0 && (
+            <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+              {historyDisplay.earlierGroups.map(({ dateKey, items }) => (
+                <AlcoholHistoryDayGroup
+                  key={dateKey}
+                  dateKey={dateKey}
+                  items={items}
+                  showDayHeader
+                  onDelete={handleDelete}
+                />
+              ))}
+            </HistoryEarlierSection>
+          )}
+          <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
         </div>
       </div>
     </div>

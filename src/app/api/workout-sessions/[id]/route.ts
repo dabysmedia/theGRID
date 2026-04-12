@@ -52,6 +52,15 @@ export async function PUT(
       data.finishedAt = body.finishedAt ? new Date(body.finishedAt) : null
     if (body.exercises !== undefined)
       data.exercises = JSON.stringify(Array.isArray(body.exercises) ? body.exercises : [])
+    if (Object.prototype.hasOwnProperty.call(body, "bodyWeightLb")) {
+      const raw = body.bodyWeightLb
+      if (raw === null || raw === "" || raw === undefined) {
+        data.bodyWeightLb = null
+      } else {
+        const n = Number(raw)
+        data.bodyWeightLb = Number.isFinite(n) && n > 0 ? n : null
+      }
+    }
 
     const session = await prisma.workoutSession.update({ where: { id }, data })
     return NextResponse.json(session, {

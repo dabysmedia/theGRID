@@ -56,7 +56,7 @@ const categories = [
   { key: "calories" as const, title: "Calories", icon: Flame, href: "/calories", color: "#ef4444" },
   { key: "steps" as const, title: "Steps", icon: Footprints, href: "/steps", color: "#22c55e" },
   { key: "running" as const, title: "Running", icon: PersonStanding, href: "/running", color: "#3b82f6" },
-  { key: "workouts" as const, title: "Workouts", icon: Dumbbell, href: "/workouts", color: "#a855f7" },
+  { key: "workouts" as const, title: "Workouts", icon: Dumbbell, href: "/workouts", color: "#c4d632" },
   { key: "sleep" as const, title: "Sleep", icon: Moon, href: "/sleep", color: "#6366f1" },
   { key: "bowel" as const, title: "Bowel", icon: CircleDot, href: "/bowel", color: "#78716c" },
   { key: "recovery" as const, title: "Recovery", icon: Activity, href: "/recovery", color: "#2dd4bf" },

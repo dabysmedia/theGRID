@@ -74,7 +74,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   calories: "#ef4444",
   steps: "#22c55e",
   running: "#3b82f6",
-  workouts: "#a855f7",
+  workouts: "#c4d632",
   sleep: "#6366f1",
   alcohol: "#f59e0b",
   bowel: "#78716c",

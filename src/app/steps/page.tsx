@@ -23,6 +23,8 @@ import { averageOnLoggedDays, formatDate, formatDisplayDate, parseLocalDate } fr
 import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { kmToMiles, runKmToStepsFromRun, STEPS_PER_MILE_FROM_RUN } from "@/lib/units"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
+import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
+import { partitionHistoryDayGroups } from "@/lib/history-display"
 
 const stepsGoalPresets: GoalPreset[] = [
   { type: "daily", label: "Daily Total", unit: "steps", placeholder: "10000" },
@@ -64,6 +66,109 @@ function milesToSteps(miles: number): number {
 type HistoryRow =
   | { kind: "logged"; entry: StepEntry }
   | { kind: "run"; run: RunEntry }
+
+type StepHistoryGroup = {
+  dayKey: string
+  header: string
+  rows: HistoryRow[]
+}
+
+function StepHistoryDayBlock({
+  group,
+  showDayHeader,
+  onDeleteStep,
+  onDeleteRun,
+}: {
+  group: StepHistoryGroup
+  showDayHeader: boolean
+  onDeleteStep: (id: string) => void
+  onDeleteRun: (id: string) => void
+}) {
+  return (
+    <div>
+      {showDayHeader && (
+        <div className="flex items-center gap-1.5 px-1 mb-2 mt-1 first:mt-0">
+          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {group.header}
+          </span>
+        </div>
+      )}
+      <div className="space-y-1.5">
+        {group.rows.map((row) => {
+          if (row.kind === "logged") {
+            const entry = row.entry
+            const dayKey = dayKeyFromEntry(entry.date)
+            const dateLine = format(parseLocalDate(dayKey), "EEE, MMM d, yyyy")
+            const timeLine =
+              entry.createdAt != null ? format(new Date(entry.createdAt), "h:mm a") : null
+            return (
+              <div
+                key={`step-${entry.id}`}
+                className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#22c55e]/10 shrink-0">
+                    <Footprints className="h-3.5 w-3.5 text-[#22c55e]" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-semibold text-sm">{entry.count.toLocaleString()} steps</span>
+                    <p className="text-xs text-muted-foreground/80 truncate">
+                      {dateLine}
+                      {timeLine != null ? ` · ${timeLine}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onDeleteStep(entry.id)}
+                  className="history-row-delete"
+                  aria-label="Delete step entry"
+                >
+                  <Trash2 />
+                </button>
+              </div>
+            )
+          }
+          const run = row.run
+          const steps = runKmToStepsFromRun(run.distance)
+          const timeLine =
+            run.createdAt != null ? format(new Date(run.createdAt), "h:mm a") : null
+          const mi = kmToMiles(run.distance)
+          return (
+            <div
+              key={`run-${run.id}`}
+              className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#22c55e]/10 shrink-0">
+                  <Footprints className="h-3.5 w-3.5 text-[#22c55e]" />
+                </div>
+                <div className="min-w-0">
+                  <span className="font-semibold text-sm">{steps.toLocaleString()} steps</span>
+                  <p className="text-xs text-muted-foreground/80 truncate">
+                    <span className="text-muted-foreground/90">from run</span>
+                    {" · "}
+                    {mi.toFixed(1)} mi
+                    {timeLine != null ? ` · ${timeLine}` : ""}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onDeleteRun(run.id)}
+                className="history-row-delete"
+                aria-label="Delete run from history"
+              >
+                <Trash2 />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 export default function StepsPage() {
   const { activeDate } = useActiveDate()
@@ -188,6 +293,11 @@ export default function StepsPage() {
       }),
     }))
   }, [entries, runEntries])
+
+  const historyDisplay = useMemo(
+    () => partitionHistoryDayGroups(historyGroups, (g) => g.dayKey, today),
+    [historyGroups, today]
+  )
 
   function switchInputMode(next: "steps" | "miles") {
     if (next === inputMode) return
@@ -458,92 +568,36 @@ export default function StepsPage() {
               <p className="text-sm text-muted-foreground">No entries yet</p>
             </div>
           )}
-          {historyGroups.map((group) => (
-            <div key={group.dayKey}>
-              <div className="flex items-center gap-1.5 px-1 mb-2 mt-1 first:mt-0">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {group.header}
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {group.rows.map((row) => {
-                  if (row.kind === "logged") {
-                    const entry = row.entry
-                    const dayKey = dayKeyFromEntry(entry.date)
-                    const dateLine = format(parseLocalDate(dayKey), "EEE, MMM d, yyyy")
-                    const timeLine =
-                      entry.createdAt != null
-                        ? format(new Date(entry.createdAt), "h:mm a")
-                        : null
-                    return (
-                      <div
-                        key={`step-${entry.id}`}
-                        className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#22c55e]/10 shrink-0">
-                            <Footprints className="h-3.5 w-3.5 text-[#22c55e]" />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="font-semibold text-sm">{entry.count.toLocaleString()} steps</span>
-                            <p className="text-xs text-muted-foreground/80 truncate">
-                              {dateLine}
-                              {timeLine != null ? ` · ${timeLine}` : ""}
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(entry.id)}
-                          className="history-row-delete"
-                          aria-label="Delete step entry"
-                        >
-                          <Trash2 />
-                        </button>
-                      </div>
-                    )
-                  }
-                  const run = row.run
-                  const steps = runKmToStepsFromRun(run.distance)
-                  const timeLine =
-                    run.createdAt != null
-                      ? format(new Date(run.createdAt), "h:mm a")
-                      : null
-                  const mi = kmToMiles(run.distance)
-                  return (
-                    <div
-                      key={`run-${run.id}`}
-                      className="glass-subtle rounded-xl p-3.5 flex items-center justify-between group"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#22c55e]/10 shrink-0">
-                          <Footprints className="h-3.5 w-3.5 text-[#22c55e]" />
-                        </div>
-                        <div className="min-w-0">
-                          <span className="font-semibold text-sm">{steps.toLocaleString()} steps</span>
-                          <p className="text-xs text-muted-foreground/80 truncate">
-                            <span className="text-muted-foreground/90">from run</span>
-                            {" · "}
-                            {mi.toFixed(1)} mi
-                            {timeLine != null ? ` · ${timeLine}` : ""}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteRun(run.id)}
-                        className="history-row-delete"
-                        aria-label="Delete run from history"
-                      >
-                        <Trash2 />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
+          {historyDisplay.todayGroups.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
+                Today
+              </p>
+              {historyDisplay.todayGroups.map((group) => (
+                <StepHistoryDayBlock
+                  key={group.dayKey}
+                  group={group}
+                  showDayHeader={false}
+                  onDeleteStep={handleDelete}
+                  onDeleteRun={handleDeleteRun}
+                />
+              ))}
             </div>
-          ))}
+          )}
+          {historyDisplay.earlierGroups.length > 0 && (
+            <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+              {historyDisplay.earlierGroups.map((group) => (
+                <StepHistoryDayBlock
+                  key={group.dayKey}
+                  group={group}
+                  showDayHeader
+                  onDeleteStep={handleDelete}
+                  onDeleteRun={handleDeleteRun}
+                />
+              ))}
+            </HistoryEarlierSection>
+          )}
+          <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
         </div>
     </div>
   )

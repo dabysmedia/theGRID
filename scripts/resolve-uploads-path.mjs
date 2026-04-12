@@ -33,7 +33,7 @@ export function legacyDataRoot() {
 }
 
 /**
- * @param {"journal" | "avatars"} segment
+ * @param {"journal" | "avatars" | "routine-covers"} segment
  * @returns {string | null} Absolute dir on volume, or null if using local-only public/
  */
 export function resolveUploadSegmentDir(segment) {
@@ -55,4 +55,8 @@ export function resolveJournalUploadDir() {
 
 export function resolveAvatarsUploadDir() {
   return resolveUploadSegmentDir("avatars")
+}
+
+export function resolveRoutineCoversUploadDir() {
+  return resolveUploadSegmentDir("routine-covers")
 }

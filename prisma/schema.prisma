@@ -95,29 +95,32 @@ model WorkoutEntry {
 }
 
 model WorkoutTemplate {
-  id        String   @id @default(cuid())
-  name      String
-  exercises String   @default("[]")
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  name           String
+  exercises      String   @default("[]")
+  tags           String   @default("[]")
+  coverImageUrl  String?
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id])
+  createdAt      DateTime @default(now())
 
   @@index([userId])
 }
 
 model WorkoutSession {
-  id         String    @id @default(cuid())
-  name       String
-  date       DateTime
-  startedAt  DateTime  @default(now())
-  finishedAt DateTime?
-  duration   Int?
-  notes      String?
-  status     String    @default("active")
-  exercises  String    @default("[]")
-  userId     String?
-  user       User?     @relation(fields: [userId], references: [id])
-  createdAt  DateTime  @default(now())
+  id             String    @id @default(cuid())
+  name           String
+  date           DateTime
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+  duration       Int?
+  notes          String?
+  status         String    @default("active")
+  exercises      String    @default("[]")
+  bodyWeightLb   Float?
+  userId         String?
+  user           User?     @relation(fields: [userId], references: [id])
+  createdAt      DateTime  @default(now())
 
   @@index([date])
   @@index([status])

@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
     const body = await req.json()
-    const { name, date, exercises } = body
+    const { name, date, exercises, bodyWeightLb } = body
     const dateStr = date == null ? "" : String(date).trim()
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
       return NextResponse.json(
@@ -65,11 +65,18 @@ export async function POST(req: NextRequest) {
         { status: 400, headers: { "Cache-Control": "no-store, must-revalidate" } },
       )
     }
+    let bw: number | null = null
+    if (bodyWeightLb !== undefined && bodyWeightLb !== null && bodyWeightLb !== "") {
+      const n = Number(bodyWeightLb)
+      if (Number.isFinite(n) && n > 0) bw = n
+    }
+
     const session = await prisma.workoutSession.create({
       data: {
         name: (name || "Workout").trim(),
         date: storedDate,
         exercises: JSON.stringify(Array.isArray(exercises) ? exercises : []),
+        bodyWeightLb: bw,
         status: "active",
         userId,
       },
