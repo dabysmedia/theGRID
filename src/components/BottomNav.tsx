@@ -21,11 +21,11 @@ import {
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/journal", label: "Journal", icon: NotebookPen },
-  { href: "/stats", label: "Stats", icon: BarChart3 },
-  { href: "/habits", label: "Habits", icon: CheckSquare },
   { href: "/more", label: "More", icon: MoreHorizontal },
+  { href: "/journal", label: "Journal", icon: NotebookPen },
+  { href: "/habits", label: "Habits", icon: CheckSquare },
+  { href: "/stats", label: "Stats", icon: BarChart3 },
+  { href: "/", label: "Home", icon: Home },
 ]
 
 const DOCK_EASE = "cubic-bezier(0.22, 1, 0.36, 1)"
