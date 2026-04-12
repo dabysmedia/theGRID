@@ -323,7 +323,7 @@ function mean(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0) / nums.length
 }
 
-/** Right column: metric-aware scale cues (heuristic, not medical). */
+/** Metric-aware scale cues merged into the correlation summary (heuristic, not medical). */
 function buildScaleCues(daily: DayData[], key: MetricKey): string[] {
   const lines: string[] = []
 
@@ -610,8 +610,6 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
 
   if (!hasWeight) return null
 
-  const ActiveIcon = meta.icon
-
   return (
     <div className="glass animate-fade-up space-y-3 rounded-2xl p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -743,64 +741,13 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
         </ResponsiveContainer>
       </div>
 
-      <div className="rounded-xl border border-border/50 overflow-hidden min-w-0 bg-muted/5 h-[19rem] lg:h-[14.5rem] flex flex-col shrink-0">
-        <p className="text-[10px] leading-snug text-muted-foreground/75 px-3 py-2 border-b border-border/40 shrink-0">
-          <span className="text-foreground/80 font-medium">Note.</span> r vs weight, not cause. Not calorie or
-          step totals.
+      <div className="rounded-xl border border-border/50 min-w-0 bg-muted/5 px-3 py-3 sm:px-4 sm:py-3.5 shrink-0">
+        <p className="text-[10px] sm:text-[11px] leading-relaxed text-foreground/90 text-pretty m-0">
+          <span className="font-semibold text-foreground">{meta.label}</span>
+          {". "}
+          {activeCopy.title} {activeCopy.sub}
+          {scaleCues.length > 0 ? ` ${scaleCues.join(" ")}` : ""}
         </p>
-        <div className="flex-1 min-h-0 grid grid-rows-2 lg:grid-rows-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border/40">
-          <section className="min-h-0 flex flex-col px-3 py-2.5 lg:px-4 lg:py-3 overflow-hidden">
-            <div className="flex items-start gap-2.5 shrink-0">
-              <div
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                style={{ backgroundColor: `${meta.color}20` }}
-              >
-                <ActiveIcon className="h-4 w-4" style={{ color: meta.color }} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground leading-tight">
-                  {meta.label}
-                  <span className="font-normal text-muted-foreground/50 normal-case tracking-normal">
-                    {" "}
-                    · correlation
-                  </span>
-                </h3>
-                <p className="text-[10px] text-muted-foreground/65 leading-snug mt-0.5">
-                  {meta.correlationMode === "sameDay"
-                    ? "Same calendar day."
-                    : "Vs next weigh-in (~2d)."}
-                </p>
-              </div>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain mt-2 pt-2 border-t border-border/25 pr-1">
-              <p className="text-[11px] sm:text-xs font-semibold leading-snug text-foreground">
-                {activeCopy.title}
-              </p>
-              <p className="text-[10px] sm:text-[11px] leading-relaxed text-muted-foreground mt-1">
-                {activeCopy.sub}
-              </p>
-            </div>
-            <p className="text-[9px] text-muted-foreground/55 tabular-nums shrink-0 pt-2 border-t border-border/25">
-              {pairCountForActive} paired day{pairCountForActive !== 1 ? "s" : ""}
-            </p>
-          </section>
-
-          <section className="min-h-0 flex flex-col px-3 py-2.5 lg:px-4 lg:py-3 overflow-hidden">
-            <div className="shrink-0 space-y-0.5">
-              <h3 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                Scale cues
-              </h3>
-              <p className="text-[9px] text-muted-foreground/55 leading-snug">Heuristic — not medical advice.</p>
-            </div>
-            <ul className="text-[10px] sm:text-[11px] leading-relaxed text-foreground/90 space-y-2 list-none m-0 mt-2 flex-1 min-h-0 overflow-y-auto overscroll-y-contain pr-1">
-              {scaleCues.map((line, i) => (
-                <li key={i} className="pl-2.5 border-l-[3px] border-[#14b8a6]/40 text-pretty">
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </section>
-        </div>
       </div>
     </div>
   )
