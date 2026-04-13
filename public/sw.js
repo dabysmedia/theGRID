@@ -1,9 +1,15 @@
-const CACHE_NAME = "thegrid-v3"
+const CACHE_NAME = "thegrid-v4"
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll(["/", "/manifest.json", "/icons/icon.svg"])
+      cache.addAll([
+        "/",
+        "/weight",
+        "/log",
+        "/manifest.json",
+        "/icons/icon.svg",
+      ])
     )
   )
   self.skipWaiting()

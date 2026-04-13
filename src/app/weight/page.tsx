@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { format } from "date-fns"
 import {
   Weight,
@@ -201,6 +201,7 @@ export default function WeightPage() {
   const [notes, setNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [chartRange, setChartRange] = useState<"7d" | "30d" | "all">("30d")
+  const entriesRef = useRef<WeightEntry[]>([])
 
   const today = activeDate
 
@@ -223,6 +224,43 @@ export default function WeightPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  const entries = useMemo(() => data?.entries ?? [], [data?.entries])
+  entriesRef.current = entries
+
+  const entryForActiveDay = useMemo(
+    () => entries.find((e) => e.date.split("T")[0] === today) ?? null,
+    [entries, today]
+  )
+
+  const weightHistoryByDate = useMemo(() => {
+    const map = new Map<string, WeightEntry[]>()
+    for (const entry of entries) {
+      const key = entry.date.split("T")[0]
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(entry)
+    }
+    const keys = [...map.keys()].sort((a, b) => b.localeCompare(a))
+    return keys.map((dateKey) => ({ dateKey, dayEntries: map.get(dateKey)! }))
+  }, [entries])
+
+  const historyDisplay = useMemo(
+    () => partitionHistoryDayGroups(weightHistoryByDate, (g) => g.dateKey, today),
+    [weightHistoryByDate, today]
+  )
+
+  /** Keep form aligned with the row for the selected calendar day; avoid re-sync on every stats refetch. */
+  useEffect(() => {
+    if (loading) return
+    const te = entriesRef.current.find((e) => e.date.split("T")[0] === today) ?? null
+    if (te) {
+      setWeight(String(te.value))
+      setNotes(te.notes ?? "")
+    } else {
+      setWeight("")
+      setNotes("")
+    }
+  }, [loading, today, entryForActiveDay?.id])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (vacationBlocksLog || !weight || submitting) return
@@ -235,19 +273,7 @@ export default function WeightPage() {
         body: JSON.stringify({ date: today, value: weight, notes: notes || null }),
       })
 
-      if (res.ok && data) {
-        const entry = await res.json()
-        const updatedEntries = data.entries.some(
-          (e) => e.date.split("T")[0] === today
-        )
-          ? data.entries.map((e) =>
-              e.date.split("T")[0] === today ? entry : e
-            )
-          : [entry, ...data.entries]
-        setData({ ...data, entries: updatedEntries })
-        setWeight("")
-        setNotes("")
-        // Refetch stats
+      if (res.ok) {
         const refreshed = await apiFetch("/api/weight").then((r) => r.json())
         setData(refreshed)
       }
@@ -303,7 +329,6 @@ export default function WeightPage() {
 
   const unit = data?.unit ?? "lbs"
   const stats = data?.stats
-  const entries = data?.entries ?? []
 
   const refDate = parseLocalDate(activeDate)
   const cutoff =
@@ -325,22 +350,6 @@ export default function WeightPage() {
       day: "numeric",
     }),
   }))
-
-  const weightHistoryByDate = useMemo(() => {
-    const map = new Map<string, WeightEntry[]>()
-    for (const entry of entries) {
-      const key = entry.date.split("T")[0]
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(entry)
-    }
-    const keys = [...map.keys()].sort((a, b) => b.localeCompare(a))
-    return keys.map((dateKey) => ({ dateKey, dayEntries: map.get(dateKey)! }))
-  }, [entries])
-
-  const historyDisplay = useMemo(
-    () => partitionHistoryDayGroups(weightHistoryByDate, (g) => g.dateKey, today),
-    [weightHistoryByDate, today]
-  )
 
   return (
     <div className="space-y-6">
@@ -502,7 +511,7 @@ export default function WeightPage() {
         {/* Log form */}
         <div className="glass rounded-2xl p-5">
           <h2 className="text-sm font-semibold uppercase tracking-wider mb-4">
-            Log Weight
+            {entryForActiveDay ? "Edit weight" : "Log weight"}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
@@ -535,7 +544,11 @@ export default function WeightPage() {
               size="lg"
               disabled={submitting}
             >
-              {submitting ? "Saving..." : "Log Weight"}
+              {submitting
+                ? "Saving..."
+                : entryForActiveDay
+                  ? "Save changes"
+                  : "Log weight"}
             </Button>
           </form>
 
