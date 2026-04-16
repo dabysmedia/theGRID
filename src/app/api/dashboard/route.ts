@@ -4,6 +4,7 @@ import { kmToMiles, runKmToStepsFromRun } from "@/lib/units"
 import { formatDate, parseLocalDate } from "@/lib/utils"
 import { format } from "date-fns"
 import { subDays } from "date-fns"
+import { startOfISOWeek } from "date-fns"
 import {
   utcCalendarDayKeyFromIso,
   utcCalendarDayRangeInclusive,
@@ -22,6 +23,40 @@ interface GoalRow {
 
 interface DatedRow {
   date: Date
+}
+
+type WeightBaselineTrend = "losing" | "maintaining" | "gaining"
+
+const WEEKLY_WEIGHT_MAINTAIN_LB = 0.45
+
+function computeWeeklyWeightTrend(
+  entries: { date: Date; value: number }[]
+): {
+  baselineTrend: WeightBaselineTrend
+  vsBaselineLb: number
+} | null {
+  const byWeekStart = new Map<number, number[]>()
+  for (const entry of entries) {
+    const t = startOfISOWeek(entry.date).getTime()
+    if (!byWeekStart.has(t)) byWeekStart.set(t, [])
+    byWeekStart.get(t)!.push(entry.value)
+  }
+  if (byWeekStart.size === 0) return null
+
+  const weekAverages = [...byWeekStart.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, vals]) => vals.reduce((s, v) => s + v, 0) / vals.length)
+  if (weekAverages.length === 0) return null
+
+  const lastWeekAverage = weekAverages[weekAverages.length - 1]!
+  const grandMean = weekAverages.reduce((s, v) => s + v, 0) / weekAverages.length
+  const vsBaselineLb = Math.round((lastWeekAverage - grandMean) * 10) / 10
+
+  let baselineTrend: WeightBaselineTrend = "maintaining"
+  if (vsBaselineLb < -WEEKLY_WEIGHT_MAINTAIN_LB) baselineTrend = "losing"
+  else if (vsBaselineLb > WEEKLY_WEIGHT_MAINTAIN_LB) baselineTrend = "gaining"
+
+  return { baselineTrend, vsBaselineLb }
 }
 
 function recoveryCompositeFromEntry(e: {
@@ -114,7 +149,9 @@ export async function GET(req: NextRequest) {
         : new Date()
     const refDayStr = formatDate(refDate)
     const weekStartStr = formatDate(subDays(refDate, 6))
+    const weightRangeStartStr = formatDate(subDays(refDate, 55))
     const dateInRange = utcCalendarDayRangeInclusive(weekStartStr, refDayStr)
+    const weightDateInRange = utcCalendarDayRangeInclusive(weightRangeStartStr, refDayStr)
 
     const [
       calorieEntries,
@@ -126,6 +163,7 @@ export async function GET(req: NextRequest) {
       bowelEntries,
       recoveryEntries,
       goals,
+      bodyWeightGoal,
     ] = await Promise.all([
       prisma.calorieEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.stepEntry.findMany({ where: { date: dateInRange, userId } }),
@@ -136,6 +174,10 @@ export async function GET(req: NextRequest) {
       prisma.bowelEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.recoveryDailyEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.goal.findMany({ where: { active: true, userId } }),
+      prisma.longGoal.findFirst({
+        where: { category: "bodyweight", userId },
+        select: { id: true },
+      }),
     ])
 
     let workoutSessions: DatedRow[] = []
@@ -152,6 +194,13 @@ export async function GET(req: NextRequest) {
     }
 
     const goalByCategory = latestGoalByCategory(goals)
+    const weightEntries =
+      bodyWeightGoal != null
+        ? await prisma.longGoalEntry.findMany({
+            where: { goalId: bodyWeightGoal.id, date: weightDateInRange },
+            select: { date: true, value: true },
+          })
+        : []
 
     function dailyTotals<T extends { date: Date }>(
       entries: T[],
@@ -219,6 +268,8 @@ export async function GET(req: NextRequest) {
     const bowelGoal = bowelG ? dashboardGoalValue(bowelG) : null
     const recoveryGoal = recoveryG ? dashboardGoalValue(recoveryG) : null
 
+    const weightTrend = computeWeeklyWeightTrend(weightEntries)
+
     const body = {
       calories: {
         todayValue: calorieLast7[6],
@@ -276,6 +327,7 @@ export async function GET(req: NextRequest) {
         unit: "/10",
         last7: recoveryLast7.map((v) => Math.round(v * 10) / 10),
       },
+      weightTrend,
     }
 
     return NextResponse.json(body, {

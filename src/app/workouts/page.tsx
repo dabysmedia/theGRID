@@ -397,6 +397,51 @@ function muscleSwatchStyles(hex: string | undefined): { soft: string; dot: strin
 /** Column headers for a Monday-start calendar week (matches `startOfWeek(..., { weekStartsOn: 1 })`). */
 const CAL_WEEKDAY_LABELS_MON = ["M", "T", "W", "T", "F", "S", "S"] as const
 
+/** Completed sessions required in the week before the summary shows a check (otherwise a progress ring). */
+const WEEK_WORKOUT_CHECK_THRESHOLD = 3
+
+/** Ring fill0–100% from `count / WEEK_WORKOUT_CHECK_THRESHOLD` (capped); check replaces it at threshold+. */
+function WeekWorkoutGoalRing({ count }: { count: number }) {
+  const stroke = 2.35
+  const vb = 24
+  const r = (vb - stroke) / 2
+  const cx = vb / 2
+  const cy = vb / 2
+  const circumference = 2 * Math.PI * r
+  const pct =
+    Math.min(Math.max(count, 0), WEEK_WORKOUT_CHECK_THRESHOLD) /
+    WEEK_WORKOUT_CHECK_THRESHOLD
+  const dash = circumference * pct
+  return (
+    <svg
+      viewBox={`0 0 ${vb} ${vb}`}
+      className="size-[1.35rem] shrink-0 -rotate-90 sm:size-6"
+      aria-hidden
+    >
+      <circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        className="text-muted-foreground/25"
+      />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={`${dash} ${circumference}`}
+        className="text-emerald-500"
+      />
+    </svg>
+  )
+}
+
 function normalizeSessionStatus(s: WorkoutSession): WorkoutSession {
   const status = String(s.status ?? "").trim().toLowerCase()
   return { ...s, status: status || "active" }
@@ -3041,28 +3086,6 @@ export default function WorkoutsPage() {
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
             <PageStatTile className="flex-1 min-w-0">
               <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
-                This Week
-              </p>
-              <span className="sr-only">
-                {stats.weekCount} completed workout{stats.weekCount === 1 ? "" : "s"} this week
-              </span>
-              {stats.weekCount > 0 ? (
-                <Check
-                  className="size-[1.35rem] lg:size-6 text-emerald-500 shrink-0"
-                  strokeWidth={2.75}
-                  aria-hidden
-                />
-              ) : (
-                <span className="text-lg lg:text-xl font-bold tabular-nums text-muted-foreground/35">
-                  —
-                </span>
-              )}
-              <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                {stats.weekCount > 0 ? "Logged" : "Not yet"}
-              </p>
-            </PageStatTile>
-            <PageStatTile className="flex-1 min-w-0">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
                 Volume
               </p>
               <span className="text-lg lg:text-xl font-bold tabular-nums">
@@ -3105,14 +3128,42 @@ export default function WorkoutsPage() {
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]" aria-hidden />
             <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12" aria-hidden />
             <div className="relative z-10">
-              <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/70 mb-3">
-                This week
-              </p>
+              <div className="mb-3 flex items-center gap-2.5">
+                <span className="sr-only">
+                  {stats.weekCount >= WEEK_WORKOUT_CHECK_THRESHOLD
+                    ? `${stats.weekCount} completed workout${stats.weekCount === 1 ? "" : "s"} this week, weekly goal met (${WEEK_WORKOUT_CHECK_THRESHOLD}+ workouts)`
+                    : `${stats.weekCount} of ${WEEK_WORKOUT_CHECK_THRESHOLD} weekly workouts completed`}
+                </span>
+                {stats.weekCount >= WEEK_WORKOUT_CHECK_THRESHOLD ? (
+                  <Check
+                    className="size-[1.35rem] shrink-0 text-emerald-500 sm:size-6"
+                    strokeWidth={2.75}
+                    aria-hidden
+                  />
+                ) : (
+                  <WeekWorkoutGoalRing count={stats.weekCount} />
+                )}
+                <div className="min-w-0">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/70">
+                    This week
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/60">
+                    {stats.weekCount >= WEEK_WORKOUT_CHECK_THRESHOLD
+                      ? "Goal met"
+                      : stats.weekCount === 0
+                        ? "Not yet"
+                        : `${stats.weekCount}/${WEEK_WORKOUT_CHECK_THRESHOLD} workouts`}
+                  </p>
+                </div>
+              </div>
               <div className="flex items-center justify-between gap-1">
                 {weekDayKeys.map((key, i) => {
                   const count = byDay.get(key)?.length ?? 0
                   const isActive = key === today
                   const has = count > 0
+                  const dayDate = parseLocalDate(key)
+                  const dayOfMonth = dayDate.getDate()
+                  const weekdayLong = format(dayDate, "EEEE")
                   return (
                     <div key={key} className="flex min-w-0 flex-1 flex-col items-center gap-2">
                       <span
@@ -3124,6 +3175,12 @@ export default function WorkoutsPage() {
                         {CAL_WEEKDAY_LABELS_MON[i]}
                       </span>
                       <div
+                        role="img"
+                        aria-label={
+                          count > 0
+                            ? `${weekdayLong} ${dayOfMonth}, ${count} workout${count === 1 ? "" : "s"}`
+                            : `${weekdayLong} ${dayOfMonth}, no workouts`
+                        }
                         className={cn(
                           "flex size-9 items-center justify-center rounded-xl transition-all duration-200 sm:size-10",
                           has && isActive && "bg-primary text-primary-foreground shadow-md shadow-primary/30",
@@ -3132,11 +3189,7 @@ export default function WorkoutsPage() {
                           !has && !isActive && "bg-muted/10 text-muted-foreground/20",
                         )}
                       >
-                        {has ? (
-                          <span className="text-xs font-bold tabular-nums">{count}</span>
-                        ) : (
-                          <span className="text-[9px]">—</span>
-                        )}
+                        <span className="text-xs font-bold tabular-nums">{dayOfMonth}</span>
                       </div>
                     </div>
                   )

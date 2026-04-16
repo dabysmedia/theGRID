@@ -27,7 +27,7 @@ const logCategories = [
   { href: "/workouts", label: "Workouts", desc: "Log your sessions", icon: Dumbbell, color: "#c4d632" },
   { href: "/sleep", label: "Sleep", desc: "Track rest & quality", icon: Moon, color: "#6366f1" },
   { href: "/recovery", label: "Recovery", desc: "Pain, energy, injuries", icon: Activity, color: "#2dd4bf" },
-  { href: "/bowel", label: "Bowel", desc: "Bristol scale tracking", icon: CircleDot, color: "#78716c" },
+  { href: "/bowel", label: "Bowel", desc: "Bristol scale tracking", icon: CircleDot, color: "#92400e" },
   { href: "/alcohol", label: "Alcohol", desc: "Log drinks & units", icon: Beer, color: "#f59e0b" },
 ]
 

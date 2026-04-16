@@ -39,6 +39,10 @@ interface DashboardData {
   alcohol: CategorySummary
   bowel: CategorySummary
   recovery: CategorySummary
+  weightTrend: {
+    baselineTrend: "losing" | "maintaining" | "gaining"
+    vsBaselineLb: number
+  } | null
 }
 
 const emptyLast7 = () => Array.from({ length: 7 }, () => 0)
@@ -52,6 +56,7 @@ const defaultData: DashboardData = {
   alcohol: { todayValue: 0, goal: null, unit: "units", last7: emptyLast7() },
   bowel: { todayValue: 0, goal: null, unit: "", last7: emptyLast7() },
   recovery: { todayValue: 0, goal: 7, unit: "/10", last7: emptyLast7() },
+  weightTrend: null,
 }
 
 const categories = [
@@ -60,7 +65,7 @@ const categories = [
   { key: "running" as const, title: "Running", icon: PersonStanding, href: "/running", color: "#3b82f6" },
   { key: "workouts" as const, title: "Workouts", icon: Dumbbell, href: "/workouts", color: "#c4d632" },
   { key: "sleep" as const, title: "Sleep", icon: Moon, href: "/sleep", color: "#6366f1" },
-  { key: "bowel" as const, title: "Bowel", icon: CircleDot, href: "/bowel", color: "#78716c" },
+  { key: "bowel" as const, title: "Bowel", icon: CircleDot, href: "/bowel", color: "#92400e" },
   { key: "recovery" as const, title: "Recovery", icon: Activity, href: "/recovery", color: "#2dd4bf" },
   { key: "alcohol" as const, title: "Alcohol", icon: Beer, href: "/alcohol", color: "#f59e0b" },
 ] as const

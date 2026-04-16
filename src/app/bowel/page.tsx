@@ -89,8 +89,8 @@ function BowelHistoryDayGroup({
             className="glass-subtle rounded-xl p-3.5 flex items-center justify-between gap-3 group"
           >
             <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[#78716c]/15 shrink-0">
-                <span className="text-xl font-bold tabular-nums text-[#78716c]">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[#92400e]/15 shrink-0">
+                <span className="text-xl font-bold tabular-nums text-[#92400e]">
                   {entry.bristolScale === 0 ? "—" : entry.bristolScale}
                 </span>
               </div>
@@ -274,7 +274,7 @@ export default function BowelPage() {
         category="bowel"
         values={{ daily: todayCount }}
         presets={bowelGoalPresets}
-        color="#78716c"
+        color="#92400e"
       />
 
       <div className="glass rounded-2xl p-5 animate-fade-up stagger-2">
@@ -369,7 +369,7 @@ export default function BowelPage() {
                   }}
                   formatter={(value) => [`${Number(value ?? 0)}`, "Entries"]}
                 />
-                <Bar dataKey="count" fill="#78716c" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Bar dataKey="count" fill="#92400e" radius={[4, 4, 0, 0]} maxBarSize={40} />
               </BarChart>
             </ResponsiveContainer>
           </div>

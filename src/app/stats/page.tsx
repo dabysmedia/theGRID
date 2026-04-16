@@ -106,7 +106,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   workouts: "#c4d632",
   sleep: "#6366f1",
   alcohol: "#f59e0b",
-  bowel: "#78716c",
+  bowel: "#92400e",
   weight: "#14b8a6",
 }
 
@@ -209,7 +209,7 @@ const METRIC_META: Record<
   steps: { label: "Steps", unit: "steps", color: "#22c55e", icon: Footprints, compareNoun: "steps", correlationMode: "lagged1to2" },
   calories: { label: "Calories", unit: "cal", color: "#ef4444", icon: Flame, compareNoun: "calories", correlationMode: "lagged1to2" },
   sleepHrs: { label: "Sleep", unit: "hrs", color: "#6366f1", icon: Moon, compareNoun: "sleep", correlationMode: "sameDay" },
-  bowel: { label: "Bowel", unit: "entries", color: "#78716c", icon: CircleDot, compareNoun: "bowel entries", correlationMode: "lagged1to2" },
+  bowel: { label: "Bowel", unit: "entries", color: "#92400e", icon: CircleDot, compareNoun: "bowel entries", correlationMode: "lagged1to2" },
 }
 
 const METRIC_KEYS: MetricKey[] = ["steps", "calories", "sleepHrs", "bowel"]

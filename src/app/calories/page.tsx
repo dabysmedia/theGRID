@@ -16,6 +16,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -166,6 +167,15 @@ function todayProgressRingStrokeHex(consumed: number, target: number): string {
   if (r >= OVER_TARGET_RATIO) return "#f87171"
   if (r >= 0.95) return "#059669"
   return "#0284c7"
+}
+
+/** 7-day bar fill — cyan / green / red vs adaptive day target (same ratios as totals UI). */
+function calorieTrendBarFillHex(consumed: number, dayTarget: number): string {
+  if (dayTarget <= 0) return "#22d3ee"
+  const r = consumed / dayTarget
+  if (r >= OVER_TARGET_RATIO) return "#ef4444"
+  if (r >= 0.95) return "#10b981"
+  return "#22d3ee"
 }
 
 /** Rolling daily slice for any calendar day (same math as the weekly goal card). */
@@ -575,6 +585,8 @@ export default function CaloriesPage() {
       dailyTotals.set(d, (dailyTotals.get(d) ?? 0) + e.calories)
     }
 
+    const weeklyT = weeklyGoal?.weeklyTarget ?? 0
+
     const days = Array.from({ length: 7 }, (_, i) =>
       subDays(parseLocalDate(activeDate), 6 - i)
     )
@@ -585,15 +597,20 @@ export default function CaloriesPage() {
       const total = dailyTotals.get(key) ?? 0
       weekSum += total
       dailyLast7.push(total)
-      return { label: format(d, "EEE"), total }
+      const dayTarget = adaptiveDayTargetForDate(key, weeklyT, dailyTotals)
+      const barFill = calorieTrendBarFillHex(total, dayTarget)
+      return { label: format(d, "EEE"), total, dateKey: key, barFill }
     })
 
-    let bestVal = 0
-    let bestKey: string | null = null
-    for (const [k, v] of dailyTotals) {
-      if (v > bestVal) {
-        bestVal = v
-        bestKey = k
+    let lowestVal = 0
+    let lowestKey: string | null = null
+    for (const d of days) {
+      const key = formatDate(d)
+      const v = dailyTotals.get(key) ?? 0
+      if (v <= 0) continue
+      if (lowestKey === null || v < lowestVal) {
+        lowestVal = v
+        lowestKey = key
       }
     }
 
@@ -602,9 +619,9 @@ export default function CaloriesPage() {
       chartData,
       weekTotal: weekSum,
       avg7: averageOnLoggedDays(dailyLast7),
-      bestDay: { value: bestVal, key: bestKey },
+      bestDay: { value: lowestVal, key: lowestKey },
     }
-  }, [entries, activeDate])
+  }, [entries, activeDate, weeklyGoal?.weeklyTarget])
 
   const hasChartData = chartData.some((d) => d.total > 0)
 
@@ -954,11 +971,6 @@ export default function CaloriesPage() {
 
   const todayTotal = dailyTotals.get(today) ?? 0
 
-  const bestDaySub =
-    bestDay.key != null && bestDay.value > 0
-      ? format(parseLocalDate(bestDay.key), "EEE, MMM d")
-      : undefined
-
   const estimateCalDisplay =
     calories.trim() === ""
       ? null
@@ -1129,14 +1141,16 @@ export default function CaloriesPage() {
         </PageStatTile>
         <PageStatTile className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Best Day
+            Lowest day
           </p>
           <span className="text-lg lg:text-xl font-bold tabular-nums">
             {bestDay.value > 0 ? bestDay.value.toLocaleString() : "—"}
           </span>
-          {bestDaySub && (
-            <p className="text-[10px] text-muted-foreground/60 mt-0.5">{bestDaySub}</p>
-          )}
+          {bestDay.key != null && bestDay.value > 0 ? (
+            <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+              {format(parseLocalDate(bestDay.key), "EEE, MMM d")}
+            </p>
+          ) : null}
         </PageStatTile>
       </div>
 
@@ -1967,12 +1981,6 @@ export default function CaloriesPage() {
               <div className="h-40 lg:h-48 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="calBarFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#ef4444" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#ef4444" stopOpacity={0.35} />
-                      </linearGradient>
-                    </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted/25" />
                     <XAxis
                       dataKey="label"
@@ -2002,7 +2010,11 @@ export default function CaloriesPage() {
                         "Total",
                       ]}
                     />
-                    <Bar dataKey="total" fill="url(#calBarFill)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                    <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                      {chartData.map((row) => (
+                        <Cell key={row.dateKey} fill={row.barFill} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>

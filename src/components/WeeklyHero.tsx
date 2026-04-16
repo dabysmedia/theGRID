@@ -7,6 +7,10 @@ import {
   Moon,
   PersonStanding,
   Dumbbell,
+  Check,
+  TrendingDown,
+  TrendingUp,
+  Minus,
 } from "lucide-react"
 import { DailyWeighIn } from "@/components/DailyWeighIn"
 import { useActiveDate } from "@/context/DateContext"
@@ -14,6 +18,7 @@ import { cn, parseLocalDate } from "@/lib/utils"
 
 /** Show today’s weigh-in prompt on the hub only from this local hour onward (inclusive). */
 const WEIGH_IN_PROMPT_FROM_HOUR = 4
+const WEEKLY_WORKOUT_GOAL = 3
 
 interface CategorySummary {
   todayValue: number
@@ -30,6 +35,10 @@ interface DashboardData {
   sleep: CategorySummary
   alcohol: CategorySummary
   bowel: CategorySummary
+  weightTrend: {
+    baselineTrend: "losing" | "maintaining" | "gaining"
+    vsBaselineLb: number
+  } | null
 }
 
 interface ProgressRingProps {
@@ -42,6 +51,15 @@ interface ProgressRingProps {
   /** Muted ring; center shows `centerLabel` instead of value (e.g. vacation). */
   disabled?: boolean
   centerLabel?: string
+  valueLabel?: string
+}
+
+function formatRingValue(value: number): string {
+  const rounded = Math.round(value * 10) / 10
+  if (rounded >= 1000) {
+    return `${(rounded / 1000).toFixed(1)}k`
+  }
+  return rounded.toFixed(1)
 }
 
 function ProgressRing({
@@ -53,6 +71,7 @@ function ProgressRing({
   icon,
   disabled,
   centerLabel,
+  valueLabel,
 }: ProgressRingProps) {
   const radius = 38
   const stroke = 3
@@ -116,9 +135,7 @@ function ProgressRing({
           <span className={cn("type-hud-stat mt-0.5", disabled && "text-muted-foreground/50 tabular-nums")}>
             {disabled && centerLabel != null
               ? centerLabel
-              : value >= 1000
-                ? `${(value / 1000).toFixed(1)}k`
-                : Math.round(value)}
+              : valueLabel ?? formatRingValue(value)}
           </span>
         </div>
       </div>
@@ -148,6 +165,59 @@ function weekAvgFromLoggedDays(last7: number[]): number {
 
 function weekTotal(last7: number[]): number {
   return last7.reduce((s, v) => s + v, 0)
+}
+
+function currentWeekValuesFromLast7(last7: number[], refDate: Date): number[] {
+  const dayOfWeek = refDate.getDay()
+  const daysIntoWeek = dayOfWeek === 0 ? 7 : dayOfWeek
+  return last7.slice(Math.max(0, last7.length - daysIntoWeek))
+}
+
+/** Tiny goal ring matching workouts page behavior (checkmark at goal). */
+function WeekWorkoutGoalRing({ count }: { count: number }) {
+  const stroke = 2.8
+  const vb = 24
+  const r = (vb - stroke) / 2
+  const cx = vb / 2
+  const cy = vb / 2
+  const circumference = 2 * Math.PI * r
+  const pct =
+    Math.min(Math.max(count, 0), WEEKLY_WORKOUT_GOAL) /
+    WEEKLY_WORKOUT_GOAL
+  const dash = circumference * pct
+
+  if (count >= WEEKLY_WORKOUT_GOAL) {
+    return <Check className="h-4 w-4 text-emerald-500" strokeWidth={2.8} aria-hidden />
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${vb} ${vb}`}
+      className="h-4 w-4 -rotate-90"
+      aria-hidden
+    >
+      <circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        className="text-muted-foreground/25"
+      />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={`${dash} ${circumference}`}
+        className="text-emerald-500"
+      />
+    </svg>
+  )
 }
 
 /** 0–1, caps over-performance at 100% for scoring */
@@ -188,6 +258,12 @@ function computeWeeklyScore(d: DashboardData, skipCalories: boolean): number {
 export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: WeeklyHeroProps) {
   const { activeDate, isToday } = useActiveDate()
   const [showWeighInPrompt, setShowWeighInPrompt] = useState(false)
+  const refDate = parseLocalDate(activeDate)
+  const dayOfWeek = refDate.getDay()
+  const weekStart = new Date(refDate)
+  weekStart.setDate(refDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekStart.getDate() + 6)
 
   useLayoutEffect(() => {
     if (!isToday) {
@@ -200,40 +276,48 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
     const id = setInterval(apply, 60_000)
     return () => clearInterval(id)
   }, [isToday])
-  const calAvg = Math.round(weekAvgFromLoggedDays(data.calories.last7))
-  const stepsAvg = Math.round(weekAvgFromLoggedDays(data.steps.last7))
+  const calAvg = weekAvgFromLoggedDays(data.calories.last7)
+  const stepsAvg = weekAvgFromLoggedDays(data.steps.last7)
   const sleepAvg = Math.round(weekAvgFromLoggedDays(data.sleep.last7) * 10) / 10
+  const workoutsThisWeek = weekTotal(currentWeekValuesFromLast7(data.workouts.last7, refDate))
 
   const calGoal = data.calories.goal ?? 2000
   const stepsGoal = data.steps.goal ?? 10000
   const sleepGoal = data.sleep.goal ?? 8
 
   const weeklyScore = computeWeeklyScore(data, vacationBlocksCalories)
+  const weightTrend = data.weightTrend?.baselineTrend ?? "maintaining"
+  const weightDelta = data.weightTrend?.vsBaselineLb ?? 0
+  const weightIcon =
+    weightTrend === "losing"
+      ? <TrendingDown className="h-4 w-4" style={{ color: "#22c55e" }} />
+      : weightTrend === "gaining"
+        ? <TrendingUp className="h-4 w-4" style={{ color: "#ef4444" }} />
+        : <Minus className="h-4 w-4" style={{ color: "#14b8a6" }} />
+  const weightLabel =
+    weightTrend === "losing"
+      ? "Losing"
+      : weightTrend === "gaining"
+        ? "Gaining"
+        : "Maintaining"
 
   const secondaryStats = [
     {
-      icon: <PersonStanding className="h-3 w-3" style={{ color: "#3b82f6" }} />,
+      icon: <PersonStanding className="h-4 w-4" style={{ color: "#3b82f6" }} />,
       label: "Running",
       value: `${(weekTotal(data.running.last7)).toFixed(1)} mi`,
     },
     {
-      icon: <Dumbbell className="h-3 w-3" style={{ color: "#c4d632" }} />,
+      icon: <WeekWorkoutGoalRing count={workoutsThisWeek} />,
       label: "Workouts",
-      value: `${weekTotal(data.workouts.last7)}`,
+      value: `${workoutsThisWeek}/${WEEKLY_WORKOUT_GOAL} this wk`,
     },
     {
-      icon: <Moon className="h-3 w-3" style={{ color: "#6366f1" }} />,
-      label: "Sleep",
-      value: `${sleepAvg} hrs avg`,
+      icon: weightIcon,
+      label: "Weight",
+      value: `${weightLabel} ${weightDelta > 0 ? `+${weightDelta}` : weightDelta} lb`,
     },
   ]
-
-  const refDate = parseLocalDate(activeDate)
-  const dayOfWeek = refDate.getDay()
-  const weekStart = new Date(refDate)
-  weekStart.setDate(refDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-  const weekEnd = new Date(weekStart)
-  weekEnd.setDate(weekStart.getDate() + 6)
 
   const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
   const dateRange = `${monthNames[weekStart.getMonth()]} ${weekStart.getDate()} – ${monthNames[weekEnd.getMonth()]} ${weekEnd.getDate()}`
@@ -349,12 +433,14 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         {secondaryStats.map((stat) => (
           <div
             key={stat.label}
-            className="flex flex-1 items-center gap-1.5 rounded-xl glass-subtle px-2.5 py-2"
+            className="flex flex-1 items-center gap-1.5 rounded-xl glass-subtle px-2.5 py-2.5"
           >
-            {stat.icon}
-            <div className="min-w-0">
-              <p className="type-hud-caption-tight truncate">{stat.label}</p>
-              <p className="type-hud-stat-sm">{stat.value}</p>
+            <div className="flex h-4 w-4 shrink-0 items-center justify-center">
+              {stat.icon}
+            </div>
+            <div className="min-w-0 pl-0.5 text-left">
+              <p className="type-hud-caption-tight truncate text-left leading-none">{stat.label}</p>
+              <p className="type-hud-stat-sm mt-1 leading-none">{stat.value}</p>
             </div>
           </div>
         ))}
