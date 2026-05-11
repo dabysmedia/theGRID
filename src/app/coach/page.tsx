@@ -31,6 +31,17 @@ import { CoachAvatar } from "@/components/coach/CoachAvatar"
 const TONE_STORAGE_KEY = "theGRID_coachTone"
 const ACTIVE_CONVERSATION_STORAGE_PREFIX = "theGRID_coachActiveConversation_"
 
+/** Browser IANA zone so the server aligns "today" with this device, not UTC. */
+function readClientTimeZone(): string | undefined {
+  try {
+    if (typeof Intl === "undefined") return undefined
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return typeof tz === "string" && tz.length > 0 ? tz : undefined
+  } catch {
+    return undefined
+  }
+}
+
 interface UIMessage extends CoachMessageClient {
   /** True while the SSE stream is appending to this assistant message. */
   streaming?: boolean
@@ -334,10 +345,15 @@ export default function CoachPage() {
       abortRef.current = controller
 
       try {
+        const tz = readClientTimeZone()
+        const payload = {
+          ...opts.body,
+          ...(tz ? { clientTimeZone: tz } : {}),
+        }
         const res = await apiFetch(opts.url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(opts.body),
+          body: JSON.stringify(payload),
           signal: controller.signal,
         })
         if (!res.ok || !res.body) {

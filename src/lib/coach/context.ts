@@ -25,8 +25,14 @@ const WEIGHT_LOOKBACK_DAYS = 30
 
 interface BuildContextOptions {
   userId: string
-  /** "today" override for testability; defaults to local startOfDay. */
+  /** "now" override for testability; defaults to `new Date()`. */
   now?: Date
+  /**
+   * Browser/device IANA zone from the client (e.g. "America/New_York").
+   * Takes precedence over `User.timeZone` so "today" matches the user's wall
+   * clock regardless of server UTC or missing DB timezone.
+   */
+  clientTimeZone?: string | null
 }
 
 interface BuildContextResult {
@@ -37,7 +43,7 @@ interface BuildContextResult {
 export async function buildUserContext(
   opts: BuildContextOptions
 ): Promise<BuildContextResult> {
- const now = opts.now ?? new Date()
+  const now = opts.now ?? new Date()
   const today = startOfDay(now)
   const since = subDays(today, LOOKBACK_DAYS - 1)
   const weightSince = subDays(today, WEIGHT_LOOKBACK_DAYS - 1)
@@ -231,7 +237,8 @@ export async function buildUserContext(
   // server's local midnight for "today" breaks everywhere that isn't UTC — the
   // weekly totals still looked fine because they bucketed by DB key, but the
   // "today's meals" filter returned nothing.
-  const userTz = isValidTimeZone(user?.timeZone) ? user.timeZone! : "UTC"
+  const userTz =
+    isValidTimeZone(opts.clientTimeZone) ? opts.clientTimeZone! : isValidTimeZone(user?.timeZone) ? user.timeZone! : "UTC"
   const todayKey = localDayKey(now, userTz)
   const todayLabel = new Intl.DateTimeFormat("en-US", {
     timeZone: userTz,
@@ -240,6 +247,12 @@ export async function buildUserContext(
     day: "numeric",
     year: "numeric",
   }).format(now)
+  const tzSource =
+    isValidTimeZone(opts.clientTimeZone)
+      ? "device"
+      : isValidTimeZone(user?.timeZone)
+        ? "profile"
+        : "UTC fallback"
 
   // ── Aggregations ───────────────────────────────────────────────────────────
   const calsByDay = sumByDay(calorieEntries.map((e) => ({ date: e.date, value: e.calories })))
@@ -296,7 +309,7 @@ export async function buildUserContext(
   }
 
   const lines: string[] = []
-  lines.push(`Today is ${todayLabel} (local date ${todayKey}, tz ${userTz}).`)
+  lines.push(`Today is ${todayLabel} (local date ${todayKey}, tz ${userTz}, source: ${tzSource}).`)
   lines.push(`User: ${userName}.`)
   if (onVacation) lines.push("Status: VACATION MODE — calorie tracking is paused.")
 

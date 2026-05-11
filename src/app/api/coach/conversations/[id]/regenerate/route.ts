@@ -13,6 +13,7 @@ import {
 import { buildUserContext } from "@/lib/coach/context"
 import { coachChatSystemPrompt } from "@/lib/coach/prompts"
 import { DEFAULT_COACH_TONE_ID, isValidCoachToneId } from "@/lib/coach/tones"
+import { isValidTimeZone } from "@/lib/notifications/server/local-time"
 import {
   COACH_STREAM_HEADERS,
   createCoachStream,
@@ -50,12 +51,16 @@ export async function POST(
 
   const { id: conversationId } = await ctx.params
 
-  let body: { tone?: unknown } = {}
+  let body: { tone?: unknown; clientTimeZone?: unknown } = {}
   try {
     body = await req.json()
   } catch {
     body = {}
   }
+
+  const clientTzStr =
+    typeof body.clientTimeZone === "string" ? body.clientTimeZone.trim().slice(0, 80) : ""
+  const clientTimeZone = clientTzStr.length > 0 && isValidTimeZone(clientTzStr) ? clientTzStr : null
 
   const conversation = await prisma.coachConversation.findFirst({
     where: { id: conversationId, userId },
@@ -144,7 +149,7 @@ export async function POST(
     },
   })
 
-  const { userName, text: contextBlock } = await buildUserContext({ userId })
+  const { userName, text: contextBlock } = await buildUserContext({ userId, clientTimeZone })
   const trimmedHistory = remaining.slice(-MAX_HISTORY_MESSAGES)
   const messages = historyToAnthropicMessages(trimmedHistory, userId)
 

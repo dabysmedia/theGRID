@@ -18,6 +18,7 @@ import {
   createCoachStream,
 } from "@/lib/coach/stream"
 import { resolveCoachUploadPath } from "@/lib/coach/uploads"
+import { isValidTimeZone } from "@/lib/notifications/server/local-time"
 import {
   MAX_HISTORY_MESSAGES,
   MAX_IMAGES_PER_TURN,
@@ -56,6 +57,8 @@ export async function POST(
     tone?: unknown
     imagePaths?: unknown
     attachments?: unknown
+    /** IANA tz from the browser — drives "today" in coach context. */
+    clientTimeZone?: unknown
   }
   try {
     body = await req.json()
@@ -68,6 +71,10 @@ export async function POST(
   const modelKey = DEFAULT_COACH_MODEL_ID
   const model = COACH_MODELS[modelKey]
   const toneKey = isValidCoachToneId(body.tone) ? body.tone : DEFAULT_COACH_TONE_ID
+
+  const clientTzStr =
+    typeof body.clientTimeZone === "string" ? body.clientTimeZone.trim().slice(0, 80) : ""
+  const clientTimeZone = clientTzStr.length > 0 && isValidTimeZone(clientTzStr) ? clientTzStr : null
 
   // Accept either { attachments: [{kind,path,mime,name}] } or { imagePaths: ["/uploads/coach/..."] }
   let attachments: IncomingAttachment[] = []
@@ -164,7 +171,10 @@ export async function POST(
   })
 
   // Build context + assemble Anthropic messages for the streamed call.
-  const { userName, text: contextBlock } = await buildUserContext({ userId })
+  const { userName, text: contextBlock } = await buildUserContext({
+    userId,
+    clientTimeZone,
+  })
 
   const trimmedHistory = conversation.messages.slice(-MAX_HISTORY_MESSAGES)
   const historyMessages = historyToAnthropicMessages(trimmedHistory, userId)
