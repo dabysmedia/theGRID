@@ -1,6 +1,11 @@
 import "server-only"
 
 import { prisma } from "@/lib/prisma"
+import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
+import {
+  isValidTimeZone,
+  localDayKey,
+} from "@/lib/notifications/server/local-time"
 import { differenceInMinutes, format, startOfDay, subDays } from "date-fns"
 
 /**
@@ -32,12 +37,10 @@ interface BuildContextResult {
 export async function buildUserContext(
   opts: BuildContextOptions
 ): Promise<BuildContextResult> {
-  const now = opts.now ?? new Date()
+ const now = opts.now ?? new Date()
   const today = startOfDay(now)
   const since = subDays(today, LOOKBACK_DAYS - 1)
   const weightSince = subDays(today, WEIGHT_LOOKBACK_DAYS - 1)
-  const todayLabel = format(today, "EEEE, MMM d, yyyy")
-  const todayKey = ymd(today)
 
   const [
     user,
@@ -222,6 +225,22 @@ export async function buildUserContext(
   const userName = user?.name ?? "Friend"
   const onVacation = isVacationActive(user?.vacationResumeDate ?? null, today)
 
+  // "Today" for food / coach copy must follow the user's wall clock (same as
+  // the rest of the app). Row dates are stored as UTC calendar days (see
+  // dateStorage.ts); we match those with utcCalendarDayKeyFromIso. Using the
+  // server's local midnight for "today" breaks everywhere that isn't UTC — the
+  // weekly totals still looked fine because they bucketed by DB key, but the
+  // "today's meals" filter returned nothing.
+  const userTz = isValidTimeZone(user?.timeZone) ? user.timeZone! : "UTC"
+  const todayKey = localDayKey(now, userTz)
+  const todayLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: userTz,
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(now)
+
   // ── Aggregations ───────────────────────────────────────────────────────────
   const calsByDay = sumByDay(calorieEntries.map((e) => ({ date: e.date, value: e.calories })))
   const proteinByDay = sumByDay(
@@ -238,7 +257,9 @@ export async function buildUserContext(
   const carbs7Avg = avg(Object.values(carbsByDay))
   const fat7Avg = avg(Object.values(fatByDay))
 
-  const todaysMeals = calorieEntries.filter((e) => ymd(e.date) === todayKey)
+  const todaysMeals = calorieEntries
+    .filter((e) => utcCalendarDayKeyFromIso(e.date) === todayKey)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
   const todaysCals = sum(todaysMeals.map((m) => m.calories))
   const todaysProtein = sum(todaysMeals.map((m) => m.protein ?? 0))
   const todaysCarbs = sum(todaysMeals.map((m) => m.carbs ?? 0))
@@ -275,7 +296,7 @@ export async function buildUserContext(
   }
 
   const lines: string[] = []
-  lines.push(`Today is ${todayLabel}.`)
+  lines.push(`Today is ${todayLabel} (local date ${todayKey}, tz ${userTz}).`)
   lines.push(`User: ${userName}.`)
   if (onVacation) lines.push("Status: VACATION MODE — calorie tracking is paused.")
 
@@ -329,20 +350,28 @@ export async function buildUserContext(
   lines.push(
     `Nutrition ${LOOKBACK_DAYS}d avg: ${fmtNum(cals7Avg)} kcal, ${fmtNum(protein7Avg)}P / ${fmtNum(
       carbs7Avg
-    )}C / ${fmtNum(fat7Avg)}F g per day (${Object.keys(calsByDay).length} days logged).`
+    )}C / ${fmtNum(fat7Avg)}F g per day (${Object.keys(calsByDay).length} days logged). Each row below is a separate CalorieEntry (same as the food log).`
   )
   if (todaysMeals.length > 0) {
     lines.push(
-      `Today (${todayKey}): ${fmtNum(todaysCals)} kcal so far, ${fmtNum(
+      `Today's logged food (${todayKey}): ${fmtNum(todaysCals)} kcal, ${fmtNum(
         todaysProtein
-      )}P / ${fmtNum(todaysCarbs)}C / ${fmtNum(todaysFat)}F g, ${todaysMeals.length} meal(s):`
+      )}P / ${fmtNum(todaysCarbs)}C / ${fmtNum(todaysFat)}F g — ${todaysMeals.length} line item(s):`
     )
-    for (const m of todaysMeals.slice(0, 8)) {
-      const desc = m.description ? truncate(m.description, 60) : "(no description)"
-      lines.push(`  - [${m.mealType}] ${desc} — ${m.calories} kcal`)
+    for (const m of todaysMeals.slice(0, 55)) {
+      const desc = m.description ? truncate(m.description, 100) : "(no description)"
+      const loggedAt = formatHmUserTz(m.createdAt, userTz)
+      lines.push(
+        `  - [${m.mealType}] ${desc} — ${m.calories} kcal (${mealMacroFragment(m)}); logged ${loggedAt}`
+      )
+    }
+    if (todaysMeals.length > 55) {
+      lines.push(`  …and ${todaysMeals.length - 55} more line items for today (list truncated).`)
     }
   } else {
-    lines.push(`Today (${todayKey}): no meals logged yet.`)
+    lines.push(
+      `Today (${todayKey}): no CalorieEntry rows for this calendar day — if the user logged food, confirm their timezone matches the device (stored under User.timeZone) so "today" aligns.`
+    )
   }
   // Yesterday & day-before quick glance, useful for trend questions.
   const recentMealDays = Object.keys(calsByDay)
@@ -562,7 +591,8 @@ export async function buildUserContext(
 function sumByDay(rows: Array<{ date: Date; value: number }>): Record<string, number> {
   const map: Record<string, number> = {}
   for (const r of rows) {
-    const k = ymd(r.date)
+    const k = utcCalendarDayKeyFromIso(r.date)
+    if (!k) continue
     map[k] = (map[k] ?? 0) + (r.value ?? 0)
   }
   return map
@@ -588,8 +618,32 @@ function hoursBetween(bedtime: Date, wakeTime: Date): number {
   return ms / 3_600_000
 }
 
+/**
+ * yyyy-MM-dd matching how dates are stored for most trackers in this app
+ * (UTC calendar components — see `dateStorage.ts`).
+ */
 function ymd(d: Date): string {
-  return format(d, "yyyy-MM-dd")
+  return utcCalendarDayKeyFromIso(d) || format(d, "yyyy-MM-dd")
+}
+
+function mealMacroFragment(m: {
+  protein: number | null
+  carbs: number | null
+  fat: number | null
+}): string {
+  const p = m.protein != null ? `${fmtNum(m.protein)}P` : "—P"
+  const c = m.carbs != null ? `${fmtNum(m.carbs)}C` : "—C"
+  const f = m.fat != null ? `${fmtNum(m.fat)}F` : "—F"
+  return `${p}/${c}/${f}`
+}
+
+function formatHmUserTz(d: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d)
 }
 
 function fmtNum(n: number, digits = 0): string {

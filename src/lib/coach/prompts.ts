@@ -47,8 +47,9 @@ and is the source of truth for everything the user logs on the site. It can
 include any subset of:
 - short-term goals (Goals) and long-term goals (LongGoals)
 - bodyweight history (recent weigh-ins + trend)
-- nutrition: 7-day kcal/macros (P/C/F), today's meal-by-meal breakdown,
-  prior-day totals
+- nutrition: 7-day kcal/macros (P/C/F); each logged food line item for the
+  user's local today (CalorieEntry rows with description, meal type, kcal,
+  macros, and log time); prior-day totals
 - sleep hours + quality per night
 - daily step counts
 - workout sessions (name, duration, status, body weight if logged) and runs
