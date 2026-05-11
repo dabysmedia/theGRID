@@ -450,44 +450,41 @@ export default function CoachPage() {
   const handleRegenerate = useCallback(async () => {
     if (!activeId || sending) return
 
-    const tempAssistantId = `local-asst-regen-${Date.now()}`
-    let hadUserTurn = false
-
-    setMessages((cur) => {
-      const out = [...cur]
-      // Strip trailing non-user rows (the assistant reply, plus any inline
-      // error bubble we may have appended on a previous failure).
-      while (out.length > 0 && out[out.length - 1].role !== "user") {
-        out.pop()
-      }
-      hadUserTurn = out.length > 0 && out[out.length - 1].role === "user"
-      if (!hadUserTurn) return cur
-      out.push({
-        id: tempAssistantId,
-        role: "assistant",
-        content: "",
-        attachments: [],
-        modelId: null,
-        tokensIn: 0,
-        tokensOut: 0,
-        createdAt: new Date().toISOString(),
-        streaming: true,
-        optimistic: true,
-      })
-      return out
-    })
-
-    if (!hadUserTurn) {
+    // Trim trailing non-user rows (the previous assistant reply, plus any
+    // inline error bubble appended on a prior failure). We compute this off
+    // the captured state snapshot instead of inside a setMessages updater so
+    // the validity check can happen synchronously — React queues updater
+    // bodies, which previously caused us to bail before firing the request.
+    const trimmed = [...messages]
+    while (trimmed.length > 0 && trimmed[trimmed.length - 1].role !== "user") {
+      trimmed.pop()
+    }
+    if (trimmed.length === 0 || trimmed[trimmed.length - 1].role !== "user") {
       setError("Nothing to regenerate — send a message first.")
       return
     }
+
+    const tempAssistantId = `local-asst-regen-${Date.now()}`
+    const placeholder: UIMessage = {
+      id: tempAssistantId,
+      role: "assistant",
+      content: "",
+      attachments: [],
+      modelId: null,
+      tokensIn: 0,
+      tokensOut: 0,
+      createdAt: new Date().toISOString(),
+      streaming: true,
+      optimistic: true,
+    }
+    setMessages([...trimmed, placeholder])
 
     await runCoachStream({
       url: `/api/coach/conversations/${activeId}/regenerate`,
       body: { tone },
       tempAssistantId,
     })
-  }, [activeId, sending, tone, runCoachStream])
+  }, [activeId, sending, messages, tone, runCoachStream])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
