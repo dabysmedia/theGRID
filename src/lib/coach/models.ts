@@ -27,8 +27,15 @@ export interface CoachModelDef {
   maxOutputTokens: number
 }
 
-const HAIKU_ALIAS = process.env.ANTHROPIC_HAIKU_MODEL?.trim() || "claude-haiku-4-5"
-const SONNET_ALIAS = process.env.ANTHROPIC_SONNET_MODEL?.trim() || "claude-sonnet-4-6"
+// Anthropic's documented "Available Models" use mixed naming: dateless for the
+// 4.6+ generation, dated for 4.5. We default to the exact IDs from
+// https://platform.claude.com/docs/en/claude_api_primer so a fresh checkout
+// works without env overrides; deploys can still pin a specific snapshot via
+// ANTHROPIC_HAIKU_MODEL / ANTHROPIC_SONNET_MODEL.
+const HAIKU_ALIAS =
+  process.env.ANTHROPIC_HAIKU_MODEL?.trim() || "claude-haiku-4-5-20251001"
+const SONNET_ALIAS =
+  process.env.ANTHROPIC_SONNET_MODEL?.trim() || "claude-sonnet-4-6"
 
 export const COACH_MODELS: Record<string, CoachModelDef> = {
   "coach-chat": {

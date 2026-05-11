@@ -29,8 +29,20 @@ export function ChatMessage({
   }, [modelId])
 
   if (role === "system") {
+    // System messages prefixed with the warning emoji are surfaced from
+    // streaming errors (`stream.ts` → client). Render them in destructive
+    // colors so the user clearly sees something went wrong, instead of the
+    // neutral "system note" style used for benign banners.
+    const isError = content.trimStart().startsWith("⚠️")
     return (
-      <div className="mx-auto max-w-prose rounded-xl border border-glass-border bg-glass-highlight/20 px-3 py-2 text-center text-xs text-muted-foreground">
+      <div
+        className={cn(
+          "mx-auto max-w-prose rounded-xl border px-3 py-2 text-center text-xs whitespace-pre-wrap break-words",
+          isError
+            ? "border-destructive/40 bg-destructive/10 text-destructive"
+            : "border-glass-border bg-glass-highlight/20 text-muted-foreground"
+        )}
+      >
         {content}
       </div>
     )

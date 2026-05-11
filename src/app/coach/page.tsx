@@ -408,7 +408,25 @@ export default function CoachPage() {
             })
           )
         } else if (event.type === "error" && typeof event.message === "string") {
+          // Surface the error both as a top-of-chat banner *and* inline in the
+          // empty assistant bubble — otherwise the user sees only a frozen
+          // typing cursor with no feedback about what went wrong.
           setError(event.message)
+          setMessages((cur) =>
+            cur.map((m) =>
+              m.id === tempAssistantId
+                ? {
+                    ...m,
+                    streaming: false,
+                    role: "system",
+                    content:
+                      m.content && m.content.trim().length > 0
+                        ? `${m.content}\n\n⚠️ ${event.message}`
+                        : `⚠️ ${event.message}`,
+                  }
+                : m
+            )
+          )
         }
       }
     },
