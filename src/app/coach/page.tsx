@@ -255,6 +255,143 @@ export default function CoachPage() {
     )
   }, [])
 
+  /**
+   * Apply a single SSE event from a coach stream to the optimistic assistant
+   * placeholder identified by `tempAssistantId`. Shared between the regular
+   * send flow and the regenerate flow so they stay in sync.
+   */
+  const applyStreamEvent = useCallback(
+    (ev: unknown, tempAssistantId: string) => {
+      if (!ev || typeof ev !== "object") return
+      const event = ev as { type: string; [k: string]: unknown }
+      if (event.type === "text" && typeof event.delta === "string") {
+        const delta = event.delta
+        setMessages((cur) =>
+          cur.map((m) =>
+            m.id === tempAssistantId ? { ...m, content: m.content + delta } : m
+          )
+        )
+      } else if (event.type === "done") {
+        const realId = String(event.messageId ?? "")
+        setMessages((cur) =>
+          cur.map((m) => {
+            if (m.id === tempAssistantId) {
+              return {
+                ...m,
+                id: realId || m.id,
+                streaming: false,
+                optimistic: false,
+                tokensIn: typeof event.tokensIn === "number" ? event.tokensIn : 0,
+                tokensOut: typeof event.tokensOut === "number" ? event.tokensOut : 0,
+                modelId:
+                  typeof event.modelId === "string" ? event.modelId : m.modelId,
+              }
+            }
+            return m
+          })
+        )
+      } else if (event.type === "error" && typeof event.message === "string") {
+        // Surface the error both as a top-of-chat banner *and* inline in the
+        // empty assistant bubble — otherwise the user sees only a frozen
+        // typing cursor with no feedback about what went wrong.
+        setError(event.message)
+        setMessages((cur) =>
+          cur.map((m) =>
+            m.id === tempAssistantId
+              ? {
+                  ...m,
+                  streaming: false,
+                  role: "system",
+                  content:
+                    m.content && m.content.trim().length > 0
+                      ? `${m.content}\n\n⚠️ ${event.message}`
+                      : `⚠️ ${event.message}`,
+                }
+              : m
+          )
+        )
+      }
+    },
+    []
+  )
+
+  /**
+   * Drive a single coach SSE request end-to-end: opens the stream, parses
+   * `data: {…}` blocks, and updates the optimistic assistant placeholder via
+   * `applyStreamEvent`. Both /messages and /regenerate go through this so the
+   * client only has to know about *one* protocol.
+   */
+  const runCoachStream = useCallback(
+    async (opts: {
+      url: string
+      body: Record<string, unknown>
+      tempAssistantId: string
+    }) => {
+      setSending(true)
+      setError(null)
+
+      const controller = new AbortController()
+      abortRef.current = controller
+
+      try {
+        const res = await apiFetch(opts.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(opts.body),
+          signal: controller.signal,
+        })
+        if (!res.ok || !res.body) {
+          const errBody = await res
+            .json()
+            .catch(() => ({ error: `Request failed (${res.status})` }))
+          throw new Error(errBody?.error || `Request failed (${res.status})`)
+        }
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          let idx = buffer.indexOf("\n\n")
+          while (idx !== -1) {
+            const block = buffer.slice(0, idx).trim()
+            buffer = buffer.slice(idx + 2)
+            if (block.startsWith("data:")) {
+              const json = block.slice(5).trim()
+              try {
+                applyStreamEvent(JSON.parse(json), opts.tempAssistantId)
+              } catch {
+                /* ignore unparseable line */
+              }
+            }
+            idx = buffer.indexOf("\n\n")
+          }
+        }
+      } catch (e) {
+        if ((e as Error)?.name === "AbortError") {
+          // handleStop already cleared streaming state.
+        } else {
+          const msg = e instanceof Error ? e.message : "Request failed."
+          setError(msg)
+          setMessages((cur) =>
+            cur.map((m) =>
+              m.id === opts.tempAssistantId
+                ? { ...m, streaming: false, content: m.content || "(no response)" }
+                : m
+            )
+          )
+        }
+      } finally {
+        abortRef.current = null
+        setSending(false)
+        void loadList()
+      }
+    },
+    [applyStreamEvent, loadList]
+  )
+
   const handleSubmit = useCallback(
     async ({
       text,
@@ -295,129 +432,62 @@ export default function CoachPage() {
         optimistic: true,
       }
       setMessages((cur) => [...cur, userMsg, assistantMsg])
-      setSending(true)
-      setError(null)
 
-      const controller = new AbortController()
-      abortRef.current = controller
-
-      try {
-        const res = await apiFetch(
-          `/api/coach/conversations/${conversationId}/messages`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, tone, attachments }),
-            signal: controller.signal,
-          }
-        )
-        if (!res.ok || !res.body) {
-          const errBody = await res
-            .json()
-            .catch(() => ({ error: `Request failed (${res.status})` }))
-          throw new Error(errBody?.error || `Request failed (${res.status})`)
-        }
-
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ""
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          buffer += decoder.decode(value, { stream: true })
-          let idx = buffer.indexOf("\n\n")
-          while (idx !== -1) {
-            const block = buffer.slice(0, idx).trim()
-            buffer = buffer.slice(idx + 2)
-            if (block.startsWith("data:")) {
-              const json = block.slice(5).trim()
-              try {
-                const ev = JSON.parse(json)
-                handleStreamEvent(ev)
-              } catch {
-                /* ignore unparseable line */
-              }
-            }
-            idx = buffer.indexOf("\n\n")
-          }
-        }
-      } catch (e) {
-        if ((e as Error)?.name === "AbortError") {
-          // Already handled in handleStop.
-        } else {
-          const msg = e instanceof Error ? e.message : "Send failed."
-          setError(msg)
-          // Remove the empty assistant placeholder on error.
-          setMessages((cur) =>
-            cur.map((m) =>
-              m.id === tempAssistantId
-                ? { ...m, streaming: false, content: m.content || "(no response)" }
-                : m
-            )
-          )
-        }
-      } finally {
-        abortRef.current = null
-        setSending(false)
-        // Refresh sidebar list (updates updatedAt + preview).
-        void loadList()
-      }
-
-      function handleStreamEvent(ev: unknown) {
-        if (!ev || typeof ev !== "object") return
-        const event = ev as { type: string; [k: string]: unknown }
-        if (event.type === "text" && typeof event.delta === "string") {
-          const delta = event.delta
-          setMessages((cur) =>
-            cur.map((m) =>
-              m.id === tempAssistantId ? { ...m, content: m.content + delta } : m
-            )
-          )
-        } else if (event.type === "done") {
-          const realId = String(event.messageId ?? "")
-          setMessages((cur) =>
-            cur.map((m) => {
-              if (m.id === tempAssistantId) {
-                return {
-                  ...m,
-                  id: realId || m.id,
-                  streaming: false,
-                  optimistic: false,
-                  tokensIn: typeof event.tokensIn === "number" ? event.tokensIn : 0,
-                  tokensOut: typeof event.tokensOut === "number" ? event.tokensOut : 0,
-                  modelId:
-                    typeof event.modelId === "string" ? event.modelId : m.modelId,
-                }
-              }
-              return m
-            })
-          )
-        } else if (event.type === "error" && typeof event.message === "string") {
-          // Surface the error both as a top-of-chat banner *and* inline in the
-          // empty assistant bubble — otherwise the user sees only a frozen
-          // typing cursor with no feedback about what went wrong.
-          setError(event.message)
-          setMessages((cur) =>
-            cur.map((m) =>
-              m.id === tempAssistantId
-                ? {
-                    ...m,
-                    streaming: false,
-                    role: "system",
-                    content:
-                      m.content && m.content.trim().length > 0
-                        ? `${m.content}\n\n⚠️ ${event.message}`
-                        : `⚠️ ${event.message}`,
-                  }
-                : m
-            )
-          )
-        }
-      }
+      await runCoachStream({
+        url: `/api/coach/conversations/${conversationId}/messages`,
+        body: { text, tone, attachments },
+        tempAssistantId,
+      })
     },
-    [activeId, tone, handleCreateConversation, loadList]
+    [activeId, tone, handleCreateConversation, runCoachStream]
   )
+
+  /**
+   * Re-run the most recent user prompt: drop the trailing assistant/system
+   * bubble locally, replace it with a streaming placeholder, and ask the
+   * server to delete + regenerate. The user message itself is untouched.
+   */
+  const handleRegenerate = useCallback(async () => {
+    if (!activeId || sending) return
+
+    const tempAssistantId = `local-asst-regen-${Date.now()}`
+    let hadUserTurn = false
+
+    setMessages((cur) => {
+      const out = [...cur]
+      // Strip trailing non-user rows (the assistant reply, plus any inline
+      // error bubble we may have appended on a previous failure).
+      while (out.length > 0 && out[out.length - 1].role !== "user") {
+        out.pop()
+      }
+      hadUserTurn = out.length > 0 && out[out.length - 1].role === "user"
+      if (!hadUserTurn) return cur
+      out.push({
+        id: tempAssistantId,
+        role: "assistant",
+        content: "",
+        attachments: [],
+        modelId: null,
+        tokensIn: 0,
+        tokensOut: 0,
+        createdAt: new Date().toISOString(),
+        streaming: true,
+        optimistic: true,
+      })
+      return out
+    })
+
+    if (!hadUserTurn) {
+      setError("Nothing to regenerate — send a message first.")
+      return
+    }
+
+    await runCoachStream({
+      url: `/api/coach/conversations/${activeId}/regenerate`,
+      body: { tone },
+      tempAssistantId,
+    })
+  }, [activeId, sending, tone, runCoachStream])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
@@ -493,15 +563,28 @@ export default function CoachPage() {
                   Send your first message to get started.
                 </div>
               )}
-              {messages.map((m) => (
-                <ChatMessage
-                  key={m.id}
-                  role={m.role}
-                  content={m.content}
-                  attachments={m.attachments}
-                  streaming={m.streaming}
-                />
-              ))}
+              {messages.map((m, i) => {
+                // Only the *last* assistant/system bubble shows a regenerate
+                // affordance, and only when nothing is currently streaming.
+                const isLast = i === messages.length - 1
+                const canRegenerate =
+                  isLast &&
+                  !sending &&
+                  !m.streaming &&
+                  (m.role === "assistant" || m.role === "system") &&
+                  messages.some((x) => x.role === "user")
+                return (
+                  <ChatMessage
+                    key={m.id}
+                    role={m.role}
+                    content={m.content}
+                    attachments={m.attachments}
+                    streaming={m.streaming}
+                    onRegenerate={canRegenerate ? handleRegenerate : undefined}
+                    regenerateDisabled={sending}
+                  />
+                )
+              })}
               <div ref={messagesEndRef} />
             </div>
           </div>

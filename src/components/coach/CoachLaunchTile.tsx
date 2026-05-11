@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, Camera } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CoachAvatar } from "@/components/coach/CoachAvatar"
 
@@ -40,10 +40,6 @@ export function CoachLaunchTile({ className }: CoachLaunchTileProps) {
           Ask anything · snap a meal photo for a calorie estimate
         </p>
       </div>
-      <span className="hidden items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground sm:flex">
-        <Camera className="size-3" aria-hidden />
-        Photo
-      </span>
       <ArrowRight
         className="size-4 shrink-0 text-muted-foreground transition-transform group-hover/coach:translate-x-0.5 group-hover/coach:text-primary"
         aria-hidden

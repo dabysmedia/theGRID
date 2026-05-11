@@ -1,16 +1,22 @@
 import "server-only"
 
 import { prisma } from "@/lib/prisma"
-import { format, startOfDay, subDays } from "date-fns"
+import { differenceInMinutes, format, startOfDay, subDays } from "date-fns"
 
 /**
  * Produces a compact, deterministic text snapshot of the user's recent state
- * for injection into the coach system prompt. Output is hard-capped near
- * ~1.8k characters (~450 tokens) to keep per-turn cost predictable.
+ * for injection into the coach system prompt. The snapshot is hard-capped near
+ * ~6k characters (~1.5k tokens) so the per-turn cost stays predictable while
+ * giving the coach visibility into every tracked surface on the site:
+ * goals, weight, nutrition (incl. logged meals), workouts, runs, sleep,
+ * recovery, injuries + treatments, journal, habits, steps, alcohol, bowel
+ * movements, and the current fasting profile.
  */
 
-const MAX_CHARS = 1800
+const MAX_CHARS = 6000
 const LOOKBACK_DAYS = 7
+/** Wider window for slow-moving signals like weigh-ins. */
+const WEIGHT_LOOKBACK_DAYS = 30
 
 interface BuildContextOptions {
   userId: string
@@ -29,7 +35,9 @@ export async function buildUserContext(
   const now = opts.now ?? new Date()
   const today = startOfDay(now)
   const since = subDays(today, LOOKBACK_DAYS - 1)
+  const weightSince = subDays(today, WEIGHT_LOOKBACK_DAYS - 1)
   const todayLabel = format(today, "EEEE, MMM d, yyyy")
+  const todayKey = ymd(today)
 
   const [
     user,
@@ -42,10 +50,18 @@ export async function buildUserContext(
     recovery,
     injuries,
     journalEntries,
+    bodyweightGoal,
+    steps,
+    bowel,
+    alcohol,
+    habits,
+    habitCompletions,
+    treatmentLogs,
+    fasting,
   ] = await Promise.all([
     prisma.user.findUnique({
       where: { id: opts.userId },
-      select: { name: true, vacationResumeDate: true },
+      select: { name: true, vacationResumeDate: true, timeZone: true },
     }),
     prisma.goal.findMany({
       where: { userId: opts.userId, active: true },
@@ -55,7 +71,7 @@ export async function buildUserContext(
     prisma.longGoal.findMany({
       where: { userId: opts.userId, active: true },
       select: { name: true, category: true, target: true, unit: true, direction: true },
-      take: 6,
+      take: 8,
     }),
     prisma.workoutSession.findMany({
       where: {
@@ -63,7 +79,13 @@ export async function buildUserContext(
         date: { gte: since },
         status: { in: ["completed", "active"] },
       },
-      select: { name: true, date: true, duration: true, status: true },
+      select: {
+        name: true,
+        date: true,
+        duration: true,
+        status: true,
+        bodyWeightLb: true,
+      },
       orderBy: { date: "desc" },
       take: 14,
     }),
@@ -75,7 +97,17 @@ export async function buildUserContext(
     }),
     prisma.calorieEntry.findMany({
       where: { userId: opts.userId, date: { gte: since } },
-      select: { date: true, calories: true, protein: true },
+      select: {
+        date: true,
+        mealType: true,
+        description: true,
+        calories: true,
+        protein: true,
+        carbs: true,
+        fat: true,
+        createdAt: true,
+      },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     }),
     prisma.sleepEntry.findMany({
       where: { userId: opts.userId, date: { gte: since } },
@@ -118,17 +150,99 @@ export async function buildUserContext(
       orderBy: { date: "desc" },
       take: 7,
     }),
+    // Bodyweight is stored as a LongGoal of category="bodyweight" with one
+    // LongGoalEntry per weigh-in (see /api/weigh-in). Fetch the goal here so
+    // we can pull entries in a follow-up query only when one exists.
+    prisma.longGoal.findFirst({
+      where: { userId: opts.userId, category: "bodyweight" },
+      select: { id: true, unit: true, target: true, direction: true },
+    }),
+    prisma.stepEntry.findMany({
+      where: { userId: opts.userId, date: { gte: since } },
+      select: { date: true, count: true },
+      orderBy: { date: "desc" },
+    }),
+    prisma.bowelEntry.findMany({
+      where: { userId: opts.userId, date: { gte: since } },
+      select: { date: true, time: true, bristolScale: true, notes: true },
+      orderBy: { time: "desc" },
+      take: 12,
+    }),
+    prisma.alcoholEntry.findMany({
+      where: { userId: opts.userId, date: { gte: since } },
+      select: { date: true, drinkType: true, quantity: true, units: true },
+      orderBy: { date: "desc" },
+    }),
+    prisma.habit.findMany({
+      where: { userId: opts.userId, archived: false },
+      select: { id: true, name: true, frequency: true },
+      orderBy: { sortOrder: "asc" },
+      take: 12,
+    }),
+    prisma.habitCompletion.findMany({
+      where: {
+        habit: { userId: opts.userId },
+        date: { gte: since },
+      },
+      select: { habitId: true, date: true },
+    }),
+    prisma.treatmentLog.findMany({
+      where: { userId: opts.userId, date: { gte: since } },
+      select: {
+        date: true,
+        treatmentKey: true,
+        completed: true,
+        injury: { select: { conditionKey: true, customLabel: true } },
+      },
+      orderBy: { date: "desc" },
+      take: 10,
+    }),
+    prisma.fastingProfile.findUnique({
+      where: { userId: opts.userId },
+      select: {
+        fastHours: true,
+        eatHours: true,
+        mode: true,
+        lastMealAtMs: true,
+        eatWindowStartMinutes: true,
+      },
+    }),
   ])
+
+  // Bodyweight history (gated on the goal existing — most users have one).
+  const bodyweightEntries = bodyweightGoal
+    ? await prisma.longGoalEntry.findMany({
+        where: { goalId: bodyweightGoal.id, date: { gte: weightSince } },
+        select: { date: true, value: true },
+        orderBy: { date: "desc" },
+        take: 30,
+      })
+    : []
 
   const userName = user?.name ?? "Friend"
   const onVacation = isVacationActive(user?.vacationResumeDate ?? null, today)
 
+  // ── Aggregations ───────────────────────────────────────────────────────────
   const calsByDay = sumByDay(calorieEntries.map((e) => ({ date: e.date, value: e.calories })))
   const proteinByDay = sumByDay(
     calorieEntries.map((e) => ({ date: e.date, value: e.protein ?? 0 }))
   )
+  const carbsByDay = sumByDay(
+    calorieEntries.map((e) => ({ date: e.date, value: e.carbs ?? 0 }))
+  )
+  const fatByDay = sumByDay(
+    calorieEntries.map((e) => ({ date: e.date, value: e.fat ?? 0 }))
+  )
   const cals7Avg = avg(Object.values(calsByDay))
   const protein7Avg = avg(Object.values(proteinByDay))
+  const carbs7Avg = avg(Object.values(carbsByDay))
+  const fat7Avg = avg(Object.values(fatByDay))
+
+  const todaysMeals = calorieEntries.filter((e) => ymd(e.date) === todayKey)
+  const todaysCals = sum(todaysMeals.map((m) => m.calories))
+  const todaysProtein = sum(todaysMeals.map((m) => m.protein ?? 0))
+  const todaysCarbs = sum(todaysMeals.map((m) => m.carbs ?? 0))
+  const todaysFat = sum(todaysMeals.map((m) => m.fat ?? 0))
 
   const sleepHrsByDay = sleepEntries
     .map((e) => ({
@@ -139,6 +253,9 @@ export async function buildUserContext(
     .filter((s) => s.hrs > 0)
   const sleep7AvgHrs = avg(sleepHrsByDay.map((s) => s.hrs))
   const sleep7AvgQual = avg(sleepHrsByDay.map((s) => s.qual))
+
+  const stepsByDay = sumByDay(steps.map((s) => ({ date: s.date, value: s.count })))
+  const steps7Avg = avg(Object.values(stepsByDay))
 
   const last = recovery[0]
   const recoveryAvgs =
@@ -152,11 +269,17 @@ export async function buildUserContext(
         }
       : null
 
+  const habitCompletionCount: Record<string, number> = {}
+  for (const c of habitCompletions) {
+    habitCompletionCount[c.habitId] = (habitCompletionCount[c.habitId] ?? 0) + 1
+  }
+
   const lines: string[] = []
   lines.push(`Today is ${todayLabel}.`)
   lines.push(`User: ${userName}.`)
   if (onVacation) lines.push("Status: VACATION MODE — calorie tracking is paused.")
 
+  // ── Goals ──────────────────────────────────────────────────────────────────
   if (goals.length > 0) {
     lines.push("Active goals:")
     for (const g of goals) {
@@ -175,34 +298,132 @@ export async function buildUserContext(
     }
   }
 
-  lines.push(`Last ${LOOKBACK_DAYS}d nutrition: avg ${fmtNum(cals7Avg)} kcal/day, avg ${fmtNum(
-    protein7Avg
-  )} g protein/day.`)
+  // ── Bodyweight ─────────────────────────────────────────────────────────────
+  if (bodyweightGoal && bodyweightEntries.length > 0) {
+    const unit = bodyweightGoal.unit || "lb"
+    const latest = bodyweightEntries[0]
+    const oldest = bodyweightEntries[bodyweightEntries.length - 1]
+    const target =
+      bodyweightGoal.target && bodyweightGoal.target > 0
+        ? `, target ${fmtNum(bodyweightGoal.target, 1)} ${unit} (${bodyweightGoal.direction})`
+        : ""
+    const trend =
+      bodyweightEntries.length >= 2
+        ? ` — ${signed(latest.value - oldest.value, 1)} ${unit} over ${bodyweightEntries.length} weigh-ins (${WEIGHT_LOOKBACK_DAYS}d)`
+        : ""
+    lines.push(
+      `Bodyweight: ${fmtNum(latest.value, 1)} ${unit} on ${ymd(latest.date)}${trend}${target}.`
+    )
+    if (bodyweightEntries.length > 1) {
+      const recent = bodyweightEntries
+        .slice(0, 4)
+        .map((e) => `${ymd(e.date)} ${fmtNum(e.value, 1)}`)
+        .join(", ")
+      lines.push(`  Recent weigh-ins: ${recent}.`)
+    }
+  } else {
+    lines.push("Bodyweight: (no weigh-ins logged)")
+  }
 
+  // ── Nutrition ──────────────────────────────────────────────────────────────
   lines.push(
-    `Last ${LOOKBACK_DAYS}d sleep: avg ${fmtNum(sleep7AvgHrs, 1)} hrs/night, avg quality ${fmtNum(
+    `Nutrition ${LOOKBACK_DAYS}d avg: ${fmtNum(cals7Avg)} kcal, ${fmtNum(protein7Avg)}P / ${fmtNum(
+      carbs7Avg
+    )}C / ${fmtNum(fat7Avg)}F g per day (${Object.keys(calsByDay).length} days logged).`
+  )
+  if (todaysMeals.length > 0) {
+    lines.push(
+      `Today (${todayKey}): ${fmtNum(todaysCals)} kcal so far, ${fmtNum(
+        todaysProtein
+      )}P / ${fmtNum(todaysCarbs)}C / ${fmtNum(todaysFat)}F g, ${todaysMeals.length} meal(s):`
+    )
+    for (const m of todaysMeals.slice(0, 8)) {
+      const desc = m.description ? truncate(m.description, 60) : "(no description)"
+      lines.push(`  - [${m.mealType}] ${desc} — ${m.calories} kcal`)
+    }
+  } else {
+    lines.push(`Today (${todayKey}): no meals logged yet.`)
+  }
+  // Yesterday & day-before quick glance, useful for trend questions.
+  const recentMealDays = Object.keys(calsByDay)
+    .filter((k) => k !== todayKey)
+    .sort()
+    .reverse()
+    .slice(0, 2)
+  if (recentMealDays.length > 0) {
+    const parts = recentMealDays.map(
+      (k) => `${k} ${Math.round(calsByDay[k])} kcal / ${Math.round(proteinByDay[k] ?? 0)}P`
+    )
+    lines.push(`  Prior days: ${parts.join("; ")}.`)
+  }
+
+  // ── Sleep ──────────────────────────────────────────────────────────────────
+  lines.push(
+    `Sleep ${LOOKBACK_DAYS}d: avg ${fmtNum(sleep7AvgHrs, 1)} hrs/night, quality ${fmtNum(
       sleep7AvgQual,
       1
-    )}/5 (${sleepHrsByDay.length} nights logged).`
+    )}/5 (${sleepHrsByDay.length} nights).`
   )
+  if (sleepHrsByDay.length > 0) {
+    const recent = sleepHrsByDay
+      .slice(0, 4)
+      .map((s) => `${s.key} ${fmtNum(s.hrs, 1)}h q${s.qual}`)
+      .join(", ")
+    lines.push(`  Recent nights: ${recent}.`)
+  }
 
+  // ── Steps ──────────────────────────────────────────────────────────────────
+  if (Object.keys(stepsByDay).length > 0) {
+    const todaysSteps = stepsByDay[todayKey]
+    lines.push(
+      `Steps ${LOOKBACK_DAYS}d avg: ${fmtNum(steps7Avg)}/day${
+        typeof todaysSteps === "number" ? ` (today ${fmtNum(todaysSteps)})` : ""
+      }.`
+    )
+  } else {
+    lines.push("Steps: (none logged)")
+  }
+
+  // ── Workouts ───────────────────────────────────────────────────────────────
   if (workoutSessions.length > 0) {
-    lines.push(`Recent workouts (${workoutSessions.length}):`)
-    for (const w of workoutSessions.slice(0, 5)) {
+    lines.push(`Recent workouts (${workoutSessions.length} in ${LOOKBACK_DAYS}d):`)
+    for (const w of workoutSessions.slice(0, 6)) {
       const mins = w.duration ? `${Math.round(w.duration / 60)}m` : "?"
-      lines.push(`  - ${ymd(w.date)} — ${w.name} (${mins}, ${w.status})`)
+      const bw = w.bodyWeightLb ? `, BW ${fmtNum(w.bodyWeightLb, 1)}lb` : ""
+      lines.push(`  - ${ymd(w.date)} — ${w.name} (${mins}, ${w.status}${bw})`)
     }
   } else {
     lines.push(`Recent workouts: none in last ${LOOKBACK_DAYS}d.`)
   }
 
+  // ── Runs ───────────────────────────────────────────────────────────────────
   if (runs.length > 0) {
     const totalMi = runs.reduce((s, r) => s + r.distance, 0)
+    const totalMin = runs.reduce((s, r) => s + r.duration, 0) / 60
     lines.push(
-      `Recent runs (${runs.length}): ${fmtNum(totalMi, 1)} mi total over last ${LOOKBACK_DAYS}d.`
+      `Recent runs (${runs.length}): ${fmtNum(totalMi, 1)} mi total, ${fmtNum(
+        totalMin
+      )} min over last ${LOOKBACK_DAYS}d.`
     )
+    for (const r of runs.slice(0, 4)) {
+      lines.push(
+        `  - ${ymd(r.date)} — ${fmtNum(r.distance, 1)} mi in ${Math.round(
+          r.duration / 60
+        )} min (${r.environment})`
+      )
+    }
   }
 
+  // ── Habits ─────────────────────────────────────────────────────────────────
+  if (habits.length > 0) {
+    lines.push(`Habits (last ${LOOKBACK_DAYS}d hit-rate):`)
+    for (const h of habits) {
+      const hits = habitCompletionCount[h.id] ?? 0
+      lines.push(`  - ${h.name} (${h.frequency}): ${hits}/${LOOKBACK_DAYS}`)
+    }
+  }
+
+  // ── Recovery ───────────────────────────────────────────────────────────────
   if (last) {
     lines.push(
       `Latest recovery (${ymd(last.date)}): pain ${last.pain}/10, energy ${last.energy}/10, mood ${
@@ -224,6 +445,7 @@ export async function buildUserContext(
     )
   }
 
+  // ── Injuries / Treatments ──────────────────────────────────────────────────
   if (injuries.length > 0) {
     lines.push("Active injuries / illness:")
     for (const inj of injuries.slice(0, 5)) {
@@ -235,19 +457,97 @@ export async function buildUserContext(
       )
     }
   }
+  if (treatmentLogs.length > 0) {
+    lines.push(`Recent treatments (${treatmentLogs.length} in ${LOOKBACK_DAYS}d):`)
+    for (const t of treatmentLogs.slice(0, 5)) {
+      const label = t.injury?.customLabel || t.injury?.conditionKey || "unknown"
+      lines.push(
+        `  - ${ymd(t.date)} — ${t.treatmentKey} for ${label}${t.completed ? "" : " (skipped)"}`
+      )
+    }
+  }
 
+  // ── Journal ────────────────────────────────────────────────────────────────
   if (journalEntries.length > 0) {
     const moodScores = journalEntries
       .map((j) => j.mood)
       .filter((m): m is number => typeof m === "number" && m > 0)
     if (moodScores.length > 0) {
       lines.push(
-        `Recent journal mood: avg ${fmtNum(avg(moodScores), 1)}/5 over ${moodScores.length} entries.`
+        `Journal mood: avg ${fmtNum(avg(moodScores), 1)}/5 over ${moodScores.length} entries.`
       )
     }
-    const latest = journalEntries[0]
-    if (latest?.content) {
-      lines.push(`Latest journal note (${ymd(latest.date)}): "${truncate(latest.content, 160)}"`)
+    const withContent = journalEntries.filter((j) => j.content && j.content.trim().length > 0)
+    for (const j of withContent.slice(0, 2)) {
+      lines.push(`  - ${ymd(j.date)} note: "${truncate(j.content, 200)}"`)
+    }
+  }
+
+  // ── Bowel ──────────────────────────────────────────────────────────────────
+  if (bowel.length > 0) {
+    const avgScale = avg(bowel.map((b) => b.bristolScale))
+    lines.push(
+      `Bowel (${bowel.length} in ${LOOKBACK_DAYS}d): avg Bristol ${fmtNum(avgScale, 1)}/7.`
+    )
+    for (const b of bowel.slice(0, 3)) {
+      const noteSuffix = b.notes ? ` — "${truncate(b.notes, 60)}"` : ""
+      lines.push(
+        `  - ${ymd(b.date)} ${format(b.time, "HH:mm")} Bristol ${b.bristolScale}${noteSuffix}`
+      )
+    }
+  }
+
+  // ── Alcohol ────────────────────────────────────────────────────────────────
+  if (alcohol.length > 0) {
+    const totalUnits = sum(alcohol.map((a) => a.units))
+    lines.push(
+      `Alcohol (${alcohol.length} drinks in ${LOOKBACK_DAYS}d): ${fmtNum(
+        totalUnits,
+        1
+      )} std drinks total.`
+    )
+    for (const a of alcohol.slice(0, 3)) {
+      lines.push(
+        `  - ${ymd(a.date)} ${a.drinkType} ×${fmtNum(a.quantity, 1)} (${fmtNum(a.units, 1)} u)`
+      )
+    }
+  } else {
+    lines.push("Alcohol: none in last 7d.")
+  }
+
+  // ── Fasting ────────────────────────────────────────────────────────────────
+  if (fasting) {
+    const baseLine = `Fasting profile: ${fasting.fastHours}:${fasting.eatHours} (${fasting.mode}).`
+    if (fasting.mode === "anchored" && fasting.lastMealAtMs) {
+      const lastMealMs = Number(fasting.lastMealAtMs)
+      if (Number.isFinite(lastMealMs)) {
+        const minsSince = differenceInMinutes(now, new Date(lastMealMs))
+        const hrsSince = minsSince / 60
+        const eatWindowEnd = lastMealMs + fasting.eatHours * 60 * 60 * 1000
+        const fastEnd = eatWindowEnd + fasting.fastHours * 60 * 60 * 1000
+        const phase =
+          now.getTime() < eatWindowEnd
+            ? `eating window (closes in ${fmtNum((eatWindowEnd - now.getTime()) / 3_600_000, 1)}h)`
+            : now.getTime() < fastEnd
+              ? `fasting (${fmtNum(
+                  (now.getTime() - eatWindowEnd) / 3_600_000,
+                  1
+                )}h in, ${fmtNum((fastEnd - now.getTime()) / 3_600_000, 1)}h to go)`
+              : `fast complete (${fmtNum((now.getTime() - fastEnd) / 3_600_000, 1)}h past target)`
+        lines.push(
+          `${baseLine} Last meal ${fmtNum(hrsSince, 1)}h ago — currently in ${phase}.`
+        )
+      } else {
+        lines.push(baseLine)
+      }
+    } else if (fasting.mode === "clock") {
+      const startH = Math.floor(fasting.eatWindowStartMinutes / 60)
+      const startM = fasting.eatWindowStartMinutes % 60
+      lines.push(
+        `${baseLine} Eating window opens at ${pad2(startH)}:${pad2(startM)} local each day.`
+      )
+    } else {
+      lines.push(baseLine)
     }
   }
 
@@ -266,6 +566,14 @@ function sumByDay(rows: Array<{ date: Date; value: number }>): Record<string, nu
     map[k] = (map[k] ?? 0) + (r.value ?? 0)
   }
   return map
+}
+
+function sum(values: number[]): number {
+  let total = 0
+  for (const v of values) {
+    if (Number.isFinite(v)) total += v
+  }
+  return total
 }
 
 function avg(values: number[]): number {
@@ -287,6 +595,16 @@ function ymd(d: Date): string {
 function fmtNum(n: number, digits = 0): string {
   if (!Number.isFinite(n) || n === 0) return "0"
   return digits === 0 ? String(Math.round(n)) : n.toFixed(digits)
+}
+
+function signed(n: number, digits = 0): string {
+  if (!Number.isFinite(n)) return "0"
+  const sign = n > 0 ? "+" : ""
+  return `${sign}${digits === 0 ? Math.round(n) : n.toFixed(digits)}`
+}
+
+function pad2(n: number): string {
+  return String(Math.max(0, Math.round(n))).padStart(2, "0")
 }
 
 function truncate(s: string, max: number): string {

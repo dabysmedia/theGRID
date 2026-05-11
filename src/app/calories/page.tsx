@@ -11,7 +11,23 @@ import { createPortal } from "react-dom"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { addDays, differenceInCalendarDays, endOfWeek, format, startOfWeek, subDays } from "date-fns"
-import { ChevronDown, Search, Trash2, Plus, Star, X, Pencil, Target, Check } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
+import {
+  ChevronDown,
+  Search,
+  Trash2,
+  Plus,
+  Star,
+  X,
+  Pencil,
+  Target,
+  Check,
+  Sunrise,
+  Sun,
+  UtensilsCrossed,
+  Cookie,
+  Utensils,
+} from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -94,6 +110,15 @@ type PendingDelete =
 
 const mealTypes = ["breakfast", "lunch", "dinner", "snack"] as const
 const mealTypeSet = new Set<string>(mealTypes)
+
+function mealHistoryIcon(mealType: string): LucideIcon {
+  const t = mealType.toLowerCase().trim()
+  if (t === "breakfast") return Sunrise
+  if (t === "lunch") return Sun
+  if (t === "dinner") return UtensilsCrossed
+  if (t === "snack") return Cookie
+  return Utensils
+}
 
 function OpenLogFoodFromQuery({ setOpen }: { setOpen: (open: boolean) => void }) {
   const searchParams = useSearchParams()
@@ -349,15 +374,19 @@ function CaloriesHistoryDayAccordion({
       {open && (
         <div className="border-t border-glass-border/30 bg-muted/15">
           <ul className="divide-y divide-glass-border/20">
-            {items.map((entry) => (
+            {items.map((entry) => {
+              const MealIcon = mealHistoryIcon(entry.mealType)
+              return (
               <li
                 key={entry.id}
                 className="flex items-stretch gap-3 px-3 py-2.5 transition-colors hover:bg-glass-highlight/10 group/row"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-glass-border/40 bg-[#ef4444]/8">
-                  <span className="text-sm font-semibold capitalize text-[#ef4444]">
-                    {entry.mealType.charAt(0)}
-                  </span>
+                <div
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-glass-border/40 bg-muted/30 text-muted-foreground"
+                  aria-hidden
+                  title={entry.mealType}
+                >
+                  <MealIcon className="size-5 shrink-0 stroke-[1.75]" />
                 </div>
                 <div className="min-w-0 flex-1 py-0.5">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
@@ -423,7 +452,8 @@ function CaloriesHistoryDayAccordion({
                   </button>
                 </div>
               </li>
-            ))}
+              )
+            })}
           </ul>
         </div>
       )}
