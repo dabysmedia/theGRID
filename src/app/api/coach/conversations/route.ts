@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId, UserError } from "@/lib/current-user"
-import {
-  DEFAULT_COACH_MODEL_ID,
-  isValidCoachModelId,
-} from "@/lib/coach/models"
+import { DEFAULT_COACH_MODEL_ID } from "@/lib/coach/models"
+import { DEFAULT_COACH_TONE_ID, isValidCoachToneId } from "@/lib/coach/tones"
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,6 +14,7 @@ export async function GET(req: NextRequest) {
         id: true,
         title: true,
         defaultModelId: true,
+        defaultTone: true,
         createdAt: true,
         updatedAt: true,
         messages: {
@@ -31,6 +30,7 @@ export async function GET(req: NextRequest) {
       id: c.id,
       title: c.title,
       defaultModelId: c.defaultModelId,
+      defaultTone: c.defaultTone ?? DEFAULT_COACH_TONE_ID,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
       lastMessagePreview: c.messages[0]?.content?.slice(0, 140) ?? "",
@@ -53,17 +53,23 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}))
     const rawTitle = typeof body?.title === "string" ? body.title.trim() : ""
     const title = rawTitle.length > 0 ? rawTitle.slice(0, 120) : "New chat"
-    const requestedModel = body?.defaultModelId
-    const defaultModelId = isValidCoachModelId(requestedModel)
-      ? requestedModel
-      : DEFAULT_COACH_MODEL_ID
+    const defaultTone = isValidCoachToneId(body?.defaultTone)
+      ? body.defaultTone
+      : DEFAULT_COACH_TONE_ID
 
     const conversation = await prisma.coachConversation.create({
-      data: { title, defaultModelId, userId },
+      data: {
+        title,
+        // Model picker is gone — every conversation uses the default chat model.
+        defaultModelId: DEFAULT_COACH_MODEL_ID,
+        defaultTone,
+        userId,
+      },
       select: {
         id: true,
         title: true,
         defaultModelId: true,
+        defaultTone: true,
         createdAt: true,
         updatedAt: true,
       },

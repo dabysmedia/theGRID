@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { MessagesSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -15,10 +15,10 @@ import { ChatComposer } from "@/components/coach/ChatComposer"
 import { ChatMessage } from "@/components/coach/ChatMessage"
 import { ConversationList } from "@/components/coach/ConversationList"
 import {
-  COACH_MODELS,
-  DEFAULT_COACH_MODEL_ID,
-  isValidCoachModelId,
-} from "@/lib/coach/models"
+  DEFAULT_COACH_TONE_ID,
+  isValidCoachToneId,
+  type CoachToneId,
+} from "@/lib/coach/tones"
 import type {
   CoachAttachmentClient,
   CoachConversationDetail,
@@ -28,7 +28,7 @@ import type {
 import { cn } from "@/lib/utils"
 import { CoachAvatar } from "@/components/coach/CoachAvatar"
 
-const MODEL_STORAGE_KEY = "theGRID_coachModel"
+const TONE_STORAGE_KEY = "theGRID_coachTone"
 const ACTIVE_CONVERSATION_STORAGE_PREFIX = "theGRID_coachActiveConversation_"
 
 interface UIMessage extends CoachMessageClient {
@@ -38,24 +38,24 @@ interface UIMessage extends CoachMessageClient {
   optimistic?: boolean
 }
 
-function rememberModel(id: string) {
+function rememberTone(id: CoachToneId) {
   try {
-    if (typeof window !== "undefined") localStorage.setItem(MODEL_STORAGE_KEY, id)
+    if (typeof window !== "undefined") localStorage.setItem(TONE_STORAGE_KEY, id)
   } catch {
     /* ignore */
   }
 }
 
-function recallModel(): string {
+function recallTone(): CoachToneId {
   try {
     if (typeof window !== "undefined") {
-      const v = localStorage.getItem(MODEL_STORAGE_KEY)
-      if (v && isValidCoachModelId(v)) return v
+      const v = localStorage.getItem(TONE_STORAGE_KEY)
+      if (v && isValidCoachToneId(v)) return v
     }
   } catch {
     /* ignore */
   }
-  return DEFAULT_COACH_MODEL_ID
+  return DEFAULT_COACH_TONE_ID
 }
 
 /** Per-user storage key — switching profile must not leak conversation ids. */
@@ -90,24 +90,24 @@ export default function CoachPage() {
   const [conversations, setConversations] = useState<CoachConversationListItem[]>([])
   const [loadingList, setLoadingList] = useState(true)
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [activeTitle, setActiveTitle] = useState<string>("AI Coach")
   const [messages, setMessages] = useState<UIMessage[]>([])
   const [loadingThread, setLoadingThread] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [modelId, setModelId] = useState<string>(DEFAULT_COACH_MODEL_ID)
+  const [tone, setTone] = useState<CoachToneId>(DEFAULT_COACH_TONE_ID)
   const [conversationsOpen, setConversationsOpen] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Persist/restore model picker.
+  // Persist/restore tone selection (used as the default for new chats and
+  // re-applied when no per-conversation tone is set yet).
   useEffect(() => {
-    setModelId(recallModel())
+    setTone(recallTone())
   }, [])
   useEffect(() => {
-    rememberModel(modelId)
-  }, [modelId])
+    rememberTone(tone)
+  }, [tone])
 
   // Load conversations list (re-runs when user switches profile).
   const loadList = useCallback(async () => {
@@ -161,7 +161,6 @@ export default function CoachPage() {
   useEffect(() => {
     if (!activeId) {
       setMessages([])
-      setActiveTitle("AI Coach")
       return
     }
     let cancelled = false
@@ -175,9 +174,8 @@ export default function CoachPage() {
         const data: CoachConversationDetail = await res.json()
         if (cancelled) return
         setMessages(data.messages.map((m) => ({ ...m })))
-        setActiveTitle(data.title)
-        if (data.defaultModelId && isValidCoachModelId(data.defaultModelId)) {
-          setModelId(data.defaultModelId)
+        if (data.defaultTone && isValidCoachToneId(data.defaultTone)) {
+          setTone(data.defaultTone)
         }
       } catch (e) {
         if (!cancelled) {
@@ -205,13 +203,12 @@ export default function CoachPage() {
       const res = await apiFetch("/api/coach/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ defaultModelId: modelId }),
+        body: JSON.stringify({ defaultTone: tone }),
       })
       if (!res.ok) throw new Error("Failed to create conversation")
       const conv = await res.json()
       await loadList()
       setActiveId(conv.id)
-      setActiveTitle(conv.title)
       setMessages([])
       setConversationsOpen(false)
       return conv.id as string
@@ -219,7 +216,7 @@ export default function CoachPage() {
       setError(e instanceof Error ? e.message : "Failed to create conversation")
       return null
     }
-  }, [modelId, loadList])
+  }, [tone, loadList])
 
   const handleDeleteConversation = useCallback(
     async (id: string) => {
@@ -290,7 +287,7 @@ export default function CoachPage() {
         role: "assistant",
         content: "",
         attachments: [],
-        modelId,
+        modelId: null,
         tokensIn: 0,
         tokensOut: 0,
         createdAt: new Date().toISOString(),
@@ -310,7 +307,7 @@ export default function CoachPage() {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, modelId, attachments }),
+            body: JSON.stringify({ text, tone, attachments }),
             signal: controller.signal,
           }
         )
@@ -319,17 +316,6 @@ export default function CoachPage() {
             .json()
             .catch(() => ({ error: `Request failed (${res.status})` }))
           throw new Error(errBody?.error || `Request failed (${res.status})`)
-        }
-
-        // Pull any new title sent in headers.
-        const titleHeader = res.headers.get("X-Coach-Title")
-        if (titleHeader) {
-          try {
-            const decoded = decodeURIComponent(titleHeader)
-            if (decoded) setActiveTitle(decoded)
-          } catch {
-            /* ignore malformed header */
-          }
         }
 
         const reader = res.body.getReader()
@@ -430,22 +416,17 @@ export default function CoachPage() {
         }
       }
     },
-    [activeId, modelId, handleCreateConversation, loadList]
+    [activeId, tone, handleCreateConversation, loadList]
   )
 
-  const headerSubtitle = useMemo(() => {
-    if (!activeId) return "Pick a conversation or start a new chat."
-    return COACH_MODELS[modelId]?.label
-  }, [activeId, modelId])
-
   return (
-    <div className="flex min-h-0 flex-col gap-4">
-      <PageHeader title="AI COACH" />
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+      <PageHeader title="Coach" />
 
-      <div className="flex flex-1 min-h-0 flex-col gap-4 md:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden md:flex-row md:items-stretch">
         {/* Sidebar — always visible on md+, sheet on mobile */}
-        <aside className="hidden md:flex md:w-72 md:shrink-0 md:flex-col">
-          <div className="glass flex h-[calc(100dvh-16rem)] flex-col gap-3 rounded-2xl p-3">
+        <aside className="hidden min-h-0 overflow-hidden md:flex md:w-72 md:shrink-0 md:flex-col">
+          <div className="glass flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-2xl p-3">
             <ConversationList
               conversations={conversations}
               activeId={activeId}
@@ -457,53 +438,43 @@ export default function CoachPage() {
           </div>
         </aside>
 
-        <section className="flex min-h-0 flex-1 flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h2 className="truncate font-heading text-lg font-medium">
-                {activeTitle}
-              </h2>
-              <p className="truncate text-xs text-muted-foreground">
-                {headerSubtitle}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 md:hidden">
-              <Sheet open={conversationsOpen} onOpenChange={setConversationsOpen}>
-                <SheetTrigger
-                  render={
-                    <Button variant="outline" size="sm" aria-label="Open conversations">
-                      <MessagesSquare className="size-4" aria-hidden />
-                      Chats
-                    </Button>
-                  }
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden">
+          <div className="flex shrink-0 justify-end md:hidden">
+            <Sheet open={conversationsOpen} onOpenChange={setConversationsOpen}>
+              <SheetTrigger
+                render={
+                  <Button variant="outline" size="sm" aria-label="Open conversations">
+                    <MessagesSquare className="size-4" aria-hidden />
+                    Chats
+                  </Button>
+                }
+              />
+              <SheetContent side="left" className="w-80 max-w-[85vw] p-3">
+                <ConversationList
+                  conversations={conversations}
+                  activeId={activeId}
+                  onSelect={handleSelectConversation}
+                  onCreate={() => void handleCreateConversation()}
+                  onDelete={handleDeleteConversation}
+                  loading={loadingList}
                 />
-                <SheetContent side="left" className="w-80 max-w-[85vw] p-3">
-                  <ConversationList
-                    conversations={conversations}
-                    activeId={activeId}
-                    onSelect={handleSelectConversation}
-                    onCreate={() => void handleCreateConversation()}
-                    onDelete={handleDeleteConversation}
-                    loading={loadingList}
-                  />
-                </SheetContent>
-              </Sheet>
-            </div>
+              </SheetContent>
+            </Sheet>
           </div>
 
+          {/* Messages — grows to fill space above the composer */}
           <div
             className={cn(
-              "glass relative flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-2xl p-3",
-              "min-h-[calc(100dvh-22rem)]"
+              "glass relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl p-3"
             )}
           >
             {error && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
+              <div className="shrink-0 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
                 {error}
               </div>
             )}
 
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-y-contain pr-1">
               {/*
                 Empty state only appears when the user truly has zero
                 conversations. Returning users auto-resume their last chat,
@@ -528,16 +499,23 @@ export default function CoachPage() {
                   role={m.role}
                   content={m.content}
                   attachments={m.attachments}
-                  modelId={m.modelId ?? undefined}
                   streaming={m.streaming}
                 />
               ))}
               <div ref={messagesEndRef} />
             </div>
+          </div>
 
+          <div
+            className={cn(
+              "shrink-0 -mx-0.5 px-0.5 pt-1",
+              "bg-gradient-to-t from-background from-85% via-background/95 to-transparent pb-0.5",
+              "supports-[backdrop-filter]:backdrop-blur-[2px]"
+            )}
+          >
             <ChatComposer
-              modelId={modelId}
-              onModelChange={setModelId}
+              tone={tone}
+              onToneChange={setTone}
               onSubmit={handleSubmit}
               busy={sending}
               onStop={handleStop}
@@ -561,7 +539,7 @@ function EmptyState({ onStart }: { onStart: () => void }) {
         <CoachAvatar className="size-14" />
       </div>
       <div className="space-y-1">
-        <h3 className="font-heading text-lg">Your AI Coach</h3>
+        <h3 className="font-heading text-lg">Coach</h3>
         <p className="max-w-md text-sm text-muted-foreground">
           Ask about training, nutrition, recovery, sleep, or motivation. The
           coach can see your recent stats from theGRID. For meal-photo calorie

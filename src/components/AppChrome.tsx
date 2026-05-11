@@ -10,10 +10,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const { fullscreen } = useFullscreenOverlay()
 
   return (
-    <div className="flex min-h-dvh flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <main
         className={cn(
-          "mx-auto flex w-full max-w-full flex-1 flex-col",
+          "mx-auto flex w-full max-w-full min-h-0 flex-1 flex-col",
           "ps-[max(0.75rem,env(safe-area-inset-left,0px))] pe-[max(0.75rem,env(safe-area-inset-right,0px))]",
           "pt-[calc(env(safe-area-inset-top,0px)+2rem)]",
           fullscreen

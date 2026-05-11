@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId, UserError } from "@/lib/current-user"
 import { isValidCoachModelId } from "@/lib/coach/models"
+import { DEFAULT_COACH_TONE_ID, isValidCoachToneId } from "@/lib/coach/tones"
 import { deleteCoachUploadsByUrls } from "@/lib/coach/uploads"
 
 interface AttachmentRow {
@@ -39,6 +40,7 @@ export async function GET(
         id: true,
         title: true,
         defaultModelId: true,
+        defaultTone: true,
         createdAt: true,
         updatedAt: true,
         messages: {
@@ -83,6 +85,7 @@ export async function GET(
       id: conversation.id,
       title: conversation.title,
       defaultModelId: conversation.defaultModelId,
+      defaultTone: conversation.defaultTone ?? DEFAULT_COACH_TONE_ID,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
       messages,
@@ -116,7 +119,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Conversation not found." }, { status: 404 })
     }
 
-    const data: { title?: string; defaultModelId?: string | null } = {}
+    const data: {
+      title?: string
+      defaultModelId?: string | null
+      defaultTone?: string
+    } = {}
     if (typeof body.title === "string") {
       const t = body.title.trim().slice(0, 120)
       if (t.length === 0) {
@@ -133,6 +140,12 @@ export async function PATCH(
         return NextResponse.json({ error: "Unknown model id." }, { status: 400 })
       }
     }
+    if ("defaultTone" in body) {
+      if (!isValidCoachToneId(body.defaultTone)) {
+        return NextResponse.json({ error: "Unknown tone id." }, { status: 400 })
+      }
+      data.defaultTone = body.defaultTone
+    }
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: "Nothing to update." }, { status: 400 })
@@ -145,6 +158,7 @@ export async function PATCH(
         id: true,
         title: true,
         defaultModelId: true,
+        defaultTone: true,
         createdAt: true,
         updatedAt: true,
       },

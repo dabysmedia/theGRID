@@ -53,7 +53,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="flex min-h-dvh flex-col bg-background text-foreground relative overflow-x-hidden">
+      <body className="flex h-full min-h-dvh flex-col bg-background text-foreground relative overflow-x-hidden">
         <div className="page-bg" aria-hidden />
 
         {/* Subtle scan-line overlay */}
@@ -67,7 +67,7 @@ export default function RootLayout({
           }}
         />
 
-        <div className="relative z-0 flex min-h-dvh flex-1 flex-col">
+        <div className="relative z-0 flex min-h-0 flex-1 flex-col">
           <Providers>
             <AppChrome>{children}</AppChrome>
           </Providers>

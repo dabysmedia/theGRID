@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
 import type { CoachAttachmentClient } from "@/lib/coach/types"
-import { ModelPicker } from "./ModelPicker"
+import type { CoachToneId } from "@/lib/coach/tones"
+import { TonePicker } from "./TonePicker"
 
 interface ChatComposerProps {
-  modelId: string
-  onModelChange: (id: string) => void
+  tone: CoachToneId
+  onToneChange: (id: CoachToneId) => void
   onSubmit: (payload: {
     text: string
     attachments: CoachAttachmentClient[]
@@ -24,8 +25,8 @@ interface ChatComposerProps {
 }
 
 export function ChatComposer({
-  modelId,
-  onModelChange,
+  tone,
+  onToneChange,
   onSubmit,
   busy = false,
   onStop,
@@ -178,7 +179,7 @@ export function ChatComposer({
           <Paperclip className="size-4" aria-hidden />
         </Button>
 
-        <ModelPicker value={modelId} onChange={onModelChange} disabled={busy} />
+        <TonePicker value={tone} onChange={onToneChange} disabled={busy} />
 
         <span className="hidden text-[10px] uppercase tracking-wider text-muted-foreground/60 sm:inline">
           Cmd/Ctrl + Enter

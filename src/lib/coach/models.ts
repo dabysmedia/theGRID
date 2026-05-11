@@ -1,13 +1,14 @@
 /**
- * AI Coach model picker registry.
+ * AI Coach model registry.
  *
- * Keys are stable picker ids stored in `CoachConversation.defaultModelId` and
- * `CoachMessage.modelId`. The Anthropic model alias can be overridden per-deploy
- * via env so we can roll forward without a code change.
+ * Only one model is exposed today (`coach-chat`, Anthropic Haiku). The picker
+ * UI was removed in favor of a per-conversation tone selector — see
+ * `src/lib/coach/tones.ts`. The registry is kept so we can add tiers back
+ * without touching every call site, and so existing assistant rows still
+ * resolve their `modelId`.
  *
- * Both tiers must support vision since the photo→calorie estimate flow is part
- * of v1. Coach Chat is the cheap default; Deep Coach handles nuanced/longer
- * planning questions.
+ * The Anthropic alias can be overridden per-deploy via env so we can roll
+ * forward without a code change.
  */
 
 export type CoachModelTier = "fast" | "smart"
@@ -17,7 +18,7 @@ export interface CoachModelDef {
   id: string
   /** Short user-facing label. */
   label: string
-  /** One-line description for the picker UI. */
+  /** One-line description (used in tooltips/debug; no UI picker today). */
   description: string
   /** Anthropic model alias passed to the API. */
   anthropic: string
@@ -31,30 +32,19 @@ export interface CoachModelDef {
 // 4.6+ generation, dated for 4.5. We default to the exact IDs from
 // https://platform.claude.com/docs/en/claude_api_primer so a fresh checkout
 // works without env overrides; deploys can still pin a specific snapshot via
-// ANTHROPIC_HAIKU_MODEL / ANTHROPIC_SONNET_MODEL.
+// ANTHROPIC_HAIKU_MODEL.
 const HAIKU_ALIAS =
   process.env.ANTHROPIC_HAIKU_MODEL?.trim() || "claude-haiku-4-5-20251001"
-const SONNET_ALIAS =
-  process.env.ANTHROPIC_SONNET_MODEL?.trim() || "claude-sonnet-4-6"
 
 export const COACH_MODELS: Record<string, CoachModelDef> = {
   "coach-chat": {
     id: "coach-chat",
     label: "Coach Chat",
-    description: "Fast everyday chat. Best for nudges, quick questions, photo logging.",
+    description: "Fast everyday chat. Used for all coaching responses.",
     anthropic: HAIKU_ALIAS,
     tier: "fast",
     vision: true,
     maxOutputTokens: 800,
-  },
-  "deep-coach": {
-    id: "deep-coach",
-    label: "Deep Coach",
-    description: "Slower & smarter. Best for planning, tradeoffs, multi-week reviews.",
-    anthropic: SONNET_ALIAS,
-    tier: "smart",
-    vision: true,
-    maxOutputTokens: 1500,
   },
 }
 

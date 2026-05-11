@@ -25,6 +25,8 @@ export interface CoachConversationListItem {
   id: string
   title: string
   defaultModelId: string | null
+  /** Picker key from src/lib/coach/tones.ts. */
+  defaultTone: string
   createdAt: string
   updatedAt: string
   lastMessagePreview: string
@@ -36,6 +38,8 @@ export interface CoachConversationDetail {
   id: string
   title: string
   defaultModelId: string | null
+  /** Picker key from src/lib/coach/tones.ts. */
+  defaultTone: string
   createdAt: string
   updatedAt: string
   messages: CoachMessageClient[]

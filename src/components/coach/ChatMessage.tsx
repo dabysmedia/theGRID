@@ -1,17 +1,15 @@
 "use client"
 
-import { useMemo } from "react"
 import { cn } from "@/lib/utils"
-import { COACH_MODELS } from "@/lib/coach/models"
 import type { CoachAttachmentClient } from "@/lib/coach/types"
 import { MessageImage } from "./MessageImage"
 import { CoachAvatar } from "./CoachAvatar"
+import { CoachMarkdown } from "./CoachMarkdown"
 
 interface ChatMessageProps {
   role: "user" | "assistant" | "system"
   content: string
   attachments?: CoachAttachmentClient[]
-  modelId?: string | null
   streaming?: boolean
 }
 
@@ -19,14 +17,9 @@ export function ChatMessage({
   role,
   content,
   attachments,
-  modelId,
   streaming = false,
 }: ChatMessageProps) {
   const isUser = role === "user"
-  const modelLabel = useMemo(() => {
-    if (!modelId) return null
-    return COACH_MODELS[modelId]?.label ?? null
-  }, [modelId])
 
   if (role === "system") {
     // System messages prefixed with the warning emoji are surfaced from
@@ -76,18 +69,18 @@ export function ChatMessage({
           </div>
         )}
 
-        {content.length > 0 && (
-          <div className="whitespace-pre-wrap break-words">
-            {content}
-            {streaming && <span className="ml-0.5 inline-block animate-pulse">▍</span>}
-          </div>
-        )}
-
-        {!isUser && !streaming && modelLabel && (
-          <div className="-mb-1 text-[10px] uppercase tracking-wider text-muted-foreground/70">
-            {modelLabel}
-          </div>
-        )}
+        {content.length > 0 &&
+          (isUser ? (
+            <div className="whitespace-pre-wrap break-words">
+              {content}
+              {streaming && <span className="ml-0.5 inline-block animate-pulse">▍</span>}
+            </div>
+          ) : (
+            <div className="min-w-0 break-words">
+              <CoachMarkdown content={content} />
+              {streaming && <span className="ml-0.5 inline-block animate-pulse">▍</span>}
+            </div>
+          ))}
       </div>
     </div>
   )

@@ -5,7 +5,6 @@ import { resolveUserId, UserError } from "@/lib/current-user"
 import {
   COACH_MODELS,
   DEFAULT_COACH_MODEL_ID,
-  isValidCoachModelId,
 } from "@/lib/coach/models"
 import {
   CoachConfigError,
@@ -13,6 +12,7 @@ import {
 } from "@/lib/coach/anthropic"
 import { buildUserContext } from "@/lib/coach/context"
 import { coachChatSystemPrompt } from "@/lib/coach/prompts"
+import { DEFAULT_COACH_TONE_ID, isValidCoachToneId } from "@/lib/coach/tones"
 import {
   COACH_STREAM_HEADERS,
   createCoachStream,
@@ -149,7 +149,7 @@ export async function POST(
 
   let body: {
     text?: unknown
-    modelId?: unknown
+    tone?: unknown
     imagePaths?: unknown
     attachments?: unknown
   }
@@ -160,8 +160,10 @@ export async function POST(
   }
 
   const text = typeof body.text === "string" ? body.text.slice(0, MAX_USER_TEXT_CHARS) : ""
-  const modelKey = isValidCoachModelId(body.modelId) ? body.modelId : DEFAULT_COACH_MODEL_ID
+  // Model picker is gone — every coach reply uses the default chat model.
+  const modelKey = DEFAULT_COACH_MODEL_ID
   const model = COACH_MODELS[modelKey]
+  const toneKey = isValidCoachToneId(body.tone) ? body.tone : DEFAULT_COACH_TONE_ID
 
   // Accept either { attachments: [{kind,path,mime,name}] } or { imagePaths: ["/uploads/coach/..."] }
   let attachments: IncomingAttachment[] = []
@@ -194,6 +196,7 @@ export async function POST(
       id: true,
       title: true,
       defaultModelId: true,
+      defaultTone: true,
       messages: {
         orderBy: { createdAt: "asc" },
         select: { role: true, content: true, attachmentsJson: true, createdAt: true },
@@ -252,6 +255,7 @@ export async function POST(
       title: newTitle,
       updatedAt: new Date(),
       defaultModelId: modelKey,
+      defaultTone: toneKey,
     },
   })
 
@@ -270,7 +274,7 @@ export async function POST(
   const upstream = anthropic.messages.stream({
     model: model.anthropic,
     max_tokens: model.maxOutputTokens,
-    system: coachChatSystemPrompt({ userName, contextBlock }),
+    system: coachChatSystemPrompt({ userName, contextBlock, toneId: toneKey }),
     messages,
   })
 

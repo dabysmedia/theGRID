@@ -369,6 +369,8 @@ model CoachConversation {
   title          String         @default("New chat")
   /// Picker key from src/lib/coach/models.ts (null = use account default)
   defaultModelId String?
+  /// Coaching tone for this conversation: "standard" | "blunt"
+  defaultTone    String         @default("standard")
   userId         String?
   user           User?          @relation(fields: [userId], references: [id])
   messages       CoachMessage[]
