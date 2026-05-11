@@ -17,6 +17,7 @@ import { PageHeader } from "./PageHeader"
 import { WeeklyHero } from "./WeeklyHero"
 import { FastingTimer } from "./FastingTimer"
 import { FastingHubTile } from "./FastingHubTile"
+import { CoachLaunchTile } from "./coach/CoachLaunchTile"
 import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
 import { cn } from "@/lib/utils"
@@ -134,6 +135,10 @@ export function HubDashboard() {
           loading={loading}
           vacationBlocksCalories={vacationBlocksCalLog}
         />
+      </div>
+
+      <div className="animate-fade-up stagger-3">
+        <CoachLaunchTile />
       </div>
 
       <div className="animate-fade-up stagger-3">

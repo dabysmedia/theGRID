@@ -10,6 +10,7 @@ import {
   useState,
   type CSSProperties,
 } from "react"
+import type { LucideIcon } from "lucide-react"
 import {
   Home,
   NotebookPen,
@@ -20,12 +21,22 @@ import {
   ChevronRight,
   Utensils,
   Footprints,
+  Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
 import { useUser } from "@/context/UserContext"
 import { useActiveDate } from "@/context/DateContext"
 import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
+import { COACH_AVATAR_SRC } from "@/lib/coach/branding"
+
+type QuickActionItem = {
+  href: string
+  label: string
+  icon: LucideIcon
+  /** When set, shown instead of the Lucide icon (e.g. coach persona). */
+  avatarSrc?: string
+}
 
 const navItems = [
   { href: "/more", label: "Settings", icon: Settings },
@@ -35,14 +46,15 @@ const navItems = [
   { href: "/", label: "Home", icon: Home },
 ]
 
-const quickActions = [
+const quickActions: QuickActionItem[] = [
+  { href: "/coach", label: "Coach", icon: Sparkles, avatarSrc: COACH_AVATAR_SRC },
   {
     href: `/calories?${CALORIES_LOG_FOOD_QUERY}=1`,
     label: "Log Meal",
     icon: Utensils,
   },
   { href: "/steps", label: "Steps", icon: Footprints },
-] as const
+]
 
 const DOCK_EASE = "cubic-bezier(0.22, 1, 0.36, 1)"
 const PANEL_WIDTH = "min(calc(100vw - 5.25rem), 42rem)"
@@ -107,7 +119,7 @@ export function BottomNav() {
               className={cn(
                 "min-w-0 motion-safe:transition-[max-height,opacity] motion-safe:duration-500 motion-reduce:transition-none",
                 open
-                  ? "max-h-36 opacity-100"
+                  ? "max-h-52 opacity-100"
                   : "max-h-0 max-w-0 overflow-hidden opacity-0"
               )}
               style={
@@ -156,11 +168,22 @@ export function BottomNav() {
                       {isActive && (
                         <span className="pointer-events-none absolute inset-0.5 rounded-md bg-grid-accent-dim/60" />
                       )}
-                      <item.icon
-                        className="relative h-4 w-4 shrink-0 sm:h-[1.05rem] sm:w-[1.05rem]"
-                        strokeWidth={isActive ? 2.1 : 1.65}
-                        aria-hidden
-                      />
+                      {item.avatarSrc ? (
+                        <img
+                          src={item.avatarSrc}
+                          alt=""
+                          className="relative h-4 w-4 shrink-0 rounded-full object-cover sm:h-[1.05rem] sm:w-[1.05rem]"
+                          width={32}
+                          height={32}
+                          decoding="async"
+                        />
+                      ) : (
+                        <item.icon
+                          className="relative h-4 w-4 shrink-0 sm:h-[1.05rem] sm:w-[1.05rem]"
+                          strokeWidth={isActive ? 2.1 : 1.65}
+                          aria-hidden
+                        />
+                      )}
                       <span className="relative">{item.label}</span>
                     </Link>
                   )

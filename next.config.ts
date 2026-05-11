@@ -14,6 +14,25 @@ const nextConfig: NextConfig = {
       "./src/generated/prisma/**/*",
     ],
   },
+  async headers() {
+    return [
+      {
+        // Service worker must never be cached or iOS will keep showing stale
+        // push handlers — see Next.js PWA guide.
+        source: "/sw.js",
+        headers: [
+          {
+            key: "Content-Type",
+            value: "application/javascript; charset=utf-8",
+          },
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -15,6 +15,8 @@ model User {
   avatarUrl   String?
   /** yyyy-MM-dd — first calendar day calorie & weight logging are allowed again; null = off */
   vacationResumeDate String?
+  /// IANA timezone (e.g. "America/New_York"); used to fire local-time reminders.
+  timeZone    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -35,6 +37,12 @@ model User {
   recoveryDailyEntries RecoveryDailyEntry[]
   injuryRecords        InjuryRecord[]
   treatmentLogs        TreatmentLog[]
+  coachConversations   CoachConversation[]
+  coachMessages        CoachMessage[]
+  pushSubscriptions       PushSubscription[]
+  notificationPreferences NotificationPreference[]
+  notificationLogs        NotificationLog[]
+  fastingProfile          FastingProfile?
 }
 
 model CalorieEntry {
@@ -353,4 +361,114 @@ model TreatmentLog {
   @@index([injuryId])
   @@index([date])
   @@index([userId])
+}
+
+/// AI Coach chat thread, one row per conversation.
+model CoachConversation {
+  id             String         @id @default(cuid())
+  title          String         @default("New chat")
+  /// Picker key from src/lib/coach/models.ts (null = use account default)
+  defaultModelId String?
+  userId         String?
+  user           User?          @relation(fields: [userId], references: [id])
+  messages       CoachMessage[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([userId, updatedAt])
+}
+
+/// AI Coach message belonging to a conversation. `role` is "user" | "assistant" | "system".
+model CoachMessage {
+  id             String            @id @default(cuid())
+  conversationId String
+  conversation   CoachConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// "user" | "assistant" | "system"
+  role           String
+  content        String            @default("")
+  /// JSON array of attachments: [{ kind: "image", path, mime, name? }]
+  attachmentsJson String           @default("[]")
+  /// Coach model picker key for assistant turns (null for user/system messages).
+  modelId        String?
+  tokensIn       Int               @default(0)
+  tokensOut      Int               @default(0)
+  /// Optional userId denormalised from the conversation for fast per-user usage queries.
+  userId         String?
+  user           User?             @relation(fields: [userId], references: [id])
+  createdAt      DateTime          @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([userId, createdAt])
+}
+
+/// One row per (user, device). Stores the Web Push subscription that the browser created
+/// after PushManager.subscribe(). We push to every active subscription for a user.
+model PushSubscription {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Globally unique endpoint URL issued by the push service (FCM, APNs gateway, Mozilla, …)
+  endpoint    String   @unique
+  /// Client public key for envelope encryption (RFC 8291).
+  p256dh      String
+  /// 16-byte HKDF auth secret.
+  auth        String
+  /// User agent string at subscription time — used to render a friendly device label.
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// Per-user, per-notification-type toggles and (for scheduled reminders) a local time-of-day.
+/// `type` matches a key from src/lib/notifications/catalog.ts.
+model NotificationPreference {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  enabled   Boolean  @default(true)
+  /// HH:mm in the user's local time; null for event-driven types.
+  timeOfDay String?
+  /// JSON for per-type extras (e.g. specific habit ids opted in).
+  metaJson  String   @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, type])
+  @@index([userId])
+}
+
+/// Idempotency log so the 5-minute cron never sends the same daily reminder twice.
+/// `fireDay` is yyyy-MM-dd in the user's local timezone.
+model NotificationLog {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         String
+  fireDay      String
+  successCount Int      @default(0)
+  failureCount Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, type, fireDay])
+  @@index([userId, createdAt])
+}
+
+/// Server-side mirror of the client's fasting configuration so the cron can fire
+/// "fasting complete" / "eating window closing" notifications even when the app is closed.
+model FastingProfile {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fastHours             Int      @default(16)
+  eatHours              Int      @default(8)
+  /// Epoch ms when the eating window last ended (anchor for anchored mode). Null = clock mode.
+  lastMealAtMs          BigInt?
+  /// "anchored" | "clock"
+  mode                  String   @default("anchored")
+  /// Minutes from local midnight when the eating window opens (clock mode only).
+  eatWindowStartMinutes Int      @default(720)
+  updatedAt             DateTime @updatedAt
 }

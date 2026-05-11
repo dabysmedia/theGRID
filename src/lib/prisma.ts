@@ -7,7 +7,7 @@ import fs from "node:fs"
 import { resolveSqliteFilePath } from "@/lib/db-path"
 
 /** Increment when Prisma schema changes require a fresh client (dev HMR keeps `globalThis.prisma` otherwise). */
-const PRISMA_CLIENT_CACHE_REV = 3
+const PRISMA_CLIENT_CACHE_REV = 5
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -42,8 +42,21 @@ function clientHasRecoveryModels(client: PrismaClient): boolean {
   const c = client as unknown as {
     recoveryDailyEntry?: unknown
     injuryRecord?: unknown
+    coachConversation?: unknown
+    coachMessage?: unknown
+    pushSubscription?: unknown
+    notificationPreference?: unknown
+    fastingProfile?: unknown
   }
-  return c.recoveryDailyEntry != null && c.injuryRecord != null
+  return (
+    c.recoveryDailyEntry != null &&
+    c.injuryRecord != null &&
+    c.coachConversation != null &&
+    c.coachMessage != null &&
+    c.pushSubscription != null &&
+    c.notificationPreference != null &&
+    c.fastingProfile != null
+  )
 }
 
 function getPrismaClient(): PrismaClient {

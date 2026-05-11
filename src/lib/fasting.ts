@@ -8,6 +8,8 @@ export const FASTING_LOGS_KEY = "theGRID_fasting_logs"
 export const FASTING_TIMER_PAUSE_KEY = "theGRID_fasting_timer_paused_at_ms"
 /** When "true", the home fasting widget is inactive (no live countdown) until re-enabled */
 export const FASTING_TIMER_DISABLED_KEY = "theGRID_fasting_timer_disabled"
+/** Wall-clock ms when the user last ate — anchors fast/eat cycles to that moment */
+export const FASTING_LAST_MEAL_AT_KEY = "theGRID_fasting_last_meal_at_ms"
 /** @deprecated session-based timer — migrated away */
 const LEGACY_STATE_KEY = "theGRID_fasting_state"
 
@@ -166,6 +168,29 @@ export function saveFastingTimerDisabled(disabled: boolean): void {
   }
 }
 
+export function loadFastingLastMealAtMs(): number | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = localStorage.getItem(FASTING_LAST_MEAL_AT_KEY)
+    if (raw == null || raw === "") return null
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n <= 0) return null
+    return n
+  } catch {
+    return null
+  }
+}
+
+export function saveFastingLastMealAtMs(ms: number | null): void {
+  if (typeof window === "undefined") return
+  try {
+    if (ms == null) localStorage.removeItem(FASTING_LAST_MEAL_AT_KEY)
+    else localStorage.setItem(FASTING_LAST_MEAL_AT_KEY, String(ms))
+  } catch {
+    /* noop */
+  }
+}
+
 export function saveFastingConfig(c: FastingConfig): void {
   const fastHours = clamp(Math.round(c.fastHours), 1, 23)
   let eatHours = clamp(Math.round(c.eatHours), 1, 23)
@@ -244,6 +269,81 @@ export function getScheduleSnapshot(now: Date, config: FastingConfig): ScheduleS
     eatingWindowStart: fallbackEat,
     eatingWindowEnd: fallbackEnd,
   }
+}
+
+const DAY_MS = 24 * 3600_000
+
+/**
+ * Fast/eat cycle anchored to `lastMealAt` (fast begins when the meal ends).
+ * Uses `fastHours` and `eatHours` from config (must sum to 24). Ignores wall-clock eat start.
+ */
+export function getAnchoredScheduleSnapshot(
+  now: Date,
+  lastMealAt: Date,
+  config: FastingConfig
+): ScheduleSnapshot {
+  const fastDurMs = config.fastHours * 3600_000
+  const eatDurMs = config.eatHours * 3600_000
+  const L = lastMealAt.getTime()
+  const n = now.getTime()
+  let t = n - L
+  if (t < 0) t = 0
+  const cycleIndex = Math.floor(t / DAY_MS)
+  const r = t - cycleIndex * DAY_MS
+  const cycleBase = L + cycleIndex * DAY_MS
+
+  if (r < fastDurMs) {
+    const phaseStart = new Date(cycleBase)
+    const phaseEnd = new Date(cycleBase + fastDurMs)
+    const elapsed = n - phaseStart.getTime()
+    const nextEatStart = phaseEnd
+    return {
+      phase: "fasting",
+      phaseStart,
+      phaseEnd,
+      progress: Math.min(1, elapsed / fastDurMs),
+      elapsedMs: elapsed,
+      remainingMs: Math.max(0, phaseEnd.getTime() - n),
+      eatingWindowStart: nextEatStart,
+      eatingWindowEnd: new Date(nextEatStart.getTime() + eatDurMs),
+    }
+  }
+
+  const phaseStart = new Date(cycleBase + fastDurMs)
+  const phaseEnd = new Date(cycleBase + fastDurMs + eatDurMs)
+  const elapsed = n - phaseStart.getTime()
+  return {
+    phase: "eating",
+    phaseStart,
+    phaseEnd,
+    progress: Math.min(1, elapsed / eatDurMs),
+    elapsedMs: elapsed,
+    remainingMs: Math.max(0, phaseEnd.getTime() - n),
+    eatingWindowStart: phaseStart,
+    eatingWindowEnd: phaseEnd,
+  }
+}
+
+/**
+ * Interpret `<input type="time" />` as the most recent local moment at that clock time:
+ * today at `value`, or yesterday if that would still be in the future.
+ */
+export function parseTimeInputToLastMealDate(value: string, now: Date): Date | null {
+  const v = value.trim()
+  if (!v || !/^\d{1,2}:\d{2}$/.test(v)) return null
+  const [hs, ms] = v.split(":")
+  const h = parseInt(hs, 10)
+  const min = parseInt(ms, 10)
+  if (Number.isNaN(h) || Number.isNaN(min) || h < 0 || h > 23 || min < 0 || min > 59) {
+    return null
+  }
+  const totalMinutes = h * 60 + min
+  const dayStart = startOfDay(now)
+  let candidate = applyMinutesFromMidnight(dayStart, totalMinutes)
+  if (candidate.getTime() > now.getTime()) {
+    candidate = applyMinutesFromMidnight(addDays(dayStart, -1), totalMinutes)
+  }
+  return candidate
 }
 
 /* ─── Fast logs (client history) ────────────────────── */
@@ -334,4 +434,40 @@ export function aggregateFastHoursByDay(
 
 export function formatShortTime(d: Date): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+}
+
+/* ─── Server sync (for push notifications) ──────────────────────────────
+ * Mirror the current fasting state to the server so the notification cron
+ * can fire "fasting window complete" / "eating window closing" pushes even
+ * when the app is closed. Best-effort — failures are silently ignored. */
+
+/**
+ * Push current fasting config + last-meal anchor to the server.
+ * Reads from localStorage so the caller doesn't have to plumb state through.
+ * Pass `userId` so the request is attributed to the active profile.
+ */
+export async function syncFastingProfileToServer(userId: string | null | undefined): Promise<void> {
+  if (typeof window === "undefined") return
+  if (!userId) return
+  try {
+    const config = loadFastingConfig()
+    const lastMealAtMs = loadFastingLastMealAtMs()
+    await fetch("/api/notifications/fasting-profile", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "x-user-id": userId,
+      },
+      body: JSON.stringify({
+        fastHours: config.fastHours,
+        eatHours: config.eatHours,
+        eatWindowStartMinutes: config.eatWindowStartMinutes,
+        lastMealAtMs,
+        mode: lastMealAtMs ? "anchored" : "clock",
+      }),
+      keepalive: true,
+    })
+  } catch {
+    /* noop — push notifications are non-essential */
+  }
 }

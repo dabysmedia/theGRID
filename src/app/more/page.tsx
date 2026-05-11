@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader"
 import { ProfileSwitcher } from "@/components/ProfileSwitcher"
 import { ProfilePhotoSettings } from "@/components/ProfilePhotoSettings"
 import { VacationModeSettings } from "@/components/VacationModeSettings"
+import { PushNotificationManager } from "@/components/PushNotificationManager"
 
 export default function MorePage() {
   return (
@@ -27,6 +28,8 @@ export default function MorePage() {
           </h2>
           <VacationModeSettings />
         </div>
+        <div className="hud-divider" />
+        <PushNotificationManager />
       </div>
 
       <div className="glass hud-corners space-y-4 rounded-2xl p-6 lg:max-w-md">

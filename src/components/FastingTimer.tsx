@@ -27,6 +27,7 @@ import {
   type FastingConfig,
   type FastingPhase,
   ensureFastLogForEatingPhase,
+  getAnchoredScheduleSnapshot,
   getScheduleSnapshot,
   loadFastingConfig,
   saveFastingConfig,
@@ -37,7 +38,13 @@ import {
   saveFastingTimerPausedAtMs,
   loadFastingTimerDisabled,
   saveFastingTimerDisabled,
+  loadFastingLastMealAtMs,
+  saveFastingLastMealAtMs,
+  minutesFromMidnight,
+  parseTimeInputToLastMealDate,
+  syncFastingProfileToServer,
 } from "@/lib/fasting"
+import { useUser } from "@/context/UserContext"
 
 const PRESETS = [
   { name: "16:8", fastHours: 16, eatHours: 8, eatStartMinutes: 12 * 60 },
@@ -56,7 +63,7 @@ const COLORS = {
 const FASTING_CARD_SHEEN =
   "glass relative overflow-hidden rounded-2xl border border-border/20 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] shadow-[inset_0_1px_0_0_oklch(1_0_0/10%),0_22px_56px_-20px_oklch(0_0_0/42%)] dark:border-[oklch(1_0_0/9%)] dark:from-glass-highlight/[0.1] dark:to-primary/[0.05] dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/12%),0_28px_72px_-24px_oklch(0_0_0/62%)]"
 
-/** Timer disabled — steel / grey glass (no filter:saturate — it would grey out the Enable CTA) */
+/** Timer disabled — steel / grey glass (no filter:saturate — it would grey out the Start CTA) */
 const FASTING_CARD_INACTIVE =
   "border-dashed border-muted-foreground/35 bg-gradient-to-b from-muted/45 via-muted/25 to-muted/40 shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)] dark:from-muted/30 dark:via-muted/15 dark:to-muted/25 dark:border-muted-foreground/30"
 
@@ -343,10 +350,16 @@ function FastingSettingsDialog({
 }
 
 export function FastingTimer() {
+  const { user } = useUser()
+  const userId = user?.id ?? null
   const [config, setConfig] = useState<FastingConfig>(loadFastingConfig)
   const [now, setNow] = useState(() => Date.now())
   const [pausedAtMs, setPausedAtMs] = useState<number | null>(null)
   const [timerDisabled, setTimerDisabled] = useState(false)
+  const [lastMealAtMs, setLastMealAtMs] = useState<number | null>(null)
+  const [startFastingOpen, setStartFastingOpen] = useState(false)
+  const [lastMealInput, setLastMealInput] = useState("")
+  const [startFastingError, setStartFastingError] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const skipTransitionLog = useRef(false)
 
@@ -356,9 +369,15 @@ export function FastingTimer() {
     setConfig(loadFastingConfig())
     setPausedAtMs(loadFastingTimerPausedAtMs())
     setTimerDisabled(loadFastingTimerDisabled())
+    setLastMealAtMs(loadFastingLastMealAtMs())
     setMounted(true)
   }, [])
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    if (!mounted) return
+    void syncFastingProfileToServer(userId)
+  }, [mounted, userId])
 
   const isPaused = pausedAtMs != null
   const effectiveNow = timerDisabled ? now : isPaused ? pausedAtMs : now
@@ -369,10 +388,13 @@ export function FastingTimer() {
     return () => clearInterval(id)
   }, [timerDisabled, isPaused])
 
-  const snapshot = useMemo(
-    () => getScheduleSnapshot(new Date(effectiveNow), config),
-    [effectiveNow, config]
-  )
+  const snapshot = useMemo(() => {
+    const d = new Date(effectiveNow)
+    if (!timerDisabled && lastMealAtMs != null) {
+      return getAnchoredScheduleSnapshot(d, new Date(lastMealAtMs), config)
+    }
+    return getScheduleSnapshot(d, config)
+  }, [effectiveNow, config, timerDisabled, lastMealAtMs])
 
   const handlePause = useCallback(() => {
     const t = Date.now()
@@ -391,19 +413,42 @@ export function FastingTimer() {
   const handleEnd = useCallback(() => {
     saveFastingTimerPausedAtMs(null)
     setPausedAtMs(null)
+    saveFastingLastMealAtMs(null)
+    setLastMealAtMs(null)
     saveFastingTimerDisabled(true)
     setTimerDisabled(true)
     setNow(Date.now())
+    void syncFastingProfileToServer(userId)
+  }, [userId])
+
+  const handleStartFastingOpenChange = useCallback((open: boolean) => {
+    setStartFastingOpen(open)
+    setStartFastingError(null)
+    if (open) {
+      const suggested = new Date(Date.now() - 60 * 60 * 1000)
+      setLastMealInput(minutesToTimeInputValue(minutesFromMidnight(suggested)))
+    }
   }, [])
 
-  const handleEnableTimer = useCallback(() => {
+  const handleConfirmStartFasting = useCallback(() => {
+    const tEnd = Date.now()
+    const parsed = parseTimeInputToLastMealDate(lastMealInput, new Date(tEnd))
+    if (!parsed) {
+      setStartFastingError("Enter a valid time.")
+      return
+    }
+    const ms = parsed.getTime()
+    saveFastingLastMealAtMs(ms)
+    setLastMealAtMs(ms)
     saveFastingTimerDisabled(false)
     setTimerDisabled(false)
     saveFastingTimerPausedAtMs(null)
     setPausedAtMs(null)
-    const t = Date.now()
-    setNow(t)
-  }, [])
+    setNow(tEnd)
+    setStartFastingOpen(false)
+    setStartFastingError(null)
+    void syncFastingProfileToServer(userId)
+  }, [lastMealInput, userId])
 
   useEffect(() => {
     if (!mounted) return
@@ -419,7 +464,8 @@ export function FastingTimer() {
     skipTransitionLog.current = true
     saveFastingConfig(c)
     setConfig(loadFastingConfig())
-  }, [])
+    void syncFastingProfileToServer(userId)
+  }, [userId])
 
   const phaseColor = snapshot.phase === "fasting" ? COLORS.fasting : COLORS.eating
 
@@ -615,17 +661,56 @@ export function FastingTimer() {
 
           <div className="relative z-[2] mt-4 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
             {timerDisabled ? (
-              <Button
-                type="button"
-                variant="glass"
-                size="sm"
-                className="h-9 gap-1.5 touch-manipulation sm:h-8"
-                onClick={handleEnableTimer}
-                aria-label="Enable fasting timer"
-              >
-                <Play className="h-3.5 w-3.5" />
-                Enable timer
-              </Button>
+              <Dialog open={startFastingOpen} onOpenChange={handleStartFastingOpenChange}>
+                <DialogTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="glass"
+                      size="sm"
+                      className="h-9 gap-1.5 touch-manipulation sm:h-8"
+                      aria-label="Start fasting"
+                    />
+                  }
+                >
+                  <Play className="h-3.5 w-3.5" />
+                  Start fasting
+                </DialogTrigger>
+                <DialogContent className="glass-frost min-h-0 overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>What time was your last meal?</DialogTitle>
+                  </DialogHeader>
+                  <p className="text-sm text-muted-foreground">
+                    Your fast starts from that moment using your{" "}
+                    <span className="font-medium text-foreground">
+                      {config.fastHours}h fast / {config.eatHours}h eat
+                    </span>{" "}
+                    schedule{config.presetName ? ` (${config.presetName})` : ""}. We use today’s
+                    date, or yesterday if that time hasn’t happened yet today.
+                  </p>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fasting-last-meal" className="type-hud-label">
+                      Time
+                    </Label>
+                    <Input
+                      id="fasting-last-meal"
+                      type="time"
+                      value={lastMealInput}
+                      onChange={(e) => {
+                        setLastMealInput(e.target.value)
+                        setStartFastingError(null)
+                      }}
+                      className="tabular-nums"
+                    />
+                  </div>
+                  {startFastingError ? (
+                    <p className="text-sm text-destructive">{startFastingError}</p>
+                  ) : null}
+                  <Button variant="glass" className="w-full" onClick={handleConfirmStartFasting}>
+                    Start timer
+                  </Button>
+                </DialogContent>
+              </Dialog>
             ) : (
               <>
                 <Button

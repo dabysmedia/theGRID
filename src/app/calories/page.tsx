@@ -43,6 +43,10 @@ import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/History
 import { partitionHistoryDayGroups } from "@/lib/history-display"
 import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
 import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
+import {
+  PhotoCalorieEstimator,
+  type PhotoEstimatePrefill,
+} from "@/components/calories/PhotoCalorieEstimator"
 
 interface CalorieEntry {
   id: string
@@ -465,6 +469,7 @@ export default function CaloriesPage() {
   const [logFoodOpen, setLogFoodOpen] = useState(false)
   const [logFoodSearchOpen, setLogFoodSearchOpen] = useState(false)
   const [logFoodManualOpen, setLogFoodManualOpen] = useState(false)
+  const [logFoodPhotoOpen, setLogFoodPhotoOpen] = useState(false)
   const [flashSavedMealId, setFlashSavedMealId] = useState<string | null>(null)
   const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set())
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)
@@ -520,6 +525,7 @@ export default function CaloriesPage() {
     if (!logFoodOpen) {
       setLogFoodSearchOpen(false)
       setLogFoodManualOpen(false)
+      setLogFoodPhotoOpen(false)
       setEditingSavedMealId(null)
       setEditSavedError(null)
     }
@@ -650,6 +656,24 @@ export default function CaloriesPage() {
     if (food.fat != null) setFat(String(Math.round(food.fat)))
     setShowSavePrompt(true)
   }
+
+  /**
+   * AI photo estimate → fill the manual form so the user can review/tweak
+   * before adding to the draft meal. Mirrors `handleFoodSelect`.
+   */
+  const handlePhotoPrefill = useCallback(
+    (prefill: PhotoEstimatePrefill) => {
+      if (vacationBlocksLog && !editingEntry) return
+      setDescription(prefill.description)
+      setCalories(String(Math.round(prefill.calories)))
+      setProtein(prefill.protein != null ? String(prefill.protein) : "")
+      setCarbs(prefill.carbs != null ? String(prefill.carbs) : "")
+      setFat(prefill.fat != null ? String(prefill.fat) : "")
+      setShowSavePrompt(true)
+      setLogFoodManualOpen(true)
+    },
+    [vacationBlocksLog, editingEntry]
+  )
 
   function addCalories(n: number) {
     const cur = parseFloat(calories)
@@ -1808,6 +1832,16 @@ export default function CaloriesPage() {
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {/* AI photo estimate — collapsed by default; not shown in edit mode. */}
+                  {!editingEntry && (
+                    <PhotoCalorieEstimator
+                      open={logFoodPhotoOpen}
+                      onOpenChange={setLogFoodPhotoOpen}
+                      onUsePrefill={handlePhotoPrefill}
+                      disabled={vacationBlocksLog}
+                    />
                   )}
 
                   {/* Manual estimate — collapsed by default (add mode); always open when editing */}
