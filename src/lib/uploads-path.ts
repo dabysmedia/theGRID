@@ -28,6 +28,7 @@ function legacyDataRoot(): string | null {
   const url = process.env.DATABASE_URL?.trim()
   if (url?.startsWith("file:")) {
     const f = url.slice(5).trim()
+    if (!path.isAbsolute(f)) return null
     return path.dirname(path.resolve(f))
   }
 
@@ -35,7 +36,7 @@ function legacyDataRoot(): string | null {
 }
 
 /**
- * Persistent upload subdirectory: `journal` | `avatars` | `routine-covers`
+ * Persistent upload subdirectory: `journal` | `avatars` | `routine-covers` | `coach`
  * - UPLOADS_PATH=/app/uploads → .../app/uploads/<segment>
  * - Legacy data root → <root>/uploads/<segment>
  * - Local dev → public/uploads/<segment> under cwd

@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * Symlink public/.../uploads/{journal,avatars} → persistent dirs so /uploads/* URLs work.
+ * Symlink public/.../uploads/* → persistent dirs so /uploads/* URLs work.
  *
- * UPLOADS_PATH=/app/uploads → .../journal and .../avatars on the volume.
- * Legacy: DATA_DIR / DATABASE_PATH → <dataRoot>/uploads/{journal,avatars}
+ * UPLOADS_PATH=/app/uploads → .../<segment> on the volume.
+ * Legacy: DATA_DIR / DATABASE_PATH → <dataRoot>/uploads/<segment>
  */
 import fs from "node:fs"
 import path from "node:path"
 import { resolveUploadSegmentDir } from "./resolve-uploads-path.mjs"
 
-const SEGMENTS = ["journal", "avatars"]
+const SEGMENTS = ["journal", "avatars", "routine-covers", "coach"]
 
 function findPublicDirs() {
   const cwd = process.cwd()

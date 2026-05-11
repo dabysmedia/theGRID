@@ -54,7 +54,7 @@ This app uses **SQLite on a persistent volume**, not Railway’s Postgres plugin
 3. Set environment variables on the web service:
    - **`DATA_DIR=/data`** (recommended), or **`DATABASE_PATH=/data/thegrid.db`**
    - **Remove or unset `DATABASE_URL`** if Railway attached a Postgres plugin — a Postgres `DATABASE_URL` was overriding the SQLite file and made the DB look “empty” on every deploy.
-4. On boot, `scripts/prod-entry.mjs` runs **`prisma db push`**, symlinks **`public/uploads/journal`** to **`/data/uploads/journal`** so image uploads survive redeploys, and creates **Carlos** (PIN **1234**) if there are no users yet.
+4. On boot, `scripts/prod-entry.mjs` runs **`prisma db push`**, prepares **`public/uploads/*`** symlinks to **`/data/uploads/*`** so image uploads survive redeploys, and creates **Carlos** (PIN **1234**) if there are no users yet.
 
 The app uses `output: "standalone"` in Next.js config for Docker/Railway.
 

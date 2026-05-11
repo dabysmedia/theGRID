@@ -26,6 +26,7 @@ export function legacyDataRoot() {
   const url = process.env.DATABASE_URL?.trim()
   if (url?.startsWith("file:")) {
     const f = url.slice(5).trim()
+    if (!path.isAbsolute(f)) return null
     return path.dirname(path.resolve(f))
   }
 
@@ -33,7 +34,7 @@ export function legacyDataRoot() {
 }
 
 /**
- * @param {"journal" | "avatars" | "routine-covers"} segment
+ * @param {"journal" | "avatars" | "routine-covers" | "coach"} segment
  * @returns {string | null} Absolute dir on volume, or null if using local-only public/
  */
 export function resolveUploadSegmentDir(segment) {
@@ -59,4 +60,8 @@ export function resolveAvatarsUploadDir() {
 
 export function resolveRoutineCoversUploadDir() {
   return resolveUploadSegmentDir("routine-covers")
+}
+
+export function resolveCoachUploadDir() {
+  return resolveUploadSegmentDir("coach")
 }
