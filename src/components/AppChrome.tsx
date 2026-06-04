@@ -1,13 +1,17 @@
 "use client"
 
 import type { ReactNode } from "react"
+import { usePathname } from "next/navigation"
 import { BottomNav } from "@/components/BottomNav"
 import { useFullscreenOverlay } from "@/context/FullscreenOverlayContext"
+import { isAgentPublicPath } from "@/lib/agent/public-routes"
 import { cn } from "@/lib/utils"
 
 /** Root shell: main column padding + bottom nav, coordinated with fullscreen overlays. */
 export function AppChrome({ children }: { children: ReactNode }) {
   const { fullscreen } = useFullscreenOverlay()
+  const pathname = usePathname()
+  const agentPublic = isAgentPublicPath(pathname)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -16,7 +20,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
           "mx-auto flex w-full max-w-full min-h-0 flex-1 flex-col",
           "ps-[max(0.75rem,env(safe-area-inset-left,0px))] pe-[max(0.75rem,env(safe-area-inset-right,0px))]",
           "pt-[calc(env(safe-area-inset-top,0px)+2rem)]",
-          fullscreen
+          fullscreen || agentPublic
             ? "pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
             : "pb-[calc(6rem+env(safe-area-inset-bottom,0px))]",
           "sm:ps-4 sm:pe-4 md:ps-6 md:pe-6",
@@ -27,7 +31,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
       >
         {children}
       </main>
-      {!fullscreen && <BottomNav />}
+      {!fullscreen && !agentPublic && <BottomNav />}
     </div>
   )
 }

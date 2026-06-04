@@ -8,15 +8,15 @@ function buildLlmsTxt(origin: string): string {
 
 > Tactical health & fitness tracker (calories, workouts, sleep, recovery, journal, peptides, and more).
 
-This site exposes read-only data for **profile Carlos** so external AI agents can answer questions about logged health data.
+This site exposes read-only health data (profile **los** or **carlos**, or the only profile on the server) for external AI agents. No sign-in, profile picker, or PIN.
 
-## Carlos profile — full data export
+## Data export
 
+- **Agent page (HTML + summary, no auth):** ${base}/agents
 - **JSON (all tables):** ${base}/api/agent/carlos
 - **Plain-text summary (7-day coach snapshot):** ${base}/api/agent/carlos?format=text
-- **Human + agent docs:** ${base}/agents
 
-All agent export endpoints are public (no authentication).
+All agent routes are public.
 
 ## In-app API (browser session)
 

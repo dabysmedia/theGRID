@@ -11,28 +11,36 @@ export class AgentAccessError extends Error {
   }
 }
 
-const DEFAULT_AGENT_PROFILE = "carlos"
+const PROFILE_FALLBACKS = ["los", "carlos"] as const
 
-/** Resolves the agent export profile (default Carlos; override with AGENT_PROFILE_NAME). */
+/** Resolves the agent export profile (AGENT_PROFILE_NAME, then los, then carlos). */
 export async function resolveCarlosUserId(): Promise<{
   id: string
   name: string
 }> {
-  const target = (
-    process.env.AGENT_PROFILE_NAME?.trim() || DEFAULT_AGENT_PROFILE
-  ).toLowerCase()
+  const envName = process.env.AGENT_PROFILE_NAME?.trim().toLowerCase()
+  const targets = [
+    ...(envName ? [envName] : []),
+    ...PROFILE_FALLBACKS,
+  ].filter((name, i, arr) => arr.indexOf(name) === i)
 
   const users = await prisma.user.findMany({
     where: { name: { not: "" } },
     select: { id: true, name: true },
     orderBy: { createdAt: "asc" },
   })
-  const match = users.find((u) => u.name.trim().toLowerCase() === target)
-  if (!match) {
-    throw new AgentAccessError(
-      `Profile "${target}" not found. Create that profile in the app or set AGENT_PROFILE_NAME.`,
-      404
-    )
+
+  for (const target of targets) {
+    const match = users.find((u) => u.name.trim().toLowerCase() === target)
+    if (match) return match
   }
-  return match
+
+  if (users.length === 1) {
+    return users[0]!
+  }
+
+  throw new AgentAccessError(
+    `No agent profile found (tried: ${targets.join(", ")}). Set AGENT_PROFILE_NAME or create a profile.`,
+    404
+  )
 }

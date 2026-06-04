@@ -5,7 +5,7 @@ import { exportProfileForAgent } from "@/lib/agent/export-profile"
 export const dynamic = "force-dynamic"
 
 /**
- * Machine-readable export of all tracked data for profile Carlos.
+ * Machine-readable export of all tracked data (no x-user-id / PIN).
  * Discovery: /llms.txt and /agents
  */
 export async function GET(req: NextRequest) {
