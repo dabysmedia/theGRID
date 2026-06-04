@@ -16,7 +16,7 @@ import {
   CartesianGrid,
 } from "recharts"
 import { PageHeader } from "@/components/PageHeader"
-import { PageStatTile } from "@/components/PageStatTile"
+import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -121,25 +121,7 @@ function SleepHistoryDayBlock({
   )
 }
 
-function StatCard({
-  label,
-  value,
-  sub,
-}: {
-  label: string
-  value: string
-  sub?: string
-}) {
-  return (
-    <PageStatTile className="min-w-0">
-      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-        {label}
-      </p>
-      <span className="text-lg lg:text-xl font-bold tabular-nums">{value}</span>
-      {sub && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{sub}</p>}
-    </PageStatTile>
-  )
-}
+const SLEEP_COLOR = "#6366f1"
 
 export default function SleepPage() {
   const { activeDate } = useActiveDate()
@@ -303,13 +285,18 @@ export default function SleepPage() {
     <div className="space-y-6">
       <PageHeader title="Sleep" />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 animate-fade-up min-w-0">
-        <StatCard label="Last Night" value={stats.lastNight} />
-        <StatCard label="7-Day Avg" value={stats.avg7h !== null ? `${stats.avg7h}h` : "—"} />
-        <StatCard label="Avg Quality" value={stats.avgQ !== null ? `${stats.avgQ}/5` : "—"} />
-        <StatCard label="Best Night" value={stats.best} />
-        <StatCard label="Consistency" value={`${stats.consistency}%`} sub="last 7 days" />
-      </div>
+      <PageHeroStrip
+        color={SLEEP_COLOR}
+        icon={Moon}
+        eyebrow={`Last night · ${formatDisplayDate(parseLocalDate(activeDate))}`}
+        value={stats.lastNight}
+        metrics={[
+          { label: "7-day avg", value: stats.avg7h !== null ? `${stats.avg7h}h` : "—" },
+          { label: "Avg quality", value: stats.avgQ !== null ? `${stats.avgQ}/5` : "—" },
+          { label: "Best night", value: stats.best },
+          { label: "Consistency", value: `${stats.consistency}%`, sub: "last 7 days" },
+        ]}
+      />
 
       <CategoryGoal
         category="sleep"

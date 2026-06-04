@@ -27,7 +27,9 @@ model User {
   workoutTemplates WorkoutTemplate[]
   workoutSessions WorkoutSession[]
   sleepEntries    SleepEntry[]
-  goals           Goal[]
+  peptideEntries      PeptideEntry[]
+  peptideDailyEntries PeptideDailyEntry[]
+  goals               Goal[]
   longGoals       LongGoal[]
   habits          Habit[]
   savedMeals      SavedMeal[]
@@ -150,6 +152,40 @@ model SleepEntry {
   user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 
+  @@index([date])
+  @@index([userId])
+}
+
+model PeptideEntry {
+  id              String   @id @default(cuid())
+  date            DateTime
+  injectedAt      DateTime
+  compound        String   @default("retatrutide")
+  doseMg          Float
+  injectionSite   String
+  sideEffectsJson String   @default("[]")
+  notes           String?
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id])
+  createdAt       DateTime @default(now())
+
+  @@index([date])
+  @@index([userId])
+}
+
+/// One row per calendar day per user: appetite / hunger (1–10, 10 = very hungry).
+model PeptideDailyEntry {
+  id              String   @id @default(cuid())
+  date            DateTime
+  hungerLevel     Int
+  sideEffectsJson String   @default("[]")
+  notes           String?
+  userId          String?
+  user        User?    @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, date])
   @@index([date])
   @@index([userId])
 }

@@ -24,14 +24,14 @@ import {
   ReferenceLine,
 } from "recharts"
 import { PageHeader } from "@/components/PageHeader"
+import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { apiFetch } from "@/lib/api-fetch"
-import { PageStatTile } from "@/components/PageStatTile"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
-import { cn, parseLocalDate } from "@/lib/utils"
+import { cn, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
@@ -156,39 +156,6 @@ function WeightHistoryDayGroup({
         )
       })}
     </div>
-  )
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-  trend,
-}: {
-  label: string
-  value: string
-  sub?: string
-  trend?: "up" | "down" | "neutral"
-}) {
-  return (
-    <PageStatTile className="flex-1 min-w-0">
-      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-        {label}
-      </p>
-      <div className="flex items-baseline gap-1">
-        <span className="text-lg lg:text-xl font-bold tabular-nums">{value}</span>
-        {trend && trend !== "neutral" && (
-          <span className={trend === "down" ? "text-[#22c55e]" : "text-red-400"}>
-            {trend === "down" ? (
-              <ArrowDown className="h-3.5 w-3.5" />
-            ) : (
-              <ArrowUp className="h-3.5 w-3.5" />
-            )}
-          </span>
-        )}
-      </div>
-      {sub && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{sub}</p>}
-    </PageStatTile>
   )
 }
 
@@ -355,42 +322,45 @@ export default function WeightPage() {
     <div className="space-y-6">
       <PageHeader title="Weight" />
 
-      {/* Stats row */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <StatCard
-          label="Current"
-          value={stats?.current != null ? `${stats.current}` : "—"}
-          sub={unit}
-        />
-        <StatCard
-          label="7-Day Avg"
-          value={stats?.avg7 != null ? `${stats.avg7}` : "—"}
-          sub={unit}
-        />
-        <StatCard
-          label="Week Change"
-          value={
-            stats?.weekChange != null
-              ? `${stats.weekChange > 0 ? "+" : ""}${stats.weekChange}`
-              : "—"
-          }
-          sub={unit}
-          trend={
-            stats?.weekChange != null
-              ? stats.weekChange < 0
-                ? "down"
-                : stats.weekChange > 0
-                  ? "up"
-                  : "neutral"
-              : undefined
-          }
-        />
-        <StatCard
-          label="All-Time Low"
-          value={stats?.allTimeLow != null ? `${stats.allTimeLow}` : "—"}
-          sub={unit}
-        />
-      </div>
+      <PageHeroStrip
+        color="#22c55e"
+        icon={Weight}
+        eyebrow={`Current · ${formatDisplayDate(parseLocalDate(activeDate))}`}
+        value={stats?.current != null ? `${stats.current}` : "—"}
+        unit={unit}
+        valueAdornment={
+          stats?.weekChange != null && stats.weekChange !== 0 ? (
+            <span
+              className={cn(
+                "inline-flex items-center",
+                stats.weekChange < 0 ? "text-[#22c55e]" : "text-red-400"
+              )}
+            >
+              {stats.weekChange < 0 ? (
+                <ArrowDown className="h-4 w-4" />
+              ) : (
+                <ArrowUp className="h-4 w-4" />
+              )}
+            </span>
+          ) : undefined
+        }
+        metrics={[
+          { label: "7-day avg", value: stats?.avg7 != null ? `${stats.avg7}` : "—", sub: unit },
+          {
+            label: "Week change",
+            value:
+              stats?.weekChange != null
+                ? `${stats.weekChange > 0 ? "+" : ""}${stats.weekChange}`
+                : "—",
+            sub: unit,
+          },
+          {
+            label: "All-time low",
+            value: stats?.allTimeLow != null ? `${stats.allTimeLow}` : "—",
+            sub: unit,
+          },
+        ]}
+      />
 
       <CategoryGoal
         category="weight"

@@ -16,12 +16,12 @@ import {
   Line,
 } from "recharts"
 import { PageHeader } from "@/components/PageHeader"
-import { PageStatTile } from "@/components/PageStatTile"
+import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { useActiveDate } from "@/context/DateContext"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { parseLocalDate } from "@/lib/utils"
+import { formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { kmToMiles, milesToKm } from "@/lib/units"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
@@ -337,40 +337,27 @@ export default function RunningPage() {
     <div className="space-y-6">
       <PageHeader title="Running" />
 
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <PageStatTile className="min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Total Distance
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {stats.count === 0 ? "0" : stats.totalMi.toFixed(1)} mi
-          </span>
-        </PageStatTile>
-        <PageStatTile className="min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Avg Pace
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {avgPaceDisplay}
-          </span>
-        </PageStatTile>
-        <PageStatTile className="min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Total Runs
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {stats.count}
-          </span>
-        </PageStatTile>
-        <PageStatTile className="min-w-[9rem] shrink-0 sm:flex-1 sm:min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Longest Run
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {stats.count === 0 ? "—" : `${stats.longestMi.toFixed(1)} mi`}
-          </span>
-        </PageStatTile>
-      </div>
+      <PageHeroStrip
+        color="#3b82f6"
+        icon={PersonStanding}
+        eyebrow={`Today · ${formatDisplayDate(parseLocalDate(activeDate))}`}
+        value={todayMiles > 0 ? todayMiles.toFixed(1) : "—"}
+        unit="mi"
+        metrics={[
+          {
+            label: "Total distance",
+            value: stats.count === 0 ? "0" : stats.totalMi.toFixed(1),
+            sub: "mi all time",
+          },
+          { label: "Avg pace", value: avgPaceDisplay },
+          { label: "Total runs", value: String(stats.count) },
+          {
+            label: "Longest",
+            value: stats.count === 0 ? "—" : stats.longestMi.toFixed(1),
+            sub: "mi",
+          },
+        ]}
+      />
 
       <CategoryGoal
         category="running"

@@ -22,10 +22,10 @@ import {
 } from "lucide-react"
 import { addDays, format, startOfWeek, subDays } from "date-fns"
 import { PageHeader } from "@/components/PageHeader"
+import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
 import { apiFetch } from "@/lib/api-fetch"
-import { PageStatTile } from "@/components/PageStatTile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -43,7 +43,7 @@ import {
   saveWorkoutRestConfig,
   type WorkoutRestConfig,
 } from "@/lib/workout-rest-config"
-import { cn, formatDate, parseLocalDate } from "@/lib/utils"
+import { cn, formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 
 /* ──────────────────────────────────────────────────────────
    Types
@@ -3081,47 +3081,28 @@ export default function WorkoutsPage() {
         <div className="space-y-6">
           <PageHeader title="Workouts" />
 
-          {/* ── Home view ─────────────────────────── */}
-          {/* Stat tiles */}
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-            <PageStatTile className="flex-1 min-w-0">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
-                Volume
-              </p>
-              <span className="text-lg lg:text-xl font-bold tabular-nums">
-                {stats.weekVolume > 0
-                  ? stats.weekVolume >= 1000
-                    ? `${(stats.weekVolume / 1000).toFixed(1)}k`
-                    : String(stats.weekVolume)
-                  : "—"}
-              </span>
-              <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                lb this week
-              </p>
-            </PageStatTile>
-            <PageStatTile className="flex-1 min-w-0">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
-                Sets
-              </p>
-              <span className="text-lg lg:text-xl font-bold tabular-nums">
-                {stats.weekSets || "—"}
-              </span>
-              <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                this week
-              </p>
-            </PageStatTile>
-            <PageStatTile className="flex-1 min-w-0">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
-                Streak
-              </p>
-              <span className="text-lg lg:text-xl font-bold tabular-nums">
-                {stats.streakDays}
-              </span>
-              <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                day{stats.streakDays === 1 ? "" : "s"}
-              </p>
-            </PageStatTile>
-          </div>
+          <PageHeroStrip
+            color="#c4d632"
+            icon={Dumbbell}
+            eyebrow={`This week · ${formatDisplayDate(parseLocalDate(activeDate))}`}
+            value={
+              stats.weekVolume > 0
+                ? stats.weekVolume >= 1000
+                  ? `${(stats.weekVolume / 1000).toFixed(1)}k`
+                  : String(stats.weekVolume)
+                : "—"
+            }
+            unit="lb volume"
+            metrics={[
+              { label: "Sessions", value: String(stats.weekCount), sub: "this week" },
+              { label: "Sets", value: stats.weekSets ? String(stats.weekSets) : "—", sub: "completed" },
+              {
+                label: "Streak",
+                value: String(stats.streakDays),
+                sub: `day${stats.streakDays === 1 ? "" : "s"}`,
+              },
+            ]}
+          />
 
           {/* Week activity dots */}
           <div className="glass relative overflow-hidden rounded-2xl border border-border/20 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] px-5 py-4 shadow-[inset_0_1px_0_0_oklch(1_0_0/10%),0_22px_56px_-20px_oklch(0_0_0/42%)] dark:border-[oklch(1_0_0/9%)] dark:from-glass-highlight/[0.1] dark:to-primary/[0.05] dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/12%),0_28px_72px_-24px_oklch(0_0_0/62%)] animate-fade-up">

@@ -7,6 +7,7 @@ import {
   PersonStanding,
   Dumbbell,
   Moon,
+  Syringe,
   Beer,
   CircleDot,
   ChevronDown,
@@ -37,6 +38,7 @@ interface DashboardData {
   running: CategorySummary
   workouts: CategorySummary
   sleep: CategorySummary
+  peptides: CategorySummary
   alcohol: CategorySummary
   bowel: CategorySummary
   recovery: CategorySummary
@@ -54,6 +56,7 @@ const defaultData: DashboardData = {
   running: { todayValue: 0, goal: null, unit: "mi", last7: emptyLast7() },
   workouts: { todayValue: 0, goal: null, unit: "sessions", last7: emptyLast7() },
   sleep: { todayValue: 0, goal: 8, unit: "hrs", last7: emptyLast7() },
+  peptides: { todayValue: 0, goal: null, unit: "mg", last7: emptyLast7() },
   alcohol: { todayValue: 0, goal: null, unit: "units", last7: emptyLast7() },
   bowel: { todayValue: 0, goal: null, unit: "", last7: emptyLast7() },
   recovery: { todayValue: 0, goal: 7, unit: "/10", last7: emptyLast7() },
@@ -66,6 +69,7 @@ const categories = [
   { key: "running" as const, title: "Running", icon: PersonStanding, href: "/running", color: "#3b82f6" },
   { key: "workouts" as const, title: "Workouts", icon: Dumbbell, href: "/workouts", color: "#c4d632" },
   { key: "sleep" as const, title: "Sleep", icon: Moon, href: "/sleep", color: "#6366f1" },
+  { key: "peptides" as const, title: "Peptides", icon: Syringe, href: "/peptides", color: "#a855f7" },
   { key: "bowel" as const, title: "Bowel", icon: CircleDot, href: "/bowel", color: "#92400e" },
   { key: "recovery" as const, title: "Recovery", icon: Activity, href: "/recovery", color: "#2dd4bf" },
   { key: "alcohol" as const, title: "Alcohol", icon: Beer, href: "/alcohol", color: "#f59e0b" },

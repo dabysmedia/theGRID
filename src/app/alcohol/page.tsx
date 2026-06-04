@@ -13,13 +13,13 @@ import {
   CartesianGrid,
 } from "recharts"
 import { PageHeader } from "@/components/PageHeader"
-import { PageStatTile } from "@/components/PageStatTile"
+import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { useActiveDate } from "@/context/DateContext"
 import { apiFetch } from "@/lib/api-fetch"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { averageOnLoggedDays, formatDate, parseLocalDate } from "@/lib/utils"
+import { averageOnLoggedDays, formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
@@ -207,35 +207,18 @@ export default function AlcoholPage() {
     <div className="space-y-6">
       <PageHeader title="Alcohol" />
 
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <PageStatTile className="flex-1 min-w-[7.5rem] shrink-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Today
-          </p>
-          <p className="text-lg lg:text-xl font-bold tabular-nums">{todayUnits}</p>
-        </PageStatTile>
-        <PageStatTile className="flex-1 min-w-[7.5rem] shrink-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Week Total
-          </p>
-          <p className="text-lg lg:text-xl font-bold tabular-nums">{weekTotal}</p>
-        </PageStatTile>
-        <PageStatTile className="flex-1 min-w-[7.5rem] shrink-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Avg/Day
-          </p>
-          <p className="text-lg lg:text-xl font-bold tabular-nums">
-            {avgPerDay.toFixed(1)}
-          </p>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">units on days w/ drinks</p>
-        </PageStatTile>
-        <PageStatTile className="flex-1 min-w-[7.5rem] shrink-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Dry Days
-          </p>
-          <p className="text-lg lg:text-xl font-bold tabular-nums">{dryDays}</p>
-        </PageStatTile>
-      </div>
+      <PageHeroStrip
+        color={AMBER}
+        icon={Beer}
+        eyebrow={`Today · ${formatDisplayDate(parseLocalDate(activeDate))}`}
+        value={String(todayUnits)}
+        unit="units"
+        metrics={[
+          { label: "Week total", value: String(weekTotal), sub: "last 7 days" },
+          { label: "Avg / day", value: avgPerDay.toFixed(1), sub: "days w/ drinks" },
+          { label: "Dry days", value: String(dryDays), sub: "this week" },
+        ]}
+      />
 
       <CategoryGoal
         category="alcohol"

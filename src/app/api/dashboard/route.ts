@@ -110,6 +110,10 @@ function dashboardGoalValue(g: GoalRow): number | null {
         return target
       }
       return null
+    case "peptides":
+      if (goalType === "weekly") return target
+      if (goalType === "daily" || goalType === "target") return target
+      return null
     case "alcohol":
       if (goalType === "daily" || goalType === "target") return target
       if (goalType === "weekly") return Math.round((target / 7) * 10) / 10
@@ -159,6 +163,7 @@ export async function GET(req: NextRequest) {
       runEntries,
       workoutEntries,
       sleepEntries,
+      peptideEntries,
       alcoholEntries,
       bowelEntries,
       recoveryEntries,
@@ -170,6 +175,7 @@ export async function GET(req: NextRequest) {
       prisma.runEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.workoutEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.sleepEntry.findMany({ where: { date: dateInRange, userId } }),
+      prisma.peptideEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.alcoholEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.bowelEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.recoveryDailyEntry.findMany({ where: { date: dateInRange, userId } }),
@@ -240,6 +246,9 @@ export async function GET(req: NextRequest) {
       const hrs = items.map((e) => sleepDurationHours(e.bedtime, e.wakeTime))
       return Math.round((hrs.reduce((s, v) => s + v, 0) / hrs.length) * 10) / 10
     })
+    const peptidesLast7 = dailyTotals(peptideEntries, (items) =>
+      items.reduce((s, e) => s + e.doseMg, 0)
+    )
     const alcoholLast7 = dailyTotals(alcoholEntries, (items) =>
       items.reduce((s, e) => s + e.units, 0)
     )
@@ -255,6 +264,7 @@ export async function GET(req: NextRequest) {
     const runG = goalByCategory.get("running")
     const woG = goalByCategory.get("workouts")
     const sleepG = goalByCategory.get("sleep")
+    const peptidesG = goalByCategory.get("peptides")
     const alcG = goalByCategory.get("alcohol")
     const bowelG = goalByCategory.get("bowel")
     const recoveryG = goalByCategory.get("recovery")
@@ -264,6 +274,7 @@ export async function GET(req: NextRequest) {
     const runGoal = runG ? dashboardGoalValue(runG) : null
     const woGoal = woG ? dashboardGoalValue(woG) : null
     const sleepGoal = sleepG ? dashboardGoalValue(sleepG) : null
+    const peptidesGoal = peptidesG ? dashboardGoalValue(peptidesG) : null
     const alcGoal = alcG ? dashboardGoalValue(alcG) : null
     const bowelGoal = bowelG ? dashboardGoalValue(bowelG) : null
     const recoveryGoal = recoveryG ? dashboardGoalValue(recoveryG) : null
@@ -305,6 +316,13 @@ export async function GET(req: NextRequest) {
         direction: sleepG?.direction ?? "up",
         unit: "hrs",
         last7: sleepLast7,
+      },
+      peptides: {
+        todayValue: Math.round(peptidesLast7[6] * 10) / 10,
+        goal: peptidesGoal,
+        direction: peptidesG?.direction ?? "up",
+        unit: "mg",
+        last7: peptidesLast7.map((v) => Math.round(v * 10) / 10),
       },
       alcohol: {
         todayValue: alcoholLast7[6],

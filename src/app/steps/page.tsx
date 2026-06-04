@@ -13,8 +13,8 @@ import {
 } from "recharts"
 import { format, isToday, isYesterday, subDays } from "date-fns"
 import { PageHeader } from "@/components/PageHeader"
+import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { apiFetch } from "@/lib/api-fetch"
-import { PageStatTile } from "@/components/PageStatTile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -408,46 +408,22 @@ export default function StepsPage() {
     <div className="space-y-6">
       <PageHeader title="Steps" />
 
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <PageStatTile className="flex-1 min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Today
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {stats.todayTotal.toLocaleString()}
-          </span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">steps total</p>
-        </PageStatTile>
-        <PageStatTile className="flex-1 min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            7-Day Avg
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {Math.round(stats.avg7).toLocaleString()}
-          </span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">avg on logged days</p>
-        </PageStatTile>
-        <PageStatTile className="flex-1 min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Week Total
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {stats.weekTotal.toLocaleString()}
-          </span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">last 7 days</p>
-        </PageStatTile>
-        <PageStatTile className="flex-1 min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Best Day
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {stats.bestDay > 0 ? stats.bestDay.toLocaleString() : "—"}
-          </span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate">
-            {stats.bestDayLabel ?? "no data yet"}
-          </p>
-        </PageStatTile>
-      </div>
+      <PageHeroStrip
+        color="#22c55e"
+        icon={Footprints}
+        eyebrow={`Today · ${formatDisplayDate(parseLocalDate(activeDate))}`}
+        value={stats.todayTotal.toLocaleString()}
+        unit="steps"
+        metrics={[
+          { label: "7-day avg", value: Math.round(stats.avg7).toLocaleString(), sub: "logged days" },
+          { label: "Week total", value: stats.weekTotal.toLocaleString(), sub: "last 7 days" },
+          {
+            label: "Best day",
+            value: stats.bestDay > 0 ? stats.bestDay.toLocaleString() : "—",
+            sub: stats.bestDayLabel ?? "no data yet",
+          },
+        ]}
+      />
 
       <CategoryGoal
         category="steps"

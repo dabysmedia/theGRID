@@ -27,6 +27,7 @@ import {
   UtensilsCrossed,
   Cookie,
   Utensils,
+  Flame,
 } from "lucide-react"
 import {
   Bar,
@@ -41,12 +42,12 @@ import {
 import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
 import { PageHeader } from "@/components/PageHeader"
-import { PageStatTile } from "@/components/PageStatTile"
+import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { FoodSearch } from "@/components/FoodSearch"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { averageOnLoggedDays, cn, formatDate, parseLocalDate } from "@/lib/utils"
+import { averageOnLoggedDays, cn, formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
 import {
   Dialog,
@@ -1174,39 +1175,25 @@ export default function CaloriesPage() {
       <div className="space-y-6">
       <PageHeader title="Calories" />
 
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <PageStatTile className="flex-1 min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            7-Day Avg
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {Math.round(avg7).toLocaleString()}
-          </span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">avg on logged days</p>
-        </PageStatTile>
-        <PageStatTile className="flex-1 min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Week Total
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {weekTotal.toLocaleString()}
-          </span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">last 7 days</p>
-        </PageStatTile>
-        <PageStatTile className="flex-1 min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Lowest day
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">
-            {bestDay.value > 0 ? bestDay.value.toLocaleString() : "—"}
-          </span>
-          {bestDay.key != null && bestDay.value > 0 ? (
-            <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-              {format(parseLocalDate(bestDay.key), "EEE, MMM d")}
-            </p>
-          ) : null}
-        </PageStatTile>
-      </div>
+      <PageHeroStrip
+        color="#ef4444"
+        icon={Flame}
+        eyebrow={`Today · ${formatDisplayDate(parseLocalDate(activeDate))}`}
+        value={todayTotal.toLocaleString()}
+        unit="cal"
+        metrics={[
+          { label: "7-day avg", value: Math.round(avg7).toLocaleString(), sub: "logged days" },
+          { label: "Week total", value: weekTotal.toLocaleString(), sub: "last 7 days" },
+          {
+            label: "Lowest day",
+            value: bestDay.value > 0 ? bestDay.value.toLocaleString() : "—",
+            sub:
+              bestDay.key != null && bestDay.value > 0
+                ? format(parseLocalDate(bestDay.key), "EEE, MMM d")
+                : undefined,
+          },
+        ]}
+      />
 
       {/* Today: ring + weekly stats + log (combined) */}
       <div className="animate-fade-up">

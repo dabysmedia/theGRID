@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { format, subDays } from "date-fns"
-import { Calendar, Trash2 } from "lucide-react"
+import { Calendar, CircleDot, Trash2 } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -15,11 +15,11 @@ import {
 import { useActiveDate } from "@/context/DateContext"
 import { apiFetch } from "@/lib/api-fetch"
 import { PageHeader } from "@/components/PageHeader"
-import { PageStatTile } from "@/components/PageStatTile"
+import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { formatDate, last7Days, parseLocalDate } from "@/lib/utils"
+import { formatDate, formatDisplayDate, last7Days, parseLocalDate } from "@/lib/utils"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
@@ -240,35 +240,18 @@ export default function BowelPage() {
     <div className="space-y-6">
       <PageHeader title="Bowel" />
 
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none animate-fade-up">
-        <PageStatTile className="flex-1 min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Today
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">{todayCount}</span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">entries</p>
-        </PageStatTile>
-        <PageStatTile className="flex-1 min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            This Week
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">{weekCount}</span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">last 7 days</p>
-        </PageStatTile>
-        <PageStatTile className="flex-1 min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Avg Type
-          </p>
-          <span className="text-lg lg:text-xl font-bold tabular-nums">{avgTypeStr}</span>
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5">Bristol 1–7 only</p>
-        </PageStatTile>
-        <PageStatTile className="flex-1 min-w-[10rem]">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1 truncate">
-            Most Common
-          </p>
-          <span className="text-sm lg:text-base font-bold leading-tight line-clamp-2">{mostCommonStr}</span>
-        </PageStatTile>
-      </div>
+      <PageHeroStrip
+        color="#92400e"
+        icon={CircleDot}
+        eyebrow={`Today · ${formatDisplayDate(parseLocalDate(activeDate))}`}
+        value={String(todayCount)}
+        unit="entries"
+        metrics={[
+          { label: "This week", value: String(weekCount), sub: "last 7 days" },
+          { label: "Avg type", value: avgTypeStr, sub: "Bristol 1–7" },
+          { label: "Most common", value: mostCommonStr },
+        ]}
+      />
 
       <CategoryGoal
         category="bowel"
