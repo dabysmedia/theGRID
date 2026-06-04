@@ -46,6 +46,9 @@ export default async function AgentsPage() {
   const textUrl = `${base}/api/agent/carlos?format=text`
   const periods = payload?.periods
 
+  const librarySection = periods
+    ? extractPeriodSection(periods.narrative, "LIBRARY & ALL-TIME", "TODAY")
+    : ""
   const contextHeader = periods ? extractNarrativeHeader(periods.narrative) : ""
   const todayNarrative = periods
     ? extractPeriodSection(periods.narrative, "TODAY", "THIS WEEK")
@@ -106,6 +109,10 @@ export default async function AgentsPage() {
               {periods.thisMonth.range.from} → {periods.thisMonth.range.to}
             </p>
           </div>
+
+          {librarySection ? (
+            <PeriodBlock title="Library & all-time (routines, meals, weight trends)" narrative={librarySection} />
+          ) : null}
 
           {contextHeader ? (
             <section className="space-y-2">
@@ -169,9 +176,11 @@ export default async function AgentsPage() {
 }
 
 function extractNarrativeHeader(full: string): string {
-  const start = full.indexOf("=== TODAY")
-  if (start < 0) return full.trim()
-  return full.slice(0, start).trim()
+  const lib = full.indexOf("=== LIBRARY")
+  const today = full.indexOf("=== TODAY")
+  const end = lib >= 0 ? lib : today
+  if (end < 0) return full.trim()
+  return full.slice(0, end).trim()
 }
 
 function extractPeriodSection(

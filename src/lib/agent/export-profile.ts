@@ -138,7 +138,10 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
       calorieEntries,
       stepEntries,
       runEntries,
+      workoutEntries,
       workoutSessions,
+      workoutTemplates,
+      savedMeals,
       sleepEntries,
       peptideEntries,
       peptideDailyEntries,
@@ -152,6 +155,15 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
       goals,
       injuryRecords,
       fastingProfile,
+      coachConversations: coachConversations.map((c) => ({
+        title: c.title,
+        updatedAt: c.updatedAt,
+        messages: c.messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          createdAt: m.createdAt,
+        })),
+      })),
     },
     user.timeZone
   )
