@@ -18,11 +18,15 @@ export async function GET(req: NextRequest) {
 
     if (format === "text" || format === "context") {
       const lines = [
-        `# theGRID — Carlos profile export`,
+        `# theGRID — profile export`,
         `exportedAt: ${payload.exportedAt}`,
         `profileId: ${payload.profile.id}`,
         ``,
+        `--- 7-day coach snapshot ---`,
         payload.contextSummary,
+        ``,
+        `--- TODAY / THIS WEEK / THIS MONTH ---`,
+        payload.periods.narrative,
         ``,
         `---`,
         `Full structured JSON: GET /api/agent/carlos`,

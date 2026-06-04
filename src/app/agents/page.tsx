@@ -10,6 +10,19 @@ export const metadata = {
   description: "Public health data export for AI agents (no sign-in)",
 }
 
+function PeriodBlock({ title, narrative }: { title: string; narrative: string }) {
+  return (
+    <section className="space-y-2">
+      <h2 className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground/55">
+        {title}
+      </h2>
+      <pre className="glass hud-corners max-h-[min(50dvh,36rem)] overflow-auto rounded-2xl p-4 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/90 sm:text-xs">
+        {narrative}
+      </pre>
+    </section>
+  )
+}
+
 export default async function AgentsPage() {
   const h = await headers()
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000"
@@ -31,6 +44,18 @@ export default async function AgentsPage() {
 
   const jsonUrl = `${base}/api/agent/carlos`
   const textUrl = `${base}/api/agent/carlos?format=text`
+  const periods = payload?.periods
+
+  const contextHeader = periods ? extractNarrativeHeader(periods.narrative) : ""
+  const todayNarrative = periods
+    ? extractPeriodSection(periods.narrative, "TODAY", "THIS WEEK")
+    : ""
+  const weekNarrative = periods
+    ? extractPeriodSection(periods.narrative, "THIS WEEK", "THIS MONTH")
+    : ""
+  const monthNarrative = periods
+    ? extractPeriodSection(periods.narrative, "THIS MONTH", null)
+    : ""
 
   return (
     <div className="space-y-6 pb-10 max-w-3xl">
@@ -40,7 +65,9 @@ export default async function AgentsPage() {
         </h1>
         <p className="text-[11px] leading-snug text-muted-foreground/75 sm:text-xs">
           Public read-only export for <strong className="text-foreground">{profileName}</strong>.
-          No profile picker or PIN on this page.
+          No profile picker or PIN. Includes <strong className="text-foreground">today</strong>,{" "}
+          <strong className="text-foreground">this week</strong>, and{" "}
+          <strong className="text-foreground">this month</strong> plus full history in JSON.
         </p>
       </header>
 
@@ -67,27 +94,63 @@ export default async function AgentsPage() {
 
       {exportError ? (
         <div className="glass hud-corners rounded-2xl p-6 text-sm text-red-400">{exportError}</div>
-      ) : payload ? (
+      ) : payload && periods ? (
         <>
           <div className="glass hud-corners rounded-2xl p-4 text-xs text-muted-foreground">
             <p>
-              Exported {payload.exportedAt} ·{" "}
+              Exported {payload.exportedAt} · tz {periods.timezone} · today {periods.todayKey} ·{" "}
               {Object.values(payload.counts).reduce((a, b) => a + b, 0)} total records
+            </p>
+            <p className="mt-1">
+              Week {periods.thisWeek.range.from} → {periods.thisWeek.range.to} · Month{" "}
+              {periods.thisMonth.range.from} → {periods.thisMonth.range.to}
             </p>
           </div>
 
+          {contextHeader ? (
+            <section className="space-y-2">
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground/55">
+                Goals & status
+              </h2>
+              <pre className="glass hud-corners rounded-2xl p-4 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/90 sm:text-xs">
+                {contextHeader}
+              </pre>
+            </section>
+          ) : null}
+
+          <PeriodBlock title="Today" narrative={todayNarrative} />
+          <PeriodBlock title="This week" narrative={weekNarrative} />
+          <PeriodBlock title="This month" narrative={monthNarrative} />
+
           <section className="space-y-2">
             <h2 className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground/55">
-              Context summary
+              7-day coach snapshot
             </h2>
-            <pre className="glass hud-corners max-h-[min(70dvh,48rem)] overflow-auto rounded-2xl p-4 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/90 sm:text-xs">
+            <pre className="glass hud-corners max-h-[min(40dvh,28rem)] overflow-auto rounded-2xl p-4 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/90 sm:text-xs">
               {payload.contextSummary}
             </pre>
           </section>
 
           <details className="glass hud-corners rounded-2xl p-4 text-xs">
             <summary className="cursor-pointer font-medium text-muted-foreground">
-              Record counts by table
+              Period totals (JSON)
+            </summary>
+            <pre className="mt-3 max-h-96 overflow-auto text-[10px] font-mono">
+              {JSON.stringify(
+                {
+                  today: periods.today.totals,
+                  thisWeek: periods.thisWeek.totals,
+                  thisMonth: periods.thisMonth.totals,
+                },
+                null,
+                2
+              )}
+            </pre>
+          </details>
+
+          <details className="glass hud-corners rounded-2xl p-4 text-xs">
+            <summary className="cursor-pointer font-medium text-muted-foreground">
+              All-time record counts
             </summary>
             <pre className="mt-3 overflow-auto text-[10px] font-mono">
               {JSON.stringify(payload.counts, null, 2)}
@@ -103,4 +166,22 @@ export default async function AgentsPage() {
       </p>
     </div>
   )
+}
+
+function extractNarrativeHeader(full: string): string {
+  const start = full.indexOf("=== TODAY")
+  if (start < 0) return full.trim()
+  return full.slice(0, start).trim()
+}
+
+function extractPeriodSection(
+  full: string,
+  startMarker: string,
+  endMarker: string | null
+): string {
+  const startNeedle = `=== ${startMarker}`
+  const start = full.indexOf(startNeedle)
+  if (start < 0) return ""
+  const end = endMarker ? full.indexOf(`=== ${endMarker}`, start + 1) : full.length
+  return full.slice(start, end < 0 ? full.length : end).trim()
 }

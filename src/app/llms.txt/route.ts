@@ -14,7 +14,7 @@ This site exposes read-only health data (profile **los** or **carlos**, or the o
 
 - **Agent page (HTML + summary, no auth):** ${base}/agents
 - **JSON (all tables):** ${base}/api/agent/carlos
-- **Plain-text summary (7-day coach snapshot):** ${base}/api/agent/carlos?format=text
+- **Plain-text (today / week / month + 7-day snapshot):** ${base}/api/agent/carlos?format=text
 
 All agent routes are public.
 

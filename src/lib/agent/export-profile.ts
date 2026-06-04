@@ -2,6 +2,7 @@ import "server-only"
 
 import { prisma } from "@/lib/prisma"
 import { buildUserContext } from "@/lib/coach/context"
+import { buildAgentPeriodRollups, type AgentPeriodRollups } from "@/lib/agent/period-rollups"
 import { toAgentJson } from "@/lib/agent/serialize"
 
 export interface AgentProfileExport {
@@ -18,6 +19,8 @@ export interface AgentProfileExport {
   }
   /** Recent-state narrative (same snapshot the in-app AI coach uses). */
   contextSummary: string
+  /** TODAY / THIS WEEK / THIS MONTH totals, entries, and narrative. */
+  periods: AgentPeriodRollups
   counts: Record<string, number>
   data: Record<string, unknown>
 }
@@ -130,6 +133,29 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
     clientTimeZone: user.timeZone,
   })
 
+  const periods = buildAgentPeriodRollups(
+    {
+      calorieEntries,
+      stepEntries,
+      runEntries,
+      workoutSessions,
+      sleepEntries,
+      peptideEntries,
+      peptideDailyEntries,
+      alcoholEntries,
+      bowelEntries,
+      journalEntries,
+      recoveryDailyEntries,
+      treatmentLogs,
+      habits,
+      longGoals,
+      goals,
+      injuryRecords,
+      fastingProfile,
+    },
+    user.timeZone
+  )
+
   const data = {
     calorieEntries,
     stepEntries,
@@ -169,6 +195,7 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
     exportedAt: new Date().toISOString(),
     profile: toAgentJson(user),
     contextSummary,
+    periods: toAgentJson(periods),
     counts,
     data: toAgentJson(data),
   }
