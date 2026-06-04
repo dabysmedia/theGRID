@@ -3,6 +3,7 @@ import "server-only"
 import { prisma } from "@/lib/prisma"
 import { buildUserContext } from "@/lib/coach/context"
 import { buildAgentPeriodRollups, type AgentPeriodRollups } from "@/lib/agent/period-rollups"
+import { resolveAgentTimezone } from "@/lib/agent/timezone"
 import { toAgentJson } from "@/lib/agent/serialize"
 
 export interface AgentProfileExport {
@@ -128,9 +129,11 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
     }),
   ])
 
+  const agentTz = resolveAgentTimezone(user.timeZone)
+
   const { text: contextSummary } = await buildUserContext({
     userId,
-    clientTimeZone: user.timeZone,
+    clientTimeZone: agentTz,
   })
 
   const periods = buildAgentPeriodRollups(

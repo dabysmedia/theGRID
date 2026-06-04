@@ -1,8 +1,12 @@
 import "server-only"
 
-import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { sleepDurationHours } from "@/lib/sleepDuration"
-import { isValidTimeZone, localDayKey, localTimeParts } from "@/lib/notifications/server/local-time"
+import { localTimeParts } from "@/lib/notifications/server/local-time"
+import {
+  agentTodayKey,
+  resolveAgentTimezone,
+  storedEntryDayKey,
+} from "@/lib/agent/timezone"
 import { toAgentJson } from "@/lib/agent/serialize"
 import {
   buildWeightAnalytics,
@@ -203,10 +207,6 @@ export interface AgentPeriodRollups {
   narrative: string
 }
 
-function resolveTimezone(raw: string | null | undefined): string {
-  return isValidTimeZone(raw) ? raw : "UTC"
-}
-
 function subtractLocalDays(ymd: string, days: number): string {
   const [y, m, d] = ymd.split("-").map(Number)
   const t = Date.UTC(y, m - 1, d, 12, 0, 0) - days * 86_400_000
@@ -235,7 +235,7 @@ function inRange(key: string, from: string, to: string): boolean {
 }
 
 function dayKey(date: Date): string {
-  return utcCalendarDayKeyFromIso(date)
+  return storedEntryDayKey(date)
 }
 
 function sum(nums: number[]): number {
@@ -675,8 +675,8 @@ export function buildAgentPeriodRollups(
   timeZone: string | null | undefined,
   now: Date = new Date()
 ): AgentPeriodRollups {
-  const tz = resolveTimezone(timeZone)
-  const todayKey = localDayKey(now, tz)
+  const tz = resolveAgentTimezone(timeZone)
+  const todayKey = agentTodayKey(now, timeZone)
   const weekFrom = localWeekStartKey(todayKey, tz)
   const monthFrom = monthStartKey(todayKey)
 
@@ -746,7 +746,7 @@ export function buildAgentPeriodRollups(
   ]
 
   const header = [
-    `Timezone: ${tz} (today = ${todayKey})`,
+    `Timezone: ${tz} (today = ${todayKey}; entry dates use stored calendar day keys)`,
     "",
     "Active goals:",
     ...(activeGoals.length

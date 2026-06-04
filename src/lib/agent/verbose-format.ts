@@ -1,6 +1,6 @@
 import "server-only"
 
-import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
+import { storedEntryDayKey } from "@/lib/agent/timezone"
 import { sleepDurationHours } from "@/lib/sleepDuration"
 import {
   compoundLabel,
@@ -88,7 +88,7 @@ export function formatWorkoutSessionBlock(session: {
   bodyWeightLb: number | null
   exercises: string
 }): string[] {
-  const dk = utcCalendarDayKeyFromIso(session.date)
+  const dk = storedEntryDayKey(session.date)
   const mins = session.duration ? Math.round(session.duration / 60) : null
   const vol = sessionVolumeLb(session.exercises)
   const lines: string[] = [
@@ -138,9 +138,10 @@ export function buildWeightAnalytics(
   bounds: { from: string; to: string } | null,
   todayKey?: string
 ) {
-  const anchorKey = todayKey ?? (goal?.entries.length ? utcCalendarDayKeyFromIso(goal.entries[goal.entries.length - 1]!.date) : "")
+  const anchorKey =
+    todayKey ?? (goal?.entries.length ? storedEntryDayKey(goal.entries[goal.entries.length - 1]!.date) : "")
   const all = [...(goal?.entries ?? [])].sort((a, b) => a.date.getTime() - b.date.getTime())
-  const key = (d: Date) => utcCalendarDayKeyFromIso(d)
+  const key = (d: Date) => storedEntryDayKey(d)
 
   const inBounds = bounds
     ? all.filter((e) => {
@@ -163,7 +164,7 @@ export function buildWeightAnalytics(
   const periodDelta =
     periodFirst && periodLast ? Math.round((periodLast.value - periodFirst.value) * 10) / 10 : null
 
-  const weekStart = utcCalendarDayKeyFromIso(startOfISOWeek(new Date()))
+  const weekStart = storedEntryDayKey(startOfISOWeek(new Date()))
   const weekEntries = all.filter((e) => key(e.date) >= weekStart)
   const weekFirst = weekEntries[0]
   const weekLast = weekEntries[weekEntries.length - 1]
@@ -267,7 +268,7 @@ export function formatStepsLines(
   }
   lines.push(`${title} by day:`)
   for (const s of [...steps].sort((a, b) => b.date.getTime() - a.date.getTime())) {
-    const dk = utcCalendarDayKeyFromIso(s.date)
+    const dk = storedEntryDayKey(s.date)
     const vs =
       stepGoal && stepGoal.goalType !== "weekly"
         ? ` (${s.count >= stepGoal.target ? "met goal" : `${stepGoal.target - s.count} short`})`
@@ -292,7 +293,7 @@ export function formatPeptideInjectionLines(
   if (entries.length === 0) return [`${title}: (none)`]
   const lines: string[] = [`${title}: ${entries.length} injection(s)`]
   for (const p of entries) {
-    const dk = utcCalendarDayKeyFromIso(p.date)
+    const dk = storedEntryDayKey(p.date)
     const fx = parseSideEffectsJson(p.sideEffectsJson).map(sideEffectLabel)
     lines.push(
       `  - ${dk} @ ${p.injectedAt.toISOString()}: ${compoundLabel(p.compound)} ${p.doseMg}mg at ${injectionSiteLabel(p.injectionSite)}${fx.length ? `, side effects: ${fx.join(", ")}` : ""}${p.notes ? ` — ${truncate(p.notes, 120)}` : ""}`
@@ -310,7 +311,7 @@ export function formatPeptideDailyLines(
   for (const p of entries) {
     const fx = parseSideEffectsJson(p.sideEffectsJson).map(sideEffectLabel)
     lines.push(
-      `  - ${utcCalendarDayKeyFromIso(p.date)}: hunger ${p.hungerLevel}/10${fx.length ? `, ${fx.join(", ")}` : ""}${p.notes ? ` — ${truncate(p.notes, 80)}` : ""}`
+      `  - ${storedEntryDayKey(p.date)}: hunger ${p.hungerLevel}/10${fx.length ? `, ${fx.join(", ")}` : ""}${p.notes ? ` — ${truncate(p.notes, 80)}` : ""}`
     )
   }
   return lines
@@ -330,7 +331,7 @@ export function formatMealLine(m: {
   const p = m.protein != null ? `${m.protein}P` : "—P"
   const c = m.carbs != null ? `${m.carbs}C` : "—C"
   const f = m.fat != null ? `${m.fat}F` : "—F"
-  return `  - [${m.mealType}] ${desc} — ${m.calories} kcal (${p}/${c}/${f}) on ${utcCalendarDayKeyFromIso(m.date)}`
+  return `  - [${m.mealType}] ${desc} — ${m.calories} kcal (${p}/${c}/${f}) on ${storedEntryDayKey(m.date)}`
 }
 
 export function formatRunLine(r: {
@@ -340,7 +341,7 @@ export function formatRunLine(r: {
   environment: string
   notes: string | null
 }): string {
-  const dk = utcCalendarDayKeyFromIso(r.date)
+  const dk = storedEntryDayKey(r.date)
   const paceMin =
     r.distance > 0 ? Math.round((r.duration / 60 / r.distance) * 10) / 10 : null
   return `  - ${dk}: ${r.distance} mi in ${Math.round(r.duration / 60)} min (${r.environment})${paceMin != null ? `, pace ${paceMin} min/mi` : ""}${r.notes ? ` — ${truncate(r.notes, 120)}` : ""}`
@@ -354,7 +355,7 @@ export function formatSleepLine(s: {
   notes: string | null
 }): string {
   const hrs = sleepDurationHours(s.bedtime, s.wakeTime)
-  const dk = utcCalendarDayKeyFromIso(s.date)
+  const dk = storedEntryDayKey(s.date)
   return `  - ${dk}: ${hrs}h, quality ${s.quality}/5, bed ${s.bedtime.toISOString()} → wake ${s.wakeTime.toISOString()}${s.notes ? ` — ${truncate(s.notes, 100)}` : ""}`
 }
 
@@ -370,7 +371,7 @@ export function formatRecoveryLine(r: {
   domsJson: string
   notes: string | null
 }): string {
-  const dk = utcCalendarDayKeyFromIso(r.date)
+  const dk = storedEntryDayKey(r.date)
   const doms = parseJsonArray<{ key: string; score: number }>(r.domsJson)
     .filter((d) => d.score > 0)
     .slice(0, 8)
