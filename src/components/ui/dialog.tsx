@@ -43,17 +43,22 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  priority = "normal",
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  /** Use above fullscreen overlays (e.g. active workout at z-120). */
+  priority?: "normal" | "high"
 }) {
+  const layer = priority === "high" ? "z-[130]" : "z-[110]"
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={layer} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "glass fixed z-[110] grid w-full max-w-none gap-4 rounded-2xl p-4 pb-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom)))] text-sm text-foreground outline-none duration-100",
+          "glass fixed grid w-full max-w-none gap-4 rounded-2xl p-4 pb-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom)))] text-sm text-foreground outline-none duration-100",
+          layer,
           "overflow-y-auto overscroll-contain",
           "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
           className

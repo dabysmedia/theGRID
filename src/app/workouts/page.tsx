@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useRef } from "react"
 import {
   ArrowLeftRight,
+  Calculator,
   Check,
   ChevronDown,
   ChevronRight,
@@ -43,7 +44,8 @@ import {
   saveWorkoutRestConfig,
   type WorkoutRestConfig,
 } from "@/lib/workout-rest-config"
-import { cn, formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import { cn, formatDate, formatDisplayDate, glassPanelClass, parseLocalDate } from "@/lib/utils"
+import { PlateCalculatorDialog } from "@/components/workouts/PlateCalculatorDialog"
 
 /* ──────────────────────────────────────────────────────────
    Types
@@ -488,6 +490,60 @@ function totalSetsCompleted(exercises: SessionExercise[]): number {
     (sum, ex) => sum + ex.sets.filter((s) => s.completed).length,
     0,
   )
+}
+
+function totalPlannedSets(exercises: SessionExercise[]): number {
+  return exercises.reduce((sum, ex) => sum + ex.sets.length, 0)
+}
+
+function completedVolume(exercises: SessionExercise[]): number {
+  let vol = 0
+  for (const ex of exercises) {
+    for (const set of ex.sets) {
+      if (set.completed && set.weight != null && set.reps != null) {
+        vol += set.weight * set.reps
+      }
+    }
+  }
+  return vol
+}
+
+function getActiveWorkoutFocus(exercises: SessionExercise[]) {
+  const totalSets = totalPlannedSets(exercises)
+  const completedSets = totalSetsCompleted(exercises)
+  const incompleteIdx = exercises.findIndex((ex) =>
+    ex.sets.some((s) => !s.completed),
+  )
+  const currentIdx =
+    incompleteIdx >= 0
+      ? incompleteIdx
+      : exercises.length > 0
+        ? exercises.length - 1
+        : -1
+  const current = currentIdx >= 0 ? exercises[currentIdx] : null
+  const next =
+    incompleteIdx >= 0 && incompleteIdx < exercises.length - 1
+      ? exercises[incompleteIdx + 1]
+      : null
+  const currentDone = current?.sets.filter((s) => s.completed).length ?? 0
+  const currentTotal = current?.sets.length ?? 0
+  const allSetsComplete = totalSets > 0 && completedSets >= totalSets
+
+  return {
+    totalSets,
+    completedSets,
+    current,
+    next,
+    currentDone,
+    currentTotal,
+    allSetsComplete,
+    onLastExercise: incompleteIdx >= 0 && incompleteIdx === exercises.length - 1,
+  }
+}
+
+function formatVolumeLb(vol: number): string {
+  if (vol >= 1000) return `${(vol / 1000).toFixed(1)}k`
+  return String(vol)
 }
 
 const SET_TYPE_LABELS: Record<string, { short: string; color: string }> = {
@@ -1371,6 +1427,11 @@ function ActiveWorkout({
     startX: number
   } | null>(null)
   const [setSwipeVisual, setSetSwipeVisual] = useState<{ key: string; dx: number } | null>(null)
+  const [plateCalcTarget, setPlateCalcTarget] = useState<{
+    exId: string
+    setId: string
+    weight: number | null
+  } | null>(null)
 
   useEffect(() => {
     const start = new Date(session.startedAt).getTime()
@@ -1780,8 +1841,12 @@ function ActiveWorkout({
     )
   }
 
-  const completedSets = totalSetsCompleted(exercises)
-  const vol = totalVolume(exercises)
+  const loggedVol = completedVolume(exercises)
+  const focus = getActiveWorkoutFocus(exercises)
+  const sessionProgressPct =
+    focus.totalSets > 0
+      ? Math.min(100, Math.round((focus.completedSets / focus.totalSets) * 100))
+      : 0
   const restRemainingSec =
     restEndsAt == null
       ? null
@@ -1796,6 +1861,10 @@ function ActiveWorkout({
       : 0
 
   const heroCover = session.coverImageUrl?.trim() ?? ""
+  const setInputClass =
+    "h-11 min-h-11 border-primary/30 bg-glass-highlight/30 px-1.5 text-center text-base tabular-nums backdrop-blur-sm ring-1 ring-inset ring-primary/15 focus-visible:border-primary/50 focus-visible:ring-primary/30 sm:h-9 sm:text-sm"
+  const setInputGhostClass =
+    "border-primary/15 bg-glass-highlight/15 text-muted-foreground/50 ring-primary/10"
 
   return (
     <>
@@ -1803,49 +1872,71 @@ function ActiveWorkout({
         role="dialog"
         aria-modal="true"
         aria-labelledby="active-workout-heading"
-        className="fixed inset-0 z-[120] flex flex-col bg-background/92 backdrop-blur-md supports-backdrop-filter:bg-background/85 sm:items-center sm:justify-center sm:p-4"
+        className="fixed inset-0 z-[120] flex flex-col bg-background/50 backdrop-blur-xl supports-backdrop-filter:backdrop-blur-xl sm:items-center sm:justify-center sm:p-4"
       >
         <div
           className={cn(
-            "glass-frost relative flex min-h-0 w-full flex-1 flex-col overflow-hidden border-border/20 sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:max-w-lg sm:flex-none sm:rounded-2xl sm:border sm:shadow-2xl sm:shadow-black/30",
+            "glass-frost relative flex min-h-0 w-full flex-1 flex-col overflow-hidden sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:max-w-lg sm:flex-none sm:rounded-2xl",
           )}
         >
           {heroCover ? (
             <>
               {/* Hero band only — top of panel, not full scroll height */}
               <div
-                className="pointer-events-none absolute left-0 right-0 top-0 z-0 h-[min(36dvh,15rem)] bg-cover bg-[center_top] bg-no-repeat opacity-[0.26] dark:opacity-[0.32] sm:rounded-t-2xl"
+                className="pointer-events-none absolute left-0 right-0 top-0 z-0 h-[min(36dvh,15rem)] bg-cover bg-[center_top] bg-no-repeat opacity-[0.22] dark:opacity-[0.28] sm:rounded-t-2xl"
                 style={{ backgroundImage: `url(${heroCover})` }}
                 aria-hidden
               />
               <div
-                className="pointer-events-none absolute left-0 right-0 top-0 z-[1] h-[min(36dvh,15rem)] bg-gradient-to-b from-background/88 via-background/45 to-transparent dark:from-background/92 dark:via-background/50 dark:to-transparent sm:rounded-t-2xl"
+                className="pointer-events-none absolute left-0 right-0 top-0 z-[1] h-[min(36dvh,15rem)] bg-gradient-to-b from-background/90 via-background/40 to-transparent dark:from-background/94 dark:via-background/45 dark:to-transparent sm:rounded-t-2xl"
                 aria-hidden
               />
             </>
           ) : null}
+          <div
+            className="pointer-events-none absolute inset-0 z-[2] bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute inset-x-10 top-0 z-[2] h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-36 bg-gradient-to-b from-primary/[0.06] via-transparent to-transparent"
+            aria-hidden
+          />
           <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-          {/* Title row — matches routine dialog header */}
-          <div className="shrink-0 border-b border-border/15 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-4">
+          {/* Header */}
+          <div className="shrink-0 border-b border-glass-border/25 px-4 pb-4 pt-[max(0.875rem,env(safe-area-inset-top))] sm:pt-4">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1 pr-2">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
-                  In progress
-                </p>
+              <div className="min-w-0 flex-1 pr-1">
+                <div className="flex items-center gap-2">
+                  <div className="status-dot" />
+                  <p className="type-hud-eyebrow text-primary/85">In progress</p>
+                </div>
                 <h2
                   id="active-workout-heading"
-                  className="font-heading mt-1 text-base font-medium leading-tight text-foreground"
+                  className="font-heading mt-2 text-xl font-semibold leading-snug text-foreground sm:text-lg"
                 >
-                  Active workout
+                  {session.name?.trim() || "Active workout"}
                 </h2>
+                <p className="mt-1 text-sm text-muted-foreground/70">
+                  {exercises.length === 0
+                    ? "Add exercises to begin"
+                    : focus.allSetsComplete
+                      ? "All sets complete — finish when ready"
+                      : focus.current
+                        ? `Working on set ${Math.min(focus.currentDone + 1, focus.currentTotal)} of ${focus.currentTotal}`
+                        : `${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`}
+                </p>
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-0.5 rounded-xl border border-primary/20 bg-primary/10 px-3 py-2">
-                <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                  Time
+              <div className="glass-subtle flex shrink-0 flex-col items-end gap-1 rounded-2xl border border-primary/25 bg-primary/10 px-3.5 py-2.5 ring-1 ring-primary/15">
+                <span className="type-hud-caption-tight text-muted-foreground/65">
+                  Elapsed
                 </span>
-                <div className="flex items-center gap-1.5">
-                  <Clock className="size-3.5 text-primary/80" aria-hidden />
-                  <span className="font-heading text-lg font-semibold tabular-nums text-primary leading-none sm:text-xl">
+                <div className="flex items-center gap-2">
+                  <Clock className="size-4 text-primary/90" aria-hidden />
+                  <span className="font-heading text-2xl font-bold tabular-nums leading-none text-primary sm:text-xl">
                     {formatTimer(elapsed)}
                   </span>
                 </div>
@@ -1853,57 +1944,110 @@ function ActiveWorkout({
             </div>
           </div>
 
-          <div className="shrink-0 px-4 pb-3 pt-3">
-            <div className="flex h-11 w-full items-center rounded-xl border border-border/15 bg-muted/10 px-3">
-              <span className="min-w-0 truncate text-base font-medium text-foreground sm:text-sm">
-                {session.name?.trim() || "Workout"}
-              </span>
-            </div>
-          </div>
+          {/* Session focus — progress + now / next */}
+          <div className="shrink-0 border-b border-glass-border/20 px-4 py-3.5">
+            <div className={cn(glassPanelClass, "space-y-3 overflow-hidden px-4 py-3.5")}>
+              <div>
+                <div className="mb-2 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="type-hud-label-soft">Session progress</p>
+                    {loggedVol > 0 && (
+                      <p className="mt-0.5 text-xs text-muted-foreground/55">
+                        {formatVolumeLb(loggedVol)} lb logged from completed sets
+                      </p>
+                    )}
+                  </div>
+                  <p className="font-heading text-lg font-bold tabular-nums text-foreground">
+                    {focus.totalSets > 0 ? (
+                      <>
+                        {focus.completedSets}
+                        <span className="text-sm font-semibold text-muted-foreground/50">
+                          /{focus.totalSets}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground/40">—</span>
+                    )}
+                  </p>
+                </div>
+                <div
+                  className="h-2.5 overflow-hidden rounded-full bg-glass-highlight/15 ring-1 ring-inset ring-glass-border/30"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={sessionProgressPct}
+                  aria-label={`${focus.completedSets} of ${focus.totalSets} sets complete`}
+                >
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+                    style={{
+                      width: `${sessionProgressPct}%`,
+                      boxShadow: sessionProgressPct > 0 ? "0 0 10px oklch(0.82 0.18 110 / 25%)" : undefined,
+                    }}
+                  />
+                </div>
+              </div>
 
-          {/* Session stats — compact strip like routine sections */}
-          <div className="shrink-0 space-y-2 border-b border-border/10 px-4 py-3">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                Moves <span className="font-bold text-foreground/90">{exercises.length}</span>
-              </span>
-              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                Sets done{" "}
-                <span className="font-bold text-foreground/90">{completedSets}</span>
-              </span>
-              {vol > 0 && (
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                  Vol{" "}
-                  <span className="font-bold text-foreground/90">
-                    {vol >= 1000 ? `${(vol / 1000).toFixed(1)}k` : vol}
-                  </span>
-                  <span className="text-muted-foreground/40"> lb</span>
-                </span>
-              )}
-              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                Body weight{" "}
-                <span className="font-bold text-foreground/90 tabular-nums">
-                  {session.bodyWeightLb != null && Number.isFinite(session.bodyWeightLb)
-                    ? `${session.bodyWeightLb} lb`
-                    : "—"}
-                </span>
-              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <div
+                  className="glass-subtle min-w-0 overflow-hidden rounded-xl border border-primary/25 bg-primary/10 px-3 py-2.5 ring-1 ring-primary/15"
+                >
+                  <p className="type-hud-caption-tight text-primary/90">Now</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                    {focus.current?.name ?? "No exercises yet"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground/65">
+                    {focus.allSetsComplete
+                      ? "Session complete"
+                      : focus.current
+                        ? focus.currentDone >= focus.currentTotal
+                          ? "Exercise done"
+                          : `${focus.currentTotal - focus.currentDone} set${focus.currentTotal - focus.currentDone === 1 ? "" : "s"} left`
+                        : "Tap add exercise below"}
+                  </p>
+                </div>
+                <div className="glass-subtle min-w-0 rounded-xl px-3 py-2.5">
+                  <p className="type-hud-caption-tight text-muted-foreground/60">Up next</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-foreground/90">
+                    {focus.allSetsComplete
+                      ? "Wrap up & finish"
+                      : focus.next?.name ??
+                        (focus.onLastExercise && focus.current
+                          ? "Last exercise"
+                          : exercises.length === 0
+                            ? "—"
+                            : "—")}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground/55">
+                    {focus.allSetsComplete
+                      ? "Review your log"
+                      : focus.next
+                        ? `${focus.next.sets.length} set${focus.next.sets.length === 1 ? "" : "s"} planned`
+                        : focus.onLastExercise
+                          ? "Then you are done"
+                          : "Keep logging sets"}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Rest timer — starts when a set is checked done; duration persisted locally */}
-          <div className="shrink-0 border-b border-border/10 px-4 py-2.5">
+          <div className="shrink-0 border-b border-glass-border/20 px-4 py-3.5">
             {restCountdownActive && restRemainingSec != null ? (
               <div
-                className="flex items-center gap-3 py-0.5"
+                className="glass-subtle overflow-hidden rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3.5 ring-1 ring-primary/15"
                 aria-live="polite"
                 aria-atomic="true"
               >
-                <span className="font-heading w-[2.85rem] shrink-0 text-right text-lg font-semibold tabular-nums tracking-tight text-primary sm:text-xl">
-                  {formatRestCountdown(restRemainingSec)}
-                </span>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="type-hud-label-soft text-primary/85">Rest timer</span>
+                  <span className="font-heading text-3xl font-bold tabular-nums tracking-tight text-primary sm:text-2xl">
+                    {formatRestCountdown(restRemainingSec)}
+                  </span>
+                </div>
                 <div
-                  className="relative h-[5px] min-w-0 flex-1 overflow-hidden rounded-full bg-muted/30 shadow-[inset_0_1px_2px_oklch(0_0_0/12%)] ring-1 ring-inset ring-border/15"
+                  className="relative h-2.5 min-w-0 overflow-hidden rounded-full bg-glass-highlight/15 shadow-[inset_0_1px_2px_oklch(0_0_0/8%)] ring-1 ring-inset ring-glass-border/30"
                   role="progressbar"
                   aria-valuemin={0}
                   aria-valuemax={100}
@@ -1920,51 +2064,51 @@ function ActiveWorkout({
                 </div>
               </div>
             ) : (
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <div className="glass-subtle space-y-3 rounded-2xl px-3.5 py-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <Timer
-                    className="size-3.5 shrink-0 text-muted-foreground/50"
+                    className="size-4 shrink-0 text-muted-foreground/55"
                     aria-hidden
                   />
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                    Rest after set
-                  </span>
-                  <span className="text-[10px] tabular-nums font-semibold text-foreground/85">
+                  <span className="type-hud-label-soft">Rest after set</span>
+                  <span className="glass-subtle rounded-lg px-2.5 py-1 text-sm tabular-nums font-semibold text-foreground">
                     {formatRestCountdown(restConfig.seconds)}
                   </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    className="h-7 min-h-7 touch-manipulation px-2.5 text-[10px]"
-                    onClick={() => {
-                      const next = saveWorkoutRestConfig({
-                        enabled: !restConfig.enabled,
-                      })
-                      setRestConfig(next)
-                      if (!next.enabled) setRestEndsAt(null)
-                    }}
-                  >
-                    {restConfig.enabled ? "On" : "Off"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="touch-manipulation"
-                    aria-label={
-                      restSettingsOpen
-                        ? "Hide rest timer length options"
-                        : "Choose rest timer length"
-                    }
-                    aria-expanded={restSettingsOpen}
-                    onClick={() => setRestSettingsOpen((o) => !o)}
-                  >
-                    <Settings2 className="size-3.5" />
-                  </Button>
+                  <div className="ml-auto flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-10 min-h-10 touch-manipulation px-4 text-xs font-semibold"
+                      onClick={() => {
+                        const next = saveWorkoutRestConfig({
+                          enabled: !restConfig.enabled,
+                        })
+                        setRestConfig(next)
+                        if (!next.enabled) setRestEndsAt(null)
+                      }}
+                    >
+                      {restConfig.enabled ? "On" : "Off"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-10 min-h-10 min-w-10 touch-manipulation"
+                      aria-label={
+                        restSettingsOpen
+                          ? "Hide rest timer length options"
+                          : "Choose rest timer length"
+                      }
+                      aria-expanded={restSettingsOpen}
+                      onClick={() => setRestSettingsOpen((o) => !o)}
+                    >
+                      <Settings2 className="size-4" />
+                    </Button>
+                  </div>
                 </div>
                 {restSettingsOpen && (
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {REST_PRESETS.map(({ sec, label }) => (
                       <button
                         key={sec}
@@ -1974,10 +2118,10 @@ function ActiveWorkout({
                           setRestConfig(next)
                         }}
                         className={cn(
-                          "rounded-lg px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors touch-manipulation",
+                          "min-h-11 rounded-xl px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors touch-manipulation",
                           restConfig.seconds === sec
-                            ? "bg-primary/20 text-primary ring-1 ring-primary/35"
-                            : "bg-muted/25 text-muted-foreground/75 hover:bg-muted/40",
+                            ? "glass-panel-accent text-primary ring-1 ring-primary/35 [--panel-accent:var(--primary)]"
+                            : "glass-subtle text-muted-foreground/80 hover:bg-glass-highlight/20 active:scale-[0.98]",
                         )}
                       >
                         {label}
@@ -1997,12 +2141,18 @@ function ActiveWorkout({
             )}
           >
             {exercises.length === 0 && (
-              <p className="px-4 py-6 text-center text-sm text-muted-foreground/70">
-                Add an exercise to start logging sets.
-              </p>
+              <div className="glass-subtle mx-4 my-8 rounded-2xl border border-dashed border-glass-border/35 px-6 py-10 text-center">
+                <Dumbbell className="mx-auto size-8 text-muted-foreground/35" aria-hidden />
+                <p className="mt-3 text-base font-medium text-foreground/90">
+                  No exercises yet
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground/65">
+                  Add a movement below to start logging sets.
+                </p>
+              </div>
             )}
 
-            <div className="divide-y divide-border/10">
+            <div className="space-y-3 px-4 py-3">
               {exercises.map((ex) => {
                 const prev = previousByExercise.get(ex.name.toLowerCase())
                 const collapsed = collapsedExerciseIds.has(ex.id)
@@ -2011,7 +2161,10 @@ function ActiveWorkout({
                 const collapseAnim =
                   "grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none"
                 return (
-                  <div key={ex.id} className="px-4 py-3">
+                  <div
+                    key={ex.id}
+                    className={cn(glassPanelClass, "overflow-hidden p-3.5")}
+                  >
                     <div
                       className={cn(collapseAnim, collapsed ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}
                     >
@@ -2021,7 +2174,7 @@ function ActiveWorkout({
                       >
                         <button
                           type="button"
-                          className="flex w-full items-center justify-between gap-3 rounded-xl border border-border/10 bg-muted/10 px-3 py-2.5 text-left transition-colors hover:bg-muted/18 touch-manipulation"
+                          className="glass-subtle flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3.5 text-left transition-colors hover:bg-glass-highlight/25 active:scale-[0.99] touch-manipulation"
                           onClick={() =>
                             setCollapsedExerciseIds((p) => {
                               const next = new Set(p)
@@ -2031,15 +2184,15 @@ function ActiveWorkout({
                           }
                         >
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-foreground">
+                            <p className="truncate text-base font-semibold text-foreground">
                               {ex.name}
                             </p>
-                            <p className="mt-0.5 text-[10px] text-muted-foreground/55">
-                              {doneCount}/{setCount} sets · Tap to expand
+                            <p className="mt-1 text-xs text-muted-foreground/60">
+                              {doneCount}/{setCount} sets complete · Tap to expand
                             </p>
                           </div>
                           <ChevronRight
-                            className="size-4 shrink-0 text-muted-foreground/40"
+                            className="size-5 shrink-0 text-muted-foreground/45"
                             aria-hidden
                           />
                         </button>
@@ -2052,31 +2205,31 @@ function ActiveWorkout({
                         className="min-h-0 overflow-hidden"
                         inert={collapsed ? true : undefined}
                       >
-                      <div className="flex gap-3 pt-0.5">
-                        <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex gap-3 pt-1">
+                        <div className="min-w-0 flex-1 space-y-3">
                           <div className="flex items-start justify-between gap-2">
                             <button
                               type="button"
                               onClick={() => toggleExerciseCollapsed(ex.id)}
-                              className="min-w-0 flex-1 rounded-xl border border-transparent px-1.5 py-1.5 -mx-1.5 text-left transition-colors hover:bg-muted/20 hover:border-border/15 active:bg-muted/30 touch-manipulation"
+                              className="min-w-0 flex-1 rounded-xl border border-transparent px-2 py-2 -mx-1 text-left transition-colors hover:bg-glass-highlight/20 hover:border-glass-border/25 active:bg-glass-highlight/30 touch-manipulation"
                               aria-expanded={!collapsed}
                             >
-                              <h3 className="m-0 text-sm font-semibold text-foreground break-words">
+                              <h3 className="m-0 text-base font-semibold leading-snug text-foreground break-words sm:text-sm">
                                 {ex.name}
                               </h3>
                               {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
-                                <div className="mt-1 flex flex-wrap items-center gap-1">
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                   {ex.primaryMuscles.map((m) => (
                                     <span
                                       key={m.code}
-                                      className="text-[9px] font-medium rounded-md px-1.5 py-0.5"
+                                      className="text-[10px] font-semibold rounded-md px-2 py-0.5"
                                       style={{ backgroundColor: `${m.color}22`, color: m.color }}
                                     >
                                       {m.name}
                                     </span>
                                   ))}
                                   {ex.category && (
-                                    <span className="text-[9px] text-muted-foreground/45">
+                                    <span className="text-[10px] text-muted-foreground/50">
                                       · {ex.category}
                                     </span>
                                   )}
@@ -2090,27 +2243,28 @@ function ActiveWorkout({
                                 setSwapExerciseId(ex.id)
                                 setShowPicker(true)
                               }}
-                              className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/20 bg-muted/15 text-muted-foreground/50 transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary touch-manipulation sm:size-11"
+                              className="glass-subtle flex size-12 shrink-0 items-center justify-center rounded-xl text-muted-foreground/55 transition-colors hover:border-primary/30 hover:bg-glass-highlight/30 hover:text-primary active:scale-[0.97] touch-manipulation"
                               aria-label={`Swap ${ex.name} for another exercise`}
                             >
-                              <ArrowLeftRight className="size-4 shrink-0" aria-hidden />
+                              <ArrowLeftRight className="size-5 shrink-0" aria-hidden />
                             </button>
                           </div>
 
-                          <div className="grid grid-cols-[2rem_1fr_4.5rem_4.5rem_2.5rem] gap-1.5 px-0.5">
-                          <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45 text-center">
+                          <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.5rem_4.75rem_4.75rem_3.25rem] gap-2 px-0.5 sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
                             Set
                           </span>
-                          <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55">
                             Prev
                           </span>
-                          <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45 text-center">
+                          <span aria-hidden className="min-w-0" />
+                          <span className="col-start-4 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
                             lb
                           </span>
-                          <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45 text-center">
+                          <span className="col-start-5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
                             Reps
                           </span>
-                          <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45 text-center">
+                          <span className="col-start-6 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
                             Done
                           </span>
                         </div>
@@ -2140,8 +2294,8 @@ function ActiveWorkout({
                               ) : null}
                               <div
                                 className={cn(
-                                  "grid grid-cols-[2rem_1fr_4.5rem_4.5rem_2.5rem] gap-1.5 items-center rounded-lg px-0.5 py-0.5 transition-colors",
-                                  set.completed && "bg-primary/8",
+                                  "grid grid-cols-[2.75rem_minmax(0,1fr)_2.5rem_4.75rem_4.75rem_3.25rem] gap-2 items-center rounded-xl px-0.5 py-1 transition-colors sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5 sm:py-0.5",
+                                  set.completed && "border border-primary/20 bg-primary/10 ring-1 ring-primary/20",
                                 )}
                                 style={{
                                   transform: swipeDx !== 0 ? `translateX(${swipeDx}px)` : undefined,
@@ -2153,7 +2307,7 @@ function ActiveWorkout({
                                 type="button"
                                 onClick={() => cycleSetType(ex.id, set.id)}
                                 className={cn(
-                                  "text-xs font-bold tabular-nums text-center transition-colors touch-manipulation",
+                                  "flex min-h-11 min-w-11 items-center justify-center rounded-xl text-sm font-bold tabular-nums transition-colors touch-manipulation active:scale-[0.96]",
                                   typeInfo.color,
                                 )}
                                 title={`Type: ${set.type} (tap to change)`}
@@ -2161,18 +2315,34 @@ function ActiveWorkout({
                                 {set.type === "working" ? set.setNumber : typeInfo.short}
                               </button>
 
-                              <span className="text-[11px] text-muted-foreground/45 tabular-nums truncate">
+                              <span className="text-xs text-muted-foreground/55 tabular-nums truncate px-0.5">
                                 {prevSet
                                   ? `${prevSet.weight ?? "–"}×${prevSet.reps ?? "–"}`
                                   : "–"}
                               </span>
 
+                              <button
+                                type="button"
+                                className="glass-subtle flex size-10 min-h-10 min-w-10 items-center justify-center rounded-xl text-muted-foreground/50 transition-colors hover:border-primary/30 hover:bg-glass-highlight/30 hover:text-primary active:scale-[0.96] touch-manipulation sm:size-9 sm:min-h-9 sm:min-w-9"
+                                aria-label="Plate calculator"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  setPlateCalcTarget({
+                                    exId: ex.id,
+                                    setId: set.id,
+                                    weight: set.weight,
+                                  })
+                                }}
+                              >
+                                <Calculator className="size-4 sm:size-3.5" aria-hidden />
+                              </button>
+
                               <Input
                                 type="number"
                                 className={cn(
-                                  "h-8 border-primary/15 bg-background/40 px-1 text-center text-xs tabular-nums",
-                                  ghostSetIds.has(set.id) &&
-                                    "border-muted-foreground/20 bg-muted/10 text-muted-foreground/50",
+                                  setInputClass,
+                                  ghostSetIds.has(set.id) && setInputGhostClass,
                                 )}
                                 placeholder="—"
                                 value={set.weight ?? ""}
@@ -2190,9 +2360,8 @@ function ActiveWorkout({
                               <Input
                                 type="number"
                                 className={cn(
-                                  "h-8 border-primary/15 bg-background/40 px-1 text-center text-xs tabular-nums",
-                                  ghostSetIds.has(set.id) &&
-                                    "border-muted-foreground/20 bg-muted/10 text-muted-foreground/50",
+                                  setInputClass,
+                                  ghostSetIds.has(set.id) && setInputGhostClass,
                                 )}
                                 placeholder="—"
                                 value={set.reps ?? ""}
@@ -2211,35 +2380,35 @@ function ActiveWorkout({
                                 type="button"
                                 onClick={() => toggleSetComplete(ex.id, set.id)}
                                 className={cn(
-                                  "mx-auto flex size-8 items-center justify-center rounded-lg transition-all touch-manipulation",
+                                  "mx-auto flex size-11 items-center justify-center rounded-xl transition-all touch-manipulation active:scale-[0.94]",
                                   set.completed
-                                    ? "bg-primary text-primary-foreground shadow-sm shadow-primary/25"
-                                    : "bg-muted/20 text-muted-foreground/35 hover:bg-muted/35",
+                                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/30"
+                                    : "glass-subtle text-muted-foreground/45 hover:bg-glass-highlight/25",
                                 )}
                               >
-                                <Check className="size-3.5" />
+                                <Check className="size-5" />
                               </button>
                               </div>
                             </div>
                           )
                         })}
 
-                        <div className="flex gap-2 pt-0.5">
+                        <div className="flex gap-2.5 pt-1">
                           <button
                             type="button"
                             onClick={() => addSet(ex.id)}
-                            className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-dashed border-border/30 py-2 text-[10px] font-medium text-muted-foreground/55 transition-colors hover:bg-muted/15 hover:text-muted-foreground touch-manipulation"
+                            className="glass-subtle flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-glass-border/40 py-3 text-sm font-semibold text-muted-foreground/70 transition-colors hover:bg-glass-highlight/20 hover:text-foreground active:scale-[0.99] touch-manipulation"
                           >
-                            <Plus className="size-3" />
+                            <Plus className="size-4" />
                             Add set
                           </button>
                           <button
                             type="button"
                             onClick={() => removeExercise(ex.id)}
-                            className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-border/30 text-muted-foreground/35 transition-colors hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-400 touch-manipulation sm:size-11"
+                            className="glass-subtle flex size-12 shrink-0 items-center justify-center rounded-xl border border-dashed border-glass-border/40 text-muted-foreground/45 transition-colors hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-400 active:scale-[0.97] touch-manipulation"
                             aria-label={`Remove ${ex.name}`}
                           >
-                            <Trash2 className="size-4" />
+                            <Trash2 className="size-5" />
                           </button>
                           </div>
                         </div>
@@ -2251,7 +2420,7 @@ function ActiveWorkout({
               })}
             </div>
 
-            <div className="px-4 pb-2 pt-1">
+            <div className="px-4 pb-3 pt-1">
               <button
                 type="button"
                 onClick={() => {
@@ -2259,22 +2428,22 @@ function ActiveWorkout({
                   setSwapExerciseId(null)
                   setShowPicker(true)
                 }}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/30 py-3 text-sm text-muted-foreground/60 transition-colors hover:bg-muted/15 hover:text-muted-foreground touch-manipulation"
+                className="glass-subtle flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/30 py-3.5 text-base font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 active:scale-[0.99] touch-manipulation sm:min-h-12 sm:text-sm"
               >
-                <Plus className="size-4" />
+                <Plus className="size-5" />
                 Add exercise
               </button>
             </div>
           </div>
 
-          {/* Footer — square discard + full-width finish */}
-          <div className="shrink-0 border-t border-border/15 px-4 py-3 pb-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom)))]">
-            <div className="flex items-stretch gap-2">
+          {/* Footer */}
+          <div className="glass-subtle shrink-0 border-t border-glass-border/25 px-4 py-3.5 pb-[max(1.25rem,calc(0.875rem+env(safe-area-inset-bottom)))]">
+            <div className="flex items-stretch gap-3">
               <Button
                 type="button"
                 variant="outline"
                 size="icon-lg"
-                className="h-12 w-12 min-h-12 min-w-12 shrink-0 touch-manipulation rounded-xl border-red-500/25 text-red-400 hover:bg-red-500/10 sm:h-12 sm:min-h-12 sm:w-12 sm:min-w-12"
+                className="size-14 min-h-14 min-w-14 shrink-0 touch-manipulation rounded-2xl border-red-500/30 text-red-400 hover:bg-red-500/10 active:scale-[0.97] sm:size-12 sm:min-h-12 sm:min-w-12 sm:rounded-xl"
                 aria-label="Discard workout"
                 onClick={() => setConfirmEndAction("discard")}
               >
@@ -2284,10 +2453,10 @@ function ActiveWorkout({
                 type="button"
                 variant="glass"
                 size="lg"
-                className="h-12 min-h-12 min-w-0 flex-1 gap-2 press-scale touch-manipulation sm:h-12 sm:min-h-12"
+                className="h-14 min-h-14 min-w-0 flex-1 gap-2.5 rounded-2xl text-base font-semibold press-scale touch-manipulation sm:h-12 sm:min-h-12 sm:rounded-xl sm:text-sm"
                 onClick={() => setConfirmEndAction("finish")}
               >
-                <Check className="size-4 shrink-0" />
+                <Check className="size-5 shrink-0" />
                 Finish workout
               </Button>
             </div>
@@ -2323,12 +2492,12 @@ function ActiveWorkout({
               </DialogDescription>
             </DialogHeader>
           </div>
-          <div className="flex gap-2 border-t border-border/15 px-4 py-3">
+          <div className="flex gap-2.5 border-t border-border/15 px-4 py-4">
             <Button
               type="button"
               variant="outline"
               size="lg"
-              className="h-11 flex-1 touch-manipulation"
+              className="h-12 min-h-12 flex-1 touch-manipulation text-base sm:text-sm"
               onClick={() => setConfirmEndAction(null)}
             >
               Cancel
@@ -2338,7 +2507,7 @@ function ActiveWorkout({
               variant={confirmEndAction === "discard" ? "destructive" : "glass"}
               size="lg"
               className={cn(
-                "h-11 flex-1 touch-manipulation gap-2",
+                "h-12 min-h-12 flex-1 touch-manipulation gap-2 text-base sm:text-sm",
                 confirmEndAction === "finish" && "press-scale",
               )}
               onClick={() => {
@@ -2355,6 +2524,21 @@ function ActiveWorkout({
           </div>
         </DialogContent>
       </Dialog>
+
+      <PlateCalculatorDialog
+        open={plateCalcTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setPlateCalcTarget(null)
+        }}
+        initialWeight={plateCalcTarget?.weight ?? null}
+        onApply={(weightLb) => {
+          if (plateCalcTarget) {
+            updateSet(plateCalcTarget.exId, plateCalcTarget.setId, "weight", weightLb)
+            clearGhostForSet(plateCalcTarget.setId)
+          }
+          setPlateCalcTarget(null)
+        }}
+      />
 
       <ExercisePicker
         open={showPicker}
