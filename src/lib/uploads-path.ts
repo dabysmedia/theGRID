@@ -65,3 +65,17 @@ export function getAvatarsUploadDir(): string {
 export function getRoutineCoversUploadDir(): string {
   return getUploadSegmentDir("routine-covers")
 }
+
+/**
+ * Resolve an on-disk path for a file under uploads/<segment>/….
+ * Checks the persistent dir first, then public/uploads (baked-in / pre-volume files).
+ */
+export function resolveUploadFilePath(segment: string, ...parts: string[]): string | null {
+  const primary = path.join(getUploadSegmentDir(segment), ...parts)
+  if (fs.existsSync(primary)) return primary
+
+  const legacy = path.join(process.cwd(), "public", "uploads", segment, ...parts)
+  if (fs.existsSync(legacy)) return legacy
+
+  return null
+}

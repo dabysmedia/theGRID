@@ -1,76 +1,51 @@
 #!/usr/bin/env node
 /**
- * One-time migration: copy any files stranded in the old ephemeral upload path
- * (/app/uploads/journal) to the correct persistent volume path (/data/uploads/journal).
+ * On every boot, copy stranded uploads into the persistent volume before
+ * prepare-volume replaces public/uploads/* with symlinks.
  *
- * Background: UPLOADS_PATH was previously incorrectly set to /app/uploads, causing
- * uploaded images to land on the ephemeral container filesystem. After the fix to
- * /data/uploads, old images became unreachable. This script runs on every boot and
- * copies any remaining files from the old location to the new one so they are recovered.
+ * Sources:
+ * - /app/uploads/<segment> — ephemeral path when UPLOADS_PATH pointed at the container FS
+ * - public/uploads/<segment> — baked-in or pre-volume files under the app image
  */
-import fs from "node:fs"
 import path from "node:path"
 import { resolveUploadSegmentDir } from "./resolve-uploads-path.mjs"
+import { copyUploadTree, findPublicDirs } from "./copy-upload-tree.mjs"
 
 const OLD_BASE = "/app/uploads"
 const SEGMENTS = ["journal", "avatars", "routine-covers", "coach"]
 
+function migrateSegment(segment, src, dest) {
+  if (path.resolve(src) === path.resolve(dest)) return null
+
+  const { migrated, skipped, errors } = copyUploadTree(src, dest)
+  if (migrated === 0 && skipped === 0 && errors === 0) return null
+
+  return { migrated, skipped, errors, src, dest }
+}
+
 for (const segment of SEGMENTS) {
-  const src = path.join(OLD_BASE, segment)
   const dest = resolveUploadSegmentDir(segment)
+  if (!dest) continue
 
-  if (!dest) {
-    // No persistent volume configured — nothing to migrate.
-    continue
+  const sources = [path.join(OLD_BASE, segment)]
+  for (const publicDir of findPublicDirs()) {
+    sources.push(path.join(publicDir, "uploads", segment))
   }
 
-  // Skip if the old location doesn't exist or is already the same path as dest.
-  if (path.resolve(src) === path.resolve(dest)) {
-    continue
+  const seen = new Set()
+  for (const src of sources) {
+    const key = path.resolve(src)
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    const result = migrateSegment(segment, src, dest)
+    if (!result) continue
+
+    console.log(
+      `[migrate-uploads] ${segment}: migrated ${result.migrated} file(s)` +
+        (result.skipped > 0 ? `, skipped ${result.skipped} already-present` : "") +
+        (result.errors > 0 ? `, ${result.errors} error(s)` : "") +
+        ` (${result.src} → ${result.dest})`
+    )
   }
-
-  let entries
-  try {
-    entries = fs.readdirSync(src)
-  } catch {
-    // Source directory doesn't exist — nothing to migrate for this segment.
-    continue
-  }
-
-  if (entries.length === 0) {
-    console.log(`[migrate-uploads] ${src} is empty — nothing to migrate.`)
-    continue
-  }
-
-  fs.mkdirSync(dest, { recursive: true })
-
-  let migrated = 0
-  let skipped = 0
-  let errors = 0
-
-  for (const entry of entries) {
-    const srcFile = path.join(src, entry)
-    const destFile = path.join(dest, entry)
-
-    try {
-      // Skip if already present at the destination.
-      if (fs.existsSync(destFile)) {
-        skipped++
-        continue
-      }
-
-      fs.copyFileSync(srcFile, destFile)
-      migrated++
-    } catch (err) {
-      console.error(`[migrate-uploads] Failed to copy ${srcFile} → ${destFile}: ${err.message}`)
-      errors++
-    }
-  }
-
-  console.log(
-    `[migrate-uploads] ${segment}: migrated ${migrated} file(s)` +
-      (skipped > 0 ? `, skipped ${skipped} already-present` : "") +
-      (errors > 0 ? `, ${errors} error(s)` : "") +
-      ` (${src} → ${dest})`
-  )
 }

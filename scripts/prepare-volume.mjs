@@ -8,6 +8,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import { resolveUploadSegmentDir } from "./resolve-uploads-path.mjs"
+import { copyUploadTree } from "./copy-upload-tree.mjs"
 
 const SEGMENTS = ["journal", "avatars", "routine-covers", "coach"]
 
@@ -57,6 +58,12 @@ for (const sub of SEGMENTS) {
       if (stat.isSymbolicLink()) {
         fs.unlinkSync(linkPath)
       } else if (stat.isDirectory()) {
+        const copied = copyUploadTree(linkPath, target)
+        if (copied.migrated > 0) {
+          console.log(
+            `[prepare-volume] copied ${copied.migrated} file(s) from ${linkPath} → ${target} before symlink`
+          )
+        }
         fs.rmSync(linkPath, { recursive: true })
       }
     } catch {

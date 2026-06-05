@@ -1,7 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import { NextRequest, NextResponse } from "next/server"
-import { getUploadSegmentDir } from "@/lib/uploads-path"
+import { resolveUploadFilePath } from "@/lib/uploads-path"
 
 const MIME: Record<string, string> = {
   jpg: "image/jpeg",
@@ -39,10 +39,10 @@ function resolveUploadPath(segments: string[]): string | null {
     const userId = segments[1]
     if (!userId || userId !== path.basename(userId)) return null
     if (userId.includes("..") || userId.includes("/") || userId.includes("\\")) return null
-    return path.join(getUploadSegmentDir(segment), userId, filename)
+    return resolveUploadFilePath(segment, userId, filename)
   }
 
-  return path.join(getUploadSegmentDir(segment), filename)
+  return resolveUploadFilePath(segment, filename)
 }
 
 /**
@@ -66,14 +66,6 @@ export async function GET(req: NextRequest) {
 
   const filePath = resolveUploadPath(segments)
   if (!filePath) {
-    console.error("[file-serve] resolveUploadPath returned null for segments:", segments)
-    return new NextResponse(null, { status: 404 })
-  }
-
-  console.error("[file-serve] resolved filePath:", filePath)
-
-  if (!fs.existsSync(filePath)) {
-    console.error("[file-serve] file not found on disk:", filePath)
     return new NextResponse(null, { status: 404 })
   }
 
