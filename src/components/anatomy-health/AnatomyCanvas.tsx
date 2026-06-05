@@ -30,6 +30,8 @@ export interface AnatomyCanvasProps {
   injurySegmentSeverity?: Record<string, SeverityLevel> | null
   /** When false, hides PAIN / NRG / MOOD / etc. readouts in the header row. */
   showVitalsReadouts?: boolean
+  /** When false, body diagram only — no regional issues side panel. */
+  showIssuesPanel?: boolean
   /** Active injury / illness rows — drives leader lines on the SVG and the condition tag strip. */
   diagramInjuries?: InjuryRowLike[] | null
 }
@@ -44,6 +46,7 @@ export function AnatomyCanvas({
   domsScores = null,
   injurySegmentSeverity = null,
   showVitalsReadouts = true,
+  showIssuesPanel = true,
   diagramInjuries = null,
 }: AnatomyCanvasProps) {
   const [view, setView] = useState<BodyView>("front")
@@ -112,8 +115,15 @@ export function AnatomyCanvas({
           ) : null}
         </div>
 
-        <div className="grid lg:grid-cols-12 lg:items-stretch">
-          <div className="lg:col-span-6 xl:col-span-7 flex flex-col border-b lg:border-b-0 lg:border-r border-border/30 min-h-0">
+        <div className={cn("grid lg:items-stretch", showIssuesPanel ? "lg:grid-cols-12" : "grid-cols-1")}>
+          <div
+            className={cn(
+              "flex flex-col min-h-0",
+              showIssuesPanel
+                ? "lg:col-span-6 xl:col-span-7 border-b lg:border-b-0 lg:border-r border-border/30"
+                : "border-b-0"
+            )}
+          >
             <div className="anatomy-figure-chassis relative isolate flex-1 flex flex-col p-3 sm:p-4 min-h-[200px]">
               <div
                 className="pointer-events-none absolute inset-0 opacity-[0.28]"
@@ -188,6 +198,7 @@ export function AnatomyCanvas({
             </div>
           </div>
 
+          {showIssuesPanel ? (
           <div className="lg:col-span-6 xl:col-span-5 flex min-h-0 flex-col lg:max-h-[min(72vh,560px)]">
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
@@ -200,6 +211,7 @@ export function AnatomyCanvas({
               </div>
             </div>
           </div>
+          ) : null}
         </div>
       </div>
     </div>

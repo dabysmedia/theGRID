@@ -310,7 +310,7 @@ const evaluators: Record<NotificationKey, Evaluator> = {
       payload: {
         title: "Recovery check-in",
         body: "Rate pain, energy, sleep, and soreness for today.",
-        url: "/recovery",
+        url: "/workouts#recovery",
         type: "recovery_check_in",
         tag: "recovery_check_in",
       },

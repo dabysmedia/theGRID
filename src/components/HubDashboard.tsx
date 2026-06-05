@@ -71,7 +71,7 @@ const categories = [
   { key: "sleep" as const, title: "Sleep", icon: Moon, href: "/sleep", color: "#6366f1" },
   { key: "peptides" as const, title: "Peptides", icon: Syringe, href: "/peptides", color: "#a855f7" },
   { key: "bowel" as const, title: "Bowel", icon: CircleDot, href: "/bowel", color: "#92400e" },
-  { key: "recovery" as const, title: "Recovery", icon: Activity, href: "/recovery", color: "#2dd4bf" },
+  { key: "recovery" as const, title: "Recovery", icon: Activity, href: "/workouts#recovery", color: "#2dd4bf" },
   { key: "alcohol" as const, title: "Alcohol", icon: Beer, href: "/alcohol", color: "#f59e0b" },
 ] as const
 

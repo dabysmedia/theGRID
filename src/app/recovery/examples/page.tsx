@@ -27,8 +27,8 @@ export default function RecoveryAnatomyExamplesPage() {
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
             Mock states for layout QA. Production UI lives on{" "}
-            <Link href="/recovery" className="underline underline-offset-2 text-primary hover:text-primary/80">
-              /recovery
+            <Link href="/workouts#recovery" className="underline underline-offset-2 text-primary hover:text-primary/80">
+              /workouts#recovery
             </Link>
             .
           </p>

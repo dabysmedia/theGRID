@@ -46,6 +46,7 @@ import {
 } from "@/lib/workout-rest-config"
 import { cn, formatDate, formatDisplayDate, glassPanelClass, parseLocalDate } from "@/lib/utils"
 import { PlateCalculatorDialog } from "@/components/workouts/PlateCalculatorDialog"
+import { WorkoutRecoverySection } from "@/components/workouts/WorkoutRecoverySection"
 
 /* ──────────────────────────────────────────────────────────
    Types
@@ -2665,6 +2666,14 @@ export default function WorkoutsPage() {
     return sessions.find((s) => norm(s) === "active") ?? null
   }, [sessions])
 
+  useEffect(() => {
+    if (activeSession) return
+    if (typeof window === "undefined" || window.location.hash !== "#recovery") return
+    requestAnimationFrame(() => {
+      document.getElementById("recovery")?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }, [activeSession])
+
   const { weekStart, weekEnd, weekDayKeys } = useMemo(() => {
     const ref = parseLocalDate(activeDate)
     const start = startOfWeek(ref, { weekStartsOn: 1 })
@@ -3612,8 +3621,17 @@ export default function WorkoutsPage() {
             )}
           </div>
 
+          <WorkoutRecoverySection
+            className="animate-fade-up stagger-4"
+            sessions={completedSessions}
+            weekStart={weekStart}
+            weekEnd={weekEnd}
+            today={today}
+            yesterday={yesterday}
+          />
+
           {/* ── Journal ──────────────────────────── */}
-          <div className="animate-fade-up stagger-3 space-y-2">
+          <div className="animate-fade-up stagger-5 space-y-2">
             <div className="flex items-center gap-2 px-1 mb-1">
               <div className="hud-divider flex-1" />
               <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/50 shrink-0">
