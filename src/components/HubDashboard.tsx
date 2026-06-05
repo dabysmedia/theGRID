@@ -206,12 +206,12 @@ export function HubDashboard() {
           </div>
         </div>
 
-        <div className="mt-3 space-y-2">
+        <div className="relative z-10 mt-3 space-y-2 pb-1">
           <button
             type="button"
             onClick={() => setOthersOpen((o) => !o)}
             aria-expanded={othersOpen}
-            className="glass-subtle flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/80 transition-colors hover:text-foreground hover:bg-glass-highlight/25"
+            className="glass-subtle flex min-h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl py-3 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/80 transition-colors hover:text-foreground hover:bg-glass-highlight/25 active:scale-[0.98]"
           >
             <ChevronDown
               className={cn("h-3.5 w-3.5 shrink-0 transition-transform duration-200", othersOpen && "rotate-180")}

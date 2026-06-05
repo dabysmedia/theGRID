@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { LogCaloriesDialog } from "@/components/quick-log/LogCaloriesDialog"
+import { LogFoodDialog } from "@/components/calories/LogFoodDialog"
 import { LogStepsDialog } from "@/components/quick-log/LogStepsDialog"
 import { LogSleepDialog } from "@/components/quick-log/LogSleepDialog"
 
@@ -45,10 +45,10 @@ export function QuickLogProvider({ children }: { children: ReactNode }) {
   return (
     <QuickLogContext value={value}>
       {children}
-      <LogCaloriesDialog
+      <LogFoodDialog
         open={active === "calories"}
         onOpenChange={(o) => !o && close()}
-        onSaved={handleSaved}
+        onPosted={() => handleSaved()}
       />
       <LogStepsDialog
         open={active === "steps"}

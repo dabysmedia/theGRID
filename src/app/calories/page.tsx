@@ -14,14 +14,12 @@ import { addDays, differenceInCalendarDays, endOfWeek, format, startOfWeek, subD
 import type { LucideIcon } from "lucide-react"
 import {
   ChevronDown,
-  Search,
   Trash2,
   Plus,
-  Star,
-  X,
   Pencil,
   Target,
   Check,
+  X,
   Sunrise,
   Sun,
   UtensilsCrossed,
@@ -43,74 +41,24 @@ import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
 import { PageHeader } from "@/components/PageHeader"
 import { PageHeroStrip } from "@/components/PageHeroStrip"
-import { FoodSearch } from "@/components/FoodSearch"
+import { LogFoodDialog } from "@/components/calories/LogFoodDialog"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { averageOnLoggedDays, cn, formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
 import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
 import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
-import {
-  PhotoCalorieEstimator,
-  type PhotoEstimatePrefill,
-} from "@/components/calories/PhotoCalorieEstimator"
-
-interface CalorieEntry {
-  id: string
-  date: string
-  mealType: string
-  description: string | null
-  calories: number
-  protein: number | null
-  carbs: number | null
-  fat: number | null
-}
-
-interface SavedMeal {
-  id: string
-  name: string
-  /** Single tag or comma-separated tags (breakfast, lunch, …) */
-  mealType: string
-  calories: number
-  protein: number | null
-  carbs: number | null
-  fat: number | null
-  useCount: number
-}
+import type { CalorieEntry, DraftMealItem } from "@/lib/calories/log-food"
 
 interface WeeklyGoal {
   id: string
   weeklyTarget: number
 }
 
-interface DraftMealItem {
-  id: string
-  mealType: string
-  description: string | null
-  calories: number
-  protein: number | null
-  carbs: number | null
-  fat: number | null
-  /** Set when added from a saved meal — used for list highlight */
-  savedMealId?: string
-}
-
-type PendingDelete =
-  | { kind: "calorieEntry"; id: string; label: string }
-  | { kind: "savedMeal"; id: string; name: string }
-
-const mealTypes = ["breakfast", "lunch", "dinner", "snack"] as const
-const mealTypeSet = new Set<string>(mealTypes)
+type PendingDelete = { kind: "calorieEntry"; id: string; label: string }
 
 function mealHistoryIcon(mealType: string): LucideIcon {
   const t = mealType.toLowerCase().trim()
@@ -137,18 +85,6 @@ function OpenLogFoodFromQuery({ setOpen }: { setOpen: (open: boolean) => void })
   }, [pathname, router, searchParams, setOpen])
 
   return null
-}
-
-function savedMealTagList(meal: Pick<SavedMeal, "mealType">): string[] {
-  if (!meal.mealType?.trim()) return []
-  return [
-    ...new Set(
-      meal.mealType
-        .split(",")
-        .map((t) => t.trim().toLowerCase())
-        .filter((t) => mealTypeSet.has(t))
-    ),
-  ]
 }
 
 function dateGroupLabel(
@@ -464,44 +400,13 @@ function CaloriesHistoryDayAccordion({
 
 export default function CaloriesPage() {
   const [entries, setEntries] = useState<CalorieEntry[]>([])
-  const [mealType, setMealType] = useState("lunch")
-  const [description, setDescription] = useState("")
-  const [calories, setCalories] = useState("")
-  const [protein, setProtein] = useState("")
-  const [carbs, setCarbs] = useState("")
-  const [fat, setFat] = useState("")
-
-  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([])
-  const [showCreateMeal, setShowCreateMeal] = useState(false)
-  const [newMealName, setNewMealName] = useState("")
-  const [newMealCal, setNewMealCal] = useState("")
-  const [newMealProtein, setNewMealProtein] = useState("")
-  const [newMealCarbs, setNewMealCarbs] = useState("")
-  const [newMealFat, setNewMealFat] = useState("")
-  const [newMealTags, setNewMealTags] = useState<string[]>(["lunch"])
-  const [editingSavedMealId, setEditingSavedMealId] = useState<string | null>(null)
-  const [editSavedName, setEditSavedName] = useState("")
-  const [editSavedCal, setEditSavedCal] = useState("")
-  const [editSavedProtein, setEditSavedProtein] = useState("")
-  const [editSavedCarbs, setEditSavedCarbs] = useState("")
-  const [editSavedFat, setEditSavedFat] = useState("")
-  const [editSavedTags, setEditSavedTags] = useState<string[]>([])
-  const [editSavedError, setEditSavedError] = useState<string | null>(null)
-  const [savingSavedMealEdit, setSavingSavedMealEdit] = useState(false)
-  const [showSavePrompt, setShowSavePrompt] = useState(false)
-  const [saveMealError, setSaveMealError] = useState<string | null>(null)
   const [editingEntry, setEditingEntry] = useState<CalorieEntry | null>(null)
   const [draftMealItems, setDraftMealItems] = useState<DraftMealItem[]>([])
-  const [postingMeal, setPostingMeal] = useState(false)
   const [weeklyGoal, setWeeklyGoal] = useState<WeeklyGoal | null>(null)
   const [editingGoal, setEditingGoal] = useState(false)
   const [goalInput, setGoalInput] = useState("")
   
   const [logFoodOpen, setLogFoodOpen] = useState(false)
-  const [logFoodSearchOpen, setLogFoodSearchOpen] = useState(false)
-  const [logFoodManualOpen, setLogFoodManualOpen] = useState(false)
-  const [logFoodPhotoOpen, setLogFoodPhotoOpen] = useState(false)
-  const [flashSavedMealId, setFlashSavedMealId] = useState<string | null>(null)
   const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set())
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)
   const [pendingDeleteBusy, setPendingDeleteBusy] = useState(false)
@@ -526,41 +431,10 @@ export default function CaloriesPage() {
     [user?.vacationResumeDate, today]
   )
 
-  const vacationBlocksEditingEntry = useMemo(
-    () =>
-      editingEntry
-        ? isVacationBlockingCalendarDay(
-            user?.vacationResumeDate,
-            editingEntry.date.split("T")[0]
-          )
-        : false,
-    [user?.vacationResumeDate, editingEntry]
-  )
-
   const vacationResumeLabel =
     user?.vacationResumeDate != null && user.vacationResumeDate !== ""
       ? format(parseLocalDate(user.vacationResumeDate), "MMM d, yyyy")
       : null
-
-  const fetchSavedMeals = useCallback(async () => {
-    try {
-      const r = await apiFetch("/api/saved-meals")
-      const data = await r.json()
-      setSavedMeals(Array.isArray(data) ? data : [])
-    } catch {
-      setSavedMeals([])
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!logFoodOpen) {
-      setLogFoodSearchOpen(false)
-      setLogFoodManualOpen(false)
-      setLogFoodPhotoOpen(false)
-      setEditingSavedMealId(null)
-      setEditSavedError(null)
-    }
-  }, [logFoodOpen])
 
   useEffect(() => {
     if (!pendingDelete) return
@@ -572,28 +446,13 @@ export default function CaloriesPage() {
   }, [pendingDelete, pendingDeleteBusy])
 
   useEffect(() => {
-    if (!logFoodOpen) return
-    const html = document.documentElement
-    const body = document.body
-    const prevHtml = html.style.overflow
-    const prevBody = body.style.overflow
-    html.style.overflow = "hidden"
-    body.style.overflow = "hidden"
-    return () => {
-      html.style.overflow = prevHtml
-      body.style.overflow = prevBody
-    }
-  }, [logFoodOpen])
-
-  useEffect(() => {
     apiFetch("/api/calories")
       .then(async (r) => {
         const data = await r.json()
         setEntries(Array.isArray(data) ? data : [])
       })
       .catch(() => setEntries([]))
-    fetchSavedMeals()
-  }, [fetchSavedMeals])
+  }, [])
 
   useEffect(() => {
     apiFetch("/api/goals?category=calories")
@@ -608,12 +467,6 @@ export default function CaloriesPage() {
       })
       .catch(() => setWeeklyGoal(null))
   }, [])
-
-  /** Saved items tagged for the selected meal slot (breakfast / lunch / …). */
-  const displayedSavedMeals = useMemo(() => {
-    const mt = mealType.toLowerCase()
-    return savedMeals.filter((m) => savedMealTagList(m).includes(mt))
-  }, [savedMeals, mealType])
 
   const { dailyTotals, chartData, weekTotal, avg7, bestDay } = useMemo(() => {
     const dailyTotals = new Map<string, number>()
@@ -678,120 +531,9 @@ export default function CaloriesPage() {
     [historyGroups, today]
   )
 
-  function handleFoodSelect(food: { food_name: string; brand_name: string | null; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) {
-    const label = food.brand_name ? `${food.food_name} (${food.brand_name})` : food.food_name
-    setDescription(label)
-    if (food.calories != null) setCalories(String(Math.round(food.calories)))
-    if (food.protein != null) setProtein(String(Math.round(food.protein)))
-    if (food.carbs != null) setCarbs(String(Math.round(food.carbs)))
-    if (food.fat != null) setFat(String(Math.round(food.fat)))
-    setShowSavePrompt(true)
-  }
-
-  /**
-   * AI photo estimate → fill the manual form so the user can review/tweak
-   * before adding to the draft meal. Mirrors `handleFoodSelect`.
-   */
-  const handlePhotoPrefill = useCallback(
-    (prefill: PhotoEstimatePrefill) => {
-      if (vacationBlocksLog && !editingEntry) return
-      setDescription(prefill.description)
-      setCalories(String(Math.round(prefill.calories)))
-      setProtein(prefill.protein != null ? String(prefill.protein) : "")
-      setCarbs(prefill.carbs != null ? String(prefill.carbs) : "")
-      setFat(prefill.fat != null ? String(prefill.fat) : "")
-      setShowSavePrompt(true)
-      setLogFoodManualOpen(true)
-    },
-    [vacationBlocksLog, editingEntry]
-  )
-
-  function addCalories(n: number) {
-    const cur = parseFloat(calories)
-    const base = Number.isNaN(cur) ? 0 : cur
-    setCalories(String(Math.round(base + n)))
-  }
-
-  function resetCurrentItemFields() {
-    setDescription("")
-    setCalories("")
-    setProtein("")
-    setCarbs("")
-    setFat("")
-    setShowSavePrompt(false)
-  }
-
-  function addCurrentItemToMeal() {
-    if (vacationBlocksLog) return
-    const cal = parseFloat(calories)
-    if (!Number.isFinite(cal) || cal <= 0) return
-
-    const p = protein.trim() === "" ? null : parseFloat(protein)
-    const c = carbs.trim() === "" ? null : parseFloat(carbs)
-    const f = fat.trim() === "" ? null : parseFloat(fat)
-
-    const item: DraftMealItem = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      mealType,
-      description: description.trim() || null,
-      calories: Math.round(cal),
-      protein: Number.isFinite(p) ? p : null,
-      carbs: Number.isFinite(c) ? c : null,
-      fat: Number.isFinite(f) ? f : null,
-    }
-
-    setDraftMealItems((prev) => [...prev, item])
-    resetCurrentItemFields()
-  }
-
-  function cancelEdit() {
-    setEditingEntry(null)
-    resetCurrentItemFields()
-    setMealType("lunch")
-  }
-
   function startEdit(entry: CalorieEntry) {
     setEditingEntry(entry)
-    setMealType(entry.mealType)
-    setDescription(entry.description ?? "")
-    setCalories(String(entry.calories))
-    setProtein(entry.protein != null ? String(entry.protein) : "")
-    setCarbs(entry.carbs != null ? String(entry.carbs) : "")
-    setFat(entry.fat != null ? String(entry.fat) : "")
-    setShowSavePrompt(false)
     setLogFoodOpen(true)
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!calories) return
-
-    if (editingEntry) {
-      if (vacationBlocksEditingEntry) return
-      const res = await apiFetch("/api/calories", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editingEntry.id,
-          date: editingEntry.date.split("T")[0],
-          mealType,
-          description: description || null,
-          calories,
-          protein: protein || null,
-          carbs: carbs || null,
-          fat: fat || null,
-        }),
-      })
-
-      if (res.ok) {
-        const updated = (await res.json()) as CalorieEntry
-        setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
-        cancelEdit()
-        setLogFoodOpen(false)
-      }
-      return
-    }
-    addCurrentItemToMeal()
   }
 
   function requestDeleteCalorieEntry(id: string, summary?: string) {
@@ -812,24 +554,12 @@ export default function CaloriesPage() {
     if (!pendingDelete || pendingDeleteBusy) return
     setPendingDeleteBusy(true)
     try {
-      if (pendingDelete.kind === "calorieEntry") {
-        const id = pendingDelete.id
-        const res = await apiFetch(`/api/calories?id=${id}`, { method: "DELETE" })
-        if (res.ok) {
-          setEntries((prev) => prev.filter((e) => e.id !== id))
-          setEditingEntry((cur) => {
-            if (cur?.id === id) queueMicrotask(() => cancelEdit())
-            return cur?.id === id ? null : cur
-          })
-        }
-      } else {
-        const id = pendingDelete.id
-        const res = await apiFetch(`/api/saved-meals?id=${id}`, { method: "DELETE" })
-        if (res.ok) {
-          setSavedMeals((prev) => prev.filter((m) => m.id !== id))
-          setEditingSavedMealId((cur) => (cur === id ? null : cur))
-          setDraftMealItems((prev) => prev.filter((i) => i.savedMealId !== id))
-        }
+      const id = pendingDelete.id
+      const res = await apiFetch(`/api/calories?id=${id}`, { method: "DELETE" })
+      if (res.ok) {
+        setEntries((prev) => prev.filter((e) => e.id !== id))
+        setEditingEntry((cur) => (cur?.id === id ? null : cur))
+        if (logFoodOpen) setLogFoodOpen(false)
       }
       setPendingDelete(null)
     } finally {
@@ -837,226 +567,7 @@ export default function CaloriesPage() {
     }
   }
 
-  function handleUseSavedMeal(meal: SavedMeal) {
-    if (vacationBlocksLog) return
-    const alreadyIn = draftMealItems.some((i) => i.savedMealId === meal.id)
-    if (alreadyIn) {
-      setDraftMealItems((prev) => prev.filter((i) => i.savedMealId !== meal.id))
-      return
-    }
-    const item: DraftMealItem = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      mealType,
-      description: meal.name,
-      calories: meal.calories,
-      protein: meal.protein,
-      carbs: meal.carbs,
-      fat: meal.fat,
-      savedMealId: meal.id,
-    }
-    setFlashSavedMealId(meal.id)
-    window.setTimeout(() => setFlashSavedMealId(null), 900)
-    setDraftMealItems((prev) => [...prev, item])
-    void apiFetch(`/api/saved-meals?id=${meal.id}`, { method: "PATCH" })
-      .then(() => fetchSavedMeals())
-      .catch(() => {})
-  }
-
-  function openEditSavedMeal(meal: SavedMeal) {
-    setSaveMealError(null)
-    setShowCreateMeal(false)
-    setEditingSavedMealId(meal.id)
-    setEditSavedError(null)
-    setEditSavedName(meal.name)
-    setEditSavedCal(String(meal.calories))
-    setEditSavedProtein(meal.protein != null ? String(meal.protein) : "")
-    setEditSavedCarbs(meal.carbs != null ? String(meal.carbs) : "")
-    setEditSavedFat(meal.fat != null ? String(meal.fat) : "")
-    setEditSavedTags(savedMealTagList(meal))
-  }
-
-  function cancelEditSavedMeal() {
-    setEditingSavedMealId(null)
-    setEditSavedError(null)
-  }
-
-  async function handleUpdateSavedMeal() {
-    if (!editingSavedMealId || savingSavedMealEdit) return
-    setEditSavedError(null)
-    if (!editSavedName.trim() || !editSavedCal.trim()) {
-      setEditSavedError("Name and calories are required.")
-      return
-    }
-    if (editSavedTags.length === 0) {
-      setEditSavedError("Pick at least one meal tag.")
-      return
-    }
-    setSavingSavedMealEdit(true)
-    try {
-      const res = await apiFetch(`/api/saved-meals?id=${editingSavedMealId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: editSavedName.trim(),
-          mealTags: editSavedTags,
-          calories: editSavedCal,
-          protein: editSavedProtein || null,
-          carbs: editSavedCarbs || null,
-          fat: editSavedFat || null,
-        }),
-      })
-      if (!res.ok) {
-        let message = "Could not update meal."
-        try {
-          const err = await res.json()
-          if (err && typeof err.error === "string") message = err.error
-        } catch {
-          /* ignore */
-        }
-        setEditSavedError(message)
-        return
-      }
-      await fetchSavedMeals()
-      cancelEditSavedMeal()
-    } finally {
-      setSavingSavedMealEdit(false)
-    }
-  }
-
-  async function handlePostMealToDay() {
-    if (vacationBlocksLog || draftMealItems.length === 0 || postingMeal) return
-    setPostingMeal(true)
-    try {
-      const created: CalorieEntry[] = []
-      for (const item of draftMealItems) {
-        const res = await apiFetch("/api/calories", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            date: today,
-            mealType: item.mealType,
-            description: item.description,
-            calories: String(item.calories),
-            protein: item.protein != null ? String(item.protein) : null,
-            carbs: item.carbs != null ? String(item.carbs) : null,
-            fat: item.fat != null ? String(item.fat) : null,
-          }),
-        })
-        if (res.ok) {
-          created.push(await res.json())
-        }
-      }
-      if (created.length > 0) {
-        setEntries((prev) => [...created.reverse(), ...prev])
-        setLogFoodOpen(false)
-      }
-      setDraftMealItems([])
-    } finally {
-      setPostingMeal(false)
-    }
-  }
-
-  async function handleCreateMeal(e?: React.FormEvent) {
-    e?.preventDefault()
-    setSaveMealError(null)
-    if (!newMealName.trim() || !newMealCal.trim()) return
-    if (newMealTags.length === 0) {
-      setSaveMealError("Pick at least one meal tag (breakfast, lunch, …).")
-      return
-    }
-
-    const res = await apiFetch("/api/saved-meals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: newMealName.trim(),
-        mealTags: newMealTags,
-        calories: newMealCal,
-        protein: newMealProtein || null,
-        carbs: newMealCarbs || null,
-        fat: newMealFat || null,
-      }),
-    })
-
-    if (!res.ok) {
-      let message = "Could not save meal."
-      try {
-        const err = await res.json()
-        if (err && typeof err.error === "string") message = err.error
-      } catch {
-        /* ignore */
-      }
-      setSaveMealError(message)
-      return
-    }
-
-    await fetchSavedMeals()
-    setShowCreateMeal(false)
-    setNewMealName("")
-    setNewMealCal("")
-    setNewMealProtein("")
-    setNewMealCarbs("")
-    setNewMealFat("")
-    setNewMealTags([mealType])
-  }
-
-  async function handleSaveCurrentAsFrequent() {
-    if (!description.trim() || !calories.trim()) return
-
-    await apiFetch("/api/saved-meals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: description.trim(),
-        mealTags: [mealType],
-        calories,
-        protein: protein || null,
-        carbs: carbs || null,
-        fat: fat || null,
-      }),
-    })
-
-    fetchSavedMeals()
-    setShowSavePrompt(false)
-  }
-
-  function requestDeleteSavedMeal(id: string, name: string) {
-    setPendingDelete({ kind: "savedMeal", id, name })
-  }
-
   const todayTotal = dailyTotals.get(today) ?? 0
-
-  const estimateCalDisplay =
-    calories.trim() === ""
-      ? null
-      : (() => {
-          const c = parseFloat(calories)
-          if (Number.isNaN(c) || c <= 0) return null
-          return Math.round(c)
-        })()
-
-  const draftTotals = useMemo(() => {
-    return draftMealItems.reduce(
-      (acc, item) => {
-        acc.calories += item.calories
-        if (item.protein != null) acc.protein += item.protein
-        if (item.carbs != null) acc.carbs += item.carbs
-        if (item.fat != null) acc.fat += item.fat
-        return acc
-      },
-      { calories: 0, protein: 0, carbs: 0, fat: 0 }
-    )
-  }, [draftMealItems])
-
-  const savedMealIdsInDraft = useMemo(
-    () =>
-      new Set(
-        draftMealItems
-          .map((i) => i.savedMealId)
-          .filter((x): x is string => Boolean(x))
-      ),
-    [draftMealItems]
-  )
 
   const weekPlan = useMemo(() => {
     if (!weeklyGoal) return null
@@ -1434,595 +945,21 @@ export default function CaloriesPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
         <div className="space-y-6 min-w-0">
-          <Dialog open={logFoodOpen} onOpenChange={setLogFoodOpen}>
-            <DialogContent
-              showCloseButton
-              className={cn(
-                "glass-frost flex min-h-0 flex-col gap-0 overflow-hidden p-0",
-                "[&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3"
-              )}
-            >
-              {/* Header */}
-              <div className="shrink-0 px-4 pt-4 pb-3 pr-12">
-                <DialogHeader className="space-y-0">
-                  <DialogTitle>{editingEntry ? "Edit entry" : "Log food"}</DialogTitle>
-                  <DialogDescription className="sr-only">
-                    {editingEntry ? "Edit a calorie entry" : "Add food to your daily log"}
-                  </DialogDescription>
-                </DialogHeader>
-                {editingEntry && (
-                  <p className="mt-1 truncate text-[10px] capitalize text-muted-foreground/60">
-                    {format(parseLocalDate(editingEntry.date.split("T")[0]), "MMM d")} · {editingEntry.mealType}
-                    {editingEntry.description && <> · {editingEntry.description}</>}
-                  </p>
-                )}
-                {vacationBlocksLog && !editingEntry && vacationResumeLabel && (
-                  <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] leading-snug text-amber-100/85">
-                    Vacation mode until{" "}
-                    <span className="font-semibold tabular-nums">{vacationResumeLabel}</span>. Clear the
-                    draft or wait until then to post.
-                  </p>
-                )}
-                {editingEntry && vacationBlocksEditingEntry && vacationResumeLabel && (
-                  <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] leading-snug text-amber-100/85">
-                    This day is in vacation mode (before{" "}
-                    <span className="font-semibold tabular-nums">{vacationResumeLabel}</span>). Editing is
-                    disabled.
-                  </p>
-                )}
-                <div className="mt-3 flex rounded-lg bg-muted/20 p-0.5">
-                  {mealTypes.map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      disabled={vacationBlocksLog && !editingEntry}
-                      onClick={() => setMealType(m)}
-                      className={cn(
-                        "flex-1 rounded-md py-2.5 text-xs font-medium capitalize transition-all duration-150",
-                        mealType === m
-                          ? "bg-background text-foreground shadow-sm shadow-black/10"
-                          : "text-muted-foreground/50 hover:text-muted-foreground",
-                        vacationBlocksLog && !editingEntry && "opacity-45"
-                      )}
-                    >
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Search — collapsed by default */}
-              <div className="relative z-20 shrink-0 border-y border-border/20 px-4 py-2.5">
-                <button
-                  type="button"
-                  disabled={vacationBlocksLog && !editingEntry}
-                  onClick={() => setLogFoodSearchOpen((v) => !v)}
-                  className="flex w-full items-center justify-between gap-2 rounded-lg py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-45"
-                >
-                  <span className="flex items-center gap-2 min-w-0">
-                    <Search className="h-3.5 w-3.5 shrink-0 opacity-60" />
-                    <span className="truncate">Search foods</span>
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      "h-3.5 w-3.5 shrink-0 opacity-50 transition-transform duration-200",
-                      logFoodSearchOpen && "rotate-180"
-                    )}
-                  />
-                </button>
-                {logFoodSearchOpen && (
-                  <div className="overflow-visible pt-2.5">
-                    <FoodSearch onSelect={handleFoodSelect} compact />
-                  </div>
-                )}
-              </div>
-
-              {/* Body */}
-              <div className="relative z-0 min-h-0 flex-1 overflow-y-auto px-4 py-4">
-                <div className="space-y-4">
-
-                  {/* Saved meals — flat list, add mode only */}
-                  {!editingEntry && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
-                          Saved
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSaveMealError(null)
-                            setEditingSavedMealId(null)
-                            if (!showCreateMeal) setNewMealTags([mealType])
-                            setShowCreateMeal(!showCreateMeal)
-                          }}
-                          className="min-h-10 shrink-0 rounded-lg border border-primary/25 bg-primary/10 px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-primary transition-colors hover:border-primary/40 hover:bg-primary/18 active:scale-[0.98] touch-manipulation"
-                        >
-                          {showCreateMeal ? "Cancel" : "+ New"}
-                        </button>
-                      </div>
-
-                      {showCreateMeal && (
-                        <div
-                          data-create-meal
-                          className="glass-subtle rounded-lg p-3 mb-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200"
-                          onKeyDownCapture={(e) => {
-                            if (e.key === "Enter" && (e.target as HTMLElement).closest("[data-create-meal]")) {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              void handleCreateMeal()
-                            }
-                          }}
-                        >
-                          <Input
-                            placeholder="Meal name"
-                            value={newMealName}
-                            onChange={(e) => setNewMealName(e.target.value)}
-                            className="h-10 bg-background/40 border-primary/15 text-sm"
-                          />
-                          <div className="space-y-1">
-                            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">Tags</Label>
-                            <div className="flex flex-wrap gap-1.5">
-                              {mealTypes.map((m) => {
-                                const on = newMealTags.includes(m)
-                                return (
-                                  <button
-                                    key={m}
-                                    type="button"
-                                    onClick={() => {
-                                      setNewMealTags((prev) => {
-                                        if (prev.includes(m)) {
-                                          if (prev.length <= 1) return prev
-                                          return prev.filter((x) => x !== m)
-                                        }
-                                        return [...prev, m]
-                                      })
-                                    }}
-                                    className={cn(
-                                      "rounded-md px-2.5 py-1.5 text-[11px] font-medium capitalize transition-colors touch-manipulation",
-                                      on
-                                        ? "bg-primary/20 text-primary ring-1 ring-primary/30"
-                                        : "bg-muted/25 text-muted-foreground/70 hover:bg-muted/40"
-                                    )}
-                                  >
-                                    {m}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-4 gap-2">
-                            <div className="space-y-1">
-                              <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">Cal *</Label>
-                              <Input type="number" min="0" placeholder="0" value={newMealCal} onChange={(e) => setNewMealCal(e.target.value)} className="h-9 bg-background/40 border-primary/15 text-sm" />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">P</Label>
-                              <Input type="number" min="0" placeholder="g" value={newMealProtein} onChange={(e) => setNewMealProtein(e.target.value)} className="h-9 bg-background/40 border-primary/15 text-sm" />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">C</Label>
-                              <Input type="number" min="0" placeholder="g" value={newMealCarbs} onChange={(e) => setNewMealCarbs(e.target.value)} className="h-9 bg-background/40 border-primary/15 text-sm" />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">F</Label>
-                              <Input type="number" min="0" placeholder="g" value={newMealFat} onChange={(e) => setNewMealFat(e.target.value)} className="h-9 bg-background/40 border-primary/15 text-sm" />
-                            </div>
-                          </div>
-                          {saveMealError && <p className="text-[10px] text-destructive" role="alert">{saveMealError}</p>}
-                          <Button
-                            type="button"
-                            variant="glass"
-                            size="sm"
-                            className="w-full h-10 text-sm"
-                            onClick={() => void handleCreateMeal()}
-                          >
-                            Save
-                          </Button>
-                        </div>
-                      )}
-
-                      {savedMeals.length > 0 && displayedSavedMeals.length === 0 && (
-                        <p className="mb-2 text-[11px] text-muted-foreground/70">
-                          No saved meals tagged for <span className="capitalize font-medium text-foreground/80">{mealType}</span>.
-                          Switch meal type or add one with this tag.
-                        </p>
-                      )}
-
-                      {displayedSavedMeals.length > 0 && (
-                        <div
-                          className="max-h-[min(42vh,300px)] overflow-y-auto overscroll-y-contain touch-pan-y space-y-0.5 pr-0.5 [-webkit-overflow-scrolling:touch]"
-                          aria-label="Saved meals for this meal type"
-                        >
-                          {displayedSavedMeals.map((meal) => {
-                            const inDraft = savedMealIdsInDraft.has(meal.id)
-                            const flash = flashSavedMealId === meal.id
-                            const tags = savedMealTagList(meal)
-                            const editingThis = editingSavedMealId === meal.id
-                            return (
-                              <div key={meal.id} className="space-y-0">
-                                <div
-                                  className={cn(
-                                    "group flex items-center gap-2 rounded-xl px-2.5 py-2.5 transition-all duration-300",
-                                    inDraft
-                                      ? "ring-1 ring-primary/35 bg-gradient-to-r from-primary/[0.09] to-transparent shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)]"
-                                      : "hover:bg-glass-highlight/15",
-                                    flash && "animate-in zoom-in-95 duration-300 ring-2 ring-primary/45"
-                                  )}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUseSavedMeal(meal)}
-                                    className="flex items-center gap-3 min-w-0 flex-1 text-left touch-manipulation"
-                                  >
-                                    <div
-                                      className={cn(
-                                        "flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors duration-300",
-                                        inDraft ? "bg-primary/20 text-primary" : "bg-primary/10"
-                                      )}
-                                    >
-                                      {inDraft ? (
-                                        <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-                                      ) : (
-                                        <Plus className="h-3.5 w-3.5 text-primary/60" />
-                                      )}
-                                    </div>
-                                    <span className="flex min-w-0 flex-1 flex-col gap-1 text-left sm:flex-row sm:items-center sm:flex-wrap sm:gap-2">
-                                      <span className="text-sm font-medium truncate">{meal.name}</span>
-                                      <span className="flex flex-wrap items-center gap-1">
-                                        {tags.map((t) => (
-                                          <span
-                                            key={t}
-                                            className={cn(
-                                              "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium capitalize",
-                                              t === mealType
-                                                ? "bg-primary/15 text-primary/90"
-                                                : "bg-muted/40 text-muted-foreground/80"
-                                            )}
-                                          >
-                                            {t}
-                                          </span>
-                                        ))}
-                                        {inDraft && (
-                                          <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary/80">
-                                            In meal
-                                          </span>
-                                        )}
-                                      </span>
-                                    </span>
-                                  </button>
-                                  <span className="text-xs tabular-nums text-muted-foreground/40 shrink-0">
-                                    {meal.calories}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => requestDeleteSavedMeal(meal.id, meal.name)}
-                                    className="history-row-delete rounded-md"
-                                    aria-label={`Delete saved meal ${meal.name}`}
-                                  >
-                                    <Trash2 />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => openEditSavedMeal(meal)}
-                                    className="history-row-delete rounded-md"
-                                    aria-label={`Edit saved meal ${meal.name}`}
-                                  >
-                                    <Pencil />
-                                  </button>
-                                </div>
-                                {editingThis && (
-                                  <div
-                                    data-edit-saved-meal
-                                    className="glass-subtle mt-1 mb-2 rounded-lg p-3 space-y-2 border border-border/25"
-                                    onKeyDownCapture={(e) => {
-                                      if (
-                                        e.key === "Enter" &&
-                                        (e.target as HTMLElement).closest("[data-edit-saved-meal]")
-                                      ) {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                        void handleUpdateSavedMeal()
-                                      }
-                                    }}
-                                  >
-                                    <Input
-                                      value={editSavedName}
-                                      onChange={(e) => setEditSavedName(e.target.value)}
-                                      className="h-10 bg-background/40 border-primary/15 text-sm"
-                                      placeholder="Meal name"
-                                    />
-                                    <div className="space-y-1">
-                                      <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">
-                                        Tags
-                                      </Label>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {mealTypes.map((m) => {
-                                          const on = editSavedTags.includes(m)
-                                          return (
-                                            <button
-                                              key={m}
-                                              type="button"
-                                              onClick={() => {
-                                                setEditSavedTags((prev) => {
-                                                  if (prev.includes(m)) {
-                                                    if (prev.length <= 1) return prev
-                                                    return prev.filter((x) => x !== m)
-                                                  }
-                                                  return [...prev, m]
-                                                })
-                                              }}
-                                              className={cn(
-                                                "rounded-md px-2.5 py-1.5 text-[11px] font-medium capitalize transition-colors touch-manipulation",
-                                                on
-                                                  ? "bg-primary/20 text-primary ring-1 ring-primary/30"
-                                                  : "bg-muted/25 text-muted-foreground/70 hover:bg-muted/40"
-                                              )}
-                                            >
-                                              {m}
-                                            </button>
-                                          )
-                                        })}
-                                      </div>
-                                    </div>
-                                    <div className="grid grid-cols-4 gap-2">
-                                      <div className="space-y-1">
-                                        <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">
-                                          Cal *
-                                        </Label>
-                                        <Input
-                                          type="number"
-                                          min="0"
-                                          value={editSavedCal}
-                                          onChange={(e) => setEditSavedCal(e.target.value)}
-                                          className="h-9 bg-background/40 border-primary/15 text-sm"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">
-                                          P
-                                        </Label>
-                                        <Input
-                                          type="number"
-                                          min="0"
-                                          value={editSavedProtein}
-                                          onChange={(e) => setEditSavedProtein(e.target.value)}
-                                          className="h-9 bg-background/40 border-primary/15 text-sm"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">
-                                          C
-                                        </Label>
-                                        <Input
-                                          type="number"
-                                          min="0"
-                                          value={editSavedCarbs}
-                                          onChange={(e) => setEditSavedCarbs(e.target.value)}
-                                          className="h-9 bg-background/40 border-primary/15 text-sm"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">
-                                          F
-                                        </Label>
-                                        <Input
-                                          type="number"
-                                          min="0"
-                                          value={editSavedFat}
-                                          onChange={(e) => setEditSavedFat(e.target.value)}
-                                          className="h-9 bg-background/40 border-primary/15 text-sm"
-                                        />
-                                      </div>
-                                    </div>
-                                    {editSavedError && (
-                                      <p className="text-[10px] text-destructive" role="alert">
-                                        {editSavedError}
-                                      </p>
-                                    )}
-                                    <div className="flex gap-2">
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        className="flex-1 h-10"
-                                        onClick={cancelEditSavedMeal}
-                                      >
-                                        Cancel
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="glass"
-                                        size="sm"
-                                        className="flex-1 h-10"
-                                        disabled={savingSavedMealEdit}
-                                        onClick={() => void handleUpdateSavedMeal()}
-                                      >
-                                        {savingSavedMealEdit ? "Saving…" : "Update"}
-                                      </Button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* AI photo estimate — collapsed by default; not shown in edit mode. */}
-                  {!editingEntry && (
-                    <PhotoCalorieEstimator
-                      open={logFoodPhotoOpen}
-                      onOpenChange={setLogFoodPhotoOpen}
-                      onUsePrefill={handlePhotoPrefill}
-                      disabled={vacationBlocksLog}
-                    />
-                  )}
-
-                  {/* Manual estimate — collapsed by default (add mode); always open when editing */}
-                  {!editingEntry && (
-                    <button
-                      type="button"
-                      disabled={vacationBlocksLog && !editingEntry}
-                      onClick={() => setLogFoodManualOpen((v) => !v)}
-                      className="flex w-full items-center justify-between gap-2 rounded-xl border border-border/25 bg-glass-highlight/[0.04] py-2.5 px-3 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-glass-highlight/10 disabled:pointer-events-none disabled:opacity-45"
-                    >
-                      <span className="flex items-center gap-2 min-w-0">
-                        <Target className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                        <span className="truncate">Estimate calories</span>
-                      </span>
-                      <ChevronDown
-                        className={cn(
-                          "h-3.5 w-3.5 shrink-0 opacity-40 transition-transform duration-200",
-                          logFoodManualOpen && "rotate-180"
-                        )}
-                      />
-                    </button>
-                  )}
-
-                  {(editingEntry || logFoodManualOpen) && (
-                    <form id="log-food-form" onSubmit={handleSubmit} className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          id="calories"
-                          type="number"
-                          min="0"
-                          step="1"
-                          inputMode="numeric"
-                          placeholder="Calories"
-                          value={calories}
-                          onChange={(e) => setCalories(e.target.value)}
-                          className="flex-1 min-w-0 h-11"
-                          required
-                          disabled={vacationBlocksLog && !editingEntry ? true : vacationBlocksEditingEntry}
-                        />
-                        {([
-                          { n: 250, label: "+250" },
-                          { n: 500, label: "+500" },
-                          { n: 1000, label: "+1k" },
-                        ] as const).map(({ n, label }) => (
-                          <button
-                            key={n}
-                            type="button"
-                            disabled={
-                              (vacationBlocksLog && !editingEntry) || vacationBlocksEditingEntry
-                            }
-                            onClick={() => addCalories(n)}
-                            className="h-11 rounded-md border border-glass-border px-3 text-xs font-medium tabular-nums text-muted-foreground/50 hover:bg-glass-highlight/15 hover:text-foreground transition-colors touch-manipulation disabled:pointer-events-none disabled:opacity-40"
-                            title={`Add ${n.toLocaleString()} cal`}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        {showSavePrompt && description && calories && (
-                          <button
-                            type="button"
-                            onClick={handleSaveCurrentAsFrequent}
-                            className="flex items-center gap-1.5 rounded-md border border-dashed border-primary/20 px-3 py-2.5 text-xs font-medium text-primary/50 hover:text-primary hover:bg-primary/5 transition-colors touch-manipulation"
-                          >
-                            <Star className="h-3.5 w-3.5" />
-                            Save
-                          </button>
-                        )}
-                        {!editingEntry && (
-                          <Button
-                            type="submit"
-                            variant="glass"
-                            size="sm"
-                            className="flex-1 h-11 text-sm"
-                            disabled={vacationBlocksLog}
-                          >
-                            {estimateCalDisplay != null
-                              ? `Add ${estimateCalDisplay.toLocaleString()} cal`
-                              : "Add to meal"}
-                          </Button>
-                        )}
-                      </div>
-                    </form>
-                  )}
-
-                  {/* Draft items */}
-                  {!editingEntry && draftMealItems.length > 0 && (
-                    <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/40 mb-1.5">
-                        Draft · {draftMealItems.length}
-                      </p>
-                      <div className="rounded-lg border border-glass-border/30 divide-y divide-glass-border/20 overflow-hidden">
-                        {draftMealItems.map((item) => (
-                          <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-3 text-xs">
-                            <div className="min-w-0">
-                              <p className="truncate font-medium leading-tight text-sm">
-                                {item.description || "Quick add"}
-                              </p>
-                              <p className="mt-0.5 text-[11px] capitalize tabular-nums text-muted-foreground/40">
-                                {item.mealType} · {item.calories} cal
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setDraftMealItems((prev) => prev.filter((x) => x.id !== item.id))}
-                              className="p-2 rounded-md hover:bg-destructive/10 shrink-0 touch-manipulation"
-                            >
-                              <X className="h-4 w-4 text-muted-foreground/30" />
-                            </button>
-                          </div>
-                        ))}
-                        <div className="px-3 py-1.5 text-[10px] tabular-nums font-medium text-muted-foreground/50 bg-glass-highlight/5">
-                          {draftTotals.calories.toLocaleString()} cal
-                          {(draftTotals.protein > 0 || draftTotals.carbs > 0 || draftTotals.fat > 0) && (
-                            <span className="text-muted-foreground/30">
-                              {" "}· P {Math.round(draftTotals.protein)}g · C {Math.round(draftTotals.carbs)}g · F {Math.round(draftTotals.fat)}g
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                </div>
-              </div>
-
-              {/* Footer — Post only when draft exists or posting; edit mode always */}
-              {(editingEntry || draftMealItems.length > 0 || postingMeal) && (
-                <div className="shrink-0 border-t border-border/30 px-4 py-3 bg-background/60 backdrop-blur-sm">
-                  {editingEntry ? (
-                    <div className="flex gap-2">
-                      <Button type="button" variant="outline" className="flex-1 h-11" size="default" onClick={cancelEdit}>
-                        Cancel
-                      </Button>
-                      <Button
-                        type="submit"
-                        variant="glass"
-                        form="log-food-form"
-                        className="flex-1 press-scale h-11"
-                        size="default"
-                        disabled={vacationBlocksEditingEntry}
-                      >
-                        Save
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="glass"
-                      className="w-full press-scale h-11 text-sm"
-                      size="default"
-                      disabled={postingMeal || vacationBlocksLog}
-                      onClick={handlePostMealToDay}
-                    >
-                      {postingMeal
-                        ? "Posting..."
-                        : `Post meal · ${draftMealItems.length} item${draftMealItems.length === 1 ? "" : "s"}`}
-                    </Button>
-                  )}
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
+          <LogFoodDialog
+            open={logFoodOpen}
+            onOpenChange={setLogFoodOpen}
+            editingEntry={editingEntry}
+            onEditingEntryChange={setEditingEntry}
+            draftMealItems={draftMealItems}
+            onDraftMealItemsChange={setDraftMealItems}
+            onPosted={(created) => {
+              setEntries((prev) => [...created.reverse(), ...prev])
+            }}
+            onUpdated={(updated) => {
+              setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
+              setEditingEntry(null)
+            }}
+          />
 
           <div className="glass-panel p-4 lg:p-5 animate-fade-up stagger-1">
             <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-3">
@@ -2153,24 +1090,16 @@ export default function CaloriesPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <h2 id="delete-confirm-title" className="font-heading text-base font-semibold text-foreground">
-                {pendingDelete.kind === "savedMeal" ? "Delete saved meal?" : "Delete log entry?"}
+                Delete log entry?
               </h2>
               <p id="delete-confirm-desc" className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {pendingDelete.kind === "calorieEntry" ? (
-                  pendingDelete.label === "this log entry" ? (
-                    <>This will remove the entry from your history. This cannot be undone.</>
-                  ) : (
-                    <>
-                      This will remove{" "}
-                      <span className="font-medium text-foreground">&quot;{pendingDelete.label}&quot;</span> from
-                      your history. This cannot be undone.
-                    </>
-                  )
+                {pendingDelete.label === "this log entry" ? (
+                  <>This will remove the entry from your history. This cannot be undone.</>
                 ) : (
                   <>
                     This will remove{" "}
-                    <span className="font-medium text-foreground">&quot;{pendingDelete.name}&quot;</span> from saved
-                    meals. This cannot be undone.
+                    <span className="font-medium text-foreground">&quot;{pendingDelete.label}&quot;</span> from your
+                    history. This cannot be undone.
                   </>
                 )}
               </p>
