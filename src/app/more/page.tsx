@@ -17,7 +17,7 @@ export default function MorePage() {
         </p>
       </div>
 
-      <div className="glass hud-corners rounded-2xl p-6 lg:max-w-md space-y-8">
+      <div className="glass-panel p-6 lg:max-w-md space-y-8">
         <ProfilePhotoSettings />
         <div className="hud-divider" />
         <ProfileSwitcher />
@@ -32,7 +32,7 @@ export default function MorePage() {
         <PushNotificationManager />
       </div>
 
-      <div className="glass hud-corners space-y-4 rounded-2xl p-6 lg:max-w-md">
+      <div className="glass-panel space-y-4 p-6 lg:max-w-md">
         <div className="flex items-center gap-3">
           <div className="status-dot" />
           <h2 className="text-base font-bold tracking-[0.18em] uppercase sm:text-lg">

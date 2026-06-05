@@ -3,7 +3,7 @@
 import Link from "next/link"
 import type { LucideIcon } from "lucide-react"
 import { MiniChart } from "./MiniChart"
-import { cn } from "@/lib/utils"
+import { cn, glassPanelClass } from "@/lib/utils"
 import { ChevronRight } from "lucide-react"
 
 interface DailySummaryCardProps {
@@ -47,7 +47,8 @@ export function DailySummaryCard({
   const inner = (
       <div
         className={cn(
-          "glass hud-corners flex h-full min-h-0 w-full flex-col rounded-2xl p-3 sm:p-4 relative overflow-hidden transition-[background-color,box-shadow] duration-200",
+          glassPanelClass,
+          "flex h-full min-h-0 w-full flex-col p-3 sm:p-4 relative transition-[background-color,box-shadow] duration-200",
           disabled
             ? "cursor-not-allowed opacity-[0.48] saturate-[0.35]"
             : "press-scale hover:bg-glass-highlight/40 hover:shadow-lg hover:shadow-black/10 cursor-pointer"

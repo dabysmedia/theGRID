@@ -104,7 +104,7 @@ export function ChatComposer({
   }, [canSubmit, text, attachments, onSubmit])
 
   return (
-    <div className="glass-frost relative flex flex-col gap-2 rounded-2xl border border-glass-border p-3 shadow-lg shadow-black/30">
+    <div className="glass-panel relative flex flex-col gap-2 border border-glass-border p-3 shadow-lg shadow-black/30">
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
           {error}

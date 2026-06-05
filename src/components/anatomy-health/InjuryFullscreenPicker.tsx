@@ -246,7 +246,7 @@ export function InjuryFullscreenPicker({
             onClick={closePopup}
           >
             <div
-              className="glass hud-corners w-full max-w-md max-h-[min(78vh,520px)] overflow-hidden flex flex-col rounded-2xl border border-border/40 shadow-2xl"
+              className="glass-panel w-full max-w-md max-h-[min(78vh,520px)] overflow-hidden flex flex-col border border-border/40 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-2 border-b border-border/30 p-4 pb-3 shrink-0">

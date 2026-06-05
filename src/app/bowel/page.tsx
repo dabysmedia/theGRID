@@ -260,7 +260,7 @@ export default function BowelPage() {
         color="#92400e"
       />
 
-      <div className="glass rounded-2xl p-5 animate-fade-up stagger-2">
+      <div className="glass-panel p-5 animate-fade-up stagger-2">
           <div className="text-center lg:text-left mb-5">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today</p>
             <p className="text-4xl font-bold tabular-nums tracking-tight">{todayCount}</p>
@@ -320,7 +320,7 @@ export default function BowelPage() {
           </form>
       </div>
 
-      <div className="glass animate-fade-up stagger-2 rounded-2xl p-4 lg:p-5">
+      <div className="glass-panel animate-fade-up stagger-2 p-4 lg:p-5">
         <p className="mb-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           7-day entries
         </p>

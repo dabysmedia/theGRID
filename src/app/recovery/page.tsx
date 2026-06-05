@@ -436,7 +436,7 @@ export default function RecoveryPage() {
         onSubmit={commitQuestionnaire}
       />
 
-      <div className="glass hud-corners rounded-2xl overflow-hidden border border-border/30">
+      <div className="glass-panel overflow-hidden border border-border/30">
         <button
           type="button"
           onClick={() => setTrendsOpen((o) => !o)}

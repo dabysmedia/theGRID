@@ -2,7 +2,7 @@
 
 import type { LucideIcon } from "lucide-react"
 import type { ReactNode } from "react"
-import { cn } from "@/lib/utils"
+import { cn, glassPanelAccentClass, glassPanelAccentStyle, glassPanelClass } from "@/lib/utils"
 
 export interface HeroMetricItem {
   label: string
@@ -54,18 +54,8 @@ export function PageHeroStrip({
 }: PageHeroStripProps) {
   return (
     <div
-      className={cn(
-        "glass hud-corners relative overflow-hidden rounded-2xl border border-border/20",
-        "bg-gradient-to-br from-glass-highlight/[0.16] via-transparent to-transparent",
-        "shadow-[inset_0_1px_0_0_oklch(1_0_0/10%),0_22px_56px_-20px_oklch(0_0_0/42%)]",
-        "dark:border-[oklch(1_0_0/9%)] dark:from-glass-highlight/[0.1]",
-        "dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/12%),0_28px_72px_-24px_oklch(0_0_0/62%)]",
-        "animate-fade-up p-4 lg:p-5",
-        className
-      )}
-      style={{
-        backgroundImage: `linear-gradient(to bottom right, oklch(1 0 0 / 0.06), transparent 55%, color-mix(in srgb, ${color} 8%, transparent))`,
-      }}
+      className={cn(glassPanelClass, glassPanelAccentClass, "animate-fade-up p-4 lg:p-5", className)}
+      style={glassPanelAccentStyle(color)}
     >
       <div
         className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"

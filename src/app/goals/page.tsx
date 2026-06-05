@@ -247,7 +247,7 @@ export default function GoalsPage() {
           New Goal
         </Button>
       ) : (
-        <div className="glass rounded-2xl p-5">
+        <div className="glass-panel p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold uppercase tracking-wider">
               Create Goal
@@ -430,7 +430,7 @@ export default function GoalsPage() {
             .map((e) => ({ value: e.value, date: e.date.split("T")[0] }))
 
           return (
-            <div key={goal.id} className="glass rounded-2xl overflow-hidden">
+            <div key={goal.id} className="glass-panel overflow-hidden">
               {/* Goal header */}
               <div className="p-4 lg:p-5">
                 <div className="flex items-start justify-between mb-3">

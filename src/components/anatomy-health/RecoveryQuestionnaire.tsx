@@ -453,7 +453,7 @@ export function RecoveryQuestionnaire({
         }}
       >
         <DialogContent
-          className={cn("glass hud-corners max-h-[90vh] overflow-hidden flex flex-col border-border/40 sm:max-w-lg")}
+          className={cn("glass-panel max-h-[90vh] overflow-hidden flex flex-col border-border/40 sm:max-w-lg")}
           showCloseButton
         >
           <DialogHeader className="shrink-0">

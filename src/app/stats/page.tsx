@@ -161,7 +161,7 @@ function SectionChart({
   summaryCards: React.ReactNode
 }) {
   return (
-    <div className="glass animate-fade-up space-y-3 rounded-2xl p-4 lg:p-5">
+    <div className="glass-panel animate-fade-up space-y-3 p-4 lg:p-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div
@@ -748,7 +748,7 @@ function CorrelationPanel({ daily }: { daily: DayData[] }) {
   if (!hasWeight) return null
 
   return (
-    <div className="glass animate-fade-up space-y-3 rounded-2xl p-4 sm:p-5">
+    <div className="glass-panel animate-fade-up space-y-3 p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#14b8a6]/15">

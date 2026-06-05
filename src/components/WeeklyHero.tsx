@@ -14,7 +14,8 @@ import {
 } from "lucide-react"
 import { DailyWeighIn } from "@/components/DailyWeighIn"
 import { useActiveDate } from "@/context/DateContext"
-import { cn, parseLocalDate } from "@/lib/utils"
+import { useQuickLog } from "@/context/QuickLogContext"
+import { cn, glassPanelClass, parseLocalDate } from "@/lib/utils"
 
 /** Show today’s weigh-in prompt on the hub only from this local hour onward (inclusive). */
 const WEIGH_IN_PROMPT_FROM_HOUR = 4
@@ -52,6 +53,8 @@ interface ProgressRingProps {
   disabled?: boolean
   centerLabel?: string
   valueLabel?: string
+  onClick?: () => void
+  ariaLabel?: string
 }
 
 function formatRingValue(value: number): string {
@@ -72,6 +75,8 @@ function ProgressRing({
   disabled,
   centerLabel,
   valueLabel,
+  onClick,
+  ariaLabel,
 }: ProgressRingProps) {
   const radius = 38
   const stroke = 3
@@ -79,9 +84,10 @@ function ProgressRing({
   const pct = disabled ? 0 : max > 0 ? Math.min(value / max, 1) : 0
   const offset = circumference - pct * circumference
   const strokeColor = disabled ? "oklch(0.45 0.01 250 / 35%)" : color
+  const clickable = Boolean(onClick) && !disabled
 
-  return (
-    <div className="flex flex-col items-center gap-1.5">
+  const ringBody = (
+    <>
       <div className="relative w-[88px] h-[88px] lg:w-[96px] lg:h-[96px]">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 88 88">
           <circle
@@ -145,8 +151,23 @@ function ProgressRing({
           {disabled ? "Vacation" : `/ ${max >= 1000 ? `${(max / 1000).toFixed(max % 1000 === 0 ? 0 : 1)}k` : max} ${unit}`}
         </p>
       </div>
-    </div>
+    </>
   )
+
+  if (clickable) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={ariaLabel ?? `Log ${label.toLowerCase()}`}
+        className="group flex flex-col items-center gap-1.5 rounded-xl px-1 py-0.5 touch-manipulation transition-transform duration-150 hover:scale-[1.03] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      >
+        {ringBody}
+      </button>
+    )
+  }
+
+  return <div className="flex flex-col items-center gap-1.5">{ringBody}</div>
 }
 
 interface WeeklyHeroProps {
@@ -257,6 +278,7 @@ function computeWeeklyScore(d: DashboardData, skipCalories: boolean): number {
 
 export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: WeeklyHeroProps) {
   const { activeDate, isToday } = useActiveDate()
+  const { openQuickLog } = useQuickLog()
   const [showWeighInPrompt, setShowWeighInPrompt] = useState(false)
   const refDate = parseLocalDate(activeDate)
   const dayOfWeek = refDate.getDay()
@@ -327,9 +349,11 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
 
   return (
     <div
-      className={`glass relative overflow-hidden rounded-2xl border border-border/20 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] p-5 lg:p-6 shadow-[inset_0_1px_0_0_oklch(1_0_0/10%),0_22px_56px_-20px_oklch(0_0_0/42%)] transition-opacity duration-500 dark:border-[oklch(1_0_0/9%)] dark:from-glass-highlight/[0.1] dark:to-primary/[0.05] dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/12%),0_28px_72px_-24px_oklch(0_0_0/62%)] ${
+      className={cn(
+        glassPanelClass,
+        "bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] p-5 lg:p-6 transition-opacity duration-500 dark:from-glass-highlight/[0.1] dark:to-primary/[0.05]",
         loading ? "opacity-50" : "opacity-100"
-      }`}
+      )}
     >
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]"
@@ -360,6 +384,8 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
           icon={<Flame className="h-3.5 w-3.5 text-[#ef4444]" />}
           disabled={vacationBlocksCalories}
           centerLabel="—"
+          onClick={() => openQuickLog("calories")}
+          ariaLabel="Log food"
         />
         <ProgressRing
           value={stepsAvg}
@@ -368,6 +394,8 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
           unit="avg"
           color="#22c55e"
           icon={<Footprints className="h-3.5 w-3.5 text-[#22c55e]" />}
+          onClick={() => openQuickLog("steps")}
+          ariaLabel="Log steps"
         />
         <ProgressRing
           value={sleepAvg}
@@ -376,6 +404,8 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
           unit="hrs avg"
           color="#6366f1"
           icon={<Moon className="h-3.5 w-3.5 text-[#6366f1]" />}
+          onClick={() => openQuickLog("sleep")}
+          ariaLabel="Log sleep"
         />
       </div>
 

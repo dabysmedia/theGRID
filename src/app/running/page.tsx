@@ -366,7 +366,7 @@ export default function RunningPage() {
         color="#3b82f6"
       />
 
-      <div className="glass rounded-2xl p-5 animate-fade-up stagger-2">
+      <div className="glass-panel p-5 animate-fade-up stagger-2">
           <form noValidate onSubmit={handleSubmit} className="space-y-4">
             {/* Environment toggle */}
             <div className="flex rounded-[3px] border border-glass-border overflow-hidden">
@@ -469,7 +469,7 @@ export default function RunningPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 animate-fade-up stagger-1 lg:grid-cols-2">
-        <div className="glass min-h-[12rem] min-w-0 rounded-2xl p-4 lg:p-5">
+        <div className="glass-panel min-h-[12rem] min-w-0 p-4 lg:p-5">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider">
             Distance trend
           </h2>
@@ -537,7 +537,7 @@ export default function RunningPage() {
           )}
         </div>
 
-        <div className="glass min-h-[12rem] min-w-0 rounded-2xl p-4 lg:p-5">
+        <div className="glass-panel min-h-[12rem] min-w-0 p-4 lg:p-5">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider">
             Pace trend
           </h2>

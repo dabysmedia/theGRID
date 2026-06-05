@@ -77,7 +77,7 @@ export function AnatomyCanvas({
 
   return (
     <div className={cn("anatomy-health-root", className)}>
-      <div className="glass hud-corners rounded-2xl border border-border/30 overflow-hidden">
+      <div className="glass-panel border border-border/30 overflow-hidden">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 justify-between border-b border-border/35 bg-black/15 px-3 py-3 sm:px-4 sm:py-3.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0 flex-1">
             <div className="shrink-0 self-center border-r border-border/30 pr-3 mr-0.5 max-w-[11rem] sm:max-w-none">

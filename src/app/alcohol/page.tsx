@@ -227,7 +227,7 @@ export default function AlcoholPage() {
         color="#f59e0b"
       />
 
-      <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
+      <div className="glass-panel p-4 lg:p-5 animate-fade-up stagger-1">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
           Last 7 days
         </p>
@@ -269,7 +269,7 @@ export default function AlcoholPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
-        <div className="glass rounded-2xl p-5">
+        <div className="glass-panel p-5">
           <div className="text-center lg:text-left mb-5">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today&apos;s Units</p>
             <p className="text-4xl font-bold tabular-nums tracking-tight">{todayUnits}</p>

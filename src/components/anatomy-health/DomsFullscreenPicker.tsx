@@ -181,7 +181,7 @@ export function DomsFullscreenPicker({
             onClick={closeMusclePopup}
           >
             <div
-              className="glass hud-corners w-full max-w-md rounded-2xl border border-border/40 p-4 shadow-2xl"
+              className="glass-panel w-full max-w-md border border-border/40 p-4 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-2 border-b border-border/30 pb-3">

@@ -265,8 +265,8 @@ export default function WeightPage() {
     return (
       <div className="space-y-6 animate-pulse">
         <PageHeader title="Weight" />
-        <div className="h-32 glass rounded-2xl" />
-        <div className="h-48 glass rounded-2xl" />
+        <div className="h-32 glass-panel" />
+        <div className="h-48 glass-panel" />
       </div>
     )
   }
@@ -275,7 +275,7 @@ export default function WeightPage() {
     return (
       <div className="space-y-6">
         <PageHeader title="Weight" />
-        <div className="glass rounded-2xl border border-amber-500/20 bg-amber-500/5 p-8 text-center space-y-4 max-w-lg mx-auto">
+        <div className="glass-panel border border-amber-500/20 bg-amber-500/5 p-8 text-center space-y-4 max-w-lg mx-auto">
           <p className="text-sm text-amber-100/95 leading-relaxed">
             Vacation mode is on for this day. Weight and the scale log are hidden until{" "}
             <span className="font-semibold tabular-nums">{vacationResumeLabel}</span>.
@@ -370,7 +370,7 @@ export default function WeightPage() {
       />
 
       {/* Trend chart */}
-      <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
+      <div className="glass-panel p-4 lg:p-5 animate-fade-up stagger-1">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-1.5">
             {data?.direction === "down" ? (
@@ -479,7 +479,7 @@ export default function WeightPage() {
       {/* Form + History grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
         {/* Log form */}
-        <div className="glass rounded-2xl p-5">
+        <div className="glass-panel p-5">
           <h2 className="text-sm font-semibold uppercase tracking-wider mb-4">
             {entryForActiveDay ? "Edit weight" : "Log weight"}
           </h2>

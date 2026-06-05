@@ -12,7 +12,7 @@ import {
   Square,
   PowerOff,
 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, glassPanelClass } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -59,9 +59,11 @@ const COLORS = {
   eating: "#22c55e",
 } as const
 
-/** Matches calories “today” wheel card — border, vertical tint, inset + drop shadow */
-const FASTING_CARD_SHEEN =
-  "glass relative overflow-hidden rounded-2xl border border-border/20 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] shadow-[inset_0_1px_0_0_oklch(1_0_0/10%),0_22px_56px_-20px_oklch(0_0_0/42%)] dark:border-[oklch(1_0_0/9%)] dark:from-glass-highlight/[0.1] dark:to-primary/[0.05] dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/12%),0_28px_72px_-24px_oklch(0_0_0/62%)]"
+/** Matches hub weekly hero / glass-panel — vertical tint + depth shadow */
+const FASTING_CARD_SHEEN = cn(
+  glassPanelClass,
+  "bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] dark:from-glass-highlight/[0.1] dark:to-primary/[0.05]"
+)
 
 /** Timer disabled — steel / grey glass (no filter:saturate — it would grey out the Start CTA) */
 const FASTING_CARD_INACTIVE =

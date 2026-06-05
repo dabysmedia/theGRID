@@ -106,7 +106,7 @@ export function BottomNav() {
         aria-label="Main navigation"
       >
         <div className="mb-2 flex max-w-full flex-col items-end justify-end">
-          <div className="glass-frost hud-corners relative flex w-fit max-w-[min(100vw-1.5rem,calc(42rem+3.5rem))] flex-col overflow-hidden rounded-2xl shadow-lg shadow-black/40">
+          <div className="glass-panel relative flex w-fit max-w-[min(100vw-1.5rem,calc(42rem+3.5rem))] flex-col overflow-hidden shadow-lg shadow-black/40">
             <div
               className={cn(
                 "absolute top-0 left-4 right-4 z-[2] h-px bg-gradient-to-r from-transparent via-primary/25 to-transparent transition-opacity duration-300 motion-reduce:transition-none",

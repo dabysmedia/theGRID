@@ -58,7 +58,7 @@ export default function LogPage() {
           const tile = (
             <div
               className={cn(
-                "glass hud-corners flex h-full cursor-pointer flex-col items-center gap-3 rounded-2xl p-4 text-center transition-all duration-200 hover:bg-glass-highlight/40 active:scale-[0.97] lg:p-5",
+                "glass-panel flex h-full cursor-pointer flex-col items-center gap-3 p-4 text-center transition-all duration-200 hover:bg-glass-highlight/40 active:scale-[0.97] lg:p-5",
                 tilePaused && "cursor-not-allowed opacity-45 saturate-[0.4] hover:bg-transparent"
               )}
             >

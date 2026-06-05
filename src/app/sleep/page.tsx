@@ -305,7 +305,7 @@ export default function SleepPage() {
         color="#6366f1"
       />
 
-      <div className="glass min-w-0 animate-fade-up stagger-2 rounded-2xl p-5">
+      <div className="glass-panel min-w-0 animate-fade-up stagger-2 p-5">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -374,7 +374,7 @@ export default function SleepPage() {
           </form>
       </div>
 
-      <div className="glass min-w-0 animate-fade-up stagger-2 rounded-2xl p-4 lg:p-5">
+      <div className="glass-panel min-w-0 animate-fade-up stagger-2 p-4 lg:p-5">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="flex items-center gap-1.5 text-sm font-medium uppercase tracking-wider text-muted-foreground">
             <TrendingUp className="h-4 w-4 text-[#6366f1]" />

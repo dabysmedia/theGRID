@@ -1147,7 +1147,7 @@ export default function CaloriesPage() {
         </Suspense>
         <div className="space-y-6">
           <PageHeader title="Calories" />
-          <div className="glass rounded-2xl border border-amber-500/20 bg-amber-500/5 p-8 text-center space-y-4 max-w-lg mx-auto">
+          <div className="glass-panel border border-amber-500/20 bg-amber-500/5 p-8 text-center space-y-4 max-w-lg mx-auto">
             <p className="text-sm text-amber-100/95 leading-relaxed">
               Vacation mode is on for this day. The calories log is hidden until{" "}
               <span className="font-semibold tabular-nums">{vacationResumeLabel}</span>.
@@ -1198,7 +1198,7 @@ export default function CaloriesPage() {
       {/* Today: ring + weekly stats + log (combined) */}
       <div className="animate-fade-up">
         {editingGoal ? (
-          <div className="glass rounded-2xl border border-border/20 p-5 lg:p-6 shadow-sm">
+          <div className="glass-panel border border-border/20 p-5 lg:p-6 shadow-sm">
             <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Weekly calorie goal
             </p>
@@ -1394,7 +1394,7 @@ export default function CaloriesPage() {
             </div>
           </div>
         ) : (
-          <div className="glass rounded-2xl border border-border/20 p-6 lg:p-7 shadow-sm">
+          <div className="glass-panel border border-border/20 p-6 lg:p-7 shadow-sm">
             <div className="text-center lg:text-left">
               <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/45">Today</p>
               <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-foreground">{todayTotal.toLocaleString()}</p>
@@ -2024,7 +2024,7 @@ export default function CaloriesPage() {
             </DialogContent>
           </Dialog>
 
-          <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-1">
+          <div className="glass-panel p-4 lg:p-5 animate-fade-up stagger-1">
             <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-3">
               7-Day trend
             </p>
@@ -2077,7 +2077,7 @@ export default function CaloriesPage() {
           </div>
         </div>
 
-        <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-2">
+        <div className="glass-panel p-4 lg:p-5 animate-fade-up stagger-2">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-3">
             History
           </p>

@@ -2903,7 +2903,7 @@ export default function WorkoutsPage() {
     const dayDuration = daySessions.reduce((s, sess) => s + (sess.duration ?? 0), 0)
 
     return (
-      <div className="glass rounded-2xl overflow-hidden">
+      <div className="glass-panel overflow-hidden">
         <button
           type="button"
           onClick={() => {
@@ -3105,7 +3105,7 @@ export default function WorkoutsPage() {
           />
 
           {/* Week activity dots */}
-          <div className="glass relative overflow-hidden rounded-2xl border border-border/20 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] px-5 py-4 shadow-[inset_0_1px_0_0_oklch(1_0_0/10%),0_22px_56px_-20px_oklch(0_0_0/42%)] dark:border-[oklch(1_0_0/9%)] dark:from-glass-highlight/[0.1] dark:to-primary/[0.05] dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/12%),0_28px_72px_-24px_oklch(0_0_0/62%)] animate-fade-up">
+          <div className="glass-panel bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] px-5 py-4 animate-fade-up dark:from-glass-highlight/[0.1] dark:to-primary/[0.05]">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]" aria-hidden />
             <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12" aria-hidden />
             <div className="relative z-10">
@@ -3220,7 +3220,7 @@ export default function WorkoutsPage() {
             </div>
 
             {templates.length === 0 && (
-              <div className="glass rounded-2xl p-6 text-center">
+              <div className="glass-panel p-6 text-center">
                 <Copy className="mx-auto size-7 text-muted-foreground/20 mb-2" />
                 <p className="text-sm text-muted-foreground/60">
                   No routines yet
@@ -3439,7 +3439,7 @@ export default function WorkoutsPage() {
             </div>
 
             {completedSessions.length === 0 && (
-              <div className="glass rounded-2xl p-8 text-center">
+              <div className="glass-panel p-8 text-center">
                 <Dumbbell className="mx-auto size-8 text-muted-foreground/20 mb-3" />
                 <p className="text-sm text-muted-foreground">
                   No completed workouts yet

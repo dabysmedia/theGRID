@@ -1,10 +1,22 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { format, startOfDay, subDays } from "date-fns"
+import type { CSSProperties } from "react"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
+
+/** Default page section card — see `.glass-panel` in globals.css */
+export const glassPanelClass = "glass-panel"
+
+/** Optional category tint for hero strips — set `--panel-accent` CSS variable */
+export function glassPanelAccentStyle(color: string): CSSProperties {
+  return { ["--panel-accent" as string]: color }
+}
+
+/** Class to pair with `glassPanelClass` when a category color tint is needed */
+export const glassPanelAccentClass = "glass-panel-accent"
 
 /** Primary “glass” CTA — frosted panel + ladder yellow accent (matches glass UI) */
 export const glassCtaButtonClass =

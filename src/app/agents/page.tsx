@@ -16,7 +16,7 @@ function PeriodBlock({ title, narrative }: { title: string; narrative: string })
       <h2 className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground/55">
         {title}
       </h2>
-      <pre className="glass hud-corners max-h-[min(50dvh,36rem)] overflow-auto rounded-2xl p-4 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/90 sm:text-xs">
+      <pre className="glass-panel max-h-[min(50dvh,36rem)] overflow-auto p-4 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/90 sm:text-xs">
         {narrative}
       </pre>
     </section>
@@ -74,7 +74,7 @@ export default async function AgentsPage() {
         </p>
       </header>
 
-      <div className="glass hud-corners space-y-3 rounded-2xl p-4 text-xs sm:text-sm">
+      <div className="glass-panel space-y-3 p-4 text-xs sm:text-sm">
         <p className="text-muted-foreground">Machine endpoints</p>
         <ul className="space-y-2 font-mono text-[11px] sm:text-xs break-all">
           <li>
@@ -96,10 +96,10 @@ export default async function AgentsPage() {
       </div>
 
       {exportError ? (
-        <div className="glass hud-corners rounded-2xl p-6 text-sm text-red-400">{exportError}</div>
+        <div className="glass-panel p-6 text-sm text-red-400">{exportError}</div>
       ) : payload && periods ? (
         <>
-          <div className="glass hud-corners rounded-2xl p-4 text-xs text-muted-foreground">
+          <div className="glass-panel p-4 text-xs text-muted-foreground">
             <p>
               Exported {payload.exportedAt} · tz {periods.timezone} · today {periods.todayKey} ·{" "}
               {Object.values(payload.counts).reduce((a, b) => a + b, 0)} total records
@@ -119,7 +119,7 @@ export default async function AgentsPage() {
               <h2 className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground/55">
                 Goals & status
               </h2>
-              <pre className="glass hud-corners rounded-2xl p-4 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/90 sm:text-xs">
+              <pre className="glass-panel p-4 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/90 sm:text-xs">
                 {contextHeader}
               </pre>
             </section>
@@ -133,12 +133,12 @@ export default async function AgentsPage() {
             <h2 className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground/55">
               7-day coach snapshot
             </h2>
-            <pre className="glass hud-corners max-h-[min(40dvh,28rem)] overflow-auto rounded-2xl p-4 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/90 sm:text-xs">
+            <pre className="glass-panel max-h-[min(40dvh,28rem)] overflow-auto p-4 text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-foreground/90 sm:text-xs">
               {payload.contextSummary}
             </pre>
           </section>
 
-          <details className="glass hud-corners rounded-2xl p-4 text-xs">
+          <details className="glass-panel p-4 text-xs">
             <summary className="cursor-pointer font-medium text-muted-foreground">
               Period totals (JSON)
             </summary>
@@ -155,7 +155,7 @@ export default async function AgentsPage() {
             </pre>
           </details>
 
-          <details className="glass hud-corners rounded-2xl p-4 text-xs">
+          <details className="glass-panel p-4 text-xs">
             <summary className="cursor-pointer font-medium text-muted-foreground">
               All-time record counts
             </summary>

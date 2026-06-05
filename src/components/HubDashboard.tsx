@@ -108,8 +108,9 @@ export function HubDashboard() {
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+
     async function fetchDashboard() {
+      setLoading(true)
       try {
         const res = await apiFetch(`/api/dashboard?d=${activeDate}&_ts=${Date.now()}`, {
           cache: "no-store",
@@ -123,8 +124,17 @@ export function HubDashboard() {
         if (!cancelled) setLoading(false)
       }
     }
-    fetchDashboard()
-    return () => { cancelled = true }
+
+    void fetchDashboard()
+
+    function onLogSaved() {
+      void fetchDashboard()
+    }
+    window.addEventListener("grid:log-saved", onLogSaved)
+    return () => {
+      cancelled = true
+      window.removeEventListener("grid:log-saved", onLogSaved)
+    }
   }, [activeDate])
 
   const staggerClasses = ["stagger-1", "stagger-2", "stagger-3", "stagger-4", "stagger-5", "stagger-6", "stagger-7"]

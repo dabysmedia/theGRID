@@ -432,7 +432,7 @@ export default function StepsPage() {
         color="#22c55e"
       />
 
-      <div className="glass rounded-2xl p-5 animate-fade-up stagger-2">
+      <div className="glass-panel p-5 animate-fade-up stagger-2">
           <div className="text-center lg:text-left mb-5">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today&apos;s Total</p>
             <p className="text-4xl font-bold tabular-nums tracking-tight">{todayTotal.toLocaleString()}</p>
@@ -537,7 +537,7 @@ export default function StepsPage() {
           </form>
         </div>
 
-      <div className="glass rounded-2xl p-4 lg:p-5 animate-fade-up stagger-2">
+      <div className="glass-panel p-4 lg:p-5 animate-fade-up stagger-2">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
           7-Day Trend
         </h2>

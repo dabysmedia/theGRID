@@ -140,33 +140,33 @@ export default function FastingPage() {
       <PageHeader title="Fasting" />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-fade-up">
-        <div className="glass hud-corners space-y-0.5 rounded-2xl p-3">
+        <div className="glass-panel space-y-0.5 p-3">
           <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60">7d avg (logged)</div>
           <div className="text-lg font-bold tabular-nums" style={{ color: ORANGE }}>
             {stats.avg7.toFixed(1)}h
           </div>
           <div className="text-[9px] text-muted-foreground/50">target {stats.planned}h</div>
         </div>
-        <div className="glass hud-corners space-y-0.5 rounded-2xl p-3">
+        <div className="glass-panel space-y-0.5 p-3">
           <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60">vs target</div>
           <div className="text-lg font-bold tabular-nums text-primary">
             {stats.adherence != null ? `${stats.adherence}%` : "—"}
           </div>
           <div className="text-[9px] text-muted-foreground/50">7-day window</div>
         </div>
-        <div className="glass hud-corners space-y-0.5 rounded-2xl p-3">
+        <div className="glass-panel space-y-0.5 p-3">
           <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60">Day streak</div>
           <div className="text-lg font-bold tabular-nums">{stats.streak}</div>
           <div className="text-[9px] text-muted-foreground/50">days with a log</div>
         </div>
-        <div className="glass hud-corners space-y-0.5 rounded-2xl p-3">
+        <div className="glass-panel space-y-0.5 p-3">
           <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60">Completed fasts</div>
           <div className="text-lg font-bold tabular-nums">{stats.total}</div>
           <div className="text-[9px] text-muted-foreground/50">all time</div>
         </div>
       </div>
 
-      <section className="glass animate-fade-up stagger-1 space-y-4 rounded-2xl p-5 lg:p-6">
+      <section className="glass-panel animate-fade-up stagger-1 space-y-4 p-5 lg:p-6">
         <div className="flex items-center gap-2">
           <Flame className="h-3.5 w-3.5" style={{ color: ORANGE }} />
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em]">Daily fast hours (14d)</h2>
@@ -199,7 +199,7 @@ export default function FastingPage() {
         </div>
       </section>
 
-      <section className="glass animate-fade-up stagger-2 space-y-4 rounded-2xl p-5 lg:p-6">
+      <section className="glass-panel animate-fade-up stagger-2 space-y-4 p-5 lg:p-6">
         <div className="flex items-center gap-2">
           <Timer className="h-3.5 w-3.5 text-primary" />
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em]">Trend (30d)</h2>
@@ -239,7 +239,7 @@ export default function FastingPage() {
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] mb-3 text-muted-foreground/80">
           Recent fasts
         </h2>
-        <div className="glass overflow-hidden rounded-2xl">
+        <div className="glass-panel overflow-hidden">
           {recent.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground/70 text-center">
               No fasts logged yet. Keep the home screen open when a fasting window ends to build history here.

@@ -186,7 +186,7 @@ export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
       )
     }
     return (
-      <div className="glass rounded-2xl p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+      <div className="glass-panel p-4 animate-in fade-in slide-in-from-top-2 duration-300">
         {vacationBody}
       </div>
     )
@@ -293,7 +293,7 @@ export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="glass rounded-2xl p-4 animate-in fade-in slide-in-from-top-2 duration-300"
+      className="glass-panel p-4 animate-in fade-in slide-in-from-top-2 duration-300"
     >
       {formInner}
     </form>

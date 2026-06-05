@@ -295,7 +295,7 @@ export default function HabitsPage() {
           <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
         </div>
       ) : habits.length === 0 ? (
-        <div className="glass animate-fade-up rounded-2xl p-6 text-center">
+        <div className="glass-panel animate-fade-up p-6 text-center">
           <CheckSquare className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
           <p className="text-xs text-muted-foreground mb-4">No habits yet. Add your first one to get started.</p>
           {!showForm && <NewHabitCTA onClick={openCreate} />}
@@ -408,7 +408,7 @@ export default function HabitsPage() {
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in px-4" onClick={closeForm}>
           <div
-            className="glass-frost animate-scale-in w-full max-w-[400px] space-y-3 rounded-2xl p-4"
+            className="glass-panel animate-scale-in w-full max-w-[400px] space-y-3 p-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">

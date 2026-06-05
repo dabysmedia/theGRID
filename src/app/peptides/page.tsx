@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { format, subDays } from "date-fns"
 import { Calendar, Gauge, Syringe, Trash2, TrendingUp } from "lucide-react"
 import {
@@ -28,8 +28,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { formatDate, formatDisplayDate, last7Days, parseLocalDate } from "@/lib/utils"
-import { cn } from "@/lib/utils"
+import { formatDate, formatDisplayDate, last7Days, parseLocalDate, cn } from "@/lib/utils"
+import { GlassChip } from "@/components/GlassChip"
+import { SectionRail } from "@/components/SectionRail"
 import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
@@ -85,44 +86,6 @@ function entryDateKey(entry: { date: string }): string {
   return utcCalendarDayKeyFromIso(entry.date)
 }
 
-
-function SectionRail({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-2 py-0.5">
-      <div className="hud-divider flex-1" />
-      <span className="type-hud-rail shrink-0">{label}</span>
-      <div className="hud-divider flex-1" />
-    </div>
-  )
-}
-
-function GlassChip({
-  selected,
-  onClick,
-  children,
-  className,
-}: {
-  selected: boolean
-  onClick: () => void
-  children: ReactNode
-  className?: string
-}) {
-  return (
-    <Button
-      type="button"
-      variant={selected ? "glass" : "outline"}
-      size="sm"
-      onClick={onClick}
-      className={cn(
-        "type-hud-chip font-sans normal-case tracking-normal",
-        !selected && "border-border/50 bg-background/30 text-muted-foreground hover:text-foreground",
-        className
-      )}
-    >
-      {children}
-    </Button>
-  )
-}
 
 function PeptideHistoryDayGroup({
   dateKey,
@@ -624,7 +587,7 @@ export default function PeptidesPage() {
       </Dialog>
 
       {/* Daily appetite */}
-      <div className="glass hud-corners animate-fade-up stagger-1 rounded-2xl p-4 lg:p-5">
+      <div className="glass-panel animate-fade-up stagger-1 p-4 lg:p-5">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="type-hud-title">Daily appetite</p>
@@ -696,7 +659,7 @@ export default function PeptidesPage() {
       />
 
       {/* Trends */}
-      <div className={cn("glass hud-corners min-w-0 animate-fade-up stagger-1 rounded-2xl p-4 lg:p-5")}>
+      <div className={cn("glass-panel min-w-0 animate-fade-up stagger-1 p-4 lg:p-5")}>
         <div className="mb-3 flex items-center gap-2">
           <TrendingUp className="h-4 w-4 shrink-0" style={{ color: PURPLE }} />
           <span className="type-hud-title">Trends</span>
@@ -801,7 +764,7 @@ export default function PeptidesPage() {
       </div>
 
       {/* Injection history */}
-      <div className="glass hud-corners animate-fade-up stagger-2 rounded-2xl p-4 lg:p-5 space-y-3">
+      <div className="glass-panel animate-fade-up stagger-2 p-4 lg:p-5 space-y-3">
           <div className="flex items-center gap-2 mb-1">
             <span className="type-hud-title">Injection history</span>
             <div className="hud-divider flex-1" />
