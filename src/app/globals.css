@@ -801,6 +801,12 @@ html {
   to   { transform: translateY(0); }
 }
 
+@keyframes ring-pop {
+  0%   { transform: scale(0.82); }
+  65%  { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
 @keyframes nav-indicator {
   from { transform: scaleX(0); }
   to   { transform: scaleX(1); }
@@ -843,6 +849,11 @@ html {
     animation: count-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
+  .animate-ring-pop {
+    animation: ring-pop 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+    transform-origin: center;
+  }
+
   .animate-nav-indicator {
     animation: nav-indicator 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
@@ -853,6 +864,10 @@ html {
 
   @media (prefers-reduced-motion: reduce) {
     .animate-nav-dock-item {
+      animation: none;
+    }
+
+    .animate-ring-pop {
       animation: none;
     }
   }

@@ -11,6 +11,7 @@ import {
   TrendingDown,
   TrendingUp,
   Minus,
+  ChevronRight,
 } from "lucide-react"
 import { DailyWeighIn } from "@/components/DailyWeighIn"
 import { useActiveDate } from "@/context/DateContext"
@@ -55,6 +56,8 @@ interface ProgressRingProps {
   valueLabel?: string
   onClick?: () => void
   ariaLabel?: string
+  /** Stagger index (0–2) for ring pop-in when the overview view changes. */
+  animationIndex?: number
 }
 
 function formatRingValue(value: number): string {
@@ -77,6 +80,7 @@ function ProgressRing({
   valueLabel,
   onClick,
   ariaLabel,
+  animationIndex = 0,
 }: ProgressRingProps) {
   const radius = 38
   const stroke = 3
@@ -85,10 +89,19 @@ function ProgressRing({
   const offset = circumference - pct * circumference
   const strokeColor = disabled ? "oklch(0.45 0.01 250 / 35%)" : color
   const clickable = Boolean(onClick) && !disabled
+  const displayValue =
+    disabled && centerLabel != null ? centerLabel : valueLabel ?? formatRingValue(value)
+  const staggerClass =
+    animationIndex === 1 ? "stagger-2" : animationIndex === 2 ? "stagger-3" : "stagger-1"
 
   const ringBody = (
     <>
-      <div className="relative w-[88px] h-[88px] lg:w-[96px] lg:h-[96px]">
+      <div
+        className={cn(
+          "relative w-[88px] h-[88px] lg:w-[96px] lg:h-[96px] motion-safe:animate-ring-pop motion-reduce:animate-none",
+          staggerClass
+        )}
+      >
         <svg className="w-full h-full -rotate-90" viewBox="0 0 88 88">
           <circle
             cx="44"
@@ -137,11 +150,22 @@ function ProgressRing({
             ))}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={disabled ? "opacity-40" : undefined}>{icon}</span>
-          <span className={cn("type-hud-stat mt-0.5", disabled && "text-muted-foreground/50 tabular-nums")}>
-            {disabled && centerLabel != null
-              ? centerLabel
-              : valueLabel ?? formatRingValue(value)}
+          <span
+            className={cn(
+              disabled ? "opacity-40" : undefined,
+              "motion-safe:animate-scale-in motion-reduce:animate-none"
+            )}
+          >
+            {icon}
+          </span>
+          <span
+            key={displayValue}
+            className={cn(
+              "type-hud-stat mt-0.5 motion-safe:animate-count-up motion-reduce:animate-none",
+              disabled && "text-muted-foreground/50 tabular-nums"
+            )}
+          >
+            {displayValue}
           </span>
         </div>
       </div>
@@ -247,6 +271,32 @@ function clamp01(n: number): number {
   return Math.min(n, 1)
 }
 
+type OverviewView = "today" | "week"
+
+/**
+ * Daily score 0–100: same weighting as weekly score but uses the hub day’s logged values.
+ */
+function computeDailyScore(d: DashboardData, skipCalories: boolean): number {
+  const calGoal = d.calories.goal ?? 2000
+  const stepsGoal = d.steps.goal ?? 10000
+
+  const calScore = calGoal > 0 ? clamp01(d.calories.todayValue / calGoal) : 0
+  const stepsScore = stepsGoal > 0 ? clamp01(d.steps.todayValue / stepsGoal) : 0
+
+  const runGoalDaily = d.running.goal ?? 3
+  const runScore = runGoalDaily > 0 ? clamp01(d.running.todayValue / runGoalDaily) : 0
+
+  const workoutGoalDaily = d.workouts.goal ?? 1
+  const workoutScore =
+    workoutGoalDaily > 0 ? clamp01(d.workouts.todayValue / workoutGoalDaily) : 0
+
+  const activityScore = (runScore + workoutScore) / 2
+  if (skipCalories) {
+    return Math.round(((stepsScore + activityScore) / 2) * 100)
+  }
+  return Math.round(((calScore + stepsScore + activityScore) / 3) * 100)
+}
+
 /**
  * Weekly score 0–100: equal weight on calories avg vs goal, steps avg vs goal, and avg of
  * running + workout vs goals. When `skipCalories`, calories are omitted (vacation on hub day).
@@ -280,6 +330,7 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
   const { activeDate, isToday } = useActiveDate()
   const { openQuickLog } = useQuickLog()
   const [showWeighInPrompt, setShowWeighInPrompt] = useState(false)
+  const [viewMode, setViewMode] = useState<OverviewView>("today")
   const refDate = parseLocalDate(activeDate)
   const dayOfWeek = refDate.getDay()
   const weekStart = new Date(refDate)
@@ -307,7 +358,14 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
   const stepsGoal = data.steps.goal ?? 10000
   const sleepGoal = data.sleep.goal ?? 8
 
-  const weeklyScore = computeWeeklyScore(data, vacationBlocksCalories)
+  const isWeekView = viewMode === "week"
+  const calValue = isWeekView ? calAvg : data.calories.todayValue
+  const stepsValue = isWeekView ? stepsAvg : data.steps.todayValue
+  const sleepValue = isWeekView ? sleepAvg : data.sleep.todayValue
+  const score = isWeekView
+    ? computeWeeklyScore(data, vacationBlocksCalories)
+    : computeDailyScore(data, vacationBlocksCalories)
+
   const weightTrend = data.weightTrend?.baselineTrend ?? "maintaining"
   const weightDelta = data.weightTrend?.vsBaselineLb ?? 0
   const weightIcon =
@@ -323,26 +381,55 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         ? "Gaining"
         : "Maintaining"
 
-  const secondaryStats = [
-    {
-      icon: <PersonStanding className="h-4 w-4" style={{ color: "#3b82f6" }} />,
-      label: "Running",
-      value: `${(weekTotal(data.running.last7)).toFixed(1)} mi`,
-    },
-    {
-      icon: <WeekWorkoutGoalRing count={workoutsThisWeek} />,
-      label: "Workouts",
-      value: `${workoutsThisWeek}/${WEEKLY_WORKOUT_GOAL} this wk`,
-    },
-    {
-      icon: weightIcon,
-      label: "Weight",
-      value: `${weightLabel} ${weightDelta > 0 ? `+${weightDelta}` : weightDelta} lb`,
-    },
-  ]
-
   const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
   const dateRange = `${monthNames[weekStart.getMonth()]} ${weekStart.getDate()} – ${monthNames[weekEnd.getMonth()]} ${weekEnd.getDate()}`
+  const dayLabel = isToday
+    ? "Today"
+    : `${monthNames[refDate.getMonth()]} ${refDate.getDate()}`
+
+  const secondaryStats = isWeekView
+    ? [
+        {
+          icon: <PersonStanding className="h-4 w-4" style={{ color: "#3b82f6" }} />,
+          label: "Running",
+          value: `${weekTotal(data.running.last7).toFixed(1)} mi`,
+        },
+        {
+          icon: <WeekWorkoutGoalRing count={workoutsThisWeek} />,
+          label: "Workouts",
+          value: `${workoutsThisWeek}/${WEEKLY_WORKOUT_GOAL} this wk`,
+        },
+        {
+          icon: weightIcon,
+          label: "Weight",
+          value: `${weightLabel} ${weightDelta > 0 ? `+${weightDelta}` : weightDelta} lb`,
+        },
+      ]
+    : [
+        {
+          icon: <PersonStanding className="h-4 w-4" style={{ color: "#3b82f6" }} />,
+          label: "Running",
+          value: `${data.running.todayValue.toFixed(1)} mi`,
+        },
+        {
+          icon:
+            data.workouts.todayValue > 0 ? (
+              <Check className="h-4 w-4 text-emerald-500" strokeWidth={2.8} aria-hidden />
+            ) : (
+              <Dumbbell className="h-4 w-4" style={{ color: "#c4d632" }} />
+            ),
+          label: "Workouts",
+          value:
+            data.workouts.todayValue > 0
+              ? `${data.workouts.todayValue} logged`
+              : "None yet",
+        },
+        {
+          icon: weightIcon,
+          label: "Weight",
+          value: `${weightLabel} ${weightDelta > 0 ? `+${weightDelta}` : weightDelta} lb`,
+        },
+      ]
 
   const dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
   const stepsMax = Math.max(...data.steps.last7, 1)
@@ -368,60 +455,96 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
       <div className="flex items-center justify-between mb-5 relative z-10">
         <div className="flex items-center gap-2">
           <div className="status-dot" />
-          <h2 className="type-hud-title">Weekly Overview</h2>
+          <h2
+            key={viewMode}
+            className="type-hud-title motion-safe:animate-fade-up motion-reduce:animate-none"
+          >
+            {isWeekView ? "Weekly Overview" : "Daily Overview"}
+          </h2>
         </div>
-          <span className="type-hud-eyebrow">{dateRange}</span>
+        <div className="flex items-center gap-1.5">
+          <span
+            key={`${viewMode}-eyebrow`}
+            className="type-hud-eyebrow motion-safe:animate-fade-up motion-reduce:animate-none"
+          >
+            {isWeekView ? dateRange : dayLabel}
+          </span>
+          <button
+            type="button"
+            onClick={() => setViewMode((mode) => (mode === "today" ? "week" : "today"))}
+            aria-label={isWeekView ? "Show today's values" : "Show weekly values"}
+            className="flex h-7 w-7 items-center justify-center rounded-lg glass-subtle text-muted-foreground transition-colors hover:text-foreground hover:bg-glass-highlight/30 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <ChevronRight
+              className={cn(
+                "h-3.5 w-3.5 transition-transform duration-300 ease-out",
+                isWeekView && "rotate-180"
+              )}
+              aria-hidden
+            />
+          </button>
+        </div>
       </div>
 
+      <div
+        key={viewMode}
+        className="relative z-10 motion-safe:animate-fade-up motion-reduce:animate-none"
+      >
       {/* Progress rings row */}
-      <div className="flex justify-around mb-5 relative z-10 animate-fade-up stagger-1">
+      <div className="flex justify-around mb-5">
         <ProgressRing
-          value={calAvg}
+          value={calValue}
           max={calGoal}
           label="Calories"
-          unit="avg"
+          unit={isWeekView ? "avg" : "cal"}
           color="#ef4444"
           icon={<Flame className="h-3.5 w-3.5 text-[#ef4444]" />}
           disabled={vacationBlocksCalories}
           centerLabel="—"
           onClick={() => openQuickLog("calories")}
           ariaLabel="Log food"
+          animationIndex={0}
         />
         <ProgressRing
-          value={stepsAvg}
+          value={stepsValue}
           max={stepsGoal}
           label="Steps"
-          unit="avg"
+          unit={isWeekView ? "avg" : "steps"}
           color="#22c55e"
           icon={<Footprints className="h-3.5 w-3.5 text-[#22c55e]" />}
           onClick={() => openQuickLog("steps")}
           ariaLabel="Log steps"
+          animationIndex={1}
         />
         <ProgressRing
-          value={sleepAvg}
+          value={sleepValue}
           max={sleepGoal}
           label="Sleep"
-          unit="hrs avg"
+          unit={isWeekView ? "hrs avg" : "hrs"}
           color="#6366f1"
           icon={<Moon className="h-3.5 w-3.5 text-[#6366f1]" />}
           onClick={() => openQuickLog("sleep")}
           ariaLabel="Log sleep"
+          animationIndex={2}
         />
       </div>
 
-      {/* Weekly score */}
-      <div className="mb-5 relative z-10 animate-fade-up stagger-2">
+      {/* Score */}
+      <div className="mb-5">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="type-hud-label-soft">Weekly score</span>
-          <span className="type-hud-stat-xs text-primary tracking-wider">
-            {weeklyScore}%
+          <span className="type-hud-label-soft">{isWeekView ? "Weekly score" : "Daily score"}</span>
+          <span
+            key={`${viewMode}-score`}
+            className="type-hud-stat-xs text-primary tracking-wider motion-safe:animate-fade-up motion-reduce:animate-none"
+          >
+            {score}%
           </span>
         </div>
         <div className="h-1 w-full bg-muted/20 overflow-hidden">
           <div
             className="h-full bg-primary transition-all duration-700 ease-out"
             style={{
-              width: `${weeklyScore}%`,
+              width: `${score}%`,
               boxShadow: '0 0 8px oklch(0.82 0.18 110 / 25%)',
             }}
           />
@@ -429,12 +552,12 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
       </div>
 
       {/* Weekly activity bars */}
-      <div className="mb-4 relative z-10 animate-fade-up stagger-3">
+      <div className="mb-4 animate-fade-up stagger-3">
         <p className="type-hud-subsection mb-2">Steps Activity</p>
         <div className="flex items-end justify-between gap-1.5 h-10">
           {data.steps.last7.map((val, i) => {
             const pct = stepsMax > 0 ? (val / stepsMax) * 100 : 0
-            const isToday = i === data.steps.last7.length - 1
+            const isTodayBar = i === data.steps.last7.length - 1
             return (
               <div key={i} className="flex-1 flex flex-col items-center gap-1">
                 <div className="w-full relative" style={{ height: "32px" }}>
@@ -442,14 +565,14 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
                     className="absolute bottom-0 w-full animate-bar-grow"
                     style={{
                       height: `${Math.max(pct, 4)}%`,
-                      backgroundColor: isToday ? "#22c55e" : "#22c55e50",
-                      boxShadow: isToday ? '0 0 6px #22c55e40' : 'none',
+                      backgroundColor: isTodayBar ? "#22c55e" : "#22c55e50",
+                      boxShadow: isTodayBar ? '0 0 6px #22c55e40' : 'none',
                       borderRadius: '1px',
                       animationDelay: `${300 + i * 60}ms`,
                     }}
                   />
                 </div>
-                <span className={`text-[10px] tracking-wider ${isToday ? "text-foreground font-semibold" : "text-muted-foreground/50"}`}>
+                <span className={`text-[10px] tracking-wider ${isTodayBar ? "text-foreground font-semibold" : "text-muted-foreground/50"}`}>
                   {dayLabels[i]}
                 </span>
               </div>
@@ -459,7 +582,7 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
       </div>
 
       {/* Secondary stats pills */}
-      <div className="flex gap-2 relative z-10 animate-fade-up stagger-4">
+      <div className="flex gap-2">
         {secondaryStats.map((stat) => (
           <div
             key={stat.label}
@@ -474,6 +597,7 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
             </div>
           </div>
         ))}
+      </div>
       </div>
 
       {showWeighInPrompt && (
