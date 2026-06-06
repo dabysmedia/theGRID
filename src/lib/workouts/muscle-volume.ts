@@ -209,20 +209,17 @@ export function aggregateMuscleStats(
   return out.sort((a, b) => b.sets - a.sets || b.volumeLb - a.volumeLb || a.muscle.localeCompare(b.muscle))
 }
 
-/** Map weekly muscle load to body segment scores (1–10) for the diagram heatmap. */
+/** Map weekly muscle set counts to body segment keys (absolute sets, not normalized). */
 export function muscleStatsToSegmentScores(stats: MuscleWeekStats[]): Record<string, number> {
   if (stats.length === 0) return {}
-  const maxSets = Math.max(...stats.map((s) => s.sets), 1)
   const scores: Record<string, number> = {}
 
   for (const row of stats) {
     const slugs = slugsForMuscle(row.muscle)
     const keys = segmentKeysForSlugs(slugs)
     if (keys.length === 0) continue
-    const intensity = Math.max(1, Math.min(10, Math.round((row.sets / maxSets) * 10)))
-    const perKey = intensity
     for (const k of keys) {
-      scores[k] = Math.max(scores[k] ?? 0, perKey)
+      scores[k] = Math.max(scores[k] ?? 0, row.sets)
     }
   }
   return scores

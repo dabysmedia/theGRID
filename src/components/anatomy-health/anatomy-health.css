@@ -28,6 +28,16 @@
   --anatomy-doms-critical-fill: oklch(0.42 0.15 88 / 0.62);
   --anatomy-doms-critical-stroke: oklch(0.86 0.14 88 / 0.58);
 
+  /* Training load tiers — green / blue / yellow; inline styles from load-colors.ts */
+  --anatomy-load-green-fill: oklch(0.67 0.22 128 / 0.84);
+  --anatomy-load-green-stroke: oklch(0.78 0.22 128 / 0.94);
+  --anatomy-load-blue-fill: oklch(0.62 0.16 240 / 0.78);
+  --anatomy-load-blue-stroke: oklch(0.74 0.15 240 / 0.9);
+  --anatomy-load-yellow-fill: oklch(0.72 0.17 110 / 0.74);
+  --anatomy-load-yellow-stroke: oklch(0.82 0.16 110 / 0.88);
+  --anatomy-load-glow-soft: oklch(0.62 0.2 128 / 0.22);
+  --anatomy-load-glow-tight: oklch(0.72 0.22 128 / 0.32);
+
   /* Leader line + tag chip (reference red) */
   --anatomy-injury-callout-stroke: oklch(0.62 0.18 22 / 0.88);
   /* Body highlights — same hue, higher L + alpha so injured segments read clearly on the figure */
@@ -47,6 +57,11 @@
   --anatomy-ladder-glow-inner: oklch(0.84 0.19 110 / 0.62);
   --anatomy-ladder-glow-core: oklch(0.93 0.18 108 / 0.88);
   --anatomy-selected-glow: var(--anatomy-ladder-glow-inner);
+  /* Gap between muscle tiles + inner rim */
+  --anatomy-segment-gap: oklch(0.11 0.014 250 / 0.98);
+  --anatomy-segment-rim: oklch(1 0 0 / 0.22);
+  --anatomy-segment-gap-width: 3px;
+  --anatomy-segment-rim-width: 1.25px;
 }
 
 .anatomy-health-root .anatomy-figure-chassis {
@@ -74,16 +89,67 @@
   background-size: 100% 100%;
 }
 
+.anatomy-health-root .anatomy-svg {
+  overflow: visible;
+}
+
+.anatomy-health-root .anatomy-svg-premium {
+  filter: drop-shadow(0 10px 28px oklch(0 0 0 / 0.38));
+}
+
+.anatomy-segment-gaps {
+  pointer-events: none;
+}
+
+.anatomy-region-separator {
+  fill: none;
+  stroke: var(--anatomy-segment-gap);
+  stroke-width: var(--anatomy-segment-gap-width);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
 .anatomy-region-group {
   cursor: pointer;
 }
 
+.anatomy-health-root[data-anatomy-static="true"] .anatomy-region-group {
+  cursor: default;
+  pointer-events: none;
+}
+
+.anatomy-health-root[data-anatomy-static="true"] .anatomy-region-group:focus-visible .anatomy-region-path {
+  outline: none;
+}
+
+.anatomy-health-root[data-anatomy-static="true"] .anatomy-region-group[data-hover="true"] .anatomy-region-path,
+.anatomy-health-root[data-anatomy-static="true"] .anatomy-region-group[data-selected="true"] .anatomy-region-path {
+  filter: none;
+  stroke-width: inherit;
+}
+
 .anatomy-region-path {
+  paint-order: stroke fill;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  stroke-width: var(--anatomy-segment-rim-width);
   transition:
     fill 0.2s ease,
     stroke 0.2s ease,
     filter 0.2s ease;
   outline: none;
+}
+
+@media (min-width: 640px) {
+  .anatomy-region-separator {
+    stroke-width: 3.5px;
+  }
+
+  .anatomy-region-path {
+    stroke-width: 1.5px;
+  }
 }
 
 .anatomy-region-group:focus-visible .anatomy-region-path {
@@ -98,7 +164,7 @@
 /* Baseline diagram (no DOMS / injury on this segment) */
 .anatomy-region-path[data-anatomy-fill="base"][data-severity="none"] {
   fill: var(--anatomy-sev-none-fill);
-  stroke: var(--anatomy-sev-none-stroke);
+  stroke: var(--anatomy-segment-rim);
 }
 
 /* DOMS = yellow ladder by soreness tier */
@@ -117,6 +183,26 @@
 .anatomy-region-path[data-anatomy-fill="doms"][data-severity="critical"] {
   fill: var(--anatomy-doms-critical-fill);
   stroke: var(--anatomy-doms-critical-stroke);
+}
+
+/* Training load tiers (fallback if inline styles missing) */
+.anatomy-region-path[data-load-tier="yellow"] {
+  fill: var(--anatomy-load-yellow-fill);
+  stroke: var(--anatomy-load-yellow-stroke);
+}
+.anatomy-region-path[data-load-tier="blue"] {
+  fill: var(--anatomy-load-blue-fill);
+  stroke: var(--anatomy-load-blue-stroke);
+}
+.anatomy-region-path[data-load-tier="green"] {
+  fill: var(--anatomy-load-green-fill);
+  stroke: var(--anatomy-load-green-stroke);
+}
+
+.anatomy-region-path.anatomy-load-glow {
+  filter:
+    drop-shadow(0 0 6px var(--anatomy-load-glow-soft))
+    drop-shadow(0 0 2px var(--anatomy-load-glow-tight));
 }
 
 /* Injury = red ladder (takes precedence over DOMS on the same segment) */

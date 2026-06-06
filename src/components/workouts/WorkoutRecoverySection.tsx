@@ -76,7 +76,7 @@ export function WorkoutRecoverySection({
         <div className="grid gap-0 lg:grid-cols-2 lg:divide-x lg:divide-border/25">
           <div className="p-3 sm:p-4">
             <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Muscle map · this week
+              Load · this week
             </p>
             <WorkoutMuscleMap segmentScores={segmentScores} />
           </div>

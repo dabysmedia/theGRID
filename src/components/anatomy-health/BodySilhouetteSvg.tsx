@@ -10,6 +10,7 @@ import {
 import type { AnatomyHealthState } from "@/lib/anatomy-health/model"
 import { formatBodySegmentTitle } from "@/lib/anatomy-health/segment-labels"
 import { domsScoreToSeverity } from "@/lib/anatomy-health/severity"
+import { weeklySetsToLoadStyle } from "@/lib/anatomy-health/load-colors"
 import type { SeverityLevel } from "@/lib/anatomy-health/model"
 import { cn } from "@/lib/utils"
 
@@ -23,12 +24,16 @@ export interface BodySilhouetteSvgProps {
   className?: string
   /** Optional: announce layer stack for future organ/skeleton overlays */
   layer?: "base" | "overlay"
-  /** Per-segment DOMS scores (1–10); rendered as yellow on the diagram. */
+  /** Per-segment heat values; for `load` variant these are weekly set counts. */
   domsScores?: Record<string, number> | null
+  /** Heat map palette: DOMS yellow (default) or training load green. */
+  segmentHeatVariant?: "doms" | "load"
   /** Per-segment active injury severity; rendered as red. Overrides DOMS on the same segment. */
   injurySegmentSeverity?: Record<string, SeverityLevel> | null
   /** Highlight segment keys (e.g. selected in DOMS picker). */
   domsHighlightKeys?: string[] | null
+  /** When false, segments are display-only (no click, hover, or keyboard focus). */
+  interactive?: boolean
   /** Grow to fill the parent box (e.g. fullscreen DOMS picker); skips default max-height cap. */
   fillParent?: boolean
   /** Leader lines + labels; segment keys must match `view` (e.g. from `buildInjuryCalloutsForView`). */
@@ -161,9 +166,11 @@ export function BodySilhouetteSvg({
   className,
   layer = "base",
   domsScores = null,
+  segmentHeatVariant = "doms",
   injurySegmentSeverity = null,
   domsHighlightKeys = null,
   fillParent = false,
+  interactive = true,
   injuryCallouts = null,
 }: BodySilhouetteSvgProps) {
   const svgRef = useRef<SVGSVGElement>(null)
@@ -349,28 +356,47 @@ export function BodySilhouetteSvg({
     <svg
       ref={svgRef}
       className={cn(
-        "anatomy-svg w-full select-none",
+        "anatomy-svg anatomy-svg-premium w-full select-none",
         fillParent ? "h-full max-h-full max-w-full" : "h-auto max-h-[min(60vh,480px)]",
         className
       )}
       viewBox={vb}
       preserveAspectRatio="xMidYMid meet"
       role="img"
-      aria-label={`Body diagram, ${view} view. Select a muscle or joint area for details.`}
+      aria-label={
+        interactive
+          ? `Body diagram, ${view} view. Select a muscle or joint area for details.`
+          : `Body diagram, ${view} view, training load.`
+      }
     >
+      <g className="anatomy-segment-gaps" aria-hidden>
+        {segments.flatMap((seg) =>
+          seg.paths.map((p) => (
+            <path key={`gap-${p.key}`} d={p.d} className="anatomy-region-separator" />
+          )),
+        )}
+      </g>
       {segments.map((seg) => {
         const region = state.regions[seg.regionId]
         const selected = selectedSegmentKey === seg.interactionKey
         const hovered = hoveredSegmentKey === seg.interactionKey
         const injurySev = injurySegmentSeverity?.[seg.interactionKey]
         const domsN = domsScores?.[seg.interactionKey]
-        const anatomyFill: "base" | "doms" | "injury" = injurySev
+        const loadStyle =
+          segmentHeatVariant === "load" && domsN != null && domsN >= 0.5
+            ? weeklySetsToLoadStyle(domsN)
+            : null
+        const heatFill = segmentHeatVariant === "load" ? "load" : "doms"
+        const anatomyFill: "base" | "doms" | "load" | "injury" = injurySev
           ? "injury"
-          : domsN != null
-            ? "doms"
-            : "base"
+          : loadStyle
+            ? "load"
+            : domsN != null && segmentHeatVariant !== "load"
+              ? heatFill
+              : "base"
         const pathSeverity: SeverityLevel =
-          injurySev ?? (domsN != null ? domsScoreToSeverity(domsN) : "none")
+          injurySev ??
+          (domsN != null && segmentHeatVariant !== "load" ? domsScoreToSeverity(domsN) : "none")
         const highlight = domsHighlightKeys?.includes(seg.interactionKey) ?? false
         const pieceTitle = formatBodySegmentTitle(seg.slug, seg.side)
         const aria = `${pieceTitle}. Parent sector ${region.label}. ${region.injuries.length} active condition(s). Severity ${region.severity}.`
@@ -379,27 +405,38 @@ export function BodySilhouetteSvg({
           <g
             key={seg.interactionKey}
             id={`anatomy-segment-${seg.interactionKey.replace(/:/g, "-")}`}
-            tabIndex={0}
-            role="button"
+            tabIndex={interactive ? 0 : undefined}
+            role={interactive ? "button" : "presentation"}
             className={cn("anatomy-region-group outline-none", highlight && "anatomy-doms-highlight")}
-            aria-label={aria}
-            aria-pressed={selected}
+            aria-label={interactive ? aria : undefined}
+            aria-hidden={interactive ? undefined : true}
+            aria-pressed={interactive ? selected : undefined}
             data-selected={selected ? "true" : "false"}
-            data-hover={hovered ? "true" : "false"}
-            onMouseEnter={() => onHoverSegment(seg.interactionKey)}
-            onMouseLeave={() => onHoverSegment(null)}
-            onFocus={() => onHoverSegment(seg.interactionKey)}
-            onBlur={() => onHoverSegment(null)}
-            onClick={() => handleSelect(seg.interactionKey)}
-            onKeyDown={(e) => segmentKeyHandler(e, seg.interactionKey, handleSelect)}
+            data-hover={interactive && hovered ? "true" : "false"}
+            onMouseEnter={interactive ? () => onHoverSegment(seg.interactionKey) : undefined}
+            onMouseLeave={interactive ? () => onHoverSegment(null) : undefined}
+            onFocus={interactive ? () => onHoverSegment(seg.interactionKey) : undefined}
+            onBlur={interactive ? () => onHoverSegment(null) : undefined}
+            onClick={interactive ? () => handleSelect(seg.interactionKey) : undefined}
+            onKeyDown={
+              interactive
+                ? (e) => segmentKeyHandler(e, seg.interactionKey, handleSelect)
+                : undefined
+            }
           >
             {seg.paths.map((p) => (
               <path
                 key={p.key}
                 d={p.d}
-                className="anatomy-region-path stroke-[1px] sm:stroke-[1.25px]"
+                className={cn("anatomy-region-path", loadStyle?.glow && "anatomy-load-glow")}
                 data-anatomy-fill={anatomyFill}
                 data-severity={pathSeverity}
+                data-load-tier={loadStyle?.tier}
+                style={
+                  loadStyle
+                    ? { fill: loadStyle.fill, stroke: loadStyle.stroke }
+                    : undefined
+                }
               />
             ))}
           </g>
