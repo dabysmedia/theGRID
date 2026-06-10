@@ -2,6 +2,10 @@ import "server-only"
 
 import fs from "node:fs"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
+
+/** Repo root — do not use process.cwd() alone; Next/Turbopack may run API routes from another cwd. */
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
 
 /**
  * Same rules as scripts/resolve-uploads-path.mjs (keep in sync).
@@ -39,7 +43,7 @@ function legacyDataRoot(): string | null {
  * Persistent upload subdirectory: `journal` | `avatars` | `routine-covers` | `coach`
  * - UPLOADS_PATH=/app/uploads → .../app/uploads/<segment>
  * - Legacy data root → <root>/uploads/<segment>
- * - Local dev → public/uploads/<segment> under cwd
+ * - Local dev → public/uploads/<segment> under repo root
  */
 export function getUploadSegmentDir(segment: string): string {
   const raw = process.env.UPLOADS_PATH?.trim()
@@ -51,7 +55,7 @@ export function getUploadSegmentDir(segment: string): string {
   const root = legacyDataRoot()
   if (root) return path.join(root, "uploads", segment)
 
-  return path.join(process.cwd(), "public", "uploads", segment)
+  return path.join(REPO_ROOT, "public", "uploads", segment)
 }
 
 export function getJournalUploadDir(): string {
@@ -74,8 +78,12 @@ export function resolveUploadFilePath(segment: string, ...parts: string[]): stri
   const primary = path.join(getUploadSegmentDir(segment), ...parts)
   if (fs.existsSync(primary)) return primary
 
-  const legacy = path.join(process.cwd(), "public", "uploads", segment, ...parts)
+  const legacy = path.join(REPO_ROOT, "public", "uploads", segment, ...parts)
   if (fs.existsSync(legacy)) return legacy
+
+  // Older dev uploads when cwd resolved next to prisma/dev.db
+  const prismaUploads = path.join(REPO_ROOT, "prisma", "uploads", segment, ...parts)
+  if (fs.existsSync(prismaUploads)) return prismaUploads
 
   return null
 }

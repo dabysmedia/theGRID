@@ -1,7 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import { NextRequest, NextResponse } from "next/server"
-import { getUploadSegmentDir } from "@/lib/uploads-path"
+import { resolveUploadFilePath } from "@/lib/uploads-path"
 
 const MIME: Record<string, string> = {
   jpg: "image/jpeg",
@@ -31,8 +31,11 @@ function resolveUploadPath(parts: string[]): { filePath: string; contentType: st
   const contentType = MIME[ext]
   if (!contentType) return null
 
+  const filePath = resolveUploadFilePath(segment, ...rest)
+  if (!filePath) return null
+
   return {
-    filePath: path.join(getUploadSegmentDir(segment), ...rest),
+    filePath,
     contentType,
     cacheControl:
       segment === "coach"

@@ -37,8 +37,8 @@ const nextConfig: NextConfig = {
     return {
       beforeFiles: [
         {
-          source: "/uploads/(.*)",
-          destination: "/api/file-serve?p=$1",
+          source: "/uploads/:path*",
+          destination: "/api/uploads/:path*",
         },
       ],
     };

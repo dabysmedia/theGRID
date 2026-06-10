@@ -48,9 +48,8 @@ function resolveUploadPath(segments: string[]): string | null {
 /**
  * Unified static-file handler for all persistent upload segments.
  *
- * Receives the upload path via the `p` query parameter, set by the
- * next.config.ts rewrite: `/uploads/(.*)` → `/api/file-serve?p=$1`.
- * The regex capture group correctly passes the full path as a string.
+ * Receives the upload path via the `p` query parameter (direct API use).
+ * Public URLs use the next.config.ts rewrite: `/uploads/:path*` → `/api/uploads/:path*`.
  * Handles paths like:
  *   /uploads/journal/<filename>
  *   /uploads/avatars/<filename>
