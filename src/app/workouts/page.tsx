@@ -47,6 +47,7 @@ import {
 import { cn, formatDate, formatDisplayDate, glassPanelClass, parseLocalDate } from "@/lib/utils"
 import { PlateCalculatorDialog } from "@/components/workouts/PlateCalculatorDialog"
 import { WorkoutRecoverySection } from "@/components/workouts/WorkoutRecoverySection"
+import { FALLBACK_EXERCISES, type ApiExercise } from "@/lib/workouts/exercise-library"
 
 /* ──────────────────────────────────────────────────────────
    Types
@@ -101,17 +102,6 @@ interface PickedExercise {
   primaryMuscles: MuscleTag[]
   secondaryMuscles: MuscleTag[]
   category: string
-}
-
-interface ApiExercise {
-  id: string
-  code: string
-  name: string
-  description?: string
-  primaryMuscles: Array<{ id: string; code: string; color: string; name: string }>
-  secondaryMuscles: Array<{ id: string; code: string; color: string; name: string }>
-  types: Array<{ id: string; code: string; name: string }>
-  categories: Array<{ id: string; code: string; name: string }>
 }
 
 interface WorkoutTemplate {
@@ -313,81 +303,6 @@ function applyPrefillFromPrevious(
 function uid(): string {
   return Math.random().toString(36).slice(2, 10)
 }
-
-/* ──────────────────────────────────────────────────────────
-   Exercise Library — offline fallback when API is unavailable
-   ────────────────────────────────────────────────────────── */
-
-const FALLBACK_MUSCLE_COLORS: Record<string, string> = {
-  Chest: "#D62828",
-  Back: "#1D4ED8",
-  Shoulders: "#F77F00",
-  Legs: "#577590",
-  Quadriceps: "#577590",
-  Hamstrings: "#90BE6D",
-  Glutes: "#6D597A",
-  Calves: "#4CC9F0",
-  Arms: "#FFBE0B",
-  Biceps: "#FFBE0B",
-  Triceps: "#2DC653",
-  Forearms: "#219EBC",
-  Core: "#E76F51",
-  Abdominals: "#E76F51",
-  Obliques: "#00B4D8",
-  Trapezius: "#264653",
-  Cardio: "#4CC9F0",
-}
-
-function makeFallback(name: string, muscle: string, category = "Free weight"): ApiExercise {
-  const color = FALLBACK_MUSCLE_COLORS[muscle] ?? "#888888"
-  return {
-    id: name.toLowerCase().replace(/\s+/g, "-"),
-    code: name.toUpperCase().replace(/\s+/g, "_"),
-    name,
-    primaryMuscles: [{ id: muscle, code: muscle.toUpperCase(), color, name: muscle }],
-    secondaryMuscles: [],
-    types: [],
-    categories: [{ id: category, code: category.toUpperCase().replace(/\s+/g, "_"), name: category }],
-  }
-}
-
-const FALLBACK_EXERCISES: ApiExercise[] = [
-  // Chest
-  makeFallback("Bench Press", "Chest"), makeFallback("Incline Bench Press", "Chest"),
-  makeFallback("Decline Bench Press", "Chest"), makeFallback("Dumbbell Bench Press", "Chest"),
-  makeFallback("Dumbbell Flyes", "Chest"), makeFallback("Cable Crossover", "Chest", "Cable"),
-  makeFallback("Push-ups", "Chest", "Body weight"), makeFallback("Chest Dips", "Chest", "Body weight"),
-  makeFallback("Pec Deck", "Chest", "Machine"),
-  // Back
-  makeFallback("Deadlift", "Back"), makeFallback("Barbell Row", "Back"),
-  makeFallback("Dumbbell Row", "Back"), makeFallback("Pull-ups", "Back", "Body weight"),
-  makeFallback("Chin-ups", "Back", "Body weight"), makeFallback("Lat Pulldown", "Back", "Cable"),
-  makeFallback("Seated Cable Row", "Back", "Cable"), makeFallback("T-Bar Row", "Back"),
-  // Shoulders
-  makeFallback("Overhead Press", "Shoulders"), makeFallback("Dumbbell Shoulder Press", "Shoulders"),
-  makeFallback("Arnold Press", "Shoulders"), makeFallback("Lateral Raises", "Shoulders"),
-  makeFallback("Front Raises", "Shoulders"), makeFallback("Face Pulls", "Shoulders", "Cable"),
-  makeFallback("Rear Delt Flyes", "Shoulders"), makeFallback("Upright Row", "Shoulders"),
-  // Legs
-  makeFallback("Squat", "Quadriceps"), makeFallback("Front Squat", "Quadriceps"),
-  makeFallback("Leg Press", "Quadriceps", "Machine"), makeFallback("Romanian Deadlift", "Hamstrings"),
-  makeFallback("Leg Curl", "Hamstrings", "Machine"), makeFallback("Leg Extension", "Quadriceps", "Machine"),
-  makeFallback("Bulgarian Split Squat", "Quadriceps"), makeFallback("Lunges", "Quadriceps"),
-  makeFallback("Hip Thrust", "Glutes"), makeFallback("Calf Raises", "Calves"),
-  // Arms
-  makeFallback("Barbell Curl", "Biceps"), makeFallback("Dumbbell Curl", "Biceps"),
-  makeFallback("Hammer Curl", "Biceps"), makeFallback("Preacher Curl", "Biceps"),
-  makeFallback("Tricep Pushdown", "Triceps", "Cable"), makeFallback("Skull Crushers", "Triceps"),
-  makeFallback("Overhead Tricep Extension", "Triceps"), makeFallback("Close-Grip Bench Press", "Triceps"),
-  makeFallback("Dips", "Triceps", "Body weight"),
-  // Core
-  makeFallback("Plank", "Abdominals", "Body weight"), makeFallback("Hanging Leg Raise", "Abdominals", "Body weight"),
-  makeFallback("Cable Crunch", "Abdominals", "Cable"), makeFallback("Ab Wheel Rollout", "Abdominals"),
-  makeFallback("Russian Twist", "Obliques"), makeFallback("Bicycle Crunch", "Abdominals", "Body weight"),
-  // Cardio
-  makeFallback("Running", "Cardio", "Body weight"), makeFallback("Cycling", "Cardio"),
-  makeFallback("Rowing Machine", "Cardio", "Machine"), makeFallback("Jump Rope", "Cardio", "Body weight"),
-]
 
 /** Client-side module-level cache so the picker doesn't re-fetch on every open. */
 let exerciseListCache: ApiExercise[] | null = null

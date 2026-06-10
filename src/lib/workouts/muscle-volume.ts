@@ -36,6 +36,11 @@ export interface MuscleWeekStats {
 const MUSCLE_SLUGS: Record<string, string[]> = {
   chest: ["chest"],
   back: ["upper-back", "lower-back", "trapezius"],
+  lats: ["upper-back"],
+  "upper back": ["upper-back"],
+  rhomboids: ["upper-back"],
+  "lower back": ["lower-back"],
+  erectors: ["lower-back"],
   shoulders: ["deltoids"],
   deltoids: ["deltoids"],
   biceps: ["biceps"],
