@@ -260,6 +260,30 @@ function sessionSetsFromTemplate(m: TemplateExercise): ExerciseSet[] {
   }))
 }
 
+function sessionToTemplateExercises(session: WorkoutSession): TemplateExercise[] {
+  const exs = parseExercises<SessionExercise>(session.exercises)
+  return exs.map((ex) => {
+    const completedSets = ex.sets.filter((s) => s.completed)
+    const sourceSets = completedSets.length > 0 ? completedSets : ex.sets
+    const setRows: TemplateSetRow[] =
+      sourceSets.length > 0
+        ? sourceSets.map((s) => ({
+            id: uid(),
+            weight:
+              s.weight != null && Number.isFinite(s.weight) ? String(s.weight) : "",
+            reps: s.reps != null && Number.isFinite(s.reps) ? String(s.reps) : "",
+          }))
+        : [{ id: uid(), weight: "", reps: "" }]
+    return {
+      id: uid(),
+      name: ex.name,
+      notes: ex.notes ?? "",
+      primaryMuscles: ex.primaryMuscles,
+      setRows,
+    }
+  })
+}
+
 function applyPrefillFromPrevious(
   list: SessionExercise[],
   prevMap: Map<string, ExerciseSet[]>,
@@ -845,11 +869,17 @@ function RoutineEditor({
   open,
   onClose,
   initial,
+  hydrationKey,
+  importAsNew = false,
   onSave,
 }: {
   open: boolean
   onClose: () => void
   initial?: WorkoutTemplate | null
+  /** Changes when opening a different template or journal import — drives form reset. */
+  hydrationKey?: string
+  /** Pre-fill from `initial` but POST a new template (journal → routine). */
+  importAsNew?: boolean
   onSave: (
     name: string,
     exercises: TemplateExercise[],
@@ -870,6 +900,7 @@ function RoutineEditor({
   const coverInputRef = useRef<HTMLInputElement>(null)
   /** Only re-hydrate from `initial` when the dialog opens or the template id changes — not when `initial` is a new object reference for the same row (that was wiping tag edits). */
   const hydratedTemplateIdRef = useRef<string | null>(null)
+  const isEdit = Boolean(initial?.id && !importAsNew)
 
   useEffect(() => {
     if (!open) {
@@ -877,7 +908,7 @@ function RoutineEditor({
       setSaveError(null)
       return
     }
-    const templateId = initial?.id ?? "new"
+    const templateId = hydrationKey ?? initial?.id ?? "new"
     if (hydratedTemplateIdRef.current === templateId) return
     hydratedTemplateIdRef.current = templateId
 
@@ -890,7 +921,7 @@ function RoutineEditor({
     setTags(parseTemplateTags(initial?.tags))
     setTagInput("")
     setCoverImageUrl(initial?.coverImageUrl?.trim() ? initial.coverImageUrl.trim() : null)
-  }, [open, initial])
+  }, [open, initial, hydrationKey])
 
   useEffect(() => {
     if (!open || showPicker) return
@@ -1055,9 +1086,11 @@ function RoutineEditor({
         >
           <div className="shrink-0 border-b border-border/15 px-4 pb-3 pt-4 pr-12">
             <DialogHeader className="space-y-0">
-              <DialogTitle>{initial ? "Edit Routine" : "New Routine"}</DialogTitle>
+              <DialogTitle>{isEdit ? "Edit Routine" : "New Routine"}</DialogTitle>
               <DialogDescription className="sr-only">
-                Name your routine and add exercises from the library
+                {importAsNew
+                  ? "Review exercises from your workout and save as a reusable routine"
+                  : "Name your routine and add exercises from the library"}
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -1349,7 +1382,7 @@ function RoutineEditor({
                 const ok = await onSave(
                   name.trim(),
                   exercises.map(templateExerciseToPersist),
-                  initial?.id,
+                  isEdit ? initial?.id : undefined,
                   coverImageUrl,
                   tagPayload,
                 )
@@ -1360,7 +1393,7 @@ function RoutineEditor({
                   )
               }}
             >
-              {initial ? "Save Changes" : "Create Routine"}
+              {isEdit ? "Save Changes" : "Create Routine"}
             </Button>
           </div>
         </DialogContent>
@@ -2625,6 +2658,8 @@ export default function WorkoutsPage() {
   )
   const [showRoutineEditor, setShowRoutineEditor] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<WorkoutTemplate | null>(null)
+  const [routineEditorKey, setRoutineEditorKey] = useState("new")
+  const [routineImportAsNew, setRoutineImportAsNew] = useState(false)
   const [templateMenuId, setTemplateMenuId] = useState<string | null>(null)
   const [routineRearrangeMode, setRoutineRearrangeMode] = useState(false)
   const [routinePointerDrag, setRoutinePointerDrag] = useState<string | null>(null)
@@ -3079,6 +3114,42 @@ export default function WorkoutsPage() {
     return format(new Date(dateKey + "T12:00:00"), "EEEE, MMM d")
   }
 
+  function openNewRoutineEditor() {
+    setRoutineEditorKey("new")
+    setRoutineImportAsNew(false)
+    setEditingTemplate(null)
+    setShowRoutineEditor(true)
+  }
+
+  function openEditRoutineEditor(tmpl: WorkoutTemplate) {
+    setRoutineEditorKey(tmpl.id)
+    setRoutineImportAsNew(false)
+    setEditingTemplate(tmpl)
+    setShowRoutineEditor(true)
+  }
+
+  function openRoutineFromSession(sess: WorkoutSession) {
+    const exercises = sessionToTemplateExercises(sess)
+    if (exercises.length === 0) return
+    setRoutineEditorKey(`session-${sess.id}`)
+    setRoutineImportAsNew(true)
+    setEditingTemplate({
+      id: "",
+      name: sess.name.trim() || "Workout routine",
+      exercises,
+      coverImageUrl: sess.coverImageUrl?.trim() ?? null,
+      createdAt: sess.finishedAt ?? sess.startedAt,
+    })
+    setShowRoutineEditor(true)
+  }
+
+  function closeRoutineEditor() {
+    setShowRoutineEditor(false)
+    setEditingTemplate(null)
+    setRoutineEditorKey("new")
+    setRoutineImportAsNew(false)
+  }
+
   function WorkoutJournalDayCard({
     dateKey,
     daySessions,
@@ -3187,6 +3258,19 @@ export default function WorkoutsPage() {
                             )}
                           </div>
                         </div>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={exs.length === 0}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openRoutineFromSession(sess)
+                        }}
+                        className="flex size-10 shrink-0 items-center justify-center self-center rounded-lg text-muted-foreground/45 transition-colors hover:bg-glass-highlight/25 hover:text-foreground disabled:pointer-events-none disabled:opacity-30 touch-manipulation"
+                        aria-label="Save workout as routine"
+                        title="Save as routine"
+                      >
+                        <Copy className="size-4" />
                       </button>
                       <button
                         type="button"
@@ -3402,10 +3486,7 @@ export default function WorkoutsPage() {
                 size="sm"
                 variant="outline"
                 className="h-8 gap-1 text-xs touch-manipulation"
-                onClick={() => {
-                  setEditingTemplate(null)
-                  setShowRoutineEditor(true)
-                }}
+                onClick={() => openNewRoutineEditor()}
               >
                 <Plus className="size-3" />
                 New
@@ -3514,8 +3595,7 @@ export default function WorkoutsPage() {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setEditingTemplate(tmpl)
-                                    setShowRoutineEditor(true)
+                                    openEditRoutineEditor(tmpl)
                                     setTemplateMenuId(null)
                                   }}
                                   className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs hover:bg-muted/20 transition-colors"
@@ -3687,11 +3767,10 @@ export default function WorkoutsPage() {
       {/* ── Routine editor dialog ────────────── */}
       <RoutineEditor
         open={showRoutineEditor}
-        onClose={() => {
-          setShowRoutineEditor(false)
-          setEditingTemplate(null)
-        }}
+        onClose={closeRoutineEditor}
         initial={editingTemplate}
+        hydrationKey={routineEditorKey}
+        importAsNew={routineImportAsNew}
         onSave={saveTemplate}
       />
     </>

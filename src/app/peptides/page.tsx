@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { format, subDays } from "date-fns"
-import { Calendar, Gauge, Syringe, Trash2, TrendingUp } from "lucide-react"
+import { Calendar, Syringe, Trash2, TrendingUp } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -15,9 +15,11 @@ import {
   YAxis,
 } from "recharts"
 import { useActiveDate } from "@/context/DateContext"
+import { useUser } from "@/context/UserContext"
 import { apiFetch } from "@/lib/api-fetch"
 import { PageHeader } from "@/components/PageHeader"
 import { PageHeroStrip } from "@/components/PageHeroStrip"
+import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import {
   Dialog,
   DialogContent,
@@ -48,10 +50,17 @@ import {
   parseSideEffectsJson,
   sideEffectLabel,
 } from "@/lib/peptides"
+import {
+  computeNextInjection,
+  readInjectionIntervalDays,
+  writeInjectionIntervalDays,
+} from "@/lib/hub-tile-prefs"
 
 const peptideGoalPresets: GoalPreset[] = [
   { type: "weekly", label: "Weekly Injections", unit: "doses", placeholder: "1" },
 ]
+
+const INJECTION_INTERVAL_PRESETS = [5, 7, 14] as const
 
 const PURPLE = PEPTIDE_COLOR
 
@@ -117,11 +126,12 @@ function PeptideHistoryDayGroup({
               className="glass-subtle rounded-xl p-3.5 flex items-center justify-between gap-3 group"
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="flex items-center justify-center w-11 h-11 rounded-xl border border-primary/25 bg-gradient-to-b from-primary/15 via-primary/6 to-transparent shrink-0">
-                  <span className="text-lg font-bold tabular-nums text-primary">
-                    {entry.doseMg}
-                  </span>
-                </div>
+                <PeptideVialGraphic
+                  color={PURPLE}
+                  doseMg={entry.doseMg}
+                  size="sm"
+                  className="shrink-0"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -168,6 +178,7 @@ function PeptideHistoryDayGroup({
 export default function PeptidesPage() {
   const [entries, setEntries] = useState<PeptideEntry[]>([])
   const [dailyEntries, setDailyEntries] = useState<PeptideDailyEntry[]>([])
+  const [injectionIntervalDays, setInjectionIntervalDays] = useState(7)
   const [compound, setCompound] = useState("retatrutide")
   const [doseMg, setDoseMg] = useState(4)
   const [customDose, setCustomDose] = useState("")
@@ -182,7 +193,12 @@ export default function PeptidesPage() {
   const [injectionOpen, setInjectionOpen] = useState(false)
 
   const { activeDate } = useActiveDate()
+  const { user } = useUser()
   const today = activeDate
+
+  useEffect(() => {
+    if (user?.id) setInjectionIntervalDays(readInjectionIntervalDays(user.id))
+  }, [user?.id])
 
   const chartFrom = formatDate(subDays(parseLocalDate(activeDate), 29))
 
@@ -226,6 +242,15 @@ export default function PeptidesPage() {
   }, [activeDate, dailyByDate])
 
   const lastInjection = entries[0] ?? null
+  const nextInjection = useMemo(
+    () =>
+      computeNextInjection(
+        lastInjection?.injectedAt,
+        injectionIntervalDays,
+        activeDate
+      ),
+    [lastInjection?.injectedAt, injectionIntervalDays, activeDate]
+  )
   const lastSiteUsed = lastInjection?.injectionSite ?? null
   const activeDayDaily = dailyByDate.get(activeDate) ?? null
   const activeDayHunger = activeDayDaily?.hungerLevel ?? null
@@ -304,6 +329,13 @@ export default function PeptidesPage() {
   )
 
   const effectiveDoseLabel = customDose.trim() ? customDose : String(doseMg)
+  const effectiveDosePreview = customDose.trim()
+    ? Number(customDose)
+    : doseMg
+  const previewDoseMg =
+    Number.isFinite(effectiveDosePreview) && effectiveDosePreview > 0
+      ? effectiveDosePreview
+      : null
   const activeDateSaved = dailyByDate.has(activeDate)
 
   const sitesInRegion = useMemo(
@@ -406,7 +438,13 @@ export default function PeptidesPage() {
 
       <PageHeroStrip
         color={PURPLE}
-        icon={Gauge}
+        iconSlot={
+          <PeptideVialGraphic
+            color={PURPLE}
+            doseMg={lastInjection?.doseMg ?? null}
+            size="md"
+          />
+        }
         eyebrow={`Appetite · ${formatDisplayDate(parseLocalDate(activeDate))}`}
         value={activeDayHunger != null ? String(activeDayHunger) : "—"}
         unit="/10"
@@ -425,6 +463,58 @@ export default function PeptidesPage() {
           { label: "Last dose", value: lastDoseMg, sub: "mg" },
         ]}
       />
+
+      <div className="glass-panel animate-fade-up stagger-1 flex flex-col items-center gap-2 p-4 sm:p-5">
+        <PeptideVialGraphic
+          color={PURPLE}
+          doseMg={lastInjection?.doseMg ?? null}
+          size="lg"
+        />
+        {lastInjection ? (
+          <p className="type-hud-caption max-w-[16rem] text-center normal-case">
+            Last shot ·{" "}
+            <span className="font-semibold text-foreground/90">
+              {lastInjection.doseMg} mg {compoundLabel(lastInjection.compound)}
+            </span>
+            {" · "}
+            {format(new Date(lastInjection.injectedAt), "MMM d")}
+          </p>
+        ) : (
+          <p className="type-hud-caption text-center normal-case">No injections logged yet</p>
+        )}
+      </div>
+
+      <div className="glass-panel animate-fade-up stagger-1 space-y-3 p-4">
+        <SectionRail label="Injection schedule" />
+        <p className="type-hud-caption -mt-1 normal-case">
+          Drives the home tile countdown · days until your next shot
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {INJECTION_INTERVAL_PRESETS.map((days) => (
+            <GlassChip
+              key={days}
+              selected={injectionIntervalDays === days}
+              onClick={() => {
+                setInjectionIntervalDays(days)
+                if (user?.id) writeInjectionIntervalDays(user.id, days)
+              }}
+            >
+              Every {days} days
+            </GlassChip>
+          ))}
+        </div>
+        {nextInjection && (
+          <p className="type-hud-caption normal-case">
+            Next due{" "}
+            <span className="font-semibold text-foreground/90">{nextInjection.nextLabel}</span>
+            {nextInjection.overdue
+              ? ` · ${Math.abs(nextInjection.daysUntil)}d overdue`
+              : nextInjection.dueToday
+                ? " · due today"
+                : ` · in ${nextInjection.daysUntil}d`}
+          </p>
+        )}
+      </div>
 
       <Button
         type="button"
@@ -447,6 +537,10 @@ export default function PeptidesPage() {
               Retatrutide · typically every 5–7 days · {formatDisplayDate(parseLocalDate(today))}
             </DialogDescription>
           </DialogHeader>
+
+          <div className="flex justify-center py-1">
+            <PeptideVialGraphic color={PURPLE} doseMg={previewDoseMg} size="lg" />
+          </div>
 
           {lastSiteUsed && (
             <p className="type-hud-caption -mt-1 normal-case">

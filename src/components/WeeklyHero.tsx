@@ -14,13 +14,13 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { DailyWeighIn } from "@/components/DailyWeighIn"
+import { WeekWorkoutGoalRing, WEEKLY_WORKOUT_GOAL } from "@/components/WeekWorkoutGoalRing"
 import { useActiveDate } from "@/context/DateContext"
 import { useQuickLog } from "@/context/QuickLogContext"
 import { cn, glassPanelClass, parseLocalDate } from "@/lib/utils"
 
 /** Show today’s weigh-in prompt on the hub only from this local hour onward (inclusive). */
 const WEIGH_IN_PROMPT_FROM_HOUR = 4
-const WEEKLY_WORKOUT_GOAL = 3
 
 interface CategorySummary {
   todayValue: number
@@ -216,53 +216,6 @@ function currentWeekValuesFromLast7(last7: number[], refDate: Date): number[] {
   const dayOfWeek = refDate.getDay()
   const daysIntoWeek = dayOfWeek === 0 ? 7 : dayOfWeek
   return last7.slice(Math.max(0, last7.length - daysIntoWeek))
-}
-
-/** Tiny goal ring matching workouts page behavior (checkmark at goal). */
-function WeekWorkoutGoalRing({ count }: { count: number }) {
-  const stroke = 2.8
-  const vb = 24
-  const r = (vb - stroke) / 2
-  const cx = vb / 2
-  const cy = vb / 2
-  const circumference = 2 * Math.PI * r
-  const pct =
-    Math.min(Math.max(count, 0), WEEKLY_WORKOUT_GOAL) /
-    WEEKLY_WORKOUT_GOAL
-  const dash = circumference * pct
-
-  if (count >= WEEKLY_WORKOUT_GOAL) {
-    return <Check className="h-4 w-4 text-emerald-500" strokeWidth={2.8} aria-hidden />
-  }
-
-  return (
-    <svg
-      viewBox={`0 0 ${vb} ${vb}`}
-      className="h-4 w-4 -rotate-90"
-      aria-hidden
-    >
-      <circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={stroke}
-        className="text-muted-foreground/25"
-      />
-      <circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={`${dash} ${circumference}`}
-        className="text-emerald-500"
-      />
-    </svg>
-  )
 }
 
 /** 0–1, caps over-performance at 100% for scoring */

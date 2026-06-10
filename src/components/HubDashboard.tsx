@@ -7,13 +7,25 @@ import { DailySummaryCard } from "./DailySummaryCard"
 import { PageHeader } from "./PageHeader"
 import { WeeklyHero } from "./WeeklyHero"
 import { FastingTimer } from "./FastingTimer"
-import { FastingHubTile } from "./FastingHubTile"
-import { CoachLaunchTile } from "./coach/CoachLaunchTile"
+import {
+  HubBowelFooter,
+  HubCalorieFooter,
+  HubPeptideFooter,
+  HubSleepBedtimeFooter,
+  HubWorkoutFooter,
+} from "./hub/HubTileFooters"
 import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
-import { cn } from "@/lib/utils"
+import { cn, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { isVacationBlockingCalendarDay, vacationCalorieDayMask } from "@/lib/vacation-mode"
+import {
+  HUB_PREFS_CHANGED_EVENT,
+  computeNextInjection,
+  computeTargetBedtime,
+  readDesiredWakeTime,
+  readInjectionIntervalDays,
+} from "@/lib/hub-tile-prefs"
 
 interface CategorySummary {
   todayValue: number
@@ -56,29 +68,62 @@ const defaultData: DashboardData = {
 const categoryOrder = [
   "calories",
   "steps",
-  "running",
+  "peptides",
   "workouts",
   "sleep",
-  "peptides",
+  "running",
   "bowel",
-  "recovery",
   "alcohol",
 ] satisfies CategoryKey[]
+
+interface PeptideHubEntry {
+  injectedAt: string
+  doseMg: number
+}
+
+function workoutsThisWeek(last7: number[], refDateKey: string): number {
+  const refDate = parseLocalDate(refDateKey)
+  const dayOfWeek = refDate.getDay()
+  const daysIntoWeek = dayOfWeek === 0 ? 7 : dayOfWeek
+  const slice = last7.slice(Math.max(0, last7.length - daysIntoWeek))
+  return slice.reduce((s, v) => s + v, 0)
+}
+
+const OTHERS_KEYS = new Set<CategoryKey>(["running", "alcohol"])
 
 const categories = categoryOrder.map((key) => {
   const t = CATEGORY_THEME[key]
   return { key, title: t.label, icon: t.icon, href: t.href, color: t.color }
 })
 
-const mainCategories = categories.filter((c) => c.key !== "alcohol")
-const alcoholCategory = categories.find((c) => c.key === "alcohol")!
+const mainCategories = categories.filter((c) => !OTHERS_KEYS.has(c.key))
+const othersCategories = categories.filter((c) => OTHERS_KEYS.has(c.key))
 
 export function HubDashboard() {
   const { activeDate } = useActiveDate()
   const { user } = useUser()
   const [data, setData] = useState<DashboardData>(defaultData)
+  const [peptideEntries, setPeptideEntries] = useState<PeptideHubEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [othersOpen, setOthersOpen] = useState(false)
+  const [desiredWakeTime, setDesiredWakeTime] = useState("06:30")
+  const [injectionIntervalDays, setInjectionIntervalDays] = useState(7)
+
+  useEffect(() => {
+    if (!user?.id) return
+    setDesiredWakeTime(readDesiredWakeTime(user.id))
+    setInjectionIntervalDays(readInjectionIntervalDays(user.id))
+  }, [user?.id])
+
+  useEffect(() => {
+    function onPrefsChanged() {
+      if (!user?.id) return
+      setDesiredWakeTime(readDesiredWakeTime(user.id))
+      setInjectionIntervalDays(readInjectionIntervalDays(user.id))
+    }
+    window.addEventListener(HUB_PREFS_CHANGED_EVENT, onPrefsChanged)
+    return () => window.removeEventListener(HUB_PREFS_CHANGED_EVENT, onPrefsChanged)
+  }, [user?.id])
 
   const vacationBlocksCalLog = useMemo(
     () => isVacationBlockingCalendarDay(user?.vacationResumeDate, activeDate),
@@ -107,11 +152,16 @@ export function HubDashboard() {
     async function fetchDashboard() {
       setLoading(true)
       try {
-        const res = await apiFetch(`/api/dashboard?d=${activeDate}&_ts=${Date.now()}`, {
-          cache: "no-store",
-        })
-        if (res.ok && !cancelled) {
-          setData(await res.json())
+        const [dashRes, peptideRes] = await Promise.all([
+          apiFetch(`/api/dashboard?d=${activeDate}&_ts=${Date.now()}`, { cache: "no-store" }),
+          apiFetch("/api/peptides"),
+        ])
+        if (dashRes.ok && !cancelled) {
+          setData(await dashRes.json())
+        }
+        if (peptideRes.ok && !cancelled) {
+          const rows = await peptideRes.json()
+          setPeptideEntries(Array.isArray(rows) ? rows : [])
         }
       } catch {
         // DB not yet connected
@@ -132,7 +182,73 @@ export function HubDashboard() {
     }
   }, [activeDate])
 
+  const weekWorkoutCount = useMemo(
+    () => workoutsThisWeek(data.workouts.last7, activeDate),
+    [data.workouts.last7, activeDate]
+  )
+
+  const lastPeptide = peptideEntries[0] ?? null
+  const nextInjection = useMemo(
+    () =>
+      computeNextInjection(
+        lastPeptide?.injectedAt,
+        injectionIntervalDays,
+        activeDate
+      ),
+    [lastPeptide?.injectedAt, injectionIntervalDays, activeDate]
+  )
+
+  const sleepHoursGoal = data.sleep.goal ?? 8
+  const targetBedtime = useMemo(
+    () => computeTargetBedtime(desiredWakeTime, sleepHoursGoal),
+    [desiredWakeTime, sleepHoursGoal]
+  )
+
   const staggerClasses = ["stagger-1", "stagger-2", "stagger-3", "stagger-4", "stagger-5", "stagger-6", "stagger-7"]
+
+  function tileFooter(key: CategoryKey, color: string) {
+    if (key === "calories") {
+      return (
+        <HubCalorieFooter
+          consumed={vacationBlocksCalLog ? 0 : data.calories.todayValue}
+          target={data.calories.goal ?? 2000}
+          color={color}
+        />
+      )
+    }
+    if (key === "workouts") {
+      return <HubWorkoutFooter weekCount={weekWorkoutCount} color={color} />
+    }
+    if (key === "peptides") {
+      return (
+        <HubPeptideFooter
+          lastDoseMg={lastPeptide?.doseMg ?? null}
+          nextInjection={nextInjection}
+          color={color}
+        />
+      )
+    }
+    if (key === "sleep") {
+      return (
+        <HubSleepBedtimeFooter
+          targetBedtime={targetBedtime}
+          desiredWakeTime={desiredWakeTime}
+          sleepHoursGoal={sleepHoursGoal}
+          color={color}
+        />
+      )
+    }
+    if (key === "bowel") {
+      return (
+        <HubBowelFooter
+          todayCount={data.bowel.todayValue}
+          goal={data.bowel.goal}
+          color={color}
+        />
+      )
+    }
+    return undefined
+  }
 
   return (
     <div className="space-y-8">
@@ -144,10 +260,6 @@ export function HubDashboard() {
           loading={loading}
           vacationBlocksCalories={vacationBlocksCalLog}
         />
-      </div>
-
-      <div className="animate-fade-up stagger-3">
-        <CoachLaunchTile />
       </div>
 
       <div className="animate-fade-up stagger-3">
@@ -168,10 +280,9 @@ export function HubDashboard() {
         >
           {mainCategories.map((cat, i) => {
             const summary = data[cat.key]
+            const footer = tileFooter(cat.key, cat.color)
             const chartData =
-              cat.key === "calories"
-                ? summary.last7.map((v, j) => ({ value: calorieDayMask[j] ? 0 : v }))
-                : summary.last7.map((v) => ({ value: v }))
+              footer == null ? summary.last7.map((v) => ({ value: v })) : undefined
             return (
               <div
                 key={cat.key}
@@ -187,6 +298,7 @@ export function HubDashboard() {
                   icon={cat.icon}
                   href={cat.href}
                   chartData={chartData}
+                  footer={footer}
                   color={cat.color}
                   disabled={cat.key === "calories" && vacationBlocksCalLog}
                   disabledHint={cat.key === "calories" && vacationBlocksCalLog ? "Vacation mode" : undefined}
@@ -194,11 +306,6 @@ export function HubDashboard() {
               </div>
             )
           })}
-          <div
-            className={`animate-scale-in aspect-square min-h-0 w-full max-w-full ${staggerClasses[mainCategories.length] ?? ""}`}
-          >
-            <FastingHubTile />
-          </div>
         </div>
 
         <div className="relative z-10 mt-3 space-y-2 pb-1">
@@ -221,18 +328,26 @@ export function HubDashboard() {
                 loading ? "opacity-50" : "opacity-100"
               }`}
             >
-              <div className="animate-scale-in aspect-square min-h-0 w-full max-w-full stagger-6">
-                <DailySummaryCard
-                  title={alcoholCategory.title}
-                  value={data.alcohol.todayValue}
-                  goal={data.alcohol.goal ?? undefined}
-                  unit={data.alcohol.unit}
-                  icon={alcoholCategory.icon}
-                  href={alcoholCategory.href}
-                  chartData={data.alcohol.last7.map((v) => ({ value: v }))}
-                  color={alcoholCategory.color}
-                />
-              </div>
+              {othersCategories.map((cat, i) => {
+                const summary = data[cat.key]
+                return (
+                  <div
+                    key={cat.key}
+                    className={`animate-scale-in aspect-square min-h-0 w-full max-w-full ${staggerClasses[i + 5] ?? "stagger-6"}`}
+                  >
+                    <DailySummaryCard
+                      title={cat.title}
+                      value={summary.todayValue}
+                      goal={summary.goal ?? undefined}
+                      unit={summary.unit}
+                      icon={cat.icon}
+                      href={cat.href}
+                      chartData={summary.last7.map((v) => ({ value: v }))}
+                      color={cat.color}
+                    />
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

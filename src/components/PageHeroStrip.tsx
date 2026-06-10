@@ -12,7 +12,9 @@ export interface HeroMetricItem {
 
 export interface PageHeroStripProps {
   color: string
-  icon: LucideIcon
+  icon?: LucideIcon
+  /** Custom icon node (e.g. bowel toilet graphic). Takes precedence over `icon`. */
+  iconSlot?: ReactNode
   eyebrow: string
   value: string
   unit?: string
@@ -43,6 +45,7 @@ export function HeroMetric({ label, value, sub }: HeroMetricItem) {
 export function PageHeroStrip({
   color,
   icon: Icon,
+  iconSlot,
   eyebrow,
   value,
   unit,
@@ -64,13 +67,16 @@ export function PageHeroStrip({
       <div className="relative grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
         <div className="flex min-w-0 items-center gap-4">
           <div
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border"
+            className={cn(
+              "flex shrink-0 items-center justify-center rounded-2xl border",
+              iconSlot ? "h-16 w-16 overflow-visible" : "h-14 w-14"
+            )}
             style={{
               borderColor: `${color}33`,
               backgroundColor: `${color}14`,
             }}
           >
-            <Icon className="h-6 w-6" style={{ color }} />
+            {iconSlot ?? (Icon ? <Icon className="h-6 w-6" style={{ color }} /> : null)}
           </div>
           <div className="min-w-0">
             <p className="type-hud-label-soft mb-1">{eyebrow}</p>

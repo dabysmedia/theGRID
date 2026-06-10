@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { format, subDays } from "date-fns"
-import { Calendar, CircleDot, Trash2 } from "lucide-react"
+import { Calendar, Trash2 } from "lucide-react"
+import { BowelToiletIcon } from "@/components/BowelToiletIcon"
 import {
   Bar,
   BarChart,
@@ -89,11 +90,10 @@ function BowelHistoryDayGroup({
             className="glass-subtle rounded-xl p-3.5 flex items-center justify-between gap-3 group"
           >
             <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[#92400e]/15 shrink-0">
-                <span className="text-xl font-bold tabular-nums text-[#92400e]">
-                  {entry.bristolScale === 0 ? "—" : entry.bristolScale}
-                </span>
-              </div>
+              <BowelToiletIcon
+                value={entry.bristolScale === 0 ? "—" : entry.bristolScale}
+                size="sm"
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -242,7 +242,7 @@ export default function BowelPage() {
 
       <PageHeroStrip
         color="#92400e"
-        icon={CircleDot}
+        iconSlot={<BowelToiletIcon value={todayCount} size="sm" />}
         eyebrow={`Today · ${formatDisplayDate(parseLocalDate(activeDate))}`}
         value={String(todayCount)}
         unit="entries"
@@ -261,10 +261,13 @@ export default function BowelPage() {
       />
 
       <div className="glass-panel p-5 animate-fade-up stagger-2">
-          <div className="text-center lg:text-left mb-5">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today</p>
-            <p className="text-4xl font-bold tabular-nums tracking-tight">{todayCount}</p>
-            <p className="text-sm text-muted-foreground">entries</p>
+          <div className="flex flex-col items-center text-center lg:flex-row lg:items-center lg:gap-5 lg:text-left mb-5">
+            <BowelToiletIcon value={todayCount} size="md" className="mb-2 lg:mb-0" />
+            <div>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today</p>
+              <p className="text-4xl font-bold tabular-nums tracking-tight">{todayCount}</p>
+              <p className="text-sm text-muted-foreground">entries</p>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

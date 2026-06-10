@@ -21,7 +21,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
+import { useUser } from "@/context/UserContext"
 import { formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import {
+  computeTargetBedtime,
+  readDesiredWakeTime,
+  writeDesiredWakeTime,
+} from "@/lib/hub-tile-prefs"
 import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { sleepDurationHours } from "@/lib/sleepDuration"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
@@ -125,9 +131,12 @@ const SLEEP_COLOR = "#6366f1"
 
 export default function SleepPage() {
   const { activeDate } = useActiveDate()
+  const { user } = useUser()
   const [entries, setEntries] = useState<SleepEntry[]>([])
   const [bedtime, setBedtime] = useState("22:30")
   const [wakeTime, setWakeTime] = useState("06:30")
+  const [desiredWakeTime, setDesiredWakeTime] = useState("06:30")
+  const [sleepGoalHours, setSleepGoalHours] = useState(8)
   const [quality, setQuality] = useState(3)
   const [notes, setNotes] = useState("")
   const [chartRange, setChartRange] = useState<"7d" | "30d" | "all">("30d")
@@ -141,6 +150,21 @@ export default function SleepPage() {
         setEntries(Array.isArray(data) ? data : [])
       })
       .catch(() => setEntries([]))
+  }, [])
+
+  useEffect(() => {
+    if (user?.id) setDesiredWakeTime(readDesiredWakeTime(user.id))
+  }, [user?.id])
+
+  useEffect(() => {
+    apiFetch("/api/goals?category=sleep")
+      .then(async (r) => {
+        if (!r.ok) return
+        const goals = await r.json()
+        const g = Array.isArray(goals) ? goals[0] : null
+        if (g?.target && g.goalType === "daily") setSleepGoalHours(Number(g.target))
+      })
+      .catch(() => {})
   }, [])
 
   const refDate = parseLocalDate(activeDate)
@@ -304,6 +328,35 @@ export default function SleepPage() {
         presets={sleepGoalPresets}
         color="#6366f1"
       />
+
+      <div className="glass-panel animate-fade-up stagger-2 space-y-3 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="type-hud-label">Hub target bedtime</p>
+            <p className="type-hud-caption mt-0.5 normal-case">
+              Shown on home · wake minus your sleep goal ({sleepGoalHours}h)
+            </p>
+          </div>
+          <p className="text-lg font-bold tabular-nums" style={{ color: SLEEP_COLOR }}>
+            {computeTargetBedtime(desiredWakeTime, sleepGoalHours)}
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="desiredWake" className="type-hud-label">
+            Desired wake time
+          </Label>
+          <Input
+            id="desiredWake"
+            type="time"
+            value={desiredWakeTime}
+            onChange={(e) => {
+              setDesiredWakeTime(e.target.value)
+              if (user?.id) writeDesiredWakeTime(user.id, e.target.value)
+            }}
+            className="tabular-nums bg-background/40"
+          />
+        </div>
+      </div>
 
       <div className="glass-panel min-w-0 animate-fade-up stagger-2 p-5">
           <form onSubmit={handleSubmit} className="space-y-4">

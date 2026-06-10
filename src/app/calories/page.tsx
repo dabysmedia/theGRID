@@ -41,11 +41,12 @@ import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
 import { PageHeader } from "@/components/PageHeader"
 import { PageHeroStrip } from "@/components/PageHeroStrip"
+import { CaloriePipTracker } from "@/components/calories/CaloriePipTracker"
 import { LogFoodDialog } from "@/components/calories/LogFoodDialog"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { averageOnLoggedDays, cn, formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import { averageOnLoggedDays, cn, formatDate, formatDisplayDate, glassPanelAccentClass, glassPanelAccentStyle, glassPanelClass, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
@@ -102,6 +103,8 @@ function dateGroupLabel(
 /** Over budget (red) only at ≥101% of target */
 const OVER_TARGET_RATIO = 1.01
 
+const CALORIES_COLOR = "#ef4444"
+
 /** Consumed vs daily target: over = red at ≥101%; on track = emerald (≥95%); under = sky */
 function calorieTargetTextClass(consumed: number, target: number): string {
   if (target <= 0) return "text-foreground"
@@ -109,30 +112,6 @@ function calorieTargetTextClass(consumed: number, target: number): string {
   if (r >= OVER_TARGET_RATIO) return "text-red-500 dark:text-red-400"
   if (r >= 0.95) return "text-emerald-600 dark:text-emerald-400"
   return "text-sky-600 dark:text-sky-400/90"
-}
-
-/** Weekly consumed vs weekly goal (same bands) */
-function weeklyProgressTextClass(consumed: number, weeklyGoal: number): string {
-  if (weeklyGoal <= 0) return "text-foreground"
-  return calorieTargetTextClass(consumed, weeklyGoal)
-}
-
-/** Calories still available today — red “over” only at ≥101% of today’s target */
-function remainingVsTargetTextClass(consumed: number, target: number): string {
-  if (target <= 0) return "text-muted-foreground/40"
-  const r = consumed / target
-  if (r >= OVER_TARGET_RATIO) return "text-red-400/90 font-medium"
-  if (r >= 0.95) return "text-emerald-600 dark:text-emerald-400 font-medium"
-  return "text-sky-600/80 dark:text-sky-400/80"
-}
-
-/** Circular ring stroke — same bands as the calorie number */
-function todayProgressRingStrokeHex(consumed: number, target: number): string {
-  if (target <= 0) return "#38bdf8"
-  const r = consumed / target
-  if (r >= OVER_TARGET_RATIO) return "#f87171"
-  if (r >= 0.95) return "#059669"
-  return "#0284c7"
 }
 
 /** 7-day bar fill — cyan / green / red vs adaptive day target (same ratios as totals UI). */
@@ -637,19 +616,6 @@ export default function CaloriesPage() {
     }
   }
 
-  const todayRing =
-    weekPlan != null
-      ? {
-          radius: 56,
-          circumference: 2 * Math.PI * 56,
-          progress:
-            weekPlan.todayTarget > 0
-              ? Math.min(1, weekPlan.consumedToday / weekPlan.todayTarget)
-              : 0,
-          stroke: todayProgressRingStrokeHex(weekPlan.consumedToday, weekPlan.todayTarget),
-        }
-      : null
-
   if (vacationBlocksLog && vacationResumeLabel) {
     return (
       <>
@@ -687,7 +653,7 @@ export default function CaloriesPage() {
       <PageHeader title="Calories" />
 
       <PageHeroStrip
-        color="#ef4444"
+        color={CALORIES_COLOR}
         icon={Flame}
         eyebrow={`Today · ${formatDisplayDate(parseLocalDate(activeDate))}`}
         value={todayTotal.toLocaleString()}
@@ -706,13 +672,14 @@ export default function CaloriesPage() {
         ]}
       />
 
-      {/* Today: ring + weekly stats + log (combined) */}
+      {/* Today: pip tracker + weekly stats + log (combined) */}
       <div className="animate-fade-up">
         {editingGoal ? (
-          <div className="glass-panel border border-border/20 p-5 lg:p-6 shadow-sm">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Weekly calorie goal
-            </p>
+          <div
+            className={cn(glassPanelClass, glassPanelAccentClass, "p-4 lg:p-5")}
+            style={glassPanelAccentStyle(CALORIES_COLOR)}
+          >
+            <p className="type-hud-label-soft">Weekly calorie goal</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Input
                 type="number"
@@ -725,9 +692,11 @@ export default function CaloriesPage() {
                 className="h-9 w-32 text-sm bg-background/40 border-primary/15"
                 autoFocus
               />
-              <span className="text-[10px] text-muted-foreground/40">cal / week</span>
+              <span className="type-hud-caption normal-case">cal / week</span>
               {goalInput && parseFloat(goalInput) > 0 && (
-                <span className="text-[10px] tabular-nums text-muted-foreground/30">≈ {Math.round(parseFloat(goalInput) / 7).toLocaleString()} / day</span>
+                <span className="type-hud-caption normal-case tabular-nums">
+                  ≈ {Math.round(parseFloat(goalInput) / 7).toLocaleString()} / day
+                </span>
               )}
               <div className="flex items-center gap-1 ml-auto">
                 <button type="button" onClick={saveGoal} className="p-1.5 rounded-md text-primary hover:bg-primary/10 transition-colors">
@@ -744,201 +713,180 @@ export default function CaloriesPage() {
               </div>
             </div>
           </div>
-        ) : weekPlan && todayRing ? (
-          <div className="glass relative overflow-hidden rounded-3xl border border-border/20 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] p-6 shadow-[inset_0_1px_0_0_oklch(1_0_0/10%),0_22px_56px_-20px_oklch(0_0_0/42%)] lg:p-8 dark:border-[oklch(1_0_0/9%)] dark:from-glass-highlight/[0.1] dark:to-primary/[0.05] dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/12%),0_28px_72px_-24px_oklch(0_0_0/62%)]">
+        ) : weekPlan ? (
+          <div
+            className={cn(glassPanelClass, glassPanelAccentClass, "p-4 lg:p-5")}
+            style={glassPanelAccentStyle(CALORIES_COLOR)}
+          >
             <div
-              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]"
+              className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"
+              style={{ backgroundColor: CALORIES_COLOR }}
               aria-hidden
             />
-            <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12" aria-hidden />
-            <div className="relative z-[1] flex flex-col items-stretch gap-8 lg:flex-row lg:items-center lg:gap-10">
-              <div className="flex justify-center lg:justify-start lg:shrink-0">
-                <div className="relative aspect-square w-full max-w-[min(100%,280px)] min-h-[220px] min-w-[220px] sm:min-h-[260px] sm:min-w-[260px] overflow-visible">
-                  <div
-                    className="pointer-events-none absolute inset-[9%] rounded-full blur-[1px]"
-                    style={{
-                      background: `radial-gradient(circle at 50% 42%, ${todayRing.stroke}22 0%, ${todayRing.stroke}08 38%, transparent 68%)`,
-                    }}
-                    aria-hidden
-                  />
-                  <svg
-                    className="relative z-[1] h-full w-full -rotate-90 overflow-visible"
-                    viewBox="0 0 128 128"
-                    aria-hidden
-                  >
-                    <circle
-                      cx="64"
-                      cy="64"
-                      r={todayRing.radius}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="7"
-                      className="text-muted/24"
-                    />
-                    <circle
-                      cx="64"
-                      cy="64"
-                      r={todayRing.radius}
-                      fill="none"
-                      stroke={todayRing.stroke}
-                      strokeWidth="7"
-                      strokeLinecap="round"
-                      strokeDasharray={todayRing.circumference}
-                      strokeDashoffset={todayRing.circumference * (1 - todayRing.progress)}
-                      className="transition-[stroke-dashoffset] duration-700 ease-out"
-                      style={{
-                        filter: [
-                          `drop-shadow(0 0 1px ${todayRing.stroke})`,
-                          `drop-shadow(0 0 4px ${todayRing.stroke}33)`,
-                        ].join(" "),
-                      }}
-                    />
-                  </svg>
-                  <div className="pointer-events-none absolute inset-0 z-[2] flex flex-col items-center justify-center px-5">
-                    <p
+            <div className="relative min-w-0 space-y-4">
+              <CaloriePipTracker
+                consumed={weekPlan.consumedToday}
+                target={weekPlan.todayTarget}
+              />
+
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="type-hud-label-soft mb-1">Today</p>
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span
                       className={cn(
-                        "text-4xl font-bold tabular-nums tracking-[-0.02em] transition-colors sm:text-5xl dark:[text-shadow:0_1px_0_oklch(0_0_0/35%)]",
+                        "type-hud-value-xl tabular-nums transition-colors",
                         calorieTargetTextClass(todayTotal, weekPlan.todayTarget)
                       )}
                     >
                       {todayTotal.toLocaleString()}
-                    </p>
-                    <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground/40 sm:text-[11px]">
-                      calories
-                    </p>
-                    <p className="mt-3 max-w-[13rem] text-center text-[11px] leading-snug text-muted-foreground/60 sm:text-xs">
-                      Target{" "}
-                      <span className="font-semibold tabular-nums text-foreground/85">
-                        {weekPlan.todayTarget.toLocaleString()}
-                      </span>
-                      <span className="text-muted-foreground/35"> today</span>
-                    </p>
+                    </span>
+                    <span className="type-hud-unit">cal</span>
                   </div>
-                </div>
-              </div>
-
-              <div className="min-w-0 flex-1 space-y-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/38">
-                      Today
-                    </p>
-                    <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm tabular-nums leading-snug">
-                      <span className={cn("font-medium transition-colors", calorieTargetTextClass(weekPlan.consumedToday, weekPlan.todayTarget))}>
-                        {weekPlan.consumedToday.toLocaleString()}{" "}
-                        <span className="text-muted-foreground/50 font-normal">eaten</span>
-                      </span>
-                      <span className={cn("font-medium transition-colors", remainingVsTargetTextClass(weekPlan.consumedToday, weekPlan.todayTarget))}>
-                        {weekPlan.todayRemaining.toLocaleString()}{" "}
-                        <span className="text-muted-foreground/50 font-normal">left</span>
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setEditingGoal(true)}
-                    className="rounded-xl border border-border/25 bg-background/45 p-2 text-muted-foreground/45 shadow-[inset_0_1px_0_0_oklch(1_0_0/8%)] backdrop-blur-sm transition-colors hover:border-border/45 hover:bg-background/60 hover:text-foreground dark:bg-background/25 dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)] dark:hover:bg-background/40"
-                    title="Edit weekly goal"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 rounded-2xl border border-border/20 bg-gradient-to-b from-background/40 to-background/[0.12] px-3 py-3 text-center tabular-nums shadow-[inset_0_1px_0_0_oklch(1_0_0/10%)] sm:gap-3 sm:px-4 dark:from-background/30 dark:to-background/[0.08] dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)]">
-                  <div>
-                    <p className="mb-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/32">Week</p>
-                    <p className="text-[12px] font-semibold leading-tight text-foreground/90">
-                      <span className={cn("transition-colors", weeklyProgressTextClass(weekPlan.consumedTotal, weekPlan.weeklyTarget))}>
-                        {weekPlan.consumedTotal.toLocaleString()}
-                      </span>
-                      <span className="text-muted-foreground/30 font-normal"> / {weekPlan.weeklyTarget.toLocaleString()}</span>
-                    </p>
-                  </div>
-                  <div className="border-x border-border/20">
-                    <p className="mb-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/32">Left</p>
-                    <p
-                      className={cn(
-                        "text-[12px] font-semibold leading-tight",
-                        weekPlan.weeklyTarget > 0 &&
-                          weekPlan.consumedTotal / weekPlan.weeklyTarget >= OVER_TARGET_RATIO
-                          ? "text-red-400/85"
-                          : "text-foreground/90"
-                      )}
-                    >
-                      {Math.abs(weekPlan.weeklyTarget - weekPlan.consumedTotal).toLocaleString()}
-                      <span className="text-muted-foreground/40 font-normal">
-                        {" "}
-                        {weekPlan.overUnder > 0 ? "over" : "left"}
-                      </span>
-                    </p>
-                  </div>
-                  <div>
-                    <p className="mb-1 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/32">Days</p>
-                    <p className="text-[12px] font-semibold leading-tight text-foreground/90">{weekPlan.daysLeft}</p>
-                  </div>
-                </div>
-
-                {today > realToday && (
-                  <p className="text-[10px] uppercase tracking-wider text-primary/75">
-                    Planning mode (date selector)
+                  <p className="type-hud-caption mt-1 normal-case">
+                    Target{" "}
+                    <span className="font-semibold tabular-nums text-foreground/85">
+                      {weekPlan.todayTarget.toLocaleString()}
+                    </span>{" "}
+                    today
                   </p>
-                )}
-
-                <Button
+                </div>
+                <button
                   type="button"
-                  variant="glass"
-                  size="lg"
-                  className="w-full gap-2"
-                  disabled={vacationBlocksLog && draftMealItems.length === 0}
-                  onClick={() => setLogFoodOpen(true)}
+                  onClick={() => setEditingGoal(true)}
+                  className="rounded-xl border border-border/25 bg-background/45 p-2 text-muted-foreground/45 shadow-[inset_0_1px_0_0_oklch(1_0_0/8%)] backdrop-blur-sm transition-colors hover:border-border/45 hover:bg-background/60 hover:text-foreground dark:bg-background/25 dark:shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)] dark:hover:bg-background/40"
+                  title="Edit weekly goal"
                 >
-                  <Plus className="h-4 w-4 shrink-0" />
-                  Log food
-                </Button>
-                {draftMealItems.length > 0 && (
-                  <p className="text-center text-[11px] text-muted-foreground lg:text-left">
-                    <span className="font-semibold tabular-nums text-foreground">{draftMealItems.length}</span> item
-                    {draftMealItems.length === 1 ? "" : "s"} in draft — tap Log food to continue
-                  </p>
-                )}
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
               </div>
+
+              <div className="flex flex-wrap gap-x-8 gap-y-3">
+                <div>
+                  <p className="type-hud-label-soft mb-1">Eaten</p>
+                  <p className={cn("type-hud-stat transition-colors", calorieTargetTextClass(weekPlan.consumedToday, weekPlan.todayTarget))}>
+                    {weekPlan.consumedToday.toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="type-hud-label-soft mb-1">Left today</p>
+                  <p
+                    className={cn(
+                      "type-hud-stat transition-colors",
+                      weekPlan.todayTarget <= 0
+                        ? "text-muted-foreground/40"
+                        : calorieTargetTextClass(weekPlan.consumedToday, weekPlan.todayTarget)
+                    )}
+                  >
+                    {weekPlan.todayRemaining.toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="type-hud-label-soft mb-1">Week</p>
+                  <p className="type-hud-stat-sm">
+                    <span className={cn("transition-colors", calorieTargetTextClass(weekPlan.consumedTotal, weekPlan.weeklyTarget))}>
+                      {weekPlan.consumedTotal.toLocaleString()}
+                    </span>
+                    <span className="text-muted-foreground/35 font-normal">
+                      {" "}
+                      / {weekPlan.weeklyTarget.toLocaleString()}
+                    </span>
+                  </p>
+                </div>
+                <div>
+                  <p className="type-hud-label-soft mb-1">Week balance</p>
+                  <p
+                    className={cn(
+                      "type-hud-stat-sm",
+                      weekPlan.weeklyTarget > 0 &&
+                        weekPlan.consumedTotal / weekPlan.weeklyTarget >= OVER_TARGET_RATIO
+                        ? "text-red-400/85"
+                        : undefined
+                    )}
+                  >
+                    {Math.abs(weekPlan.weeklyTarget - weekPlan.consumedTotal).toLocaleString()}
+                    <span className="text-muted-foreground/40 font-normal">
+                      {" "}
+                      {weekPlan.overUnder > 0 ? "over" : "left"}
+                    </span>
+                  </p>
+                </div>
+                <div>
+                  <p className="type-hud-label-soft mb-1">Days left</p>
+                  <p className="type-hud-stat-sm">{weekPlan.daysLeft}</p>
+                </div>
+              </div>
+
+              {today > realToday && (
+                <p className="type-hud-caption normal-case text-primary/80">Planning mode (date selector)</p>
+              )}
+
+              <Button
+                type="button"
+                variant="glass"
+                size="lg"
+                className="w-full gap-2"
+                disabled={vacationBlocksLog && draftMealItems.length === 0}
+                onClick={() => setLogFoodOpen(true)}
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+                Log food
+              </Button>
+              {draftMealItems.length > 0 && (
+                <p className="type-hud-caption normal-case text-center lg:text-left">
+                  <span className="font-semibold tabular-nums text-foreground">{draftMealItems.length}</span> item
+                  {draftMealItems.length === 1 ? "" : "s"} in draft — tap Log food to continue
+                </p>
+              )}
             </div>
           </div>
         ) : (
-          <div className="glass-panel border border-border/20 p-6 lg:p-7 shadow-sm">
-            <div className="text-center lg:text-left">
-              <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/45">Today</p>
-              <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-foreground">{todayTotal.toLocaleString()}</p>
-              <p className="mt-1 text-sm text-muted-foreground">calories</p>
-              {today > realToday && (
-                <p className="mt-2 text-[10px] uppercase tracking-wider text-primary/80">Planning mode (date selector)</p>
+          <div
+            className={cn(glassPanelClass, glassPanelAccentClass, "p-4 lg:p-5")}
+            style={glassPanelAccentStyle(CALORIES_COLOR)}
+          >
+            <div
+              className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"
+              style={{ backgroundColor: CALORIES_COLOR }}
+              aria-hidden
+            />
+            <div className="relative min-w-0 space-y-4">
+              <div className="min-w-0">
+                <p className="type-hud-label-soft mb-1">Today</p>
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span className="type-hud-value-xl tabular-nums">{todayTotal.toLocaleString()}</span>
+                  <span className="type-hud-unit">cal</span>
+                </div>
+                {today > realToday && (
+                  <p className="type-hud-caption mt-1 normal-case text-primary/80">Planning mode (date selector)</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingGoal(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border/40 py-3 type-hud-label-soft transition-colors hover:border-primary/25 hover:text-muted-foreground"
+              >
+                <Target className="h-3.5 w-3.5" />
+                Set weekly calorie goal
+              </button>
+              <Button
+                type="button"
+                variant="glass"
+                size="lg"
+                className="w-full gap-2"
+                disabled={vacationBlocksLog && draftMealItems.length === 0}
+                onClick={() => setLogFoodOpen(true)}
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+                Log food
+              </Button>
+              {draftMealItems.length > 0 && (
+                <p className="type-hud-caption normal-case text-center lg:text-left">
+                  <span className="font-semibold tabular-nums text-foreground">{draftMealItems.length}</span> item
+                  {draftMealItems.length === 1 ? "" : "s"} in draft — tap Log food to continue
+                </p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => setEditingGoal(true)}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border/40 py-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/40 transition-colors hover:border-primary/25 hover:text-muted-foreground"
-            >
-              <Target className="h-3.5 w-3.5" />
-              Set weekly calorie goal
-            </button>
-            <Button
-              type="button"
-              variant="glass"
-              size="lg"
-              className="mt-4 w-full gap-2"
-              disabled={vacationBlocksLog && draftMealItems.length === 0}
-              onClick={() => setLogFoodOpen(true)}
-            >
-              <Plus className="h-4 w-4 shrink-0" />
-              Log food
-            </Button>
-            {draftMealItems.length > 0 && (
-              <p className="mt-3 text-center text-[11px] text-muted-foreground lg:text-left">
-                <span className="font-semibold tabular-nums text-foreground">{draftMealItems.length}</span> item
-                {draftMealItems.length === 1 ? "" : "s"} in draft — tap Log food to continue
-              </p>
-            )}
           </div>
         )}
       </div>

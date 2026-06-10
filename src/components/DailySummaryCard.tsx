@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import type { LucideIcon } from "lucide-react"
+import type { ReactNode } from "react"
 import { MiniChart } from "./MiniChart"
 import { cn, glassPanelClass } from "@/lib/utils"
 import { ChevronRight } from "lucide-react"
@@ -13,7 +14,9 @@ interface DailySummaryCardProps {
   unit?: string
   icon: LucideIcon
   href: string
-  chartData: { value: number }[]
+  chartData?: { value: number }[]
+  /** Replaces the sparkline when set (workouts ring, peptide schedule, sleep bedtime, etc.). */
+  footer?: ReactNode
   color?: string
   /** When set, card is not a link and calorie-style UI is muted (e.g. vacation mode). */
   disabled?: boolean
@@ -28,6 +31,7 @@ export function DailySummaryCard({
   icon: Icon,
   href,
   chartData,
+  footer,
   color = "oklch(0.82 0.18 110)",
   disabled = false,
   disabledHint,
@@ -40,9 +44,11 @@ export function DailySummaryCard({
     : null
 
   const progress =
-    !disabled && numericGoal && numericGoal > 0
+    !disabled && !footer && numericGoal && numericGoal > 0
       ? Math.min((numericValue / numericGoal) * 100, 100)
       : null
+
+  const featured = footer != null && !disabled
 
   const inner = (
       <div
@@ -59,7 +65,7 @@ export function DailySummaryCard({
           style={{ backgroundColor: color }}
         />
 
-        <div className="flex shrink-0 items-center justify-between gap-1 mb-2">
+        <div className={cn("flex shrink-0 items-center justify-between gap-1", featured ? "mb-1" : "mb-2")}>
           <div className="flex min-w-0 items-center gap-2">
             <div
               className="flex shrink-0 items-center justify-center w-7 h-7 rounded-lg"
@@ -80,40 +86,50 @@ export function DailySummaryCard({
           </p>
         )}
 
-        <div className="flex shrink-0 items-baseline gap-1.5">
-          <span className="type-hud-value-lg animate-count-up">
-            {typeof value === "number" ? value.toLocaleString() : value}
-          </span>
-          {unit && !disabled && <span className="type-hud-unit">{unit}</span>}
-        </div>
-
-        <div className="flex min-h-[2.25rem] flex-1 flex-col justify-end gap-1.5">
-          {numericGoal != null && !disabled && (
-            <p className="type-hud-target-line">/ {typeof goal === "number" ? goal.toLocaleString() : goal} TARGET</p>
-          )}
-          {progress != null && (
-            <div className="h-1 w-full shrink-0 overflow-hidden rounded-full bg-muted/30">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all duration-700 ease-out",
-                  progress >= 100 ? "bg-primary" : ""
-                )}
-                style={{
-                  width: `${progress}%`,
-                  backgroundColor: progress < 100 ? color : undefined,
-                  boxShadow:
-                    progress >= 100
-                      ? "0 0 8px oklch(0.82 0.18 110 / 55%)"
-                      : `0 0 6px ${color}40`,
-                }}
-              />
+        {!featured && (
+          <>
+            <div className="flex shrink-0 items-baseline gap-1.5">
+              <span className="type-hud-value-lg animate-count-up">
+                {typeof value === "number" ? value.toLocaleString() : value}
+              </span>
+              {unit && !disabled && <span className="type-hud-unit">{unit}</span>}
             </div>
-          )}
-        </div>
 
-        <div className="shrink-0 pt-1">
-          <MiniChart data={chartData} color={color} />
-        </div>
+            <div className="flex min-h-[2.25rem] flex-1 flex-col justify-end gap-1.5">
+              {numericGoal != null && !disabled && (
+                <p className="type-hud-target-line">/ {typeof goal === "number" ? goal.toLocaleString() : goal} TARGET</p>
+              )}
+              {progress != null && (
+                <div className="h-1 w-full shrink-0 overflow-hidden rounded-full bg-muted/30">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-700 ease-out",
+                      progress >= 100 ? "bg-primary" : ""
+                    )}
+                    style={{
+                      width: `${progress}%`,
+                      backgroundColor: progress < 100 ? color : undefined,
+                      boxShadow:
+                        progress >= 100
+                          ? "0 0 8px oklch(0.82 0.18 110 / 55%)"
+                          : `0 0 6px ${color}40`,
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="shrink-0 pt-1">
+              {chartData ? <MiniChart data={chartData} color={color} /> : null}
+            </div>
+          </>
+        )}
+
+        {featured && (
+          <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col self-stretch overflow-hidden px-0.5 pb-0.5">
+            {footer}
+          </div>
+        )}
       </div>
   )
 

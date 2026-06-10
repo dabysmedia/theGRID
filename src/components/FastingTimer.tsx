@@ -2,17 +2,21 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import Link from "next/link"
+import { format, subDays } from "date-fns"
 import {
   Timer,
   Settings2,
   Utensils,
-  TrendingUp,
   Pause,
   Play,
   Square,
   PowerOff,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react"
-import { cn, glassPanelClass } from "@/lib/utils"
+import { cn, glassPanelClass, parseLocalDate } from "@/lib/utils"
+import { MiniChart } from "./MiniChart"
+import { useActiveDate } from "@/context/DateContext"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -43,6 +47,9 @@ import {
   minutesFromMidnight,
   parseTimeInputToLastMealDate,
   syncFastingProfileToServer,
+  aggregateFastHoursByDay,
+  loadFastLogs,
+  type FastLogEntry,
 } from "@/lib/fasting"
 import { useUser } from "@/context/UserContext"
 
@@ -351,14 +358,55 @@ function FastingSettingsDialog({
   )
 }
 
+function FastingStatsStrip({
+  activeDate,
+  logs,
+  goal,
+}: {
+  activeDate: string
+  logs: FastLogEntry[]
+  goal: number
+}) {
+  const { todayValue, last7 } = useMemo(() => {
+    const end = parseLocalDate(activeDate)
+    const keys = Array.from({ length: 7 }, (_, i) => format(subDays(end, 6 - i), "yyyy-MM-dd"))
+    const byDay = aggregateFastHoursByDay(logs, keys)
+    const last7 = keys.map((k) => Math.round((byDay[k] ?? 0) * 10) / 10)
+    const todayKey = format(end, "yyyy-MM-dd")
+    const todayValue = Math.round((byDay[todayKey] ?? 0) * 10) / 10
+    return { todayValue, last7 }
+  }, [activeDate, logs])
+
+  return (
+    <Link
+      href="/fasting"
+      className="group flex items-center gap-3 rounded-xl border border-border/35 bg-muted/15 px-3 py-2.5 transition-colors hover:bg-glass-highlight/25 active:scale-[0.99]"
+    >
+      <div className="min-w-0 flex-1">
+        <MiniChart data={last7.map((v) => ({ value: v }))} color={COLORS.fasting} />
+      </div>
+      <div className="shrink-0 text-right">
+        <p className="type-hud-stat tabular-nums text-foreground">{todayValue}</p>
+        <p className="type-hud-caption text-muted-foreground/70">
+          hrs today · {goal}h goal
+        </p>
+      </div>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground/70" />
+    </Link>
+  )
+}
+
 export function FastingTimer() {
   const { user } = useUser()
+  const { activeDate } = useActiveDate()
   const userId = user?.id ?? null
   const [config, setConfig] = useState<FastingConfig>(loadFastingConfig)
   const [now, setNow] = useState(() => Date.now())
   const [pausedAtMs, setPausedAtMs] = useState<number | null>(null)
   const [timerDisabled, setTimerDisabled] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
   const [lastMealAtMs, setLastMealAtMs] = useState<number | null>(null)
+  const [fastLogs, setFastLogs] = useState<FastLogEntry[]>([])
   const [startFastingOpen, setStartFastingOpen] = useState(false)
   const [lastMealInput, setLastMealInput] = useState("")
   const [startFastingError, setStartFastingError] = useState<string | null>(null)
@@ -370,11 +418,23 @@ export function FastingTimer() {
   useEffect(() => {
     setConfig(loadFastingConfig())
     setPausedAtMs(loadFastingTimerPausedAtMs())
-    setTimerDisabled(loadFastingTimerDisabled())
+    const disabled = loadFastingTimerDisabled()
+    setTimerDisabled(disabled)
+    setCollapsed(disabled)
     setLastMealAtMs(loadFastingLastMealAtMs())
+    setFastLogs(loadFastLogs())
     setMounted(true)
   }, [])
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    function refreshLogs() {
+      setFastLogs(loadFastLogs())
+    }
+    refreshLogs()
+    window.addEventListener("fasting-logs-changed", refreshLogs)
+    return () => window.removeEventListener("fasting-logs-changed", refreshLogs)
+  }, [])
 
   useEffect(() => {
     if (!mounted) return
@@ -419,6 +479,7 @@ export function FastingTimer() {
     setLastMealAtMs(null)
     saveFastingTimerDisabled(true)
     setTimerDisabled(true)
+    setCollapsed(true)
     setNow(Date.now())
     void syncFastingProfileToServer(userId)
   }, [userId])
@@ -444,6 +505,7 @@ export function FastingTimer() {
     setLastMealAtMs(ms)
     saveFastingTimerDisabled(false)
     setTimerDisabled(false)
+    setCollapsed(false)
     saveFastingTimerPausedAtMs(null)
     setPausedAtMs(null)
     setNow(tEnd)
@@ -470,6 +532,58 @@ export function FastingTimer() {
   }, [userId])
 
   const phaseColor = snapshot.phase === "fasting" ? COLORS.fasting : COLORS.eating
+  const showExpanded = !timerDisabled || !collapsed
+
+  const headerTitleContent = (
+    <>
+      <div
+        className={cn(
+          "h-1.5 w-1.5 shrink-0 rounded-full",
+          timerDisabled && "bg-muted-foreground/50 shadow-none",
+        )}
+        style={
+          timerDisabled
+            ? undefined
+            : {
+                backgroundColor: phaseColor,
+                boxShadow: `0 0 6px ${phaseColor}60`,
+                animation: isPaused ? "none" : "pulse-glow 2.5s ease-in-out infinite",
+              }
+        }
+      />
+      <h2
+        className={cn(
+          "type-hud-title truncate",
+          timerDisabled && "text-muted-foreground/80",
+        )}
+      >
+        Fasting
+      </h2>
+      <span
+        className={cn(
+          "hidden text-[10px] sm:inline",
+          timerDisabled ? "text-muted-foreground/40" : "text-muted-foreground/55",
+        )}
+      >
+        · {config.presetName}
+      </span>
+      {timerDisabled && (
+        <span className="rounded-md border border-muted-foreground/25 bg-muted/50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Off
+        </span>
+      )}
+      {!timerDisabled && isPaused && (
+        <span className="rounded-md bg-muted/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Paused
+        </span>
+      )}
+      {timerDisabled && collapsed && (
+        <span className="truncate text-[10px] text-muted-foreground/50">
+          Tap to expand
+        </span>
+      )}
+    </>
+  )
 
   if (!mounted) {
     return (
@@ -499,7 +613,7 @@ export function FastingTimer() {
     <div
       className={cn(
         FASTING_CARD_SHEEN,
-        "p-5 sm:p-6",
+        showExpanded ? "p-5 sm:p-6" : "px-4 py-3 sm:px-5 sm:py-3.5",
         timerDisabled && FASTING_CARD_INACTIVE,
       )}
     >
@@ -526,65 +640,47 @@ export function FastingTimer() {
 
       <div
         className={cn(
-          "relative z-10 mb-4 flex items-center justify-between gap-2",
+          "relative z-10 flex items-center justify-between gap-2",
+          showExpanded && "mb-4",
           timerDisabled && "text-muted-foreground",
         )}
       >
-        <div className="flex min-w-0 items-center gap-2">
-          <div
-            className={cn(
-              "h-1.5 w-1.5 shrink-0 rounded-full",
-              timerDisabled && "bg-muted-foreground/50 shadow-none",
-            )}
-            style={
-              timerDisabled
-                ? undefined
-                : {
-                    backgroundColor: phaseColor,
-                    boxShadow: `0 0 6px ${phaseColor}60`,
-                    animation: isPaused ? "none" : "pulse-glow 2.5s ease-in-out infinite",
-                  }
-            }
-          />
-          <h2
-            className={cn(
-              "type-hud-title truncate",
-              timerDisabled && "text-muted-foreground/80",
-            )}
+        {timerDisabled ? (
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 touch-manipulation items-center gap-2 text-left"
+            onClick={() => setCollapsed((c) => !c)}
+            aria-expanded={showExpanded}
           >
-            Fasting
-          </h2>
-          <span
-            className={cn(
-              "hidden text-[10px] sm:inline",
-              timerDisabled ? "text-muted-foreground/40" : "text-muted-foreground/55",
-            )}
-          >
-            · {config.presetName}
-          </span>
-          {timerDisabled && (
-            <span className="rounded-md border border-muted-foreground/25 bg-muted/50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Off
-            </span>
-          )}
-          {!timerDisabled && isPaused && (
-            <span className="rounded-md bg-muted/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Paused
-            </span>
-          )}
-        </div>
+            {headerTitleContent}
+          </button>
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {headerTitleContent}
+          </div>
+        )}
         <div className="flex shrink-0 items-center gap-0.5">
-          <Link
-            href="/fasting"
-            className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-glass-highlight/30 hover:text-foreground sm:h-8 sm:w-8"
-            aria-label="Fasting history and trends"
-          >
-            <TrendingUp className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-          </Link>
           <FastingSettingsDialog config={config} onSave={handleConfigSave} />
+          {timerDisabled && (
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              aria-expanded={showExpanded}
+              aria-label={showExpanded ? "Collapse fasting timer" : "Expand fasting timer"}
+              className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-glass-highlight/30 hover:text-foreground sm:h-8 sm:w-8"
+            >
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 sm:h-3.5 sm:w-3.5 transition-transform duration-200",
+                  showExpanded && "rotate-180",
+                )}
+              />
+            </button>
+          )}
         </div>
       </div>
 
+      {showExpanded && (
       <div className="relative z-10 flex flex-col items-stretch gap-5 sm:flex-row sm:items-center sm:gap-8 lg:gap-10">
         <FastingRing
           progress={snapshot.progress}
@@ -751,6 +847,17 @@ export function FastingTimer() {
           </div>
         </div>
       </div>
+      )}
+
+      {showExpanded && !timerDisabled && (
+        <div className="relative z-10 mt-4 border-t border-border/25 pt-4">
+          <FastingStatsStrip
+            activeDate={activeDate}
+            logs={fastLogs}
+            goal={config.fastHours}
+          />
+        </div>
+      )}
     </div>
   )
 }
