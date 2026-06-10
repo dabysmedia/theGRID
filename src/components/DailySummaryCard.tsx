@@ -61,8 +61,12 @@ export function DailySummaryCard({
         )}
       >
         <div
-          className="absolute top-0 right-0 w-24 h-24 opacity-[0.03] -translate-y-8 translate-x-8"
-          style={{ backgroundColor: color }}
+          className="pointer-events-none absolute top-0 right-0 size-[4.25rem] opacity-[0.05]"
+          style={{
+            backgroundColor: color,
+            borderBottomLeftRadius: "100%",
+          }}
+          aria-hidden
         />
 
         <div className={cn("flex shrink-0 items-center justify-between gap-1", featured ? "mb-1" : "mb-2")}>

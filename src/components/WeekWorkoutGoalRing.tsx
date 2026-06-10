@@ -1,26 +1,41 @@
+"use client"
+
+import { useId } from "react"
 import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export const WEEKLY_WORKOUT_GOAL = 3
+export const WORKOUT_RING_COLOR = "#c4d632"
 
 type WeekWorkoutGoalRingProps = {
   count: number
   /** sm = icon-sized (hero pills); lg = hub Systems tile footer */
   size?: "sm" | "lg"
+  color?: string
   className?: string
 }
 
 export function WeekWorkoutGoalRing({
   count,
   size = "sm",
+  color = WORKOUT_RING_COLOR,
   className,
 }: WeekWorkoutGoalRingProps) {
   const goal = WEEKLY_WORKOUT_GOAL
   const capped = Math.min(Math.max(count, 0), goal)
   const met = count >= goal
+  const uid = useId().replace(/:/g, "")
+  const arcGradId = `${uid}-arc`
 
   if (size === "sm" && met) {
-    return <Check className={cn("h-4 w-4 text-emerald-500", className)} strokeWidth={2.8} aria-hidden />
+    return (
+      <Check
+        className={cn("h-4 w-4", className)}
+        style={{ color }}
+        strokeWidth={2.8}
+        aria-hidden
+      />
+    )
   }
 
   const stroke = size === "lg" ? 5.5 : 2.35
@@ -45,22 +60,28 @@ export function WeekWorkoutGoalRing({
   return (
     <div
       className={cn(
-        "relative inline-flex shrink-0 items-center justify-center",
+        "relative inline-flex shrink-0 items-center justify-center overflow-visible",
         boxClass,
         className
       )}
     >
       {size === "lg" && (
         <div
-          className="pointer-events-none absolute inset-[8%] rounded-full opacity-40 blur-lg"
+          className="pointer-events-none absolute inset-[2%] rounded-full opacity-45 blur-lg"
           style={{
-            background:
-              "radial-gradient(circle at 50% 50%, oklch(0.82 0.18 110 / 45%), transparent 68%)",
+            background: `radial-gradient(circle at 50% 50%, ${color}50, transparent 68%)`,
           }}
           aria-hidden
         />
       )}
-      <svg viewBox={`0 0 ${vb} ${vb}`} className={svgClass} aria-hidden>
+      <svg viewBox={`0 0 ${vb} ${vb}`} className={cn(svgClass, "relative z-10")} aria-hidden>
+        <defs>
+          <linearGradient id={arcGradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={color} stopOpacity={1} />
+            <stop offset="100%" stopColor={color} stopOpacity={0.85} />
+          </linearGradient>
+        </defs>
+
         <circle
           cx={cx}
           cy={cy}
@@ -76,24 +97,22 @@ export function WeekWorkoutGoalRing({
             cy={cy}
             r={r}
             fill="none"
-            stroke="currentColor"
+            stroke={`url(#${arcGradId})`}
             strokeWidth={stroke}
             strokeLinecap="round"
             strokeDasharray={`${dash} ${circumference}`}
-            className="text-emerald-500"
-            style={{
-              filter:
-                size === "lg"
-                  ? "drop-shadow(0 0 8px oklch(0.62 0.17 150 / 50%))"
-                  : undefined,
-            }}
           />
         )}
       </svg>
       {size === "lg" && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           {met ? (
-            <Check className="h-9 w-9 text-emerald-500 sm:h-10 sm:w-10" strokeWidth={2.75} aria-hidden />
+            <Check
+              className="h-9 w-9 sm:h-10 sm:w-10"
+              style={{ color }}
+              strokeWidth={2.75}
+              aria-hidden
+            />
           ) : (
             <span className="text-[1.65rem] font-bold tabular-nums leading-none tracking-tight text-foreground sm:text-[1.75rem]">
               {capped}/{goal}

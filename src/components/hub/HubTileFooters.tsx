@@ -65,7 +65,7 @@ export function HubWorkoutFooter({
 
   return (
     <div className="flex w-full flex-col items-center justify-center gap-2.5 text-center">
-      <WeekWorkoutGoalRing count={weekCount} size="lg" />
+      <WeekWorkoutGoalRing count={weekCount} size="lg" color={color} />
       <div className="space-y-0.5">
         <p className="type-hud-caption-tight text-[8px]">This week</p>
         <p

@@ -175,6 +175,260 @@ function summarizeDay(items: CalorieEntry[]) {
   }
 }
 
+const MEAL_ORDER = ["breakfast", "lunch", "dinner", "snack"] as const
+
+function groupEntriesByMeal(items: CalorieEntry[]) {
+  const map = new Map<string, CalorieEntry[]>()
+  for (const entry of items) {
+    const key = entry.mealType.toLowerCase().trim() || "other"
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(entry)
+  }
+  const ordered = MEAL_ORDER.filter((m) => map.has(m)).map((meal) => ({
+    meal,
+    items: map.get(meal)!,
+  }))
+  for (const [meal, mealItems] of map) {
+    if (!MEAL_ORDER.includes(meal as (typeof MEAL_ORDER)[number])) {
+      ordered.push({ meal, items: mealItems })
+    }
+  }
+  return ordered
+}
+
+function dayCalorieClass(calories: number, dayTarget: number, weeklyGoal: WeeklyGoal | null) {
+  return weeklyGoal != null && dayTarget > 0
+    ? calorieTargetTextClass(calories, dayTarget)
+    : "text-foreground"
+}
+
+function CaloriesDayProgressBar({
+  calories,
+  dayTarget,
+}: {
+  calories: number
+  dayTarget: number
+}) {
+  if (dayTarget <= 0) return null
+  const pct = Math.min(100, (calories / dayTarget) * 100)
+  const fill = calorieTrendBarFillHex(calories, dayTarget)
+  return (
+    <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-muted/20">
+      <div
+        className="h-full rounded-full transition-[width] duration-500 ease-out"
+        style={{ width: `${pct}%`, backgroundColor: fill }}
+      />
+    </div>
+  )
+}
+
+function MacroPills({
+  protein,
+  carbs,
+  fat,
+}: {
+  protein: number | null
+  carbs: number | null
+  fat: number | null
+}) {
+  if (protein == null && carbs == null && fat == null) return null
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {protein != null && (
+        <span className="type-hud-micro rounded-md border border-border/25 bg-background/35 px-1.5 py-0.5 tabular-nums normal-case">
+          P {protein}g
+        </span>
+      )}
+      {carbs != null && (
+        <span className="type-hud-micro rounded-md border border-border/25 bg-background/35 px-1.5 py-0.5 tabular-nums normal-case">
+          C {carbs}g
+        </span>
+      )}
+      {fat != null && (
+        <span className="type-hud-micro rounded-md border border-border/25 bg-background/35 px-1.5 py-0.5 tabular-nums normal-case">
+          F {fat}g
+        </span>
+      )}
+    </div>
+  )
+}
+
+function CaloriesHistoryEntryRow({
+  entry,
+  calClass,
+  startEdit,
+  requestDeleteCalorieEntry,
+}: {
+  entry: CalorieEntry
+  calClass: string
+  startEdit: (entry: CalorieEntry) => void
+  requestDeleteCalorieEntry: (id: string, label: string) => void
+}) {
+  return (
+    <li className="group/row flex items-stretch gap-3 px-3 py-2.5 transition-colors hover:bg-glass-highlight/15">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className={cn("type-hud-stat tabular-nums transition-colors", calClass)}>
+            {entry.calories.toLocaleString()}
+          </span>
+          <span className="type-hud-unit">cal</span>
+        </div>
+        <MacroPills protein={entry.protein} carbs={entry.carbs} fat={entry.fat} />
+        {entry.description && (
+          <p className="type-hud-caption mt-1.5 normal-case line-clamp-2 text-muted-foreground/75">
+            {entry.description}
+          </p>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-1 self-center">
+        <button
+          type="button"
+          onClick={() => startEdit(entry)}
+          className="history-row-edit !min-h-9 !min-w-9 !m-0"
+          title="Edit"
+          aria-label="Edit entry"
+        >
+          <Pencil />
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            requestDeleteCalorieEntry(
+              entry.id,
+              entry.description?.trim() || `${entry.calories} cal · ${entry.mealType}`
+            )
+          }
+          className="history-row-delete-row !min-h-9 !min-w-9 !m-0"
+          aria-label="Delete entry"
+        >
+          <Trash2 />
+        </button>
+      </div>
+    </li>
+  )
+}
+
+function CaloriesMealGroup({
+  meal,
+  items,
+  calClass,
+  startEdit,
+  requestDeleteCalorieEntry,
+}: {
+  meal: string
+  items: CalorieEntry[]
+  calClass: string
+  startEdit: (entry: CalorieEntry) => void
+  requestDeleteCalorieEntry: (id: string, label: string) => void
+}) {
+  const mealTotal = items.reduce((s, e) => s + e.calories, 0)
+  const MealIcon = mealHistoryIcon(meal)
+
+  return (
+    <div className="glass-subtle overflow-hidden rounded-xl">
+      <div className="flex items-center gap-2 border-b border-border/15 px-3 py-2.5">
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/20 bg-background/40 text-muted-foreground"
+          aria-hidden
+        >
+          <MealIcon className="size-3.5 stroke-[1.75]" />
+        </div>
+        <span className="type-hud-label-soft capitalize">{meal}</span>
+        <span className={cn("type-hud-stat-sm ml-auto tabular-nums", calClass)}>
+          {mealTotal.toLocaleString()} cal
+        </span>
+      </div>
+      <ul className="divide-y divide-border/15">
+        {items.map((entry) => (
+          <CaloriesHistoryEntryRow
+            key={entry.id}
+            entry={entry}
+            calClass={calClass}
+            startEdit={startEdit}
+            requestDeleteCalorieEntry={requestDeleteCalorieEntry}
+          />
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function CaloriesTodayLog({
+  dateKey,
+  items,
+  today,
+  yesterday,
+  realToday,
+  weeklyGoal,
+  dailyTotals,
+  startEdit,
+  requestDeleteCalorieEntry,
+}: {
+  dateKey: string
+  items: CalorieEntry[]
+  today: string
+  yesterday: string
+  realToday: string
+  weeklyGoal: WeeklyGoal | null
+  dailyTotals: Map<string, number>
+  startEdit: (entry: CalorieEntry) => void
+  requestDeleteCalorieEntry: (id: string, label: string) => void
+}) {
+  const summary = summarizeDay(items)
+  const label = dateGroupLabel(dateKey, today, yesterday, realToday)
+  const subDate =
+    dateKey === today || dateKey === yesterday ? format(parseLocalDate(dateKey), "EEE, MMM d") : null
+  const dayTarget =
+    weeklyGoal != null ? adaptiveDayTargetForDate(dateKey, weeklyGoal.weeklyTarget, dailyTotals) : 0
+  const calClass = dayCalorieClass(summary.calories, dayTarget, weeklyGoal)
+  const mealGroups = groupEntriesByMeal(items)
+
+  return (
+    <div
+      className={cn(glassPanelClass, glassPanelAccentClass, "overflow-hidden p-4 lg:p-5")}
+      style={glassPanelAccentStyle(CALORIES_COLOR)}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <h3 className="type-hud-title normal-case">{label}</h3>
+            {subDate && <span className="type-hud-caption tabular-nums">{subDate}</span>}
+          </div>
+          <p className="type-hud-caption mt-1 normal-case">
+            {summary.count} {summary.count === 1 ? "entry" : "entries"}
+            {dayTarget > 0 && (
+              <>
+                <span className="text-muted-foreground/30"> · </span>
+                target {dayTarget.toLocaleString()} cal
+              </>
+            )}
+          </p>
+          <CaloriesDayProgressBar calories={summary.calories} dayTarget={dayTarget} />
+        </div>
+        <div className="text-right">
+          <p className={cn("type-hud-value-lg tabular-nums leading-none transition-colors", calClass)}>
+            {summary.calories.toLocaleString()}
+          </p>
+          <p className="type-hud-unit mt-1">cal</p>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {mealGroups.map(({ meal, items: mealItems }) => (
+          <CaloriesMealGroup
+            key={meal}
+            meal={meal}
+            items={mealItems}
+            calClass={calClass}
+            startEdit={startEdit}
+            requestDeleteCalorieEntry={requestDeleteCalorieEntry}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function CaloriesHistoryDayAccordion({
   dateKey,
   items,
@@ -183,7 +437,6 @@ function CaloriesHistoryDayAccordion({
   realToday,
   expandedDays,
   onToggleDay,
-  lockOpen,
   weeklyGoal,
   dailyTotals,
   startEdit,
@@ -196,181 +449,82 @@ function CaloriesHistoryDayAccordion({
   realToday: string
   expandedDays: ReadonlySet<string>
   onToggleDay: (dateKey: string) => void
-  lockOpen: boolean
   weeklyGoal: WeeklyGoal | null
   dailyTotals: Map<string, number>
   startEdit: (entry: CalorieEntry) => void
   requestDeleteCalorieEntry: (id: string, label: string) => void
 }) {
   const summary = summarizeDay(items)
-  const open = lockOpen || expandedDays.has(dateKey)
+  const open = expandedDays.has(dateKey)
   const label = dateGroupLabel(dateKey, today, yesterday, realToday)
   const subDate =
     dateKey === today || dateKey === yesterday ? format(parseLocalDate(dateKey), "EEE, MMM d") : null
   const dayTarget =
     weeklyGoal != null ? adaptiveDayTargetForDate(dateKey, weeklyGoal.weeklyTarget, dailyTotals) : 0
-  const historyDayCalClass =
-    weeklyGoal != null && dayTarget > 0
-      ? calorieTargetTextClass(summary.calories, dayTarget)
-      : "text-foreground"
+  const calClass = dayCalorieClass(summary.calories, dayTarget, weeklyGoal)
+  const mealGroups = groupEntriesByMeal(items)
 
   return (
-    <div className="rounded-lg overflow-hidden border border-glass-border/30 bg-glass-highlight/5 transition-colors">
+    <div className="overflow-hidden rounded-2xl border border-border/20 bg-background/25 transition-colors">
       <button
         type="button"
-        onClick={() => {
-          if (!lockOpen) onToggleDay(dateKey)
-        }}
+        onClick={() => onToggleDay(dateKey)}
         aria-expanded={open}
-        className="w-full text-left px-3.5 py-3 flex items-start gap-3 transition-colors hover:bg-glass-highlight/25 active:bg-glass-highlight/35"
+        className="w-full px-4 py-3.5 text-left transition-colors hover:bg-glass-highlight/15 active:bg-glass-highlight/25"
       >
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 space-y-0.5">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                <span className="text-sm font-semibold tracking-tight text-foreground">{label}</span>
-                {subDate && (
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/55 tabular-nums">
-                    {subDate}
-                  </span>
-                )}
-              </div>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
-                {summary.count} {summary.count === 1 ? "entry" : "entries"}
-                {(summary.protein != null || summary.carbs != null || summary.fat != null) && (
-                  <>
-                    <span className="text-muted-foreground/25"> · </span>
-                    <span className="normal-case font-normal tracking-normal text-muted-foreground/65">
-                      {summary.protein != null && <span className="tabular-nums">P {summary.protein}g</span>}
-                      {summary.protein != null && (summary.carbs != null || summary.fat != null) && (
-                        <span className="text-muted-foreground/30"> · </span>
-                      )}
-                      {summary.carbs != null && <span className="tabular-nums">C {summary.carbs}g</span>}
-                      {summary.carbs != null && summary.fat != null && (
-                        <span className="text-muted-foreground/30"> · </span>
-                      )}
-                      {summary.fat != null && <span className="tabular-nums">F {summary.fat}g</span>}
-                    </span>
-                  </>
-                )}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="type-hud-stat-sm">{label}</span>
+              {subDate && <span className="type-hud-caption tabular-nums">{subDate}</span>}
+            </div>
+            <p className="type-hud-caption mt-1 normal-case">
+              {summary.count} {summary.count === 1 ? "entry" : "entries"}
+              {dayTarget > 0 && (
+                <>
+                  <span className="text-muted-foreground/30"> · </span>
+                  target {dayTarget.toLocaleString()}
+                </>
+              )}
+            </p>
+            <CaloriesDayProgressBar calories={summary.calories} dayTarget={dayTarget} />
+          </div>
+          <div className="flex shrink-0 items-start gap-2">
+            <div className="text-right">
+              <p className={cn("type-hud-value-lg tabular-nums leading-none transition-colors", calClass)}>
+                {summary.calories.toLocaleString()}
               </p>
+              <p className="type-hud-unit mt-1">cal</p>
             </div>
-            <div className="flex items-start gap-2 shrink-0">
-              <div className="text-right">
-                <p
-                  className={cn(
-                    "text-lg font-bold tabular-nums leading-none transition-colors",
-                    historyDayCalClass
-                  )}
-                >
-                  {summary.calories.toLocaleString()}
-                </p>
-                <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/45 mt-1">
-                  kcal
-                </p>
-              </div>
-              <span
+            <span
+              className={cn(
+                "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/25 bg-background/35 transition-colors",
+                open && "border-primary/25 bg-primary/10"
+              )}
+            >
+              <ChevronDown
                 className={cn(
-                  "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] border border-glass-border/50 bg-background/30 transition-transform duration-200",
-                  open && "bg-primary/10 border-primary/25"
+                  "h-4 w-4 text-muted-foreground/50 transition-transform duration-200",
+                  open && "rotate-180 text-primary/80"
                 )}
-              >
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 text-muted-foreground/50 transition-transform duration-200",
-                    open && "rotate-180 text-primary/80"
-                  )}
-                />
-              </span>
-            </div>
+              />
+            </span>
           </div>
         </div>
       </button>
 
       {open && (
-        <div className="border-t border-glass-border/30 bg-muted/15">
-          <ul className="divide-y divide-glass-border/20">
-            {items.map((entry) => {
-              const MealIcon = mealHistoryIcon(entry.mealType)
-              return (
-              <li
-                key={entry.id}
-                className="flex items-stretch gap-3 px-3 py-2.5 transition-colors hover:bg-glass-highlight/10 group/row"
-              >
-                <div
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-glass-border/40 bg-muted/30 text-muted-foreground"
-                  aria-hidden
-                  title={entry.mealType}
-                >
-                  <MealIcon className="size-5 shrink-0 stroke-[1.75]" />
-                </div>
-                <div className="min-w-0 flex-1 py-0.5">
-                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
-                    <span
-                      className={cn("text-sm font-semibold tabular-nums transition-colors", historyDayCalClass)}
-                    >
-                      {entry.calories}{" "}
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
-                        cal
-                      </span>
-                    </span>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/55 capitalize">
-                      {entry.mealType}
-                    </span>
-                  </div>
-                  {(entry.protein != null || entry.carbs != null || entry.fat != null) && (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {entry.protein != null && (
-                        <span className="text-[10px] font-medium tabular-nums rounded-[3px] border border-glass-border/35 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">
-                          P {entry.protein}g
-                        </span>
-                      )}
-                      {entry.carbs != null && (
-                        <span className="text-[10px] font-medium tabular-nums rounded-[3px] border border-glass-border/35 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">
-                          C {entry.carbs}g
-                        </span>
-                      )}
-                      {entry.fat != null && (
-                        <span className="text-[10px] font-medium tabular-nums rounded-[3px] border border-glass-border/35 bg-muted/30 px-1.5 py-0.5 text-muted-foreground">
-                          F {entry.fat}g
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {entry.description && (
-                    <p className="mt-1 text-xs leading-snug text-muted-foreground/75 line-clamp-2">
-                      {entry.description}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-4 shrink-0 self-center opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    onClick={() => startEdit(entry)}
-                    className="history-row-edit"
-                    title="Edit"
-                    aria-label="Edit entry"
-                  >
-                    <Pencil />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      requestDeleteCalorieEntry(
-                        entry.id,
-                        entry.description?.trim() || `${entry.calories} cal · ${entry.mealType}`
-                      )
-                    }
-                    className="history-row-delete-row"
-                    aria-label="Delete entry"
-                  >
-                    <Trash2 />
-                  </button>
-                </div>
-              </li>
-              )
-            })}
-          </ul>
+        <div className="space-y-3 border-t border-border/20 px-3 pb-3 pt-3">
+          {mealGroups.map(({ meal, items: mealItems }) => (
+            <CaloriesMealGroup
+              key={meal}
+              meal={meal}
+              items={mealItems}
+              calClass={calClass}
+              startEdit={startEdit}
+              requestDeleteCalorieEntry={requestDeleteCalorieEntry}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -891,135 +1045,172 @@ export default function CaloriesPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
-        <div className="space-y-6 min-w-0">
-          <LogFoodDialog
-            open={logFoodOpen}
-            onOpenChange={setLogFoodOpen}
-            editingEntry={editingEntry}
-            onEditingEntryChange={setEditingEntry}
-            draftMealItems={draftMealItems}
-            onDraftMealItemsChange={setDraftMealItems}
-            onPosted={(created) => {
-              setEntries((prev) => [...created.reverse(), ...prev])
-            }}
-            onUpdated={(updated) => {
-              setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
-              setEditingEntry(null)
-            }}
-          />
+      <LogFoodDialog
+        open={logFoodOpen}
+        onOpenChange={setLogFoodOpen}
+        editingEntry={editingEntry}
+        onEditingEntryChange={setEditingEntry}
+        draftMealItems={draftMealItems}
+        onDraftMealItemsChange={setDraftMealItems}
+        onPosted={(created) => {
+          setEntries((prev) => [...created.reverse(), ...prev])
+        }}
+        onUpdated={(updated) => {
+          setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
+          setEditingEntry(null)
+        }}
+      />
 
-          <div className="glass-panel p-4 lg:p-5 animate-fade-up stagger-1">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-3">
-              7-Day trend
+      <section className="animate-fade-up stagger-2 space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3 px-0.5">
+          <div>
+            <h2 className="type-hud-title">Food log</h2>
+            <p className="type-hud-caption mt-1 normal-case">
+              {entries.length === 0
+                ? "Nothing logged yet"
+                : `${entries.length} ${entries.length === 1 ? "entry" : "entries"} across ${historyGroups.length} ${historyGroups.length === 1 ? "day" : "days"}`}
             </p>
-            {hasChartData ? (
-              <div className="h-40 lg:h-48 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted/25" />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      width={32}
-                      tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        background: "oklch(0.19 0.012 250 / 98%)",
-                        border: "1px solid oklch(1 0 0 / 8%)",
-                        borderRadius: "8px",
-                        fontSize: "10px",
-                        padding: "4px 6px",
-                        backdropFilter: "blur(8px)",
-                        color: "var(--muted-foreground)",
-                      }}
-                      labelStyle={{ color: "var(--muted-foreground)" }}
-                      formatter={(value) => [
-                        `${Number(value ?? 0).toLocaleString()} cal`,
-                        "Total",
-                      ]}
-                    />
-                    <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={40}>
-                      {chartData.map((row) => (
-                        <Cell key={row.dateKey} fill={row.barFill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-40 lg:h-48 flex items-center justify-center">
-                <p className="text-sm text-muted-foreground text-center px-4">Log entries to see trends</p>
-              </div>
-            )}
           </div>
         </div>
 
-        <div className="glass-panel p-4 lg:p-5 animate-fade-up stagger-2">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            History
-          </p>
-          {entries.length === 0 ? (
-            <div className="h-40 lg:h-48 flex items-center justify-center">
-              <p className="text-sm text-muted-foreground text-center px-4">No entries yet</p>
-            </div>
-          ) : (
-          <div className="space-y-2">
-            {historyDisplay.todayGroups.length > 0 && (
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Today
-              </p>
-            )}
+        {entries.length === 0 ? (
+          <div
+            className={cn(glassPanelClass, glassPanelAccentClass, "p-8 text-center lg:p-10")}
+            style={glassPanelAccentStyle(CALORIES_COLOR)}
+          >
+            <p className="type-hud-stat-sm text-muted-foreground/80">No food logged yet</p>
+            <p className="type-hud-caption mx-auto mt-2 max-w-sm normal-case">
+              Tap Log food above to start tracking meals, macros, and daily totals.
+            </p>
+            <Button
+              type="button"
+              variant="glass"
+              size="lg"
+              className="mt-5 gap-2"
+              onClick={() => setLogFoodOpen(true)}
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              Log food
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
             {historyDisplay.todayGroups.map(({ dateKey, items }) => (
-              <CaloriesHistoryDayAccordion
+              <CaloriesTodayLog
                 key={dateKey}
                 dateKey={dateKey}
                 items={items}
                 today={today}
                 yesterday={yesterday}
                 realToday={realToday}
-                expandedDays={expandedDays}
-                onToggleDay={toggleHistoryDay}
-                lockOpen
                 weeklyGoal={weeklyGoal}
                 dailyTotals={dailyTotals}
                 startEdit={startEdit}
                 requestDeleteCalorieEntry={requestDeleteCalorieEntry}
               />
             ))}
-            {historyDisplay.earlierGroups.length > 0 && (
-              <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
-                {historyDisplay.earlierGroups.map(({ dateKey, items }) => (
-                  <CaloriesHistoryDayAccordion
-                    key={dateKey}
-                    dateKey={dateKey}
-                    items={items}
-                    today={today}
-                    yesterday={yesterday}
-                    realToday={realToday}
-                    expandedDays={expandedDays}
-                    onToggleDay={toggleHistoryDay}
-                    lockOpen={false}
-                    weeklyGoal={weeklyGoal}
-                    dailyTotals={dailyTotals}
-                    startEdit={startEdit}
-                    requestDeleteCalorieEntry={requestDeleteCalorieEntry}
-                  />
-                ))}
-              </HistoryEarlierSection>
-            )}
-            <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
           </div>
+        )}
+      </section>
+
+      <details
+        className={cn(
+          glassPanelClass,
+          glassPanelAccentClass,
+          "animate-fade-up stagger-3 overflow-hidden [&[open]_summary_.cal-trend-chevron]:rotate-180"
+        )}
+        style={glassPanelAccentStyle(CALORIES_COLOR)}
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-glass-highlight/10 lg:px-5 lg:py-4 [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0">
+            <p className="type-hud-label-soft">7-day trend</p>
+            <p className="type-hud-caption mt-0.5 normal-case tabular-nums">
+              {hasChartData ? (
+                <>
+                  Avg {Math.round(avg7).toLocaleString()} cal logged · {weekTotal.toLocaleString()} this week
+                </>
+              ) : (
+                "Expand to view daily totals"
+              )}
+            </p>
+          </div>
+          <ChevronDown className="cal-trend-chevron h-4 w-4 shrink-0 text-muted-foreground/45 transition-transform duration-200" />
+        </summary>
+        <div className="border-t border-border/20 px-4 pb-4 pt-3 lg:px-5 lg:pb-5">
+          {hasChartData ? (
+            <div className="h-44 w-full min-w-0 lg:h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted/25" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    width={32}
+                    tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "oklch(0.19 0.012 250 / 98%)",
+                      border: "1px solid oklch(1 0 0 / 8%)",
+                      borderRadius: "8px",
+                      fontSize: "10px",
+                      padding: "4px 6px",
+                      backdropFilter: "blur(8px)",
+                      color: "var(--muted-foreground)",
+                    }}
+                    labelStyle={{ color: "var(--muted-foreground)" }}
+                    formatter={(value) => [
+                      `${Number(value ?? 0).toLocaleString()} cal`,
+                      "Total",
+                    ]}
+                  />
+                  <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                    {chartData.map((row) => (
+                      <Cell key={row.dateKey} fill={row.barFill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex h-32 items-center justify-center">
+              <p className="type-hud-caption normal-case text-center">Log entries to see trends</p>
+            </div>
           )}
         </div>
-      </div>
+      </details>
+
+      {entries.length > 0 && (historyDisplay.earlierGroups.length > 0 || historyDisplay.archivedDayCount > 0) && (
+        <section className="animate-fade-up stagger-4 space-y-3">
+          {historyDisplay.earlierGroups.length > 0 && (
+            <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+              {historyDisplay.earlierGroups.map(({ dateKey, items }) => (
+                <CaloriesHistoryDayAccordion
+                  key={dateKey}
+                  dateKey={dateKey}
+                  items={items}
+                  today={today}
+                  yesterday={yesterday}
+                  realToday={realToday}
+                  expandedDays={expandedDays}
+                  onToggleDay={toggleHistoryDay}
+                  weeklyGoal={weeklyGoal}
+                  dailyTotals={dailyTotals}
+                  startEdit={startEdit}
+                  requestDeleteCalorieEntry={requestDeleteCalorieEntry}
+                />
+              ))}
+            </HistoryEarlierSection>
+          )}
+          <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
+        </section>
+      )}
 
       {pendingDelete &&
         createPortal(
