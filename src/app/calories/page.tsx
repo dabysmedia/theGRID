@@ -184,10 +184,12 @@ function groupEntriesByMeal(items: CalorieEntry[]) {
     if (!map.has(key)) map.set(key, [])
     map.get(key)!.push(entry)
   }
-  const ordered = MEAL_ORDER.filter((m) => map.has(m)).map((meal) => ({
-    meal,
-    items: map.get(meal)!,
-  }))
+  const ordered: { meal: string; items: CalorieEntry[] }[] = MEAL_ORDER.filter((m) => map.has(m)).map(
+    (meal) => ({
+      meal,
+      items: map.get(meal)!,
+    })
+  )
   for (const [meal, mealItems] of map) {
     if (!MEAL_ORDER.includes(meal as (typeof MEAL_ORDER)[number])) {
       ordered.push({ meal, items: mealItems })
