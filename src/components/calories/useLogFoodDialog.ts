@@ -18,6 +18,7 @@ import type { PhotoEstimatePrefill } from "@/components/calories/PhotoCalorieEst
 import {
   mealTypes,
   savedMealTagList,
+  draftMealItemTotals,
   type CalorieEntry,
   type DraftMealItem,
   type PendingSavedMealDelete,
@@ -61,6 +62,7 @@ export function useLogFoodDialog({
   const [protein, setProtein] = useState("")
   const [carbs, setCarbs] = useState("")
   const [fat, setFat] = useState("")
+  const [lastAddedDraftId, setLastAddedDraftId] = useState<string | null>(null)
 
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([])
   const [showCreateMeal, setShowCreateMeal] = useState(false)
@@ -178,25 +180,70 @@ export function useLogFoodDialog({
   const draftTotals = useMemo(() => {
     return draftMealItems.reduce(
       (acc, item) => {
-        acc.calories += item.calories
-        if (item.protein != null) acc.protein += item.protein
-        if (item.carbs != null) acc.carbs += item.carbs
-        if (item.fat != null) acc.fat += item.fat
+        const t = draftMealItemTotals(item)
+        acc.calories += t.calories
+        if (t.protein != null) acc.protein += t.protein
+        if (t.carbs != null) acc.carbs += t.carbs
+        if (t.fat != null) acc.fat += t.fat
         return acc
       },
       { calories: 0, protein: 0, carbs: 0, fat: 0 }
     )
   }, [draftMealItems])
 
-  const savedMealIdsInDraft = useMemo(
-    () =>
-      new Set(
-        draftMealItems
-          .map((i) => i.savedMealId)
-          .filter((x): x is string => Boolean(x))
-      ),
-    [draftMealItems]
-  )
+  const savedMealCountsInDraft = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const item of draftMealItems) {
+      if (!item.savedMealId) continue
+      counts.set(item.savedMealId, (counts.get(item.savedMealId) ?? 0) + item.quantity)
+    }
+    return counts
+  }, [draftMealItems])
+
+  function createDraftItem(
+    fields: Omit<DraftMealItem, "id" | "quantity"> & { quantity?: number }
+  ): DraftMealItem {
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      quantity: fields.quantity ?? 1,
+      mealType: fields.mealType,
+      description: fields.description,
+      unitCalories: fields.unitCalories,
+      unitProtein: fields.unitProtein,
+      unitCarbs: fields.unitCarbs,
+      unitFat: fields.unitFat,
+      savedMealId: fields.savedMealId,
+    }
+  }
+
+  function pushDraftItem(item: DraftMealItem) {
+    setDraftMealItems((prev) => {
+      const existing = item.savedMealId
+        ? prev.find((i) => i.savedMealId === item.savedMealId)
+        : prev.find(
+            (i) =>
+              !i.savedMealId &&
+              i.mealType === item.mealType &&
+              i.description === item.description &&
+              i.unitCalories === item.unitCalories
+          )
+
+      if (existing) {
+        const nextQty = Math.round((existing.quantity + 1) * 4) / 4
+        setLastAddedDraftId(existing.id)
+        window.setTimeout(() => {
+          setLastAddedDraftId((cur) => (cur === existing.id ? null : cur))
+        }, 1200)
+        return prev.map((i) => (i.id === existing.id ? { ...i, quantity: nextQty } : i))
+      }
+
+      setLastAddedDraftId(item.id)
+      window.setTimeout(() => {
+        setLastAddedDraftId((cur) => (cur === item.id ? null : cur))
+      }, 1200)
+      return [...prev, item]
+    })
+  }
 
   function handleFoodSelect(food: {
     food_name: string
@@ -206,13 +253,22 @@ export function useLogFoodDialog({
     carbs: number | null
     fat: number | null
   }) {
+    if (vacationBlocksLog) return
+    const cal = food.calories
+    if (cal == null || cal <= 0) return
+
     const label = food.brand_name ? `${food.food_name} (${food.brand_name})` : food.food_name
-    setDescription(label)
-    if (food.calories != null) setCalories(String(Math.round(food.calories)))
-    if (food.protein != null) setProtein(String(Math.round(food.protein)))
-    if (food.carbs != null) setCarbs(String(Math.round(food.carbs)))
-    if (food.fat != null) setFat(String(Math.round(food.fat)))
-    setShowSavePrompt(true)
+    pushDraftItem(
+      createDraftItem({
+        mealType,
+        description: label,
+        unitCalories: Math.round(cal),
+        unitProtein: food.protein != null ? Math.round(food.protein) : null,
+        unitCarbs: food.carbs != null ? Math.round(food.carbs) : null,
+        unitFat: food.fat != null ? Math.round(food.fat) : null,
+      })
+    )
+    setLogFoodSearchOpen(false)
   }
 
   const handlePhotoPrefill = useCallback(
@@ -253,18 +309,36 @@ export function useLogFoodDialog({
     const c = carbs.trim() === "" ? null : parseFloat(carbs)
     const f = fat.trim() === "" ? null : parseFloat(fat)
 
-    const item: DraftMealItem = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      mealType,
-      description: description.trim() || null,
-      calories: Math.round(cal),
-      protein: Number.isFinite(p) ? p : null,
-      carbs: Number.isFinite(c) ? c : null,
-      fat: Number.isFinite(f) ? f : null,
-    }
-
-    setDraftMealItems((prev) => [...prev, item])
+    pushDraftItem(
+      createDraftItem({
+        mealType,
+        description: description.trim() || null,
+        unitCalories: Math.round(cal),
+        unitProtein: Number.isFinite(p) ? p : null,
+        unitCarbs: Number.isFinite(c) ? c : null,
+        unitFat: Number.isFinite(f) ? f : null,
+      })
+    )
     resetCurrentItemFields()
+    setLogFoodManualOpen(false)
+  }
+
+  function updateDraftItemQuantity(id: string, nextQuantity: number) {
+    if (!Number.isFinite(nextQuantity) || nextQuantity < 0.5) return
+    const quantity = Math.round(nextQuantity * 2) / 2
+    setDraftMealItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, quantity } : item))
+    )
+  }
+
+  function adjustDraftItemQuantity(id: string, delta: number) {
+    setDraftMealItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item
+        const next = Math.max(0.5, Math.round((item.quantity + delta) * 2) / 2)
+        return { ...item, quantity: next }
+      })
+    )
   }
 
   function cancelEdit() {
@@ -307,24 +381,19 @@ export function useLogFoodDialog({
 
   function handleUseSavedMeal(meal: SavedMeal) {
     if (vacationBlocksLog) return
-    const alreadyIn = draftMealItems.some((i) => i.savedMealId === meal.id)
-    if (alreadyIn) {
-      setDraftMealItems((prev) => prev.filter((i) => i.savedMealId !== meal.id))
-      return
-    }
-    const item: DraftMealItem = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      mealType,
-      description: meal.name,
-      calories: meal.calories,
-      protein: meal.protein,
-      carbs: meal.carbs,
-      fat: meal.fat,
-      savedMealId: meal.id,
-    }
+    pushDraftItem(
+      createDraftItem({
+        mealType,
+        description: meal.name,
+        unitCalories: meal.calories,
+        unitProtein: meal.protein,
+        unitCarbs: meal.carbs,
+        unitFat: meal.fat,
+        savedMealId: meal.id,
+      })
+    )
     setFlashSavedMealId(meal.id)
     window.setTimeout(() => setFlashSavedMealId(null), 900)
-    setDraftMealItems((prev) => [...prev, item])
     void apiFetch(`/api/saved-meals?id=${meal.id}`, { method: "PATCH" })
       .then(() => fetchSavedMeals())
       .catch(() => {})
@@ -397,6 +466,7 @@ export function useLogFoodDialog({
     try {
       const created: CalorieEntry[] = []
       for (const item of draftMealItems) {
+        const totals = draftMealItemTotals(item)
         const res = await apiFetch("/api/calories", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -404,10 +474,10 @@ export function useLogFoodDialog({
             date: today,
             mealType: item.mealType,
             description: item.description,
-            calories: String(item.calories),
-            protein: item.protein != null ? String(item.protein) : null,
-            carbs: item.carbs != null ? String(item.carbs) : null,
-            fat: item.fat != null ? String(item.fat) : null,
+            calories: String(totals.calories),
+            protein: totals.protein != null ? String(totals.protein) : null,
+            carbs: totals.carbs != null ? String(totals.carbs) : null,
+            fat: totals.fat != null ? String(totals.fat) : null,
           }),
         })
         if (res.ok) {
@@ -515,6 +585,9 @@ export function useLogFoodDialog({
     description,
     calories,
     setCalories,
+    lastAddedDraftId,
+    updateDraftItemQuantity,
+    adjustDraftItemQuantity,
     savedMeals,
     showCreateMeal,
     setShowCreateMeal,
@@ -565,7 +638,7 @@ export function useLogFoodDialog({
     displayedSavedMeals,
     estimateCalDisplay,
     draftTotals,
-    savedMealIdsInDraft,
+    savedMealCountsInDraft,
     handleFoodSelect,
     handlePhotoPrefill,
     addCalories,

@@ -7,11 +7,11 @@ import {
   Search,
   Trash2,
   Plus,
+  Minus,
   Star,
   X,
   Pencil,
   Target,
-  Check,
 } from "lucide-react"
 import { FoodSearch } from "@/components/FoodSearch"
 import { Button } from "@/components/ui/button"
@@ -28,7 +28,7 @@ import {
 import {
   PhotoCalorieEstimator,
 } from "@/components/calories/PhotoCalorieEstimator"
-import { mealTypes, savedMealTagList } from "@/lib/calories/log-food"
+import { mealTypes, savedMealTagList, draftMealItemTotals } from "@/lib/calories/log-food"
 import { useLogFoodDialog, type UseLogFoodDialogOptions } from "@/components/calories/useLogFoodDialog"
 
 export type LogFoodDialogProps = UseLogFoodDialogOptions
@@ -114,13 +114,17 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
             </button>
             {s.logFoodSearchOpen && (
               <div className="overflow-visible pt-2.5">
-                <FoodSearch onSelect={s.handleFoodSelect} compact />
+                <FoodSearch onSelect={s.handleFoodSelect} compact instantAdd />
               </div>
             )}
           </div>
 
           <div className="relative z-0 min-h-0 flex-1 overflow-y-auto px-4 py-4">
             <div className="space-y-4">
+              {!s.editingEntry && s.draftMealItems.length > 0 && (
+                <DraftMealsSection s={s} />
+              )}
+
               {!s.editingEntry && (
                 <SavedMealsSection s={s} />
               )}
@@ -209,42 +213,6 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
                 </form>
               )}
 
-              {!s.editingEntry && s.draftMealItems.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/40 mb-1.5">
-                    Draft · {s.draftMealItems.length}
-                  </p>
-                  <div className="rounded-lg border border-glass-border/30 divide-y divide-glass-border/20 overflow-hidden">
-                    {s.draftMealItems.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-3 text-xs">
-                        <div className="min-w-0">
-                          <p className="truncate font-medium leading-tight text-sm">{item.description || "Quick add"}</p>
-                          <p className="mt-0.5 text-[11px] capitalize tabular-nums text-muted-foreground/40">
-                            {item.mealType} · {item.calories} cal
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => s.setDraftMealItems((prev) => prev.filter((x) => x.id !== item.id))}
-                          className="p-2 rounded-md hover:bg-destructive/10 shrink-0 touch-manipulation"
-                        >
-                          <X className="h-4 w-4 text-muted-foreground/30" />
-                        </button>
-                      </div>
-                    ))}
-                    <div className="px-3 py-1.5 text-[10px] tabular-nums font-medium text-muted-foreground/50 bg-glass-highlight/5">
-                      {s.draftTotals.calories.toLocaleString()} cal
-                      {(s.draftTotals.protein > 0 || s.draftTotals.carbs > 0 || s.draftTotals.fat > 0) && (
-                        <span className="text-muted-foreground/30">
-                          {" "}
-                          · P {Math.round(s.draftTotals.protein)}g · C {Math.round(s.draftTotals.carbs)}g · F{" "}
-                          {Math.round(s.draftTotals.fat)}g
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -333,6 +301,65 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
           document.body
         )}
     </>
+  )
+}
+
+function DraftMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
+  return (
+    <div>
+      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/40 mb-1.5">
+        In this meal · {s.draftMealItems.length}
+      </p>
+      <div className="rounded-lg border border-glass-border/30 divide-y divide-glass-border/20 overflow-hidden">
+        {s.draftMealItems.map((item) => {
+          const totals = draftMealItemTotals(item)
+          const isNew = s.lastAddedDraftId === item.id
+          return (
+            <div
+              key={item.id}
+              className={cn(
+                "flex items-center gap-2 px-3 py-3 text-xs transition-colors",
+                isNew && "bg-primary/[0.06] ring-1 ring-inset ring-primary/25"
+              )}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium leading-tight text-sm">{item.description || "Quick add"}</p>
+                <p className="mt-0.5 text-[11px] capitalize tabular-nums text-muted-foreground/40">
+                  {item.mealType} · {totals.calories} cal
+                </p>
+              </div>
+              <QuantityStepper
+                compact
+                value={String(item.quantity)}
+                onChange={(next) => {
+                  const q = parseFloat(next)
+                  if (Number.isFinite(q) && q >= 0.5) s.updateDraftItemQuantity(item.id, q)
+                }}
+                onAdjust={(delta) => s.adjustDraftItemQuantity(item.id, delta)}
+              />
+              <button
+                type="button"
+                onClick={() => s.setDraftMealItems((prev) => prev.filter((x) => x.id !== item.id))}
+                className="p-2 rounded-md hover:bg-destructive/10 shrink-0 touch-manipulation"
+                aria-label={`Remove ${item.description || "item"}`}
+              >
+                <X className="h-4 w-4 text-muted-foreground/30" />
+              </button>
+            </div>
+          )
+        })}
+        <div className="px-3 py-1.5 text-[10px] tabular-nums font-medium text-muted-foreground/50 bg-glass-highlight/5">
+          {s.draftTotals.calories.toLocaleString()} cal
+          {(s.draftTotals.protein > 0 || s.draftTotals.carbs > 0 || s.draftTotals.fat > 0) && (
+            <span className="text-muted-foreground/30">
+              {" "}
+              · P {Math.round(s.draftTotals.protein)}g · C {Math.round(s.draftTotals.carbs)}g · F{" "}
+              {Math.round(s.draftTotals.fat)}g
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -442,7 +469,7 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
           aria-label="Saved meals for this meal type"
         >
           {s.displayedSavedMeals.map((meal) => {
-            const inDraft = s.savedMealIdsInDraft.has(meal.id)
+            const inDraftCount = s.savedMealCountsInDraft.get(meal.id) ?? 0
             const flash = s.flashSavedMealId === meal.id
             const tags = savedMealTagList(meal)
             const editingThis = s.editingSavedMealId === meal.id
@@ -451,7 +478,7 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
                 <div
                   className={cn(
                     "group flex items-center gap-2 rounded-xl px-2.5 py-2.5 transition-all duration-300",
-                    inDraft
+                    inDraftCount > 0
                       ? "ring-1 ring-primary/35 bg-gradient-to-r from-primary/[0.09] to-transparent shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)]"
                       : "hover:bg-glass-highlight/15",
                     flash && "animate-in zoom-in-95 duration-300 ring-2 ring-primary/45"
@@ -465,11 +492,11 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
                     <div
                       className={cn(
                         "flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors duration-300",
-                        inDraft ? "bg-primary/20 text-primary" : "bg-primary/10"
+                        inDraftCount > 0 ? "bg-primary/20 text-primary" : "bg-primary/10"
                       )}
                     >
-                      {inDraft ? (
-                        <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                      {inDraftCount > 0 ? (
+                        <span className="text-[11px] font-bold tabular-nums">{inDraftCount}</span>
                       ) : (
                         <Plus className="h-3.5 w-3.5 text-primary/60" />
                       )}
@@ -488,9 +515,9 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
                             {t}
                           </span>
                         ))}
-                        {inDraft && (
+                        {inDraftCount > 0 && (
                           <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary/80">
-                            In meal
+                            {inDraftCount} in meal
                           </span>
                         )}
                       </span>
@@ -608,6 +635,93 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function QuantityStepper({
+  label,
+  value,
+  onChange,
+  onAdjust,
+  disabled = false,
+  compact = false,
+}: {
+  label?: string
+  value: string
+  onChange: (value: string) => void
+  onAdjust: (delta: number) => void
+  disabled?: boolean
+  compact?: boolean
+}) {
+  const numeric = parseFloat(value) || 1
+
+  return (
+    <div className={cn("flex items-center gap-2", compact ? "shrink-0" : "justify-between")}>
+      {label && (
+        <Label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">
+          {label}
+        </Label>
+      )}
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          disabled={disabled || numeric <= 0.5}
+          onClick={() => onAdjust(-0.5)}
+          className={cn(
+            "flex touch-manipulation items-center justify-center rounded-md border border-glass-border transition-colors hover:bg-glass-highlight/15 disabled:cursor-not-allowed disabled:opacity-30",
+            compact ? "h-8 w-8" : "h-9 w-9"
+          )}
+          aria-label="Decrease quantity"
+        >
+          <Minus className="h-3.5 w-3.5" />
+        </button>
+        <Input
+          type="number"
+          min="0.5"
+          step="0.5"
+          value={value}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value)}
+          className={cn(
+            "text-center tabular-nums bg-background/40 border-primary/15 px-1",
+            compact ? "h-8 w-12 text-sm font-semibold" : "h-9 w-16 text-base font-semibold"
+          )}
+          aria-label="Quantity"
+        />
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onAdjust(0.5)}
+          className={cn(
+            "flex touch-manipulation items-center justify-center rounded-md border border-glass-border transition-colors hover:bg-glass-highlight/15 disabled:opacity-30",
+            compact ? "h-8 w-8" : "h-9 w-9"
+          )}
+          aria-label="Increase quantity"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+        {!compact && (
+          <div className="ml-1 flex gap-1">
+            {[1, 2, 3].map((v) => (
+              <button
+                key={v}
+                type="button"
+                disabled={disabled}
+                onClick={() => onChange(String(v))}
+                className={cn(
+                  "rounded-md border px-2 py-1.5 text-[11px] tabular-nums transition-colors touch-manipulation",
+                  numeric === v
+                    ? "border-primary/30 bg-primary/15 font-semibold text-primary"
+                    : "border-glass-border text-muted-foreground/60 hover:bg-glass-highlight/15"
+                )}
+              >
+                {v}x
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

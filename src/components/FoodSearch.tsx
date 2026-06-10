@@ -24,6 +24,8 @@ interface FoodSearchProps {
   onSelect: (food: FoodResult) => void
   /** Less chrome (e.g. in modals) */
   compact?: boolean
+  /** Skip portion editor — add on result tap (adjust qty in meal draft). */
+  instantAdd?: boolean
 }
 
 type PortionMode = "servings" | "grams"
@@ -33,7 +35,7 @@ function scaleVal(value: number | null, multiplier: number): number | null {
   return Math.round(value * multiplier * 10) / 10
 }
 
-export function FoodSearch({ onSelect, compact = false }: FoodSearchProps) {
+export function FoodSearch({ onSelect, compact = false, instantAdd = false }: FoodSearchProps) {
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<FoodResult[]>([])
   const [source, setSource] = useState<string | null>(null)
@@ -87,6 +89,13 @@ export function FoodSearch({ onSelect, compact = false }: FoodSearchProps) {
   }
 
   function handlePick(food: FoodResult) {
+    if (instantAdd) {
+      onSelect(food)
+      setQuery("")
+      setResults([])
+      setOpen(false)
+      return
+    }
     setSelected(food)
     setServings("1")
     setGrams(food.serving_size_g ? String(food.serving_size_g) : "100")
@@ -349,7 +358,7 @@ export function FoodSearch({ onSelect, compact = false }: FoodSearchProps) {
           {/* Confirm */}
           <Button variant="glass" onClick={handleConfirm} size="default" className="w-full gap-1.5 h-11 text-sm">
             <Check className="h-4 w-4" />
-            Add to entry
+            Add to meal
           </Button>
         </div>
       ) : (
