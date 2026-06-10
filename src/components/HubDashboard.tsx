@@ -1,18 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import {
-  Flame,
-  Footprints,
-  PersonStanding,
-  Dumbbell,
-  Moon,
-  Syringe,
-  Beer,
-  CircleDot,
-  ChevronDown,
-  Activity,
-} from "lucide-react"
+import { ChevronDown } from "lucide-react"
+import { CATEGORY_THEME, type CategoryKey } from "@/lib/category-theme"
 import { DailySummaryCard } from "./DailySummaryCard"
 import { PageHeader } from "./PageHeader"
 import { WeeklyHero } from "./WeeklyHero"
@@ -63,17 +53,22 @@ const defaultData: DashboardData = {
   weightTrend: null,
 }
 
-const categories = [
-  { key: "calories" as const, title: "Calories", icon: Flame, href: "/calories", color: "#ef4444" },
-  { key: "steps" as const, title: "Steps", icon: Footprints, href: "/steps", color: "#22c55e" },
-  { key: "running" as const, title: "Running", icon: PersonStanding, href: "/running", color: "#3b82f6" },
-  { key: "workouts" as const, title: "Workouts", icon: Dumbbell, href: "/workouts", color: "#c4d632" },
-  { key: "sleep" as const, title: "Sleep", icon: Moon, href: "/sleep", color: "#6366f1" },
-  { key: "peptides" as const, title: "Peptides", icon: Syringe, href: "/peptides", color: "#a855f7" },
-  { key: "bowel" as const, title: "Bowel", icon: CircleDot, href: "/bowel", color: "#92400e" },
-  { key: "recovery" as const, title: "Recovery", icon: Activity, href: "/workouts#recovery", color: "#2dd4bf" },
-  { key: "alcohol" as const, title: "Alcohol", icon: Beer, href: "/alcohol", color: "#f59e0b" },
-] as const
+const categoryOrder = [
+  "calories",
+  "steps",
+  "running",
+  "workouts",
+  "sleep",
+  "peptides",
+  "bowel",
+  "recovery",
+  "alcohol",
+] satisfies CategoryKey[]
+
+const categories = categoryOrder.map((key) => {
+  const t = CATEGORY_THEME[key]
+  return { key, title: t.label, icon: t.icon, href: t.href, color: t.color }
+})
 
 const mainCategories = categories.filter((c) => c.key !== "alcohol")
 const alcoholCategory = categories.find((c) => c.key === "alcohol")!

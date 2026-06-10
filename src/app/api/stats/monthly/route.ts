@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { startOfMonth, endOfMonth, eachDayOfInterval, format, addDays } from "date-fns"
-import { kmToMiles } from "@/lib/units"
+import { kmToMiles, runKmToStepsFromRun } from "@/lib/units"
+import { sleepDurationHours } from "@/lib/sleepDuration"
 import { resolveUserId, UserError } from "@/lib/current-user"
 
 export async function GET(req: NextRequest) {
@@ -36,6 +37,18 @@ export async function GET(req: NextRequest) {
         }),
       ])
 
+    // Completed workout sessions count toward training volume alongside legacy entries
+    // (mirrors /api/dashboard so the hub and stats agree).
+    let workoutSessions: { date: Date }[] = []
+    try {
+      workoutSessions = await prisma.workoutSession.findMany({
+        where: { date: dateRange, status: "completed", userId },
+        select: { date: true },
+      })
+    } catch {
+      // Older DBs without the sessions table fall back to legacy entries only.
+    }
+
     function dateKey(d: Date): string {
       return format(d, "yyyy-MM-dd")
     }
@@ -45,14 +58,26 @@ export async function GET(req: NextRequest) {
 
     const stepsByDay = new Map<string, number>()
     for (const e of steps) stepsByDay.set(dateKey(e.date), (stepsByDay.get(dateKey(e.date)) ?? 0) + e.count)
+    // Run distance credits steps too (same rule as the Steps page and dashboard).
+    for (const e of runs) {
+      const k = dateKey(e.date)
+      stepsByDay.set(k, (stepsByDay.get(k) ?? 0) + runKmToStepsFromRun(e.distance))
+    }
 
     const runDistByDay = new Map<string, number>()
     const runPaceByDay = new Map<string, number[]>()
+    let runCount = 0
+    let runTotalDurationMin = 0
+    let runTotalMilesForPace = 0
     for (const e of runs) {
       const k = dateKey(e.date)
       runDistByDay.set(k, (runDistByDay.get(k) ?? 0) + kmToMiles(e.distance))
+      if (e.distance > 0) runCount++
       if (e.distance > 0 && e.duration > 0) {
-        const pace = e.duration / kmToMiles(e.distance)
+        const miles = kmToMiles(e.distance)
+        const pace = e.duration / miles
+        runTotalDurationMin += e.duration
+        runTotalMilesForPace += miles
         if (!runPaceByDay.has(k)) runPaceByDay.set(k, [])
         runPaceByDay.get(k)!.push(pace)
       }
@@ -60,11 +85,13 @@ export async function GET(req: NextRequest) {
 
     const workoutsByDay = new Map<string, number>()
     for (const e of workouts) workoutsByDay.set(dateKey(e.date), (workoutsByDay.get(dateKey(e.date)) ?? 0) + 1)
+    for (const s of workoutSessions) {
+      workoutsByDay.set(dateKey(s.date), (workoutsByDay.get(dateKey(s.date)) ?? 0) + 1)
+    }
 
     const sleepByDay = new Map<string, number>()
     for (const e of sleeps) {
-      const hrs = (new Date(e.wakeTime).getTime() - new Date(e.bedtime).getTime()) / 3600000
-      sleepByDay.set(dateKey(e.date), hrs)
+      sleepByDay.set(dateKey(e.date), sleepDurationHours(e.bedtime, e.wakeTime))
     }
 
     const alcoholByDay = new Map<string, number>()
@@ -122,13 +149,21 @@ export async function GET(req: NextRequest) {
     const bowelVals = daily.map((d) => d.bowel).filter((v) => v > 0)
     const weightVals = daily.map((d) => d.weight).filter((v): v is number => v != null)
 
+    // True average pace weights every mile equally (total time / total distance),
+    // instead of averaging each day's best pace.
+    const trueAvgPace =
+      runTotalMilesForPace > 0
+        ? Math.round((runTotalDurationMin / runTotalMilesForPace) * 100) / 100
+        : null
+
     const summary = {
       calories: { avg: avg(calVals), total: total(calVals), daysLogged: calVals.length },
       steps: { avg: avg(stepVals), total: total(stepVals), daysLogged: stepVals.length },
       running: {
         totalMiles: Math.round(total(runVals) * 10) / 10,
-        runs: runVals.length,
-        avgPace: avg(paceVals),
+        runs: runCount,
+        daysActive: runVals.length,
+        avgPace: trueAvgPace,
         bestPace: paceVals.length > 0 ? Math.round(Math.min(...paceVals) * 100) / 100 : null,
       },
       workouts: { total: total(workoutVals), daysActive: workoutVals.length },
@@ -143,10 +178,18 @@ export async function GET(req: NextRequest) {
       },
     }
 
+    // Mid-month views should rate consistency against days that have actually
+    // happened, not days that haven't occurred yet.
+    const todayKey = format(new Date(), "yyyy-MM-dd")
+    const elapsedKeys = dayKeys.filter((k) => k <= todayKey)
+    const daysElapsed = Math.max(1, Math.min(dayKeys.length, elapsedKeys.length))
+
     return NextResponse.json({
       month: format(start, "yyyy-MM"),
       monthLabel: format(start, "MMMM yyyy"),
       daysInMonth: dayKeys.length,
+      daysElapsed,
+      isCurrentMonth: format(new Date(), "yyyy-MM") === format(start, "yyyy-MM"),
       daily,
       summary,
     })

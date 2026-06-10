@@ -41,6 +41,8 @@
   --color-card: var(--card);
   --color-grid-accent: var(--grid-accent);
   --color-grid-accent-dim: var(--grid-accent-dim);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
   --color-glass: var(--glass);
   --color-glass-border: var(--glass-border);
   --color-glass-highlight: var(--glass-highlight);
@@ -93,6 +95,9 @@
   --sidebar-ring: oklch(0.78 0.17 110);
 
   --grid-line: oklch(0 0 0 / 4.5%);
+  /* Semantic trend colors — "good" movement vs "bad" movement on stats */
+  --positive: oklch(0.62 0.17 150);
+  --negative: oklch(0.58 0.19 25);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -141,6 +146,8 @@
 
   --grid-line: oklch(1 0 0 / 2.5%);
   --hud-accent: oklch(0.82 0.18 110);
+  --positive: oklch(0.74 0.17 150);
+  --negative: oklch(0.68 0.18 25);
 }
 
 /* Mobile / OLED: default dark grid is too faint on deep blacks */
@@ -823,6 +830,16 @@ html {
   }
 }
 
+@keyframes chart-wipe {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes skeleton-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
 @layer utilities {
   .animate-fade-up {
     animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -889,6 +906,40 @@ html {
   }
   .press-scale:active {
     transform: scale(0.96);
+  }
+
+  /* Charts wipe in left → right once data lands */
+  .animate-chart-wipe {
+    animation: chart-wipe 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-chart-wipe {
+      animation: none;
+    }
+  }
+
+  /* Premium skeleton — frosted block with a soft light sweep */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.875rem;
+    background: oklch(0.55 0.01 250 / 12%);
+  }
+  .dark .skeleton {
+    background: oklch(0.3 0.012 250 / 45%);
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 20%,
+      oklch(1 0 0 / 7%) 50%,
+      transparent 80%
+    );
+    animation: skeleton-sweep 1.6s ease-in-out infinite;
   }
 
   /* Glow sweep shimmer for loading states */

@@ -81,7 +81,7 @@ export function DailySummaryCard({
         )}
 
         <div className="flex shrink-0 items-baseline gap-1.5">
-          <span className="type-hud-value-lg">
+          <span className="type-hud-value-lg animate-count-up">
             {typeof value === "number" ? value.toLocaleString() : value}
           </span>
           {unit && !disabled && <span className="type-hud-unit">{unit}</span>}
@@ -92,16 +92,19 @@ export function DailySummaryCard({
             <p className="type-hud-target-line">/ {typeof goal === "number" ? goal.toLocaleString() : goal} TARGET</p>
           )}
           {progress != null && (
-            <div className="h-0.5 w-full shrink-0 bg-muted/30 overflow-hidden">
+            <div className="h-1 w-full shrink-0 overflow-hidden rounded-full bg-muted/30">
               <div
                 className={cn(
-                  "h-full transition-all duration-700 ease-out",
+                  "h-full rounded-full transition-all duration-700 ease-out",
                   progress >= 100 ? "bg-primary" : ""
                 )}
                 style={{
                   width: `${progress}%`,
                   backgroundColor: progress < 100 ? color : undefined,
-                  boxShadow: `0 0 6px ${color}40`,
+                  boxShadow:
+                    progress >= 100
+                      ? "0 0 8px oklch(0.82 0.18 110 / 55%)"
+                      : `0 0 6px ${color}40`,
                 }}
               />
             </div>
