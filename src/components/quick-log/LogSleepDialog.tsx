@@ -10,11 +10,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { SleepLogFields } from "@/components/sleep/SleepLogFields"
 import { useActiveDate } from "@/context/DateContext"
 import { formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
+import { sleepDurationHours } from "@/lib/sleepDuration"
 
 export interface LogSleepDialogProps {
   open: boolean
@@ -70,6 +70,11 @@ export function LogSleepDialog({ open, onOpenChange, onSaved }: LogSleepDialogPr
     }
   }
 
+  const previewDuration = sleepDurationHours(
+    new Date(`${activeDate}T${bedtime}:00`),
+    new Date(`${activeDate}T${wakeTime}:00`)
+  )
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="glass-frost max-h-[min(90dvh,720px)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto overscroll-contain sm:p-5">
@@ -84,66 +89,21 @@ export function LogSleepDialog({ open, onOpenChange, onSaved }: LogSleepDialogPr
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="quick-log-bedtime" className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <span className="status-dot" style={{ width: 4, height: 4 }} />
-                Bedtime
-              </Label>
-              <Input
-                id="quick-log-bedtime"
-                type="time"
-                value={bedtime}
-                onChange={(e) => setBedtime(e.target.value)}
-                className="tabular-nums text-lg tracking-widest bg-background/40 border-primary/15 focus-visible:border-primary/40 focus-visible:ring-primary/15"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="quick-log-wake" className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <span className="status-dot" style={{ width: 4, height: 4 }} />
-                Wake time
-              </Label>
-              <Input
-                id="quick-log-wake"
-                type="time"
-                value={wakeTime}
-                onChange={(e) => setWakeTime(e.target.value)}
-                className="tabular-nums text-lg tracking-widest bg-background/40 border-primary/15 focus-visible:border-primary/40 focus-visible:ring-primary/15"
-              />
-            </div>
-          </div>
+          <p className="text-center text-[11px] text-muted-foreground tabular-nums lg:text-left">
+            ≈ {previewDuration}h sleep
+          </p>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-              Quality ({quality}/5)
-            </Label>
-            <div className="flex gap-2 mt-1">
-              {[1, 2, 3, 4, 5].map((q) => (
-                <Button
-                  key={q}
-                  type="button"
-                  variant={quality === q ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setQuality(q)}
-                  className="w-10"
-                >
-                  {q}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="quick-log-sleep-notes" className="text-xs uppercase tracking-wider text-muted-foreground">
-              Notes
-            </Label>
-            <Input
-              id="quick-log-sleep-notes"
-              placeholder="How did you sleep?"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
+          <SleepLogFields
+            bedtime={bedtime}
+            wakeTime={wakeTime}
+            quality={quality}
+            notes={notes}
+            onBedtimeChange={setBedtime}
+            onWakeTimeChange={setWakeTime}
+            onQualityChange={setQuality}
+            onNotesChange={setNotes}
+            idPrefix="quick-log-sleep"
+          />
 
           <Button
             type="submit"
