@@ -2373,8 +2373,11 @@ function ActiveWorkout({
                         <>
                       <div
                         className={cn(
-                          "min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain py-1",
-                          "scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0",
+                          "shrink-0 space-y-1 py-1",
+                          ex.sets.length > 4 &&
+                            "max-h-[min(38dvh,16rem)] overflow-y-auto overscroll-contain",
+                          ex.sets.length > 4 &&
+                            "scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0",
                         )}
                       >
                         {ex.sets.map((set) => {
@@ -2504,38 +2507,11 @@ function ActiveWorkout({
                         })}
                       </div>
 
-                      {exComplete && summaryEditExId === ex.id ? (
-                        <button
-                          type="button"
-                          onClick={() => setSummaryEditExId(null)}
-                          className="glass-subtle mt-1.5 flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border border-primary/25 px-3 text-xs font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 touch-manipulation"
-                        >
-                          <Check className="size-3.5" aria-hidden />
-                          Done editing — view summary
-                        </button>
-                      ) : (
-                        <ProgressiveOverloadCoach
-                          key={ex.id}
-                          exercise={ex}
-                          sessions={previousSessions}
-                          sessionId={session.id}
-                          onApplyToNextSet={(weight, reps) =>
-                            applyRecToNextSet(ex.id, weight, reps)
-                          }
-                          onAddOptionalSet={(weight, reps) =>
-                            addOptionalSet(ex.id, weight, reps)
-                          }
-                          onSetEffort={(setId, patch) =>
-                            updateSetEffort(ex.id, setId, patch)
-                          }
-                        />
-                      )}
-
-                      <div className="flex shrink-0 gap-2.5 pt-2">
+                      <div className="flex shrink-0 gap-2 pt-1">
                         <button
                           type="button"
                           onClick={() => addSet(ex.id)}
-                          className="glass-subtle flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-glass-border/40 py-3 text-sm font-semibold text-muted-foreground/70 transition-colors hover:bg-glass-highlight/20 hover:text-foreground active:scale-[0.99] touch-manipulation"
+                          className="glass-subtle flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-dashed border-glass-border/40 py-2 text-sm font-semibold text-muted-foreground/70 transition-colors hover:bg-glass-highlight/20 hover:text-foreground active:scale-[0.99] touch-manipulation"
                         >
                           <Plus className="size-4" />
                           Add set
@@ -2543,11 +2519,42 @@ function ActiveWorkout({
                         <button
                           type="button"
                           onClick={() => removeExercise(ex.id)}
-                          className="glass-subtle flex size-12 shrink-0 items-center justify-center rounded-xl border border-dashed border-glass-border/40 text-muted-foreground/45 transition-colors hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-400 active:scale-[0.97] touch-manipulation"
+                          className="glass-subtle flex size-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-glass-border/40 text-muted-foreground/45 transition-colors hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-400 active:scale-[0.97] touch-manipulation"
                           aria-label={`Remove ${ex.name}`}
                         >
-                          <Trash2 className="size-5" />
+                          <Trash2 className="size-4" />
                         </button>
+                      </div>
+
+                      <div className="flex min-h-0 flex-1 flex-col pt-1.5">
+                        {exComplete && summaryEditExId === ex.id ? (
+                          <button
+                            type="button"
+                            onClick={() => setSummaryEditExId(null)}
+                            className="glass-subtle flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border border-primary/25 px-3 text-xs font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 touch-manipulation"
+                          >
+                            <Check className="size-3.5" aria-hidden />
+                            Done editing — view summary
+                          </button>
+                        ) : (
+                          <ProgressiveOverloadCoach
+                            key={ex.id}
+                            exercise={ex}
+                            setCount={ex.sets.length}
+                            sessions={previousSessions}
+                            sessionId={session.id}
+                            className="min-h-0 flex-1"
+                            onApplyToNextSet={(weight, reps) =>
+                              applyRecToNextSet(ex.id, weight, reps)
+                            }
+                            onAddOptionalSet={(weight, reps) =>
+                              addOptionalSet(ex.id, weight, reps)
+                            }
+                            onSetEffort={(setId, patch) =>
+                              updateSetEffort(ex.id, setId, patch)
+                            }
+                          />
+                        )}
                       </div>
                         </>
                       )}

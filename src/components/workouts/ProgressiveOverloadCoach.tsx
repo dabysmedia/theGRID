@@ -83,10 +83,50 @@ function postRecommendationEvent(
   }).catch(() => {})
 }
 
+/** Typography/spacing tiers — fewer sets leave more room for the coach panel. */
+function coachDensity(setCount: number) {
+  if (setCount <= 2) {
+    return {
+      pad: "px-3.5 py-3",
+      headline: "text-2xl sm:text-[1.65rem]",
+      detail: "text-sm",
+      context: "text-xs",
+      label: "text-[10px]",
+      actionH: "min-h-12 h-12 text-sm",
+      rirBtn: "min-h-12 text-base",
+      gap: "gap-3",
+    }
+  }
+  if (setCount <= 4) {
+    return {
+      pad: "px-3 py-2.5",
+      headline: "text-xl sm:text-2xl",
+      detail: "text-xs sm:text-sm",
+      context: "text-[11px]",
+      label: "text-[10px]",
+      actionH: "min-h-11 h-11 text-xs",
+      rirBtn: "min-h-11 text-sm",
+      gap: "gap-2.5",
+    }
+  }
+  return {
+    pad: "px-2.5 py-2",
+    headline: "text-lg sm:text-xl",
+    detail: "text-[11px]",
+    context: "text-[10px]",
+    label: "text-[9px]",
+    actionH: "min-h-10 h-10 text-[11px]",
+    rirBtn: "min-h-10 text-sm",
+    gap: "gap-2",
+  }
+}
+
 export function ProgressiveOverloadCoach({
   exercise,
   sessions,
   sessionId,
+  setCount = exercise.sets.length,
+  className,
   onApplyToNextSet,
   onAddOptionalSet,
   onSetEffort,
@@ -94,6 +134,8 @@ export function ProgressiveOverloadCoach({
   exercise: PoExercise
   sessions: PoSession[]
   sessionId: string
+  setCount?: number
+  className?: string
   onApplyToNextSet: (weight: number | null, reps: number | null) => void
   onAddOptionalSet: (weight: number | null, reps: number | null) => void
   onSetEffort: (setId: string, patch: SetEffortPatch) => void
@@ -150,6 +192,13 @@ export function ProgressiveOverloadCoach({
   if (disabled || dismissed) return null
 
   const scale = prefs.effortScale
+  const density = coachDensity(setCount)
+  const panelClass = cn(
+    "glass-subtle flex min-h-0 flex-1 flex-col rounded-xl border border-glass-border/35",
+    density.pad,
+    density.gap,
+    className,
+  )
 
   /* ── Effort (RIR/RPE) prompt takes over the card right after a set ── */
   if (pendingEffortSet != null) {
@@ -166,10 +215,15 @@ export function ProgressiveOverloadCoach({
     return (
       <section
         aria-label={`Effort rating for set ${setNo}`}
-        className="glass-subtle shrink-0 rounded-xl border border-primary/20 px-2.5 py-2 mt-1.5"
+        className={cn(panelClass, "border-primary/20 justify-between")}
       >
         <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-[11px] font-semibold text-foreground">
+          <p
+            className={cn(
+              "min-w-0 font-semibold text-foreground",
+              setCount <= 2 ? "text-sm" : "truncate text-[11px]",
+            )}
+          >
             How hard was set {setNo}?
             <span className="ml-1.5 font-normal text-muted-foreground/60">
               {scale === "rir" ? "reps left in the tank" : "RPE"}
@@ -183,7 +237,7 @@ export function ProgressiveOverloadCoach({
             Skip
           </button>
         </div>
-        <div className="mt-1.5 grid grid-cols-6 gap-1.5">
+        <div className="grid min-h-0 flex-1 grid-cols-6 content-center gap-1.5 sm:gap-2">
           {RIR_CHOICES.map((c) => {
             const label = scale === "rir" ? c.label : c.rir === 5 ? "≤5" : String(rirToRpe(c.rir))
             return (
@@ -193,7 +247,8 @@ export function ProgressiveOverloadCoach({
                 onClick={() => record(c.rir, false)}
                 aria-label={`${scale === "rir" ? `${c.label} reps in reserve` : `RPE ${label}`}${c.hint ? ` — ${c.hint}` : ""}`}
                 className={cn(
-                  "glass-subtle flex min-h-11 flex-col items-center justify-center rounded-lg text-sm font-bold tabular-nums transition-colors touch-manipulation active:scale-[0.95] hover:border-primary/35 hover:bg-glass-highlight/25",
+                  "glass-subtle flex flex-col items-center justify-center rounded-lg font-bold tabular-nums transition-colors touch-manipulation active:scale-[0.95] hover:border-primary/35 hover:bg-glass-highlight/25",
+                  density.rirBtn,
                   c.rir === 2 && "border-primary/30 text-primary",
                 )}
               >
@@ -207,13 +262,13 @@ export function ProgressiveOverloadCoach({
             )
           })}
         </div>
-        <div className="mt-1.5 flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
             aria-pressed={effortFlags.technique}
             onClick={() => setEffortFlags((f) => ({ ...f, technique: !f.technique }))}
             className={cn(
-              "flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-[10px] font-semibold transition-colors touch-manipulation",
+              "flex min-h-10 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-[10px] font-semibold transition-colors touch-manipulation sm:min-h-11",
               effortFlags.technique
                 ? "border border-amber-500/45 bg-amber-500/15 text-amber-400"
                 : "glass-subtle text-muted-foreground/60 hover:text-foreground",
@@ -227,7 +282,7 @@ export function ProgressiveOverloadCoach({
             aria-pressed={effortFlags.pain}
             onClick={() => setEffortFlags((f) => ({ ...f, pain: !f.pain }))}
             className={cn(
-              "flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-[10px] font-semibold transition-colors touch-manipulation",
+              "flex min-h-10 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-[10px] font-semibold transition-colors touch-manipulation sm:min-h-11",
               effortFlags.pain
                 ? "border border-rose-500/45 bg-rose-500/15 text-rose-400"
                 : "glass-subtle text-muted-foreground/60 hover:text-foreground",
@@ -249,14 +304,22 @@ export function ProgressiveOverloadCoach({
 
   return (
     <>
-      <section
-        aria-label="Progressive overload coach"
-        className="glass-subtle shrink-0 rounded-xl border border-glass-border/35 px-2.5 py-2 mt-1.5"
-      >
-        <div className="flex items-center justify-between gap-2">
+      <section aria-label="Progressive overload coach" className={panelClass}>
+        <div className="flex shrink-0 items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
-            <TrendingUp className="size-3 shrink-0 text-primary/80" aria-hidden />
-            <h4 className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            <TrendingUp
+              className={cn(
+                "shrink-0 text-primary/80",
+                setCount <= 2 ? "size-4" : "size-3",
+              )}
+              aria-hidden
+            />
+            <h4
+              className={cn(
+                "truncate font-semibold uppercase tracking-wider text-muted-foreground/70",
+                density.label,
+              )}
+            >
               Progressive overload
             </h4>
           </div>
@@ -283,47 +346,75 @@ export function ProgressiveOverloadCoach({
           </div>
         </div>
 
-        <div className="mt-1 flex items-baseline justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-[9px] font-medium uppercase tracking-[0.15em] text-muted-foreground/55">
-              Next target
-            </p>
-            <p className="truncate font-heading text-lg font-bold leading-tight text-foreground">
-              {rec.headline}
-            </p>
-            <p className="truncate text-[11px] text-muted-foreground/70">
-              {scale === "rpe"
-                ? rec.detail.replace(
-                    `${rec.targetRir} RIR`,
-                    `RPE ${rirToRpe(rec.targetRir)}`,
-                  )
-                : rec.detail}
-            </p>
+        <div className="flex min-h-0 flex-1 flex-col justify-center gap-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p
+                className={cn(
+                  "font-medium uppercase tracking-[0.15em] text-muted-foreground/55",
+                  density.label,
+                )}
+              >
+                Next target
+              </p>
+              <p
+                className={cn(
+                  "font-heading font-bold leading-tight text-foreground",
+                  density.headline,
+                  setCount > 4 && "truncate",
+                )}
+              >
+                {rec.headline}
+              </p>
+              <p className={cn("text-muted-foreground/70", density.detail, setCount > 4 && "truncate")}>
+                {scale === "rpe"
+                  ? rec.detail.replace(
+                      `${rec.targetRir} RIR`,
+                      `RPE ${rirToRpe(rec.targetRir)}`,
+                    )
+                  : rec.detail}
+              </p>
+            </div>
+            {rec.delta ? (
+              <span
+                className={cn(
+                  "shrink-0 rounded-lg border border-primary/25 bg-primary/10 px-2.5 py-1.5 font-bold tabular-nums text-primary",
+                  setCount <= 2 ? "text-sm" : "text-[11px]",
+                )}
+              >
+                {rec.delta}
+              </span>
+            ) : null}
           </div>
-          {rec.delta ? (
-            <span className="shrink-0 rounded-lg border border-primary/25 bg-primary/10 px-2 py-1 text-[11px] font-bold tabular-nums text-primary">
-              {rec.delta}
-            </span>
+
+          {contextLines.length > 0 ? (
+            <div className="space-y-1">
+              {contextLines.slice(0, 2).map((line, i) => (
+                <p
+                  key={i}
+                  className={cn(
+                    "leading-snug text-muted-foreground/55",
+                    density.context,
+                    setCount > 3 ? "line-clamp-2" : "line-clamp-3",
+                  )}
+                >
+                  {line}
+                </p>
+              ))}
+            </div>
           ) : null}
         </div>
 
-        {contextLines.length > 0 ? (
-          <div className="mt-1 space-y-0.5">
-            {contextLines.slice(0, 2).map((line, i) => (
-              <p key={i} className="truncate text-[10px] leading-snug text-muted-foreground/55">
-                {line}
-              </p>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="mt-1.5 flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           {apply ? (
             <Button
               type="button"
               variant="glass"
               size="sm"
-              className="h-9 min-h-9 min-w-0 flex-1 truncate px-2 text-[11px] font-semibold press-scale touch-manipulation"
+              className={cn(
+                "min-w-0 flex-1 truncate px-2 font-semibold press-scale touch-manipulation",
+                density.actionH,
+              )}
               onClick={() => {
                 if (apply.addSet) onAddOptionalSet(apply.weight, apply.reps)
                 else onApplyToNextSet(apply.weight, apply.reps)
@@ -336,7 +427,10 @@ export function ProgressiveOverloadCoach({
           <button
             type="button"
             onClick={() => setWhyOpen(true)}
-            className="glass-subtle flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-2.5 text-[11px] font-semibold text-muted-foreground/70 transition-colors hover:text-foreground touch-manipulation"
+            className={cn(
+              "glass-subtle flex shrink-0 items-center gap-1 rounded-lg px-2.5 font-semibold text-muted-foreground/70 transition-colors hover:text-foreground touch-manipulation",
+              density.actionH,
+            )}
             aria-label="Why this recommendation?"
           >
             <HelpCircle className="size-3.5" aria-hidden />

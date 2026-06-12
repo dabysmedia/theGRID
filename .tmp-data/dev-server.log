@@ -56,3 +56,65 @@ The database is already in sync with the Prisma schema.
 Γ£ô Compiled in 93ms
  GET /api/workout-progression?limit=1 200 in 6ms (next.js: 1561┬╡s, application-code: 4ms)
  GET /api/workout-sessions?_=1 200 in 5ms (next.js: 1441┬╡s, application-code: 3ms)
+ POST /api/workout-sessions?_=1781291587422 201 in 49ms (next.js: 12ms, application-code: 36ms)
+ POST /api/progression-recommendations 201 in 20ms (next.js: 7ms, application-code: 14ms)
+ GET /api/weigh-in?d=2026-06-12 200 in 238ms (next.js: 224ms, application-code: 14ms)
+ GET /api/weigh-in?d=2026-06-12 200 in 242ms (next.js: 238ms, application-code: 4ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 560ms (next.js: 547ms, application-code: 13ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 6ms (next.js: 1380┬╡s, application-code: 4ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 6ms (next.js: 1429┬╡s, application-code: 4ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 12ms (next.js: 6ms, application-code: 6ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 10ms (next.js: 6ms, application-code: 5ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 10ms (next.js: 5ms, application-code: 4ms)
+ POST /api/progression-recommendations 201 in 5ms (next.js: 1357┬╡s, application-code: 4ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 10ms (next.js: 6ms, application-code: 4ms)
+ POST /api/progression-recommendations 201 in 7ms (next.js: 1722┬╡s, application-code: 6ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 11ms (next.js: 6ms, application-code: 5ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 13ms (next.js: 7ms, application-code: 5ms)
+ POST /api/progression-recommendations 201 in 5ms (next.js: 1246┬╡s, application-code: 4ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 12ms (next.js: 5ms, application-code: 6ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 11ms (next.js: 6ms, application-code: 5ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 9ms (next.js: 5ms, application-code: 4ms)
+ POST /api/progression-recommendations 201 in 5ms (next.js: 1506┬╡s, application-code: 4ms)
+ POST /api/progression-recommendations 201 in 5ms (next.js: 1317┬╡s, application-code: 4ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 11ms (next.js: 6ms, application-code: 5ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 11ms (next.js: 6ms, application-code: 5ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 20ms (next.js: 12ms, application-code: 9ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 11ms (next.js: 6ms, application-code: 5ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 10ms (next.js: 6ms, application-code: 5ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 12ms (next.js: 5ms, application-code: 6ms)
+ POST /api/progression-recommendations 201 in 6ms (next.js: 1427┬╡s, application-code: 4ms)
+ POST /api/progression-recommendations 201 in 6ms (next.js: 1556┬╡s, application-code: 4ms)
+ PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 11ms (next.js: 6ms, application-code: 5ms)
+ POST /api/workout-progression 201 in 24ms (next.js: 9ms, application-code: 15ms)
+ GET /api/workout-progression?limit=1&_=1781291692861 200 in 5ms (next.js: 1614┬╡s, application-code: 3ms)
+ GET /api/workout-progression?limit=1&_=1781291692862 200 in 9ms (next.js: 6ms, application-code: 3ms)
+ GET /api/workout-progression?limit=1&_=1781291692922 200 in 6ms (next.js: 2ms, application-code: 4ms)
+ POST /api/workout-sessions?_=1781291707552 201 in 5ms (next.js: 1560┬╡s, application-code: 4ms)
+ GET /api/weigh-in?d=2026-06-15 200 in 6ms (next.js: 1474┬╡s, application-code: 5ms)
+ GET /api/weigh-in?d=2026-06-15 200 in 5ms (next.js: 1293┬╡s, application-code: 4ms)
+ POST /api/progression-recommendations 201 in 6ms (next.js: 1351┬╡s, application-code: 4ms)
+ PUT /api/workout-sessions/cmqbb3a1z000fn8vds3vw2iqz 200 in 11ms (next.js: 6ms, application-code: 5ms)
+ POST /api/progression-recommendations 201 in 6ms (next.js: 1369┬╡s, application-code: 5ms)
+ PUT /api/workout-sessions/cmqbb3a1z000fn8vds3vw2iqz 200 in 10ms (next.js: 5ms, application-code: 5ms)
+ POST /api/progression-recommendations 201 in 5ms (next.js: 1268┬╡s, application-code: 3ms)
+ PUT /api/workout-sessions/cmqbb3a1z000fn8vds3vw2iqz 200 in 10ms (next.js: 6ms, application-code: 4ms)
+ POST /api/progression-recommendations 201 in 6ms (next.js: 1571┬╡s, application-code: 4ms)
+ POST /api/progression-recommendations 201 in 5ms (next.js: 1381┬╡s, application-code: 4ms)
+ POST /api/progression-recommendations 201 in 6ms (next.js: 1351┬╡s, application-code: 4ms)
+ POST /api/progression-recommendations 201 in 6ms (next.js: 1536┬╡s, application-code: 4ms)
+ PUT /api/workout-sessions/cmqbb3a1z000fn8vds3vw2iqz 200 in 11ms (next.js: 6ms, application-code: 5ms)
+ PUT /api/workout-sessions/cmqbb3a1z000fn8vds3vw2iqz 200 in 14ms (next.js: 9ms, application-code: 5ms)
+Γ£ô Compiled in 505ms
+Γ£ô Compiled in 283ms
+ POST /api/progression-recommendations 201 in 7ms (next.js: 1704┬╡s, application-code: 5ms)
+Γ£ô Compiled in 282ms
+Γ£ô Compiled in 97ms
+Γ£ô Compiled in 90ms
+Γ£ô Compiled in 254ms
+Γ£ô Compiled in 266ms
+Γ£ô Compiled in 90ms
+Γ£ô Compiled in 87ms
+Γ£ô Compiled in 89ms
+Γ£ô Compiled in 84ms
+Γ£ô Compiled in 102ms
