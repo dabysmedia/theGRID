@@ -814,6 +814,43 @@ html {
   100% { transform: scale(1); }
 }
 
+@keyframes workout-card-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-2rem) scale(0.96);
+  }
+}
+
+@keyframes workout-card-enter {
+  from {
+    opacity: 0;
+    transform: translateX(2rem) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes workout-complete-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 @keyframes nav-indicator {
   from { transform: scaleX(0); }
   to   { transform: scaleX(1); }
@@ -871,6 +908,18 @@ html {
     transform-origin: center;
   }
 
+  .animate-workout-card-exit {
+    animation: workout-card-exit 0.38s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  .animate-workout-card-enter {
+    animation: workout-card-enter 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-workout-complete-pop {
+    animation: workout-complete-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
   .animate-nav-indicator {
     animation: nav-indicator 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
@@ -884,7 +933,10 @@ html {
       animation: none;
     }
 
-    .animate-ring-pop {
+    .animate-ring-pop,
+    .animate-workout-card-exit,
+    .animate-workout-card-enter,
+    .animate-workout-complete-pop {
       animation: none;
     }
   }

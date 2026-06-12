@@ -6,7 +6,6 @@ import {
   Calculator,
   Check,
   ChevronDown,
-  ChevronRight,
   Clock,
   Copy,
   Dumbbell,
@@ -16,7 +15,7 @@ import {
   Play,
   Plus,
   Search,
-  Settings2,
+  SkipForward,
   Timer,
   Trash2,
   X,
@@ -48,6 +47,13 @@ import { cn, formatDate, formatDisplayDate, glassPanelClass, parseLocalDate } fr
 import { PlateCalculatorDialog } from "@/components/workouts/PlateCalculatorDialog"
 import { WorkoutRecoverySection } from "@/components/workouts/WorkoutRecoverySection"
 import { FALLBACK_EXERCISES, type ApiExercise } from "@/lib/workouts/exercise-library"
+import {
+  ProgressiveOverloadCoach,
+  type SetEffortPatch,
+} from "@/components/workouts/ProgressiveOverloadCoach"
+import { MovementCompleteOverview } from "@/components/workouts/MovementCompleteOverview"
+import { ProgressionSummaryHero } from "@/components/workouts/ProgressionSummaryHero"
+import { summarizeWorkoutProgression } from "@/lib/workouts/progressive-overload"
 
 /* ──────────────────────────────────────────────────────────
    Types
@@ -60,6 +66,14 @@ interface ExerciseSet {
   reps: number | null
   type: "working" | "warmup" | "dropset" | "failure"
   completed: boolean
+  /** Progressive overload coach: canonical reps-in-reserve (5 = "5+"); null/absent = not reported. */
+  rir?: number | null
+  /** User skipped the effort prompt for this set. */
+  rirSkipped?: boolean
+  techniqueFlag?: boolean
+  painFlag?: boolean
+  /** Added from an "optional extra set" recommendation. */
+  optionalSet?: boolean
 }
 
 interface MuscleTag {
@@ -448,36 +462,47 @@ function completedVolume(exercises: SessionExercise[]): number {
   return vol
 }
 
-function getActiveWorkoutFocus(exercises: SessionExercise[]) {
+function isExerciseComplete(ex: SessionExercise): boolean {
+  return ex.sets.length > 0 && ex.sets.every((s) => s.completed)
+}
+
+/** Active movement queue: non-skipped first (session order), then skipped (deferred to end). */
+function getActiveWorkoutQueue(
+  exercises: SessionExercise[],
+  skippedIds: readonly string[] = [],
+) {
+  const skippedSet = new Set(skippedIds)
+  const byId = new Map(exercises.map((e) => [e.id, e]))
+
+  const activeIncomplete = exercises.filter(
+    (e) => !skippedSet.has(e.id) && !isExerciseComplete(e),
+  )
+  const skippedIncomplete = skippedIds
+    .map((id) => byId.get(id))
+    .filter((e): e is SessionExercise => !!e && !isExerciseComplete(e))
+
+  const remaining = [...activeIncomplete, ...skippedIncomplete]
+  const current = remaining[0] ?? null
+  const next = remaining[1] ?? null
   const totalSets = totalPlannedSets(exercises)
   const completedSets = totalSetsCompleted(exercises)
-  const incompleteIdx = exercises.findIndex((ex) =>
-    ex.sets.some((s) => !s.completed),
-  )
-  const currentIdx =
-    incompleteIdx >= 0
-      ? incompleteIdx
-      : exercises.length > 0
-        ? exercises.length - 1
-        : -1
-  const current = currentIdx >= 0 ? exercises[currentIdx] : null
-  const next =
-    incompleteIdx >= 0 && incompleteIdx < exercises.length - 1
-      ? exercises[incompleteIdx + 1]
-      : null
-  const currentDone = current?.sets.filter((s) => s.completed).length ?? 0
-  const currentTotal = current?.sets.length ?? 0
   const allSetsComplete = totalSets > 0 && completedSets >= totalSets
+  const completedMovements = exercises.filter(isExerciseComplete).length
 
   return {
     totalSets,
     completedSets,
     current,
     next,
-    currentDone,
-    currentTotal,
+    remaining,
+    skippedPending: skippedIncomplete,
+    currentDone: current?.sets.filter((s) => s.completed).length ?? 0,
+    currentTotal: current?.sets.length ?? 0,
     allSetsComplete,
-    onLastExercise: incompleteIdx >= 0 && incompleteIdx === exercises.length - 1,
+    onLastMovement: remaining.length <= 1 && !!current,
+    movementIndex: current ? completedMovements + 1 : 0,
+    movementTotal: exercises.length,
+    canSkip: remaining.length > 1,
   }
 }
 
@@ -1367,6 +1392,22 @@ function ActiveWorkout({
   const [collapsedExerciseIds, setCollapsedExerciseIds] = useState<Set<string>>(
     () => new Set(),
   )
+  const [skippedExerciseIds, setSkippedExerciseIds] = useState<string[]>([])
+  /** Movements whose completion overview the user has acknowledged with "Continue". */
+  const [ackedSummaryIds, setAckedSummaryIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  /** Movement whose sets are being edited from the completion overview. */
+  const [summaryEditExId, setSummaryEditExId] = useState<string | null>(null)
+  const [displayedExerciseId, setDisplayedExerciseId] = useState<string | null>(
+    null,
+  )
+  const [cardPhase, setCardPhase] = useState<"idle" | "out" | "in" | "celebrate">(
+    "idle",
+  )
+  const cardTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
   const weighInPrefilledRef = useRef(false)
   const setSwipeDragRef = useRef<{
     pointerId: number
@@ -1426,8 +1467,22 @@ function ActiveWorkout({
       if (ex.sets.length > 0 && ex.sets.every((s) => s.completed)) c.add(ex.id)
     }
     setCollapsedExerciseIds(c)
+    setSkippedExerciseIds([])
+    /* Movements already fully complete when the session loads (e.g. reopening) skip the overview. */
+    setAckedSummaryIds(new Set(c))
+    setSummaryEditExId(null)
+    setDisplayedExerciseId(null)
+    setCardPhase("idle")
     weighInPrefilledRef.current = false
   }, [session.id])
+
+  useEffect(() => {
+    return () => {
+      if (cardTransitionTimerRef.current != null) {
+        clearTimeout(cardTransitionTimerRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (weighInPrefilledRef.current) return
@@ -1577,16 +1632,14 @@ function ActiveWorkout({
       next.delete(exId)
       return next
     })
+    setSkippedExerciseIds((prev) => prev.filter((id) => id !== exId))
     onUpdate(exercises.filter((e) => e.id !== exId))
   }
 
-  function toggleExerciseCollapsed(exId: string) {
-    setCollapsedExerciseIds((p) => {
-      const next = new Set(p)
-      if (next.has(exId)) next.delete(exId)
-      else next.add(exId)
-      return next
-    })
+  function skipExercise(exId: string) {
+    setSkippedExerciseIds((prev) =>
+      prev.includes(exId) ? prev : [...prev, exId],
+    )
   }
 
   function addSet(exId: string) {
@@ -1703,22 +1756,35 @@ function ActiveWorkout({
     field: keyof ExerciseSet,
     value: unknown,
   ) {
+    const ex = exercises.find((e) => e.id === exId)
+    const setIndex = ex?.sets.findIndex((s) => s.id === setId) ?? -1
+    const propagateWeight = field === "weight" && ex != null && setIndex >= 0
+    const affectedSetIds = propagateWeight
+      ? ex.sets.slice(setIndex).map((s) => s.id)
+      : [setId]
+
     if (field === "weight" || field === "reps") {
-      touchedSetIdsRef.current.add(setId)
+      for (const id of affectedSetIds) touchedSetIdsRef.current.add(id)
       setGhostSetIds((prev) => {
         const next = new Set(prev)
-        next.delete(setId)
+        for (const id of affectedSetIds) next.delete(id)
         return next
       })
     }
     onUpdate(
-      exercises.map((ex) => {
-        if (ex.id !== exId) return ex
+      exercises.map((e) => {
+        if (e.id !== exId) return e
+        const idx = e.sets.findIndex((s) => s.id === setId)
+        if (idx < 0) return e
         return {
-          ...ex,
-          sets: ex.sets.map((s) =>
-            s.id === setId ? { ...s, [field]: value } : s,
-          ),
+          ...e,
+          sets: e.sets.map((s, i) => {
+            if (propagateWeight && i >= idx) {
+              return { ...s, weight: value as number | null }
+            }
+            if (s.id === setId) return { ...s, [field]: value }
+            return s
+          }),
         }
       }),
     )
@@ -1760,12 +1826,107 @@ function ActiveWorkout({
     }
     if (wasCompleted) {
       setRestEndsAt(null)
+      /* Re-opening a set re-arms the movement-complete overview. */
+      setAckedSummaryIds((prev) => {
+        if (!prev.has(exId)) return prev
+        const next = new Set(prev)
+        next.delete(exId)
+        return next
+      })
+      setSummaryEditExId((cur) => (cur === exId ? null : cur))
     } else if (restConfig.enabled) {
       const sec = restConfig.seconds
       setRestTotalSec(sec)
       setRestEndsAt(Date.now() + sec * 1000)
     }
     onUpdate(updated)
+  }
+
+  /** Progressive overload coach: record effort/flags on a logged set. */
+  function updateSetEffort(exId: string, setId: string, patch: SetEffortPatch) {
+    onUpdate(
+      exercisesRef.current.map((ex) => {
+        if (ex.id !== exId) return ex
+        return {
+          ...ex,
+          sets: ex.sets.map((s) => (s.id === setId ? { ...s, ...patch } : s)),
+        }
+      }),
+    )
+  }
+
+  /**
+   * Progressive overload coach "Apply": prefill the next planned set's load and
+   * rep target. Weight propagates down to later un-logged sets (same behavior
+   * as editing a weight input); nothing is marked completed.
+   */
+  function applyRecToNextSet(
+    exId: string,
+    weight: number | null,
+    reps: number | null,
+  ) {
+    const ex = exercisesRef.current.find((e) => e.id === exId)
+    if (!ex) return
+    const idx = ex.sets.findIndex((s) => !s.completed)
+    if (idx < 0) return
+    const affectedIds =
+      weight != null
+        ? ex.sets.slice(idx).filter((s) => !s.completed).map((s) => s.id)
+        : [ex.sets[idx].id]
+    for (const id of affectedIds) touchedSetIdsRef.current.add(id)
+    setGhostSetIds((prev) => {
+      const next = new Set(prev)
+      for (const id of affectedIds) next.delete(id)
+      return next
+    })
+    onUpdate(
+      exercisesRef.current.map((e) => {
+        if (e.id !== exId) return e
+        return {
+          ...e,
+          sets: e.sets.map((s, i) => {
+            if (i === idx) {
+              return {
+                ...s,
+                ...(weight != null ? { weight } : {}),
+                ...(reps != null ? { reps } : {}),
+              }
+            }
+            if (weight != null && i > idx && !s.completed) return { ...s, weight }
+            return s
+          }),
+        }
+      }),
+    )
+  }
+
+  /** Progressive overload coach: append a clearly-optional extra working set. */
+  function addOptionalSet(
+    exId: string,
+    weight: number | null,
+    reps: number | null,
+  ) {
+    onUpdate(
+      exercisesRef.current.map((ex) => {
+        if (ex.id !== exId) return ex
+        const last = ex.sets[ex.sets.length - 1]
+        return {
+          ...ex,
+          sets: [
+            ...ex.sets,
+            {
+              id: uid(),
+              setNumber: ex.sets.length + 1,
+              weight: weight ?? last?.weight ?? null,
+              reps: reps ?? last?.reps ?? null,
+              type: "working" as const,
+              completed: false,
+              optionalSet: true,
+            },
+          ],
+        }
+      }),
+    )
   }
 
   function cycleSetType(exId: string, setId: string) {
@@ -1791,10 +1952,62 @@ function ActiveWorkout({
   }
 
   const loggedVol = completedVolume(exercises)
-  const focus = getActiveWorkoutFocus(exercises)
+  const queue = getActiveWorkoutQueue(exercises, skippedExerciseIds)
+  const targetExerciseId = queue.current?.id ?? null
+  const displayedExercise =
+    displayedExerciseId != null
+      ? exercises.find((e) => e.id === displayedExerciseId) ?? null
+      : null
+
+  useEffect(() => {
+    if (cardTransitionTimerRef.current != null) {
+      clearTimeout(cardTransitionTimerRef.current)
+      cardTransitionTimerRef.current = null
+    }
+
+    /* Hold on a completed movement until its overview is acknowledged — never auto-advance. */
+    if (displayedExerciseId != null) {
+      const displayed =
+        exercisesRef.current.find((e) => e.id === displayedExerciseId) ?? null
+      if (
+        displayed != null &&
+        isExerciseComplete(displayed) &&
+        !ackedSummaryIds.has(displayedExerciseId)
+      ) {
+        return
+      }
+    }
+
+    if (targetExerciseId == null) {
+      setDisplayedExerciseId(null)
+      setCardPhase("idle")
+      return
+    }
+
+    if (displayedExerciseId == null) {
+      setDisplayedExerciseId(targetExerciseId)
+      setCardPhase("in")
+      cardTransitionTimerRef.current = setTimeout(() => setCardPhase("idle"), 450)
+      return
+    }
+
+    if (targetExerciseId === displayedExerciseId) return
+
+    const leaving =
+      exercisesRef.current.find((e) => e.id === displayedExerciseId) ?? null
+    const leavingComplete = leaving != null && isExerciseComplete(leaving)
+    setCardPhase(leavingComplete ? "celebrate" : "out")
+
+    cardTransitionTimerRef.current = setTimeout(() => {
+      setDisplayedExerciseId(targetExerciseId)
+      setCardPhase("in")
+      cardTransitionTimerRef.current = setTimeout(() => setCardPhase("idle"), 450)
+    }, leavingComplete ? 520 : 380)
+  }, [targetExerciseId, displayedExerciseId, ackedSummaryIds])
+
   const sessionProgressPct =
-    focus.totalSets > 0
-      ? Math.min(100, Math.round((focus.completedSets / focus.totalSets) * 100))
+    queue.totalSets > 0
+      ? Math.min(100, Math.round((queue.completedSets / queue.totalSets) * 100))
       : 0
   const restRemainingSec =
     restEndsAt == null
@@ -1832,12 +2045,12 @@ function ActiveWorkout({
             <>
               {/* Hero band only — top of panel, not full scroll height */}
               <div
-                className="pointer-events-none absolute left-0 right-0 top-0 z-0 h-[min(36dvh,15rem)] bg-cover bg-[center_top] bg-no-repeat opacity-[0.22] dark:opacity-[0.28] sm:rounded-t-2xl"
+                className="pointer-events-none absolute left-0 right-0 top-0 z-0 h-[min(22dvh,9rem)] bg-cover bg-[center_top] bg-no-repeat opacity-[0.18] dark:opacity-[0.24] sm:rounded-t-2xl"
                 style={{ backgroundImage: `url(${heroCover})` }}
                 aria-hidden
               />
               <div
-                className="pointer-events-none absolute left-0 right-0 top-0 z-[1] h-[min(36dvh,15rem)] bg-gradient-to-b from-background/90 via-background/40 to-transparent dark:from-background/94 dark:via-background/45 dark:to-transparent sm:rounded-t-2xl"
+                className="pointer-events-none absolute left-0 right-0 top-0 z-[1] h-[min(22dvh,9rem)] bg-gradient-to-b from-background/90 via-background/40 to-transparent dark:from-background/94 dark:via-background/45 dark:to-transparent sm:rounded-t-2xl"
                 aria-hidden
               />
             </>
@@ -1855,148 +2068,70 @@ function ActiveWorkout({
             aria-hidden
           />
           <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-          {/* Header */}
-          <div className="shrink-0 border-b border-glass-border/25 px-4 pb-4 pt-[max(0.875rem,env(safe-area-inset-top))] sm:pt-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1 pr-1">
-                <div className="flex items-center gap-2">
-                  <div className="status-dot" />
-                  <p className="type-hud-eyebrow text-primary/85">In progress</p>
+          {/* Compact header + progress + rest */}
+          <div className="shrink-0 space-y-2 border-b border-glass-border/25 px-4 pb-2.5 pt-[max(0.5rem,env(safe-area-inset-top))] sm:pt-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <div className="status-dot scale-90" />
+                  <h2
+                    id="active-workout-heading"
+                    className="truncate font-heading text-base font-semibold leading-tight text-foreground sm:text-sm"
+                  >
+                    {session.name?.trim() || "Active workout"}
+                  </h2>
                 </div>
-                <h2
-                  id="active-workout-heading"
-                  className="font-heading mt-2 text-xl font-semibold leading-snug text-foreground sm:text-lg"
-                >
-                  {session.name?.trim() || "Active workout"}
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground/70">
+                <p className="mt-0.5 truncate text-[11px] text-muted-foreground/65">
                   {exercises.length === 0
                     ? "Add exercises to begin"
-                    : focus.allSetsComplete
-                      ? "All sets complete — finish when ready"
-                      : focus.current
-                        ? `Working on set ${Math.min(focus.currentDone + 1, focus.currentTotal)} of ${focus.currentTotal}`
+                    : queue.allSetsComplete
+                      ? "All sets complete"
+                      : queue.current
+                        ? queue.movementTotal > 1
+                          ? `Mov ${queue.movementIndex}/${queue.movementTotal} · Set ${Math.min(queue.currentDone + 1, queue.currentTotal)}/${queue.currentTotal}`
+                          : `Set ${Math.min(queue.currentDone + 1, queue.currentTotal)}/${queue.currentTotal}`
                         : `${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`}
+                  {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
                 </p>
               </div>
-              <div className="glass-subtle flex shrink-0 flex-col items-end gap-1 rounded-2xl border border-primary/25 bg-primary/10 px-3.5 py-2.5 ring-1 ring-primary/15">
-                <span className="type-hud-caption-tight text-muted-foreground/65">
-                  Elapsed
+              <div className="flex shrink-0 items-center gap-1.5 tabular-nums">
+                <Clock className="size-3.5 text-primary/80" aria-hidden />
+                <span className="font-heading text-lg font-bold leading-none text-primary sm:text-base">
+                  {formatTimer(elapsed)}
                 </span>
-                <div className="flex items-center gap-2">
-                  <Clock className="size-4 text-primary/90" aria-hidden />
-                  <span className="font-heading text-2xl font-bold tabular-nums leading-none text-primary sm:text-xl">
-                    {formatTimer(elapsed)}
-                  </span>
-                </div>
               </div>
             </div>
-          </div>
 
-          {/* Session focus — progress + now / next */}
-          <div className="shrink-0 border-b border-glass-border/20 px-4 py-3.5">
-            <div className={cn(glassPanelClass, "space-y-3 overflow-hidden px-4 py-3.5")}>
-              <div>
-                <div className="mb-2 flex items-end justify-between gap-3">
-                  <div>
-                    <p className="type-hud-label-soft">Session progress</p>
-                    {loggedVol > 0 && (
-                      <p className="mt-0.5 text-xs text-muted-foreground/55">
-                        {formatVolumeLb(loggedVol)} lb logged from completed sets
-                      </p>
-                    )}
-                  </div>
-                  <p className="font-heading text-lg font-bold tabular-nums text-foreground">
-                    {focus.totalSets > 0 ? (
-                      <>
-                        {focus.completedSets}
-                        <span className="text-sm font-semibold text-muted-foreground/50">
-                          /{focus.totalSets}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-muted-foreground/40">—</span>
-                    )}
-                  </p>
-                </div>
+            {queue.totalSets > 0 ? (
+              <div className="flex items-center gap-2.5">
                 <div
-                  className="h-2.5 overflow-hidden rounded-full bg-glass-highlight/15 ring-1 ring-inset ring-glass-border/30"
+                  className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-glass-highlight/15 ring-1 ring-inset ring-glass-border/25"
                   role="progressbar"
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={sessionProgressPct}
-                  aria-label={`${focus.completedSets} of ${focus.totalSets} sets complete`}
+                  aria-label={`${queue.completedSets} of ${queue.totalSets} sets complete`}
                 >
                   <div
                     className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
-                    style={{
-                      width: `${sessionProgressPct}%`,
-                      boxShadow: sessionProgressPct > 0 ? "0 0 10px oklch(0.82 0.18 110 / 25%)" : undefined,
-                    }}
+                    style={{ width: `${sessionProgressPct}%` }}
                   />
                 </div>
+                <span className="shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground/70">
+                  {queue.completedSets}/{queue.totalSets}
+                </span>
               </div>
+            ) : null}
 
-              <div className="grid grid-cols-2 gap-2">
-                <div
-                  className="glass-subtle min-w-0 overflow-hidden rounded-xl border border-primary/25 bg-primary/10 px-3 py-2.5 ring-1 ring-primary/15"
-                >
-                  <p className="type-hud-caption-tight text-primary/90">Now</p>
-                  <p className="mt-1 truncate text-sm font-semibold text-foreground">
-                    {focus.current?.name ?? "No exercises yet"}
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground/65">
-                    {focus.allSetsComplete
-                      ? "Session complete"
-                      : focus.current
-                        ? focus.currentDone >= focus.currentTotal
-                          ? "Exercise done"
-                          : `${focus.currentTotal - focus.currentDone} set${focus.currentTotal - focus.currentDone === 1 ? "" : "s"} left`
-                        : "Tap add exercise below"}
-                  </p>
-                </div>
-                <div className="glass-subtle min-w-0 rounded-xl px-3 py-2.5">
-                  <p className="type-hud-caption-tight text-muted-foreground/60">Up next</p>
-                  <p className="mt-1 truncate text-sm font-semibold text-foreground/90">
-                    {focus.allSetsComplete
-                      ? "Wrap up & finish"
-                      : focus.next?.name ??
-                        (focus.onLastExercise && focus.current
-                          ? "Last exercise"
-                          : exercises.length === 0
-                            ? "—"
-                            : "—")}
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground/55">
-                    {focus.allSetsComplete
-                      ? "Review your log"
-                      : focus.next
-                        ? `${focus.next.sets.length} set${focus.next.sets.length === 1 ? "" : "s"} planned`
-                        : focus.onLastExercise
-                          ? "Then you are done"
-                          : "Keep logging sets"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Rest timer — starts when a set is checked done; duration persisted locally */}
-          <div className="shrink-0 border-b border-glass-border/20 px-4 py-3.5">
             {restCountdownActive && restRemainingSec != null ? (
               <div
-                className="glass-subtle overflow-hidden rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3.5 ring-1 ring-primary/15"
+                className="glass-subtle flex items-center gap-2.5 overflow-hidden rounded-xl border border-primary/25 bg-primary/10 px-2.5 py-2 ring-1 ring-primary/15"
                 aria-live="polite"
                 aria-atomic="true"
               >
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="type-hud-label-soft text-primary/85">Rest timer</span>
-                  <span className="font-heading text-3xl font-bold tabular-nums tracking-tight text-primary sm:text-2xl">
-                    {formatRestCountdown(restRemainingSec)}
-                  </span>
-                </div>
+                <Timer className="size-3.5 shrink-0 text-primary/85" aria-hidden />
                 <div
-                  className="relative h-2.5 min-w-0 overflow-hidden rounded-full bg-glass-highlight/15 shadow-[inset_0_1px_2px_oklch(0_0_0/8%)] ring-1 ring-inset ring-glass-border/30"
+                  className="relative h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-glass-highlight/15 ring-1 ring-inset ring-glass-border/25"
                   role="progressbar"
                   aria-valuemin={0}
                   aria-valuemax={100}
@@ -2004,93 +2139,87 @@ function ActiveWorkout({
                   aria-label={`Rest ${formatRestCountdown(restRemainingSec)} remaining`}
                 >
                   <div
-                    className="will-change-transform absolute inset-y-0 left-0 w-full origin-left rounded-full bg-gradient-to-r from-primary/40 via-primary to-primary/90 shadow-[0_0_12px_-2px] shadow-primary/35"
+                    className="will-change-transform absolute inset-y-0 left-0 w-full origin-left rounded-full bg-primary"
                     style={{
                       transform: `scaleX(${restProgress})`,
                       transition: "transform 160ms linear",
                     }}
                   />
                 </div>
+                <span className="shrink-0 font-heading text-sm font-bold tabular-nums text-primary">
+                  {formatRestCountdown(restRemainingSec)}
+                </span>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 transition-colors hover:bg-glass-highlight/30 hover:text-foreground touch-manipulation"
+                  onClick={() => setRestEndsAt(null)}
+                >
+                  Skip
+                </button>
               </div>
             ) : (
-              <div className="glass-subtle space-y-3 rounded-2xl px-3.5 py-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Timer
-                    className="size-4 shrink-0 text-muted-foreground/55"
-                    aria-hidden
-                  />
-                  <span className="type-hud-label-soft">Rest after set</span>
-                  <span className="glass-subtle rounded-lg px-2.5 py-1 text-sm tabular-nums font-semibold text-foreground">
-                    {formatRestCountdown(restConfig.seconds)}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  className="glass-subtle flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-xl px-2.5 py-1.5 text-left touch-manipulation"
+                  aria-expanded={restSettingsOpen}
+                  aria-label={
+                    restSettingsOpen
+                      ? "Hide rest timer options"
+                      : "Rest timer options"
+                  }
+                  onClick={() => setRestSettingsOpen((o) => !o)}
+                >
+                  <Timer className="size-3.5 shrink-0 text-muted-foreground/55" aria-hidden />
+                  <span className="truncate text-[11px] text-muted-foreground/70">
+                    Rest {restConfig.enabled ? formatRestCountdown(restConfig.seconds) : "off"}
                   </span>
-                  <div className="ml-auto flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-10 min-h-10 touch-manipulation px-4 text-xs font-semibold"
-                      onClick={() => {
-                        const next = saveWorkoutRestConfig({
-                          enabled: !restConfig.enabled,
-                        })
-                        setRestConfig(next)
-                        if (!next.enabled) setRestEndsAt(null)
-                      }}
-                    >
-                      {restConfig.enabled ? "On" : "Off"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-10 min-h-10 min-w-10 touch-manipulation"
-                      aria-label={
-                        restSettingsOpen
-                          ? "Hide rest timer length options"
-                          : "Choose rest timer length"
-                      }
-                      aria-expanded={restSettingsOpen}
-                      onClick={() => setRestSettingsOpen((o) => !o)}
-                    >
-                      <Settings2 className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-                {restSettingsOpen && (
-                  <div className="flex flex-wrap gap-2">
-                    {REST_PRESETS.map(({ sec, label }) => (
-                      <button
-                        key={sec}
-                        type="button"
-                        onClick={() => {
-                          const next = saveWorkoutRestConfig({ seconds: sec })
-                          setRestConfig(next)
-                        }}
-                        className={cn(
-                          "min-h-11 rounded-xl px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors touch-manipulation",
-                          restConfig.seconds === sec
-                            ? "glass-panel-accent text-primary ring-1 ring-primary/35 [--panel-accent:var(--primary)]"
-                            : "glass-subtle text-muted-foreground/80 hover:bg-glass-highlight/20 active:scale-[0.98]",
-                        )}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                </button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 min-h-9 shrink-0 px-2.5 text-[10px] font-semibold uppercase tracking-wide touch-manipulation"
+                  onClick={() => {
+                    const next = saveWorkoutRestConfig({
+                      enabled: !restConfig.enabled,
+                    })
+                    setRestConfig(next)
+                    if (!next.enabled) setRestEndsAt(null)
+                  }}
+                >
+                  {restConfig.enabled ? "On" : "Off"}
+                </Button>
               </div>
             )}
+            {restSettingsOpen && !restCountdownActive ? (
+              <div className="flex flex-wrap gap-1.5">
+                {REST_PRESETS.map(({ sec, label }) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    onClick={() => {
+                      const next = saveWorkoutRestConfig({ seconds: sec })
+                      setRestConfig(next)
+                    }}
+                    className={cn(
+                      "min-h-9 rounded-lg px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider transition-colors touch-manipulation",
+                      restConfig.seconds === sec
+                        ? "glass-panel-accent text-primary ring-1 ring-primary/35 [--panel-accent:var(--primary)]"
+                        : "glass-subtle text-muted-foreground/80 hover:bg-glass-highlight/20 active:scale-[0.98]",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
 
-          {/* Scrollable log */}
-          <div
-            className={cn(
-              "min-h-0 flex-1 overflow-y-auto overscroll-contain",
-              "scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0",
-            )}
-          >
-            {exercises.length === 0 && (
-              <div className="glass-subtle mx-4 my-8 rounded-2xl border border-dashed border-glass-border/35 px-6 py-10 text-center">
+          {/* One movement at a time */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-2 sm:px-4">
+            {exercises.length === 0 ? (
+              <div className="glass-subtle my-auto rounded-2xl border border-dashed border-glass-border/35 px-6 py-10 text-center">
                 <Dumbbell className="mx-auto size-8 text-muted-foreground/35" aria-hidden />
                 <p className="mt-3 text-base font-medium text-foreground/90">
                   No exercises yet
@@ -2099,92 +2228,94 @@ function ActiveWorkout({
                   Add a movement below to start logging sets.
                 </p>
               </div>
-            )}
-
-            <div className="space-y-3 px-4 py-3">
-              {exercises.map((ex) => {
+            ) : displayedExercise ? (
+              (() => {
+                const ex = displayedExercise
                 const prev = previousByExercise.get(ex.name.toLowerCase())
-                const collapsed = collapsedExerciseIds.has(ex.id)
-                const setCount = ex.sets.length
-                const doneCount = ex.sets.filter((s) => s.completed).length
-                const collapseAnim =
-                  "grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none"
+                const exComplete = isExerciseComplete(ex)
+                const hasPendingEffort = ex.sets.some(
+                  (s) =>
+                    s.completed &&
+                    (s.type === "working" || s.type === "failure") &&
+                    typeof s.rir !== "number" &&
+                    !s.rirSkipped,
+                )
+                const showMovementSummary =
+                  exComplete &&
+                  !hasPendingEffort &&
+                  summaryEditExId !== ex.id &&
+                  !ackedSummaryIds.has(ex.id)
+                const isDeferred =
+                  queue.skippedPending.length > 0 &&
+                  queue.skippedPending[0]?.id === ex.id
+                const cardAnimClass =
+                  cardPhase === "out" || cardPhase === "celebrate"
+                    ? "animate-workout-card-exit"
+                    : cardPhase === "in"
+                      ? "animate-workout-card-enter"
+                      : ""
                 return (
                   <div
                     key={ex.id}
-                    className={cn(glassPanelClass, "overflow-hidden p-3.5")}
+                    className={cn(
+                      "relative flex min-h-0 flex-1 flex-col",
+                      cardAnimClass,
+                    )}
                   >
-                    <div
-                      className={cn(collapseAnim, collapsed ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}
-                    >
+                    {cardPhase === "celebrate" ? (
                       <div
-                        className="min-h-0 overflow-hidden"
-                        inert={collapsed ? undefined : true}
+                        className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
+                        aria-hidden
                       >
-                        <button
-                          type="button"
-                          className="glass-subtle flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3.5 text-left transition-colors hover:bg-glass-highlight/25 active:scale-[0.99] touch-manipulation"
-                          onClick={() =>
-                            setCollapsedExerciseIds((p) => {
-                              const next = new Set(p)
-                              next.delete(ex.id)
-                              return next
-                            })
-                          }
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-base font-semibold text-foreground">
-                              {ex.name}
-                            </p>
-                            <p className="mt-1 text-xs text-muted-foreground/60">
-                              {doneCount}/{setCount} sets complete · Tap to expand
-                            </p>
-                          </div>
-                          <ChevronRight
-                            className="size-5 shrink-0 text-muted-foreground/45"
-                            aria-hidden
-                          />
-                        </button>
+                        <div className="animate-workout-complete-pop flex size-20 items-center justify-center rounded-full bg-primary/20 ring-2 ring-primary/40 backdrop-blur-sm">
+                          <Check className="size-10 text-primary" />
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
                     <div
-                      className={cn(collapseAnim, collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]")}
+                      className={cn(
+                        glassPanelClass,
+                        "flex min-h-0 flex-1 flex-col overflow-hidden p-3",
+                      )}
                     >
-                      <div
-                        className="min-h-0 overflow-hidden"
-                        inert={collapsed ? true : undefined}
-                      >
-                      <div className="flex gap-3 pt-1">
-                        <div className="min-w-0 flex-1 space-y-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <button
-                              type="button"
-                              onClick={() => toggleExerciseCollapsed(ex.id)}
-                              className="min-w-0 flex-1 rounded-xl border border-transparent px-2 py-2 -mx-1 text-left transition-colors hover:bg-glass-highlight/20 hover:border-glass-border/25 active:bg-glass-highlight/30 touch-manipulation"
-                              aria-expanded={!collapsed}
-                            >
-                              <h3 className="m-0 text-base font-semibold leading-snug text-foreground break-words sm:text-sm">
-                                {ex.name}
-                              </h3>
-                              {ex.primaryMuscles && ex.primaryMuscles.length > 0 && (
-                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                  {ex.primaryMuscles.map((m) => (
-                                    <span
-                                      key={m.code}
-                                      className="text-[10px] font-semibold rounded-md px-2 py-0.5"
-                                      style={{ backgroundColor: `${m.color}22`, color: m.color }}
-                                    >
-                                      {m.name}
-                                    </span>
-                                  ))}
-                                  {ex.category && (
-                                    <span className="text-[10px] text-muted-foreground/50">
-                                      · {ex.category}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </button>
+                      <div className="shrink-0 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <h3 className="m-0 text-base font-semibold leading-snug text-foreground break-words">
+                              {ex.name}
+                            </h3>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              {ex.primaryMuscles?.slice(0, 3).map((m) => (
+                                <span
+                                  key={m.code}
+                                  className="text-[10px] font-medium text-muted-foreground/65"
+                                >
+                                  {m.name}
+                                </span>
+                              ))}
+                              {isDeferred ? (
+                                <span className="text-[10px] font-medium text-amber-400/90">
+                                  Skipped · back now
+                                </span>
+                              ) : null}
+                              {queue.next && !queue.allSetsComplete ? (
+                                <span className="truncate text-[10px] text-muted-foreground/50">
+                                  Next: {queue.next.name}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 gap-1.5">
+                            {queue.canSkip && ex.id === queue.current?.id ? (
+                              <button
+                                type="button"
+                                onClick={() => skipExercise(ex.id)}
+                                className="glass-subtle flex size-10 items-center justify-center rounded-lg text-muted-foreground/55 transition-colors hover:border-amber-500/35 hover:bg-amber-500/10 hover:text-amber-400 active:scale-[0.97] touch-manipulation"
+                                aria-label={`Skip ${ex.name} for now`}
+                              >
+                                <SkipForward className="size-4 shrink-0" aria-hidden />
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               onClick={() => {
@@ -2192,32 +2323,60 @@ function ActiveWorkout({
                                 setSwapExerciseId(ex.id)
                                 setShowPicker(true)
                               }}
-                              className="glass-subtle flex size-12 shrink-0 items-center justify-center rounded-xl text-muted-foreground/55 transition-colors hover:border-primary/30 hover:bg-glass-highlight/30 hover:text-primary active:scale-[0.97] touch-manipulation"
+                              className="glass-subtle flex size-10 items-center justify-center rounded-lg text-muted-foreground/55 transition-colors hover:border-primary/30 hover:bg-glass-highlight/30 hover:text-primary active:scale-[0.97] touch-manipulation"
                               aria-label={`Swap ${ex.name} for another exercise`}
                             >
-                              <ArrowLeftRight className="size-5 shrink-0" aria-hidden />
+                              <ArrowLeftRight className="size-4 shrink-0" aria-hidden />
                             </button>
                           </div>
-
-                          <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.5rem_4.75rem_4.75rem_3.25rem] gap-2 px-0.5 sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5">
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
-                            Set
-                          </span>
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55">
-                            Prev
-                          </span>
-                          <span aria-hidden className="min-w-0" />
-                          <span className="col-start-4 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
-                            lb
-                          </span>
-                          <span className="col-start-5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
-                            Reps
-                          </span>
-                          <span className="col-start-6 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
-                            Done
-                          </span>
                         </div>
 
+                        {!showMovementSummary ? (
+                          <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.5rem_4.75rem_4.75rem_3.25rem] gap-2 px-0.5 sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
+                              Set
+                            </span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55">
+                              Prev
+                            </span>
+                            <span aria-hidden className="min-w-0" />
+                            <span className="col-start-4 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
+                              lb
+                            </span>
+                            <span className="col-start-5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
+                              Reps
+                            </span>
+                            <span className="col-start-6 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
+                              Done
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {showMovementSummary ? (
+                        <MovementCompleteOverview
+                          exercise={ex}
+                          sessions={previousSessions}
+                          sessionId={session.id}
+                          isLastMovement={queue.remaining.length === 0}
+                          onContinue={() =>
+                            setAckedSummaryIds((prevIds) =>
+                              new Set(prevIds).add(ex.id),
+                            )
+                          }
+                          onEditSets={() => setSummaryEditExId(ex.id)}
+                          onAddOptionalSet={(weight, reps) =>
+                            addOptionalSet(ex.id, weight, reps)
+                          }
+                        />
+                      ) : (
+                        <>
+                      <div
+                        className={cn(
+                          "min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain py-1",
+                          "scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0",
+                        )}
+                      >
                         {ex.sets.map((set) => {
                           const prevSet = prev?.[set.setNumber - 1]
                           const typeInfo = SET_TYPE_LABELS[set.type]
@@ -2244,132 +2403,173 @@ function ActiveWorkout({
                               <div
                                 className={cn(
                                   "grid grid-cols-[2.75rem_minmax(0,1fr)_2.5rem_4.75rem_4.75rem_3.25rem] gap-2 items-center rounded-xl px-0.5 py-1 transition-colors sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5 sm:py-0.5",
-                                  set.completed && "border border-primary/20 bg-primary/10 ring-1 ring-primary/20",
+                                  set.completed &&
+                                    "border border-primary/20 bg-primary/10 ring-1 ring-primary/20",
                                 )}
                                 style={{
-                                  transform: swipeDx !== 0 ? `translateX(${swipeDx}px)` : undefined,
+                                  transform:
+                                    swipeDx !== 0 ? `translateX(${swipeDx}px)` : undefined,
                                   transition:
                                     swipeDx !== 0 ? "none" : "transform 0.2s ease-out",
                                 }}
                               >
-                              <button
-                                type="button"
-                                onClick={() => cycleSetType(ex.id, set.id)}
-                                className={cn(
-                                  "flex min-h-11 min-w-11 items-center justify-center rounded-xl text-sm font-bold tabular-nums transition-colors touch-manipulation active:scale-[0.96]",
-                                  typeInfo.color,
-                                )}
-                                title={`Type: ${set.type} (tap to change)`}
-                              >
-                                {set.type === "working" ? set.setNumber : typeInfo.short}
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => cycleSetType(ex.id, set.id)}
+                                  className={cn(
+                                    "flex min-h-11 min-w-11 items-center justify-center rounded-xl text-sm font-bold tabular-nums transition-colors touch-manipulation active:scale-[0.96]",
+                                    typeInfo.color,
+                                  )}
+                                  title={`Type: ${set.type} (tap to change)`}
+                                >
+                                  {set.type === "working" ? set.setNumber : typeInfo.short}
+                                </button>
 
-                              <span className="text-xs text-muted-foreground/55 tabular-nums truncate px-0.5">
-                                {prevSet
-                                  ? `${prevSet.weight ?? "–"}×${prevSet.reps ?? "–"}`
-                                  : "–"}
-                              </span>
+                                <span className="text-xs text-muted-foreground/55 tabular-nums truncate px-0.5">
+                                  {prevSet
+                                    ? `${prevSet.weight ?? "–"}×${prevSet.reps ?? "–"}`
+                                    : "–"}
+                                </span>
 
-                              <button
-                                type="button"
-                                className="glass-subtle flex size-10 min-h-10 min-w-10 items-center justify-center rounded-xl text-muted-foreground/50 transition-colors hover:border-primary/30 hover:bg-glass-highlight/30 hover:text-primary active:scale-[0.96] touch-manipulation sm:size-9 sm:min-h-9 sm:min-w-9"
-                                aria-label="Plate calculator"
-                                onClick={(e) => {
-                                  e.preventDefault()
-                                  e.stopPropagation()
-                                  setPlateCalcTarget({
-                                    exId: ex.id,
-                                    setId: set.id,
-                                    weight: set.weight,
-                                  })
-                                }}
-                              >
-                                <Calculator className="size-4 sm:size-3.5" aria-hidden />
-                              </button>
+                                <button
+                                  type="button"
+                                  className="glass-subtle flex size-10 min-h-10 min-w-10 items-center justify-center rounded-xl text-muted-foreground/50 transition-colors hover:border-primary/30 hover:bg-glass-highlight/30 hover:text-primary active:scale-[0.96] touch-manipulation sm:size-9 sm:min-h-9 sm:min-w-9"
+                                  aria-label="Plate calculator"
+                                  onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    setPlateCalcTarget({
+                                      exId: ex.id,
+                                      setId: set.id,
+                                      weight: set.weight,
+                                    })
+                                  }}
+                                >
+                                  <Calculator className="size-4 sm:size-3.5" aria-hidden />
+                                </button>
 
-                              <Input
-                                type="number"
-                                className={cn(
-                                  setInputClass,
-                                  ghostSetIds.has(set.id) && setInputGhostClass,
-                                )}
-                                placeholder="—"
-                                value={set.weight ?? ""}
-                                onFocus={() => clearGhostForSet(set.id)}
-                                onChange={(e) =>
-                                  updateSet(
-                                    ex.id,
-                                    set.id,
-                                    "weight",
-                                    e.target.value ? parseFloat(e.target.value) : null,
-                                  )
-                                }
-                              />
+                                <Input
+                                  type="number"
+                                  className={cn(
+                                    setInputClass,
+                                    ghostSetIds.has(set.id) && setInputGhostClass,
+                                  )}
+                                  placeholder="—"
+                                  value={set.weight ?? ""}
+                                  onFocus={() => clearGhostForSet(set.id)}
+                                  onChange={(e) =>
+                                    updateSet(
+                                      ex.id,
+                                      set.id,
+                                      "weight",
+                                      e.target.value ? parseFloat(e.target.value) : null,
+                                    )
+                                  }
+                                />
 
-                              <Input
-                                type="number"
-                                className={cn(
-                                  setInputClass,
-                                  ghostSetIds.has(set.id) && setInputGhostClass,
-                                )}
-                                placeholder="—"
-                                value={set.reps ?? ""}
-                                onFocus={() => clearGhostForSet(set.id)}
-                                onChange={(e) =>
-                                  updateSet(
-                                    ex.id,
-                                    set.id,
-                                    "reps",
-                                    e.target.value ? parseInt(e.target.value) : null,
-                                  )
-                                }
-                              />
+                                <Input
+                                  type="number"
+                                  className={cn(
+                                    setInputClass,
+                                    ghostSetIds.has(set.id) && setInputGhostClass,
+                                  )}
+                                  placeholder="—"
+                                  value={set.reps ?? ""}
+                                  onFocus={() => clearGhostForSet(set.id)}
+                                  onChange={(e) =>
+                                    updateSet(
+                                      ex.id,
+                                      set.id,
+                                      "reps",
+                                      e.target.value ? parseInt(e.target.value) : null,
+                                    )
+                                  }
+                                />
 
-                              <button
-                                type="button"
-                                onClick={() => toggleSetComplete(ex.id, set.id)}
-                                className={cn(
-                                  "mx-auto flex size-11 items-center justify-center rounded-xl transition-all touch-manipulation active:scale-[0.94]",
-                                  set.completed
-                                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/30"
-                                    : "glass-subtle text-muted-foreground/45 hover:bg-glass-highlight/25",
-                                )}
-                              >
-                                <Check className="size-5" />
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSetComplete(ex.id, set.id)}
+                                  className={cn(
+                                    "mx-auto flex size-11 items-center justify-center rounded-xl transition-all touch-manipulation active:scale-[0.94]",
+                                    set.completed
+                                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/30"
+                                      : "glass-subtle text-muted-foreground/45 hover:bg-glass-highlight/25",
+                                  )}
+                                >
+                                  <Check className="size-5" />
+                                </button>
                               </div>
                             </div>
                           )
                         })}
+                      </div>
 
-                        <div className="flex gap-2.5 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => addSet(ex.id)}
-                            className="glass-subtle flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-glass-border/40 py-3 text-sm font-semibold text-muted-foreground/70 transition-colors hover:bg-glass-highlight/20 hover:text-foreground active:scale-[0.99] touch-manipulation"
-                          >
-                            <Plus className="size-4" />
-                            Add set
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeExercise(ex.id)}
-                            className="glass-subtle flex size-12 shrink-0 items-center justify-center rounded-xl border border-dashed border-glass-border/40 text-muted-foreground/45 transition-colors hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-400 active:scale-[0.97] touch-manipulation"
-                            aria-label={`Remove ${ex.name}`}
-                          >
-                            <Trash2 className="size-5" />
-                          </button>
-                          </div>
-                        </div>
+                      {exComplete && summaryEditExId === ex.id ? (
+                        <button
+                          type="button"
+                          onClick={() => setSummaryEditExId(null)}
+                          className="glass-subtle mt-1.5 flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border border-primary/25 px-3 text-xs font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 touch-manipulation"
+                        >
+                          <Check className="size-3.5" aria-hidden />
+                          Done editing — view summary
+                        </button>
+                      ) : (
+                        <ProgressiveOverloadCoach
+                          key={ex.id}
+                          exercise={ex}
+                          sessions={previousSessions}
+                          sessionId={session.id}
+                          onApplyToNextSet={(weight, reps) =>
+                            applyRecToNextSet(ex.id, weight, reps)
+                          }
+                          onAddOptionalSet={(weight, reps) =>
+                            addOptionalSet(ex.id, weight, reps)
+                          }
+                          onSetEffort={(setId, patch) =>
+                            updateSetEffort(ex.id, setId, patch)
+                          }
+                        />
+                      )}
+
+                      <div className="flex shrink-0 gap-2.5 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => addSet(ex.id)}
+                          className="glass-subtle flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-glass-border/40 py-3 text-sm font-semibold text-muted-foreground/70 transition-colors hover:bg-glass-highlight/20 hover:text-foreground active:scale-[0.99] touch-manipulation"
+                        >
+                          <Plus className="size-4" />
+                          Add set
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeExercise(ex.id)}
+                          className="glass-subtle flex size-12 shrink-0 items-center justify-center rounded-xl border border-dashed border-glass-border/40 text-muted-foreground/45 transition-colors hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-400 active:scale-[0.97] touch-manipulation"
+                          aria-label={`Remove ${ex.name}`}
+                        >
+                          <Trash2 className="size-5" />
+                        </button>
                       </div>
-                      </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 )
-              })}
-            </div>
+              })()
+            ) : queue.allSetsComplete ? (
+              <div className="my-auto flex flex-col items-center justify-center px-4 py-10 text-center">
+                <div className="animate-workout-complete-pop flex size-16 items-center justify-center rounded-full bg-primary/15 ring-2 ring-primary/30">
+                  <Check className="size-8 text-primary" aria-hidden />
+                </div>
+                <p className="mt-5 text-lg font-semibold text-foreground">
+                  All movements complete
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground/65">
+                  Finish the workout when you are ready.
+                </p>
+              </div>
+            ) : null}
 
-            <div className="px-4 pb-3 pt-1">
+            <div className="shrink-0 pt-1">
               <button
                 type="button"
                 onClick={() => {
@@ -2377,22 +2577,22 @@ function ActiveWorkout({
                   setSwapExerciseId(null)
                   setShowPicker(true)
                 }}
-                className="glass-subtle flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/30 py-3.5 text-base font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 active:scale-[0.99] touch-manipulation sm:min-h-12 sm:text-sm"
+                className="glass-subtle flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/25 py-2.5 text-sm font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 active:scale-[0.99] touch-manipulation"
               >
-                <Plus className="size-5" />
+                <Plus className="size-4" />
                 Add exercise
               </button>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="glass-subtle shrink-0 border-t border-glass-border/25 px-4 py-3.5 pb-[max(1.25rem,calc(0.875rem+env(safe-area-inset-bottom)))]">
-            <div className="flex items-stretch gap-3">
+          <div className="glass-subtle shrink-0 border-t border-glass-border/25 px-3 py-2.5 pb-[max(0.75rem,calc(0.5rem+env(safe-area-inset-bottom)))] sm:px-4">
+            <div className="flex items-stretch gap-2.5">
               <Button
                 type="button"
                 variant="outline"
                 size="icon-lg"
-                className="size-14 min-h-14 min-w-14 shrink-0 touch-manipulation rounded-2xl border-red-500/30 text-red-400 hover:bg-red-500/10 active:scale-[0.97] sm:size-12 sm:min-h-12 sm:min-w-12 sm:rounded-xl"
+                className="size-12 min-h-12 min-w-12 shrink-0 touch-manipulation rounded-xl border-red-500/30 text-red-400 hover:bg-red-500/10 active:scale-[0.97]"
                 aria-label="Discard workout"
                 onClick={() => setConfirmEndAction("discard")}
               >
@@ -2402,10 +2602,10 @@ function ActiveWorkout({
                 type="button"
                 variant="glass"
                 size="lg"
-                className="h-14 min-h-14 min-w-0 flex-1 gap-2.5 rounded-2xl text-base font-semibold press-scale touch-manipulation sm:h-12 sm:min-h-12 sm:rounded-xl sm:text-sm"
+                className="h-12 min-h-12 min-w-0 flex-1 gap-2 rounded-xl text-sm font-semibold press-scale touch-manipulation"
                 onClick={() => setConfirmEndAction("finish")}
               >
-                <Check className="size-5 shrink-0" />
+                <Check className="size-4 shrink-0" />
                 Finish workout
               </Button>
             </div>
@@ -2587,6 +2787,8 @@ export default function WorkoutsPage() {
   } | null>(null)
   const [startError, setStartError] = useState<string | null>(null)
   const [startingWorkout, setStartingWorkout] = useState(false)
+  /** Bumped after a workout is finished so the progression hero re-fetches. */
+  const [progressionRefresh, setProgressionRefresh] = useState(0)
 
   templatesRef.current = templates
 
@@ -2824,10 +3026,23 @@ export default function WorkoutsPage() {
       }),
     })
     if (res.ok) {
-      const updated = await res.json()
+      const updated = (await res.json()) as WorkoutSession
       setSessions((prev) =>
         prev.map((s) => (s.id === activeSession.id ? updated : s)),
       )
+      /* Persist the progressive-overload report so the hero survives reloads. */
+      try {
+        const summary = summarizeWorkoutProgression(updated, completedSessions)
+        await apiFetch("/api/workout-progression", {
+          ...noStore,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: updated.id, summary }),
+        })
+      } catch {
+        /* Summary is best-effort; never block finishing the workout. */
+      }
+      setProgressionRefresh((n) => n + 1)
     }
   }
 
@@ -3371,28 +3586,14 @@ export default function WorkoutsPage() {
             </div>
           </div>
 
-          {/* Quick start */}
-          <div className="animate-fade-up stagger-2 space-y-2">
-            <Button
-              type="button"
-              variant="glass"
-              size="sm"
-              disabled={startingWorkout}
-              onClick={() => void startSession("Workout")}
-              className="h-8 w-full shrink-0 gap-1 px-2 text-[11px] press-scale touch-manipulation sm:h-9 sm:text-xs"
-            >
-              <Play className="size-3 shrink-0" />
-              {startingWorkout ? "Starting…" : "Start Empty Workout"}
-            </Button>
-            {startError && (
-              <p className="text-center text-xs text-destructive px-1" role="alert">
-                {startError}
-              </p>
-            )}
-          </div>
+          {/* ── Progressive overload hero (persisted) ── */}
+          <ProgressionSummaryHero
+            className="animate-fade-up stagger-1"
+            refreshToken={progressionRefresh}
+          />
 
           {/* ── My Routines ──────────────────────── */}
-          <div className="animate-fade-up stagger-3 space-y-3">
+          <div className="animate-fade-up stagger-2 space-y-3">
             <div className="flex items-center justify-between px-1">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">
                 My Routines
@@ -3613,6 +3814,26 @@ export default function WorkoutsPage() {
                 </div>
               ) : null}
               </>
+            )}
+          </div>
+
+          {/* Quick start */}
+          <div className="animate-fade-up stagger-3 space-y-2">
+            <Button
+              type="button"
+              variant="glass"
+              size="sm"
+              disabled={startingWorkout}
+              onClick={() => void startSession("Workout")}
+              className="h-8 w-full shrink-0 gap-1 px-2 text-[11px] press-scale touch-manipulation sm:h-9 sm:text-xs"
+            >
+              <Play className="size-3 shrink-0" />
+              {startingWorkout ? "Starting…" : "Start Empty Workout"}
+            </Button>
+            {startError && (
+              <p className="text-center text-xs text-destructive px-1" role="alert">
+                {startError}
+              </p>
             )}
           </div>
 

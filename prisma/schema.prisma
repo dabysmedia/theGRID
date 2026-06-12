@@ -141,6 +141,54 @@ model WorkoutSession {
   @@index([userId])
 }
 
+/// Persisted progressive-overload report for one completed workout session.
+/// `summaryJson` holds the full WorkoutProgressionSummaryData payload so the
+/// workouts-page hero survives reloads and does not depend on client state.
+model WorkoutProgressionSummary {
+  id          String   @id @default(cuid())
+  sessionId   String   @unique
+  userId      String?
+  summaryJson String   @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+/// Audit record for a progressive-overload recommendation event so
+/// recommendations can be reproduced and inspected later.
+model ProgressionRecommendation {
+  id                 String    @id @default(cuid())
+  userId             String?
+  sessionId          String?
+  /// Normalized exercise name key for the movement the rec targets.
+  targetExerciseKey  String
+  /// Set when the rec was estimated from a similar movement.
+  sourceExerciseKey  String?
+  /// JSON string[] of session ids the rec was computed from.
+  sourceSessionIds   String    @default("[]")
+  /// initial | next-set | next-session
+  recommendationType String
+  suggestedLoadLb    Float?
+  suggestedRepMin    Int?
+  suggestedRepMax    Int?
+  targetRir          Int?
+  optionalSetCount   Int       @default(0)
+  /// high | medium | low
+  confidence         String
+  /// JSON string[] of structured reason codes.
+  reasonCodes        String    @default("[]")
+  explanation        String    @default("")
+  /// shown | applied | dismissed
+  status             String    @default("shown")
+  createdAt          DateTime  @default(now())
+  acceptedAt         DateTime?
+  dismissedAt        DateTime?
+
+  @@index([userId, createdAt])
+  @@index([sessionId])
+}
+
 model SleepEntry {
   id        String   @id @default(cuid())
   date      DateTime

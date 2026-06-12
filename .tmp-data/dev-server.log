@@ -1,0 +1,58 @@
+﻿
+> the-grid@0.1.0 dev
+> prisma generate && prisma db push && next dev
+
+node.exe : Loaded Prisma config from prisma.config.ts.
+At line:1 char:1
++ & "C:\Users\carbh\AppData\Local\Programs\nodejs/node.exe" "C:\Users\c ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Loaded Prisma c...isma.config.ts.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Prisma schema loaded from prisma\schema.prisma.
+
+Γ£ö Generated Prisma Client (7.6.0) to .\src\generated\prisma in 185ms
+
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma\schema.prisma.
+Datasource "db": SQLite database "dev.db" at "file:./prisma/dev.db"
+
+The database is already in sync with the Prisma schema.
+
+Γû▓ Next.js 16.2.2 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.0.0.182:3000
+- Environments: .env.local, .env
+Γ£ô Ready in 356ms
+
+ GET /workouts 200 in 1057ms (next.js: 692ms, application-code: 365ms)
+ GET /api/workout-progression?limit=1&_=1781289988883 200 in 193ms (next.js: 93ms, application-code: 100ms)
+ GET /api/workout-templates?_=1781289988884 200 in 234ms (next.js: 226ms, application-code: 8ms)
+ GET /api/workout-sessions?_=1781289988884 200 in 285ms (next.js: 278ms, application-code: 6ms)
+ GET /api/users 200 in 44ms (next.js: 38ms, application-code: 6ms)
+ POST /api/progression-recommendations 201 in 47ms (next.js: 33ms, application-code: 14ms)
+ POST /api/progression-recommendations 201 in 8ms (next.js: 2ms, application-code: 6ms)
+ PUT /api/workout-sessions/cmqba1nyc0004zwvdivvdyenm 200 in 654ms (next.js: 642ms, application-code: 13ms)
+ POST /api/workout-sessions 201 in 12ms (next.js: 2ms, application-code: 9ms)
+ PUT /api/workout-sessions/cmqba2zbu0002n8vd5r45z45g 200 in 15ms (next.js: 9ms, application-code: 6ms)
+ GET /api/workout-sessions/cmqba2zbu0002n8vd5r45z45g 200 in 10ms (next.js: 2ms, application-code: 8ms)
+ PUT /api/workout-sessions/cmqba2zbu0002n8vd5r45z45g 200 in 10ms (next.js: 3ms, application-code: 7ms)
+ POST /api/workout-progression 201 in 13ms (next.js: 2ms, application-code: 11ms)
+ GET /api/workout-progression?limit=1 200 in 6ms (next.js: 1649┬╡s, application-code: 4ms)
+ POST /api/progression-recommendations 201 in 9ms (next.js: 2ms, application-code: 6ms)
+ GET /api/workout-progression?limit=1 404 in 5ms (next.js: 1492┬╡s, application-code: 3ms)
+ DELETE /api/workout-sessions/cmqba1nyc0004zwvdivvdyenm 200 in 13ms (next.js: 7ms, application-code: 6ms)
+ GET /api/workout-progression?limit=1&_=1781290015249 200 in 6ms (next.js: 2ms, application-code: 4ms)
+ GET /api/workout-progression?limit=1&_=1781290015250 200 in 6ms (next.js: 1980┬╡s, application-code: 4ms)
+ DELETE /api/workout-sessions/cmqba1wju0005zwvd5d976lsl 200 in 9ms (next.js: 6ms, application-code: 4ms)
+ DELETE /api/workout-sessions/cmqba2zbu0002n8vd5r45z45g 200 in 5ms (next.js: 1368┬╡s, application-code: 4ms)
+Γ£ô Compiled in 95ms
+Γ£ô Compiled in 102ms
+Γ£ô Compiled in 102ms
+Γ£ô Compiled in 84ms
+Γ£ô Compiled in 101ms
+Γ£ô Compiled in 93ms
+ GET /api/workout-progression?limit=1 200 in 6ms (next.js: 1561┬╡s, application-code: 4ms)
+ GET /api/workout-sessions?_=1 200 in 5ms (next.js: 1441┬╡s, application-code: 3ms)
