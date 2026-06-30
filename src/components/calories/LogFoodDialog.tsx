@@ -465,7 +465,7 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
 
       {s.displayedSavedMeals.length > 0 && (
         <div
-          className="max-h-[min(42vh,300px)] overflow-y-auto overscroll-y-contain touch-pan-y space-y-0.5 pr-0.5 [-webkit-overflow-scrolling:touch]"
+          className="max-h-[70vh] sm:max-h-[50vh] overflow-y-auto overscroll-y-contain touch-pan-y space-y-0.5 pr-0.5 [-webkit-overflow-scrolling:touch]"
           aria-label="Saved meals for this meal type"
         >
           {s.displayedSavedMeals.map((meal) => {
