@@ -43,7 +43,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
         <DialogContent
           showCloseButton
           className={cn(
-            "glass-frost flex min-h-0 flex-col gap-0 overflow-hidden p-0",
+            "glass-frost flex h-[95vh] max-h-[95vh] sm:h-auto sm:max-h-[90vh] flex-col gap-0 overflow-hidden p-0",
             "[&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3"
           )}
         >
@@ -79,7 +79,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
                   key={m}
                   type="button"
                   disabled={s.vacationBlocksLog && !s.editingEntry}
-                  onClick={() => s.setMealType(m)}
+                  onClick={() => s.setMealType(s.mealType === m ? null : m)}
                   className={cn(
                     "flex-1 rounded-md py-2.5 text-xs font-medium capitalize transition-all duration-150",
                     s.mealType === m
@@ -373,7 +373,7 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
           onClick={() => {
             s.setSaveMealError(null)
             s.setEditingSavedMealId(null)
-            if (!s.showCreateMeal) s.setNewMealTags([s.mealType])
+            if (!s.showCreateMeal) s.setNewMealTags(s.mealType ? [s.mealType] : [])
             s.setShowCreateMeal(!s.showCreateMeal)
           }}
           className="min-h-10 shrink-0 rounded-lg border border-primary/25 bg-primary/10 px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-primary transition-colors hover:border-primary/40 hover:bg-primary/18 active:scale-[0.98] touch-manipulation"
@@ -456,7 +456,7 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
         </div>
       )}
 
-      {s.savedMeals.length > 0 && s.displayedSavedMeals.length === 0 && (
+      {s.savedMeals.length > 0 && s.displayedSavedMeals.length === 0 && s.mealType && (
         <p className="mb-2 text-[11px] text-muted-foreground/70">
           No saved meals tagged for <span className="capitalize font-medium text-foreground/80">{s.mealType}</span>. Switch
           meal type or add one with this tag.

@@ -56,7 +56,7 @@ export function useLogFoodDialog({
 
   const editingEntry = controlledEditingEntry ?? null
 
-  const [mealType, setMealType] = useState("lunch")
+  const [mealType, setMealType] = useState<string | null>(null)
   const [description, setDescription] = useState("")
   const [calories, setCalories] = useState("")
   const [protein, setProtein] = useState("")
@@ -71,7 +71,7 @@ export function useLogFoodDialog({
   const [newMealProtein, setNewMealProtein] = useState("")
   const [newMealCarbs, setNewMealCarbs] = useState("")
   const [newMealFat, setNewMealFat] = useState("")
-  const [newMealTags, setNewMealTags] = useState<string[]>(["lunch"])
+  const [newMealTags, setNewMealTags] = useState<string[]>([])
   const [editingSavedMealId, setEditingSavedMealId] = useState<string | null>(null)
   const [editSavedName, setEditSavedName] = useState("")
   const [editSavedCal, setEditSavedCal] = useState("")
@@ -164,6 +164,7 @@ export function useLogFoodDialog({
   }, [editingEntry, open])
 
   const displayedSavedMeals = useMemo(() => {
+    if (!mealType) return savedMeals
     const mt = mealType.toLowerCase()
     return savedMeals.filter((m) => savedMealTagList(m).includes(mt))
   }, [savedMeals, mealType])
@@ -258,9 +259,10 @@ export function useLogFoodDialog({
     if (cal == null || cal <= 0) return
 
     const label = food.brand_name ? `${food.food_name} (${food.brand_name})` : food.food_name
+    const effectiveMealType = mealType || mealTypes[0]
     pushDraftItem(
       createDraftItem({
-        mealType,
+        mealType: effectiveMealType,
         description: label,
         unitCalories: Math.round(cal),
         unitProtein: food.protein != null ? Math.round(food.protein) : null,
@@ -309,9 +311,10 @@ export function useLogFoodDialog({
     const c = carbs.trim() === "" ? null : parseFloat(carbs)
     const f = fat.trim() === "" ? null : parseFloat(fat)
 
+    const effectiveMealType = mealType || mealTypes[0]
     pushDraftItem(
       createDraftItem({
-        mealType,
+        mealType: effectiveMealType,
         description: description.trim() || null,
         unitCalories: Math.round(cal),
         unitProtein: Number.isFinite(p) ? p : null,
@@ -344,7 +347,7 @@ export function useLogFoodDialog({
   function cancelEdit() {
     onEditingEntryChange?.(null)
     resetCurrentItemFields()
-    setMealType("lunch")
+    setMealType(null)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -353,13 +356,14 @@ export function useLogFoodDialog({
 
     if (editingEntry) {
       if (vacationBlocksEditingEntry) return
+      const effectiveMealType = mealType || editingEntry.mealType
       const res = await apiFetch("/api/calories", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: editingEntry.id,
           date: editingEntry.date.split("T")[0],
-          mealType,
+          mealType: effectiveMealType,
           description: description || null,
           calories,
           protein: protein || null,
@@ -381,9 +385,11 @@ export function useLogFoodDialog({
 
   function handleUseSavedMeal(meal: SavedMeal) {
     if (vacationBlocksLog) return
+    const mealTags = savedMealTagList(meal)
+    const effectiveMealType = mealType || (mealTags.length > 0 ? mealTags[0] : mealTypes[0])
     pushDraftItem(
       createDraftItem({
-        mealType,
+        mealType: effectiveMealType,
         description: meal.name,
         unitCalories: meal.calories,
         unitProtein: meal.protein,
@@ -534,18 +540,19 @@ export function useLogFoodDialog({
     setNewMealProtein("")
     setNewMealCarbs("")
     setNewMealFat("")
-    setNewMealTags([mealType])
+    setNewMealTags(mealType ? [mealType] : [])
   }
 
   async function handleSaveCurrentAsFrequent() {
     if (!description.trim() || !calories.trim()) return
 
+    const tags = mealType ? [mealType] : [mealTypes[0]]
     await apiFetch("/api/saved-meals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: description.trim(),
-        mealTags: [mealType],
+        mealTags: tags,
         calories,
         protein: protein || null,
         carbs: carbs || null,
