@@ -34,6 +34,8 @@ type Props = {
 
 /**
  * Shared hub HUD panel: readiness + isometric steps bars in one container.
+ * Breaks out of WeeklyHero padding (`-mx-4 lg:-mx-5`) so the steel wash and
+ * readiness gradient sit flush to the overview card edges.
  */
 export function StepsActivityBars({
   values,
@@ -63,13 +65,13 @@ export function StepsActivityBars({
 
   return (
     <div
-      className={cn("relative", className)}
+      className={cn("relative -mx-4 lg:-mx-5", className)}
       style={{
         perspective: "520px",
         perspectiveOrigin: "50% 120%",
       }}
     >
-      {/* Soft steel wash — open composition, no nested frame */}
+      {/* Soft steel wash — full card width (no padded gutter / light left edge) */}
       <div
         className="pointer-events-none absolute inset-0 opacity-80"
         aria-hidden
@@ -87,17 +89,20 @@ export function StepsActivityBars({
           backgroundImage:
             "linear-gradient(to right, oklch(0.48 0.015 250 / 16%) 1px, transparent 1px), linear-gradient(to top, oklch(0.48 0.015 250 / 12%) 1px, transparent 1px)",
           backgroundSize: "14% 8px, 100% 8px",
+          /* Offset so the first vertical grid line is not a bright strip on the card edge */
+          backgroundPosition: "7% 0, 0 0",
           maskImage: "linear-gradient(to top, black, transparent)",
           transform: "rotateX(58deg) scaleY(0.85)",
           transformOrigin: "bottom center",
         }}
       />
 
-      {/* Readiness row — steel HUD chrome; band accent stays semantic */}
+      {/* Readiness — text inset; gradient full-bleed to card edges */}
       <Link
         href="/vitals"
-        className="relative z-10 flex items-center gap-2.5 px-0.5 py-2 transition-colors hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
+        className="relative z-10 block transition-colors hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
       >
+        <div className="flex items-center gap-2.5 px-4 py-2 lg:px-5">
           <div
             className="relative flex h-12 w-12 shrink-0 items-center justify-center"
             style={{
@@ -171,39 +176,41 @@ export function StepsActivityBars({
                 ) : null}
               </p>
             </div>
-            {/* Edge-to-edge band gradient — no muted track frame */}
-            <div
-              className="relative mt-1.5 h-1.5 w-full overflow-hidden rounded-sm transition-opacity duration-700 ease-out"
-              style={{
-                opacity: readiness != null ? 1 : 0.45,
-                background:
-                  readiness != null
-                    ? `linear-gradient(90deg, ${accent}55 0%, ${accent} 42%, ${accent}cc 100%)`
-                    : "linear-gradient(90deg, oklch(0.42 0.015 250 / 55%) 0%, oklch(0.48 0.015 250 / 70%) 50%, oklch(0.42 0.015 250 / 55%) 100%)",
-                boxShadow: band
-                  ? `inset 0 1px 0 #ffffff44, 0 0 10px ${accent}55`
-                  : "inset 0 1px 0 oklch(0.55 0.01 250 / 25%)",
-              }}
-            >
-              {readiness != null ? (
-                <div
-                  className="absolute inset-x-0 top-0 h-1/2 opacity-40"
-                  style={{
-                    background: "linear-gradient(180deg, #ffffff66, transparent)",
-                  }}
-                />
-              ) : null}
-            </div>
           </div>
+        </div>
+
+        {/* Edge-to-edge band gradient — full overview card width */}
+        <div
+          className="relative h-1.5 w-full overflow-hidden transition-opacity duration-700 ease-out"
+          style={{
+            opacity: readiness != null ? 1 : 0.45,
+            background:
+              readiness != null
+                ? `linear-gradient(90deg, ${accent}55 0%, ${accent} 42%, ${accent}cc 100%)`
+                : "linear-gradient(90deg, oklch(0.42 0.015 250 / 55%) 0%, oklch(0.48 0.015 250 / 70%) 50%, oklch(0.42 0.015 250 / 55%) 100%)",
+            boxShadow: band
+              ? `inset 0 1px 0 #ffffff44, 0 0 10px ${accent}55`
+              : "inset 0 1px 0 oklch(0.55 0.01 250 / 25%)",
+          }}
+        >
+          {readiness != null ? (
+            <div
+              className="absolute inset-x-0 top-0 h-1/2 opacity-40"
+              style={{
+                background: "linear-gradient(180deg, #ffffff66, transparent)",
+              }}
+            />
+          ) : null}
+        </div>
       </Link>
 
       <div
-        className="pointer-events-none mx-0.5 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent"
+        className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/12 to-transparent"
         aria-hidden
       />
 
-      {/* Steps bars */}
-      <div className="relative z-10 px-0.5 pb-1 pt-2.5">
+      {/* Steps bars — re-inset to match card content padding */}
+      <div className="relative z-10 px-4 pb-1 pt-2.5 lg:px-5">
         <div className="mb-2 flex items-end justify-between gap-2">
           <p className="type-hud-subsection">Steps Activity</p>
           <p className="text-[10px] tabular-nums tracking-wide text-muted-foreground/55">
@@ -220,135 +227,135 @@ export function StepsActivityBars({
         </div>
 
         <div
-          className="pointer-events-none absolute inset-x-1 bottom-[2.15rem] h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
+          className="pointer-events-none absolute inset-x-4 bottom-[2.15rem] h-px bg-gradient-to-r from-transparent via-white/15 to-transparent lg:inset-x-5"
           aria-hidden
         />
 
-          <div className="relative" style={{ transformStyle: "preserve-3d" }}>
-            <div
-              className="relative flex items-end justify-between gap-1.5 px-0.5"
-              style={{ height: BAR_AREA_PX }}
-            >
-              {goalLineBottomPx != null ? (
+        <div className="relative" style={{ transformStyle: "preserve-3d" }}>
+          <div
+            className="relative flex items-end justify-between gap-1.5 px-0.5"
+            style={{ height: BAR_AREA_PX }}
+          >
+            {goalLineBottomPx != null ? (
+              <div
+                className="pointer-events-none absolute inset-x-0 z-20"
+                style={{ bottom: goalLineBottomPx }}
+                aria-hidden
+              >
                 <div
-                  className="pointer-events-none absolute inset-x-0 z-20"
-                  style={{ bottom: goalLineBottomPx }}
-                  aria-hidden
+                  className="mx-0.5 h-0 border-t-[1.5px] border-dashed border-amber-300/90"
+                  style={{ boxShadow: "0 0 8px #fbbf2466" }}
+                />
+                <span className="absolute -top-3 right-0 text-[8px] font-semibold uppercase tracking-[0.14em] text-amber-300/85">
+                  Goal
+                </span>
+              </div>
+            ) : null}
+
+            {values.map((val, i) => {
+              const pct = scaleMax > 0 ? val / scaleMax : 0
+              const heightPx = Math.max(10, Math.round(pct * BAR_MAX_PX))
+              const isToday = i === todayIdx
+              const delay = 280 + i * 70
+
+              return (
+                <div
+                  key={i}
+                  className="relative flex min-w-0 flex-1 justify-center"
+                  style={{ height: BAR_AREA_PX, perspective: "240px" }}
                 >
                   <div
-                    className="mx-0.5 h-0 border-t-[1.5px] border-dashed border-amber-300/90"
-                    style={{ boxShadow: "0 0 8px #fbbf2466" }}
-                  />
-                  <span className="absolute -top-3 right-0 text-[8px] font-semibold uppercase tracking-[0.14em] text-amber-300/85">
-                    Goal
-                  </span>
-                </div>
-              ) : null}
-
-              {values.map((val, i) => {
-                const pct = scaleMax > 0 ? val / scaleMax : 0
-                const heightPx = Math.max(10, Math.round(pct * BAR_MAX_PX))
-                const isToday = i === todayIdx
-                const delay = 280 + i * 70
-
-                return (
-                  <div
-                    key={i}
-                    className="relative flex min-w-0 flex-1 justify-center"
-                    style={{ height: BAR_AREA_PX, perspective: "240px" }}
+                    className="absolute bottom-0 origin-bottom animate-bar-grow"
+                    style={{
+                      width: "62%",
+                      maxWidth: 22,
+                      height: heightPx,
+                      animationDelay: `${delay}ms`,
+                      transformStyle: "preserve-3d",
+                      transform: "rotateX(12deg) rotateY(-18deg)",
+                    }}
                   >
                     <div
-                      className="absolute bottom-0 origin-bottom animate-bar-grow"
+                      className="absolute left-0 right-0 top-0"
                       style={{
-                        width: "62%",
-                        maxWidth: 22,
-                        height: heightPx,
-                        animationDelay: `${delay}ms`,
-                        transformStyle: "preserve-3d",
-                        transform: "rotateX(12deg) rotateY(-18deg)",
+                        height: 7,
+                        transform: "translateY(-6px) rotateX(72deg)",
+                        transformOrigin: "bottom",
+                        background: isToday
+                          ? "linear-gradient(135deg, #86efac, #22c55e)"
+                          : "linear-gradient(135deg, #4ade8088, #16a34a66)",
+                        boxShadow: isToday
+                          ? "0 0 12px #22c55e66"
+                          : "0 0 6px #22c55e22",
+                      }}
+                    />
+                    <div
+                      className="absolute bottom-0 top-0"
+                      style={{
+                        width: 6,
+                        right: -5,
+                        transform: "skewY(-38deg)",
+                        transformOrigin: "left bottom",
+                        background: isToday
+                          ? "linear-gradient(180deg, #16a34a, #14532d)"
+                          : "linear-gradient(180deg, #15803d88, #052e1688)",
+                      }}
+                    />
+                    <div
+                      className="absolute inset-0 overflow-hidden"
+                      style={{
+                        background: isToday
+                          ? "linear-gradient(180deg, #4ade80 0%, #22c55e 45%, #15803d 100%)"
+                          : "linear-gradient(180deg, #22c55e99 0%, #16a34a66 55%, #14532d55 100%)",
+                        boxShadow: isToday
+                          ? "inset 0 1px 0 #bbf7d0aa, 0 0 14px #22c55e55"
+                          : "inset 0 1px 0 #86efac33",
+                        borderRadius: "1px 1px 0 0",
                       }}
                     >
                       <div
-                        className="absolute left-0 right-0 top-0"
+                        className="absolute inset-x-0 top-0 h-1/3 opacity-40"
                         style={{
-                          height: 7,
-                          transform: "translateY(-6px) rotateX(72deg)",
-                          transformOrigin: "bottom",
-                          background: isToday
-                            ? "linear-gradient(135deg, #86efac, #22c55e)"
-                            : "linear-gradient(135deg, #4ade8088, #16a34a66)",
-                          boxShadow: isToday
-                            ? "0 0 12px #22c55e66"
-                            : "0 0 6px #22c55e22",
+                          background:
+                            "linear-gradient(180deg, #ffffff55, transparent)",
                         }}
                       />
-                      <div
-                        className="absolute bottom-0 top-0"
-                        style={{
-                          width: 6,
-                          right: -5,
-                          transform: "skewY(-38deg)",
-                          transformOrigin: "left bottom",
-                          background: isToday
-                            ? "linear-gradient(180deg, #16a34a, #14532d)"
-                            : "linear-gradient(180deg, #15803d88, #052e1688)",
-                        }}
-                      />
-                      <div
-                        className="absolute inset-0 overflow-hidden"
-                        style={{
-                          background: isToday
-                            ? "linear-gradient(180deg, #4ade80 0%, #22c55e 45%, #15803d 100%)"
-                            : "linear-gradient(180deg, #22c55e99 0%, #16a34a66 55%, #14532d55 100%)",
-                          boxShadow: isToday
-                            ? "inset 0 1px 0 #bbf7d0aa, 0 0 14px #22c55e55"
-                            : "inset 0 1px 0 #86efac33",
-                          borderRadius: "1px 1px 0 0",
-                        }}
-                      >
+                      {isToday ? (
                         <div
-                          className="absolute inset-x-0 top-0 h-1/3 opacity-40"
+                          className="absolute inset-0 animate-pulse opacity-25"
                           style={{
                             background:
-                              "linear-gradient(180deg, #ffffff55, transparent)",
+                              "linear-gradient(105deg, transparent 35%, #ffffff66 50%, transparent 65%)",
                           }}
                         />
-                        {isToday ? (
-                          <div
-                            className="absolute inset-0 animate-pulse opacity-25"
-                            style={{
-                              background:
-                                "linear-gradient(105deg, transparent 35%, #ffffff66 50%, transparent 65%)",
-                            }}
-                          />
-                        ) : null}
-                      </div>
+                      ) : null}
                     </div>
                   </div>
-                )
-              })}
-            </div>
+                </div>
+              )
+            })}
+          </div>
 
-            <div className="mt-1.5 flex justify-between gap-1.5 px-0.5">
-              {values.map((_, i) => {
-                const isToday = i === todayIdx
-                return (
-                  <span
-                    key={`lbl-${i}`}
-                    className={cn(
-                      "min-w-0 flex-1 text-center text-[10px] tracking-wider",
-                      isToday
-                        ? "font-semibold text-emerald-300"
-                        : "text-muted-foreground/50",
-                    )}
-                  >
-                    {labels[i] ?? ""}
-                  </span>
-                )
-              })}
-            </div>
+          <div className="mt-1.5 flex justify-between gap-1.5 px-0.5">
+            {values.map((_, i) => {
+              const isToday = i === todayIdx
+              return (
+                <span
+                  key={`lbl-${i}`}
+                  className={cn(
+                    "min-w-0 flex-1 text-center text-[10px] tracking-wider",
+                    isToday
+                      ? "font-semibold text-emerald-300"
+                      : "text-muted-foreground/50",
+                  )}
+                >
+                  {labels[i] ?? ""}
+                </span>
+              )
+            })}
           </div>
         </div>
+      </div>
     </div>
   )
 }
