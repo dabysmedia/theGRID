@@ -34,8 +34,9 @@ type Props = {
 
 /**
  * Shared hub HUD panel: readiness + isometric steps bars in one container.
- * Breaks out of WeeklyHero padding (`-mx-4 lg:-mx-5`) so the steel wash and
- * readiness gradient sit flush to the overview card edges.
+ * Breaks out of WeeklyHero padding (`-mx-4 lg:-mx-5`) so the readiness
+ * gradient sits flush to the overview card edges. Background wash lives on
+ * WeeklyHero only — no local steel layer (avoids a lighter readiness slab).
  */
 export function StepsActivityBars({
   values,
@@ -71,23 +72,13 @@ export function StepsActivityBars({
         perspectiveOrigin: "50% 120%",
       }}
     >
-      {/* Soft steel wash — full card width (no padded gutter / light left edge) */}
+      {/* Floor grid behind bars — no local steel wash (card wash is continuous) */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-80"
-        aria-hidden
-        style={{
-          background:
-            "linear-gradient(180deg, oklch(0.36 0.015 250 / 14%) 0%, oklch(0.24 0.01 250 / 16%) 42%, oklch(0.12 0.005 250 / 22%) 78%, oklch(0.06 0.005 250 / 28%) 100%)",
-        }}
-      />
-
-      {/* Floor grid behind bars */}
-      <div
-        className="pointer-events-none absolute inset-x-0 bottom-8 h-14 opacity-30"
+        className="pointer-events-none absolute inset-x-0 bottom-8 h-14 opacity-22"
         aria-hidden
         style={{
           backgroundImage:
-            "linear-gradient(to right, oklch(0.32 0.01 250 / 18%) 1px, transparent 1px), linear-gradient(to top, oklch(0.32 0.01 250 / 14%) 1px, transparent 1px)",
+            "linear-gradient(to right, oklch(0.28 0.01 250 / 14%) 1px, transparent 1px), linear-gradient(to top, oklch(0.28 0.01 250 / 10%) 1px, transparent 1px)",
           backgroundSize: "14% 8px, 100% 8px",
           /* Offset so the first vertical grid line is not a bright strip on the card edge */
           backgroundPosition: "7% 0, 0 0",
@@ -202,8 +193,9 @@ export function StepsActivityBars({
         </div>
       </Link>
 
+      {/* Soft seam only — no opaque cut between readiness and steps */}
       <div
-        className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/12 to-transparent"
+        className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/5 to-transparent"
         aria-hidden
       />
 
@@ -225,7 +217,7 @@ export function StepsActivityBars({
         </div>
 
         <div
-          className="pointer-events-none absolute inset-x-4 bottom-[2.15rem] h-px bg-gradient-to-r from-transparent via-white/15 to-transparent lg:inset-x-5"
+          className="pointer-events-none absolute inset-x-4 bottom-[2.15rem] h-px bg-gradient-to-r from-transparent via-white/8 to-transparent lg:inset-x-5"
           aria-hidden
         />
 
