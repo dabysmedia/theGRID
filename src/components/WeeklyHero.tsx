@@ -16,7 +16,7 @@ import {
   HubVitalsExpand,
   HubWeightExpand,
   HubWorkoutsExpand,
-  HubExpandDismiss,
+  HubBackToOverview,
   type HubExpandedPanel,
 } from "@/components/hub/HubExpandPanels"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
@@ -440,7 +440,9 @@ export function WeeklyHero({
     <div
       className={cn(
         glassPanelClass,
-        "overflow-hidden p-4 transition-opacity duration-500 lg:p-5",
+        "p-4 transition-opacity duration-500 lg:p-5",
+        // glass-panel CSS sets overflow:hidden; sticky back bar needs visible
+        expanded != null && "!overflow-visible",
         loading ? "opacity-50" : "opacity-100",
       )}
     >
@@ -468,46 +470,48 @@ export function WeeklyHero({
         aria-hidden
       />
 
-      {/* Header */}
-      <div className="relative z-10 mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="status-dot" />
-          <h2
-            key={viewMode}
-            className="type-hud-title motion-safe:animate-fade-up motion-reduce:animate-none"
-          >
-            {isWeekView ? "Weekly Overview" : "Daily Overview"}
-          </h2>
+      {/* Header — when expanded, full-width sticky back bar replaces overview chrome */}
+      {expanded != null ? (
+        <div className="relative z-20 -mx-4 mb-4 sticky top-0 lg:-mx-5">
+          <div className="border-b border-white/[0.06] bg-[oklch(0.14_0.01_250_/0.92)] px-4 py-2 backdrop-blur-md lg:px-5">
+            <HubBackToOverview onBack={() => setExpanded(null)} />
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          {expanded != null ? (
-            <HubExpandDismiss onDismiss={() => setExpanded(null)} />
-          ) : (
-            <>
-              <span
-                key={`${viewMode}-eyebrow`}
-                className="type-hud-eyebrow motion-safe:animate-fade-up motion-reduce:animate-none"
-              >
-                {isWeekView ? dateRange : dayLabel}
-              </span>
-              <button
-                type="button"
-                onClick={() => setViewMode((mode) => (mode === "today" ? "week" : "today"))}
-                aria-label={isWeekView ? "Show today's values" : "Show weekly values"}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
-              >
-                <ChevronRight
-                  className={cn(
-                    "h-3.5 w-3.5 transition-transform duration-300 ease-out",
-                    isWeekView && "rotate-180",
-                  )}
-                  aria-hidden
-                />
-              </button>
-            </>
-          )}
+      ) : (
+        <div className="relative z-10 mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="status-dot" />
+            <h2
+              key={viewMode}
+              className="type-hud-title motion-safe:animate-fade-up motion-reduce:animate-none"
+            >
+              {isWeekView ? "Weekly Overview" : "Daily Overview"}
+            </h2>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span
+              key={`${viewMode}-eyebrow`}
+              className="type-hud-eyebrow motion-safe:animate-fade-up motion-reduce:animate-none"
+            >
+              {isWeekView ? dateRange : dayLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => setViewMode((mode) => (mode === "today" ? "week" : "today"))}
+              aria-label={isWeekView ? "Show today's values" : "Show weekly values"}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
+            >
+              <ChevronRight
+                className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-300 ease-out",
+                  isWeekView && "rotate-180",
+                )}
+                aria-hidden
+              />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div
         key={viewMode}
@@ -590,7 +594,6 @@ export function WeeklyHero({
               consumed={data.calories.todayValue}
               target={calGoal}
               vacationBlocked={vacationBlocksCalories}
-              onDismiss={() => setExpanded(null)}
             />
           </>
         ) : null}
@@ -606,7 +609,6 @@ export function WeeklyHero({
               goal={sleepGoal}
               last7={data.sleep.last7}
               dayLabels={dayLabels}
-              onDismiss={() => setExpanded(null)}
             />
           </>
         ) : null}
@@ -648,7 +650,6 @@ export function WeeklyHero({
               readiness={readinessValue}
               fallbackHrvMs={hrvMs}
               fallbackRhr={restingHeartRate}
-              onDismiss={() => setExpanded(null)}
             />
           </>
         ) : null}
@@ -667,7 +668,6 @@ export function WeeklyHero({
               todayMg={peptideSummary?.todayMg ?? 0}
               last7={peptideSummary?.last7 ?? data.peptides?.last7 ?? Array.from({ length: 7 }, () => 0)}
               dayLabels={dayLabels}
-              onDismiss={() => setExpanded(null)}
             />
           ) : expanded === "workouts" ? (
             <HubWorkoutsExpand
@@ -676,7 +676,6 @@ export function WeeklyHero({
               last7={workoutSummary?.last7 ?? data.workouts.last7}
               dayLabels={dayLabels}
               recoveryScore={workoutSummary?.recoveryScore ?? null}
-              onDismiss={() => setExpanded(null)}
             />
           ) : (
             <div
@@ -780,7 +779,7 @@ export function WeeklyHero({
               onActivate={expanded === "weight" ? undefined : () => toggleExpand("weight")}
             />
             {expanded === "weight" ? (
-              <HubWeightExpand onDismiss={() => setExpanded(null)} />
+              <HubWeightExpand />
             ) : null}
           </div>
         </FadeSection>
