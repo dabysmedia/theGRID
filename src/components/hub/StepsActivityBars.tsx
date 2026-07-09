@@ -173,10 +173,10 @@ export function StepsActivityBars({
             </div>
             <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-sm bg-muted/40 shadow-[inset_0_1px_0_rgba(0,0,0,0.35)]">
               <div
-                className="relative h-full overflow-hidden rounded-sm transition-all duration-700 ease-out"
+                className="relative h-full w-full overflow-hidden rounded-sm transition-opacity duration-700 ease-out"
                 style={{
-                  width: `${readiness != null ? Math.max(4, Math.min(100, readiness)) : 0}%`,
-                  background: `linear-gradient(180deg, ${accent}dd 0%, ${accent} 45%, ${accent}99 100%)`,
+                  opacity: readiness != null ? 1 : 0,
+                  background: `linear-gradient(90deg, ${accent}55 0%, ${accent} 42%, ${accent}cc 100%)`,
                   boxShadow: band
                     ? `inset 0 1px 0 #ffffff55, 0 0 10px ${accent}55`
                     : undefined,
