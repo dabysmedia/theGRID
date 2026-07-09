@@ -259,7 +259,7 @@ export function CaloriePipTracker({
         }}
         aria-hidden
       />
-      <div className="relative h-44 w-full touch-none sm:h-52 md:h-60">
+      <div className="relative h-[min(58vh,28rem)] w-full touch-none sm:h-[min(56vh,30rem)]">
         <CaloriePipScene
           consumed={consumed}
           target={target}
@@ -268,7 +268,7 @@ export function CaloriePipTracker({
         />
       </div>
       {target > 0 ? (
-        <p className="mt-1.5 text-right text-[9px] font-medium tabular-nums tracking-wide text-muted-foreground/45">
+        <p className="mt-1 text-right text-[9px] font-medium tabular-nums tracking-wide text-muted-foreground/45">
           {Math.round(filledAmount)}/{pipCount} · {Math.round(calPerPip)} cal/pip
           {ratio > 0 ? ` · ${Math.round(ratio * 100)}%` : ""}
         </p>
