@@ -441,7 +441,8 @@ export function WeeklyHero({
       className={cn(
         glassPanelClass,
         "p-4 transition-opacity duration-500 lg:p-5",
-        expanded != null ? "overflow-visible" : "overflow-hidden",
+        // glass-panel CSS sets overflow:hidden; sticky back bar needs visible
+        expanded != null && "!overflow-visible",
         loading ? "opacity-50" : "opacity-100",
       )}
     >
