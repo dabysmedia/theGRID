@@ -11,6 +11,8 @@ import {
 } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
 import { sleepDurationHours } from "@/lib/sleepDuration"
+import { computeReadinessScore } from "@/lib/readiness-score"
+import { deriveSleepScore, qualityToScore } from "@/lib/sleep-score"
 
 interface GoalRow {
   category: string
@@ -153,8 +155,13 @@ export async function GET(req: NextRequest) {
         : new Date()
     const refDayStr = formatDate(refDate)
     const weekStartStr = formatDate(subDays(refDate, 6))
+    const vitalsBaselineStartStr = formatDate(subDays(refDate, 29))
     const weightRangeStartStr = formatDate(subDays(refDate, 55))
     const dateInRange = utcCalendarDayRangeInclusive(weekStartStr, refDayStr)
+    const vitalsBaselineRange = utcCalendarDayRangeInclusive(
+      vitalsBaselineStartStr,
+      refDayStr,
+    )
     const weightDateInRange = utcCalendarDayRangeInclusive(weightRangeStartStr, refDayStr)
 
     const [
@@ -168,6 +175,7 @@ export async function GET(req: NextRequest) {
       bowelEntries,
       recoveryEntries,
       vitalEntries,
+      vitalBaselineEntries,
       goals,
       bodyWeightGoal,
     ] = await Promise.all([
@@ -181,6 +189,10 @@ export async function GET(req: NextRequest) {
       prisma.bowelEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.recoveryDailyEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.vitalDailyEntry.findMany({ where: { date: dateInRange, userId } }),
+      prisma.vitalDailyEntry.findMany({
+        where: { date: vitalsBaselineRange, userId },
+        select: { date: true, hrvMs: true, restingHeartRate: true },
+      }),
       prisma.goal.findMany({ where: { active: true, userId } }),
       prisma.longGoal.findFirst({
         where: { category: "bodyweight", userId },
@@ -265,6 +277,74 @@ export async function GET(req: NextRequest) {
       if (!withHrv.length) return 0
       return withHrv.reduce((s, e) => s + (e.hrvMs ?? 0), 0) / withHrv.length
     })
+
+    const sleepScoreLast7 = dailyTotals(sleepEntries, (items) => {
+      if (!items.length) return 0
+      const scores = items.map((e) => {
+        if (e.score != null && Number.isFinite(e.score)) return e.score
+        const derived = deriveSleepScore({
+          remMinutes: e.remMinutes,
+          lightMinutes: e.lightMinutes,
+          deepMinutes: e.deepMinutes,
+          awakeMinutes: e.awakeMinutes,
+          efficiency: e.efficiency,
+        })
+        if (derived != null) return derived
+        return qualityToScore(e.quality)
+      })
+      return scores.reduce((s, v) => s + v, 0) / scores.length
+    })
+
+    const hrvBaselineSamples = vitalBaselineEntries
+      .map((e) => e.hrvMs)
+      .filter((v): v is number => v != null && v > 0)
+    const rhrBaselineSamples = vitalBaselineEntries
+      .map((e) => e.restingHeartRate)
+      .filter((v): v is number => v != null && v > 0)
+
+    const readinessLast7: number[] = []
+    let todayHrvMs: number | null = null
+    let todayRhr: number | null = null
+    for (let i = 0; i <= 6; i++) {
+      const day = subDays(refDate, 6 - i)
+      const dayKey = format(day, "yyyy-MM-dd")
+      const dayVitals = vitalEntries.filter(
+        (e) => utcCalendarDayKeyFromIso(e.date) === dayKey,
+      )
+      const hrvVals = dayVitals
+        .map((e) => e.hrvMs)
+        .filter((v): v is number => v != null && v > 0)
+      const rhrVals = dayVitals
+        .map((e) => e.restingHeartRate)
+        .filter((v): v is number => v != null && v > 0)
+      const hrvMs = hrvVals.length
+        ? hrvVals.reduce((s, v) => s + v, 0) / hrvVals.length
+        : null
+      const restingHeartRate = rhrVals.length
+        ? Math.round(rhrVals.reduce((s, v) => s + v, 0) / rhrVals.length)
+        : null
+      if (i === 6) {
+        todayHrvMs = hrvMs
+        todayRhr = restingHeartRate
+      }
+      const sleepScore = sleepScoreLast7[i] > 0 ? sleepScoreLast7[i] : null
+      const readiness = computeReadinessScore({
+        hrvMs,
+        restingHeartRate,
+        sleepScore,
+        hrvBaselineSamples,
+        rhrBaselineSamples,
+      })
+      readinessLast7.push(readiness ?? 0)
+    }
+
+    const readinessLogged = readinessLast7.filter((v) => v > 0)
+    const readinessWeekAvg =
+      readinessLogged.length > 0
+        ? Math.round(
+            readinessLogged.reduce((s, v) => s + v, 0) / readinessLogged.length,
+          )
+        : null
 
     const calG = goalByCategory.get("calories")
     const stepsG = goalByCategory.get("steps")
@@ -358,6 +438,14 @@ export async function GET(req: NextRequest) {
         direction: "up",
         unit: "ms",
         last7: vitalsLast7.map((v) => Math.round(v * 10) / 10),
+      },
+      readiness: {
+        /** Derived proxy — Google Health does not expose Fitbit Daily Readiness. */
+        todayValue: readinessLast7[6] > 0 ? readinessLast7[6] : null,
+        weekAvg: readinessWeekAvg,
+        hrvMs: todayHrvMs != null ? Math.round(todayHrvMs * 10) / 10 : null,
+        restingHeartRate: todayRhr,
+        last7: readinessLast7,
       },
       weightTrend,
     }
