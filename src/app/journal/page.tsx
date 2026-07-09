@@ -27,12 +27,14 @@ import {
   CircleMinus,
   Sparkles,
 } from "lucide-react"
-import { cn, formatDate } from "@/lib/utils"
+import { CATEGORY_THEME } from "@/lib/category-theme"
+import { cn, formatDate, glassPanelClass } from "@/lib/utils"
 import { kmToMiles, DEFAULT_WEIGHT_UNIT } from "@/lib/units"
 import { apiFetch } from "@/lib/api-fetch"
 import { useUser } from "@/context/UserContext"
 import { useActiveDate } from "@/context/DateContext"
 import { PageHeader } from "@/components/PageHeader"
+import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { UserProfileAvatar } from "@/components/ProfileSwitcher"
 import { Button } from "@/components/ui/button"
 import {
@@ -256,17 +258,17 @@ function EntryCard({
 
   return (
     <>
-      <article className="glass-panel overflow-hidden border border-border/30 shadow-sm transition-all">
+      <article className={cn(glassPanelClass, "overflow-hidden transition-all")}>
         <div className="flex items-center justify-between gap-2 px-3.5 py-3">
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex min-w-0 items-center gap-2.5">
             {author && (
               <UserProfileAvatar user={author} size="sm" noPhotoStyle="color" />
             )}
             <div className="min-w-0">
               {author && (
-                <p className="truncate text-xs font-semibold text-foreground/90">{author.name}</p>
+                <p className="truncate font-heading text-xs font-semibold text-foreground/90">{author.name}</p>
               )}
-              <p className="text-[11px] text-muted-foreground">
+              <p className="type-hud-caption normal-case text-muted-foreground">
                 {dateLabel} &middot; {timeLabel}
               </p>
             </div>
@@ -739,9 +741,7 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-2 flex flex-col gap-4">
           {/* Mood selector */}
           <div>
-            <p className="mb-2 text-[11px] font-medium text-muted-foreground tracking-widest uppercase">
-              Mood
-            </p>
+            <p className="type-hud-label-soft mb-2">Mood</p>
             <div className="flex gap-1.5">
               {MOODS.map((m) => (
                 <button
@@ -778,21 +778,19 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
 
           {/* Text area */}
           <div>
-            <p className="mb-2 text-[11px] font-medium text-muted-foreground tracking-widest uppercase">
-              Entry
-            </p>
+            <p className="type-hud-label-soft mb-2">Entry</p>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Write your thoughts, reflections, wins, setbacks…"
               rows={6}
-              className="w-full resize-none rounded-xl border border-border/40 bg-muted/20 px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all leading-relaxed"
+              className="w-full resize-none rounded-xl border border-border/40 bg-glass-highlight/20 px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-all leading-relaxed focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
             />
           </div>
 
           {/* Images */}
           <div>
-            <p className="mb-2 text-[11px] font-medium text-muted-foreground tracking-widest uppercase">
+            <p className="type-hud-label-soft mb-2">
               Photos {images.length > 0 && `(${images.length}/${MAX_IMAGES})`}
             </p>
             <div className="flex flex-wrap gap-2">
@@ -930,16 +928,44 @@ export default function JournalPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
       <PageHeader title="Journal" />
+
+      <PageHeroStrip
+        color={CATEGORY_THEME.journal.color}
+        icon={NotebookPen}
+        eyebrow="Feed"
+        value={loading ? "—" : String(entries.length)}
+        unit={loading || entries.length === 0 ? undefined : "posts"}
+        hint={entries.length === 0 ? "write your first note" : "all time"}
+        metrics={[
+          {
+            label: "This week",
+            value: String(
+              entries.filter((e) => {
+                const age =
+                  (Date.now() - new Date(e.createdAt).getTime()) / 86_400_000
+                return age <= 7
+              }).length,
+            ),
+          },
+          {
+            label: "With photos",
+            value: String(entries.filter((e) => e.images.length > 0).length),
+          },
+          {
+            label: "Mood logged",
+            value: String(entries.filter((e) => e.mood != null).length),
+          },
+        ]}
+      />
 
       {/* Entries feed */}
       {loading ? (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="glass-panel overflow-hidden border border-border/20">
-              <div className="aspect-square animate-pulse bg-muted/40" />
-              <div className="space-y-2 p-3">
+            <div key={i} className={cn(glassPanelClass, "overflow-hidden")}>
+              <div className="aspect-[4/3] animate-pulse bg-muted/40" />
+              <div className="space-y-2 p-3.5">
                 <div className="h-3 w-1/3 animate-pulse rounded bg-muted/40" />
                 <div className="h-3 w-full animate-pulse rounded bg-muted/40" />
               </div>
@@ -947,14 +973,20 @@ export default function JournalPage() {
           ))}
         </div>
       ) : entries.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border/40 py-16 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/30 bg-muted/30">
-            <NotebookPen className="size-6 text-muted-foreground" />
+        <div className={cn(glassPanelClass, "flex flex-col items-center justify-center gap-4 py-16 text-center")}>
+          <div
+            className="flex h-14 w-14 items-center justify-center rounded-2xl border"
+            style={{
+              borderColor: `${CATEGORY_THEME.journal.color}33`,
+              backgroundColor: `${CATEGORY_THEME.journal.color}14`,
+            }}
+          >
+            <NotebookPen className="size-6" style={{ color: CATEGORY_THEME.journal.color }} />
           </div>
           <div>
-            <p className="font-medium text-foreground">No journal posts yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Tap the + button to write your first journal entry.
+            <p className="font-heading font-medium text-foreground">No journal posts yet</p>
+            <p className="type-hud-caption mt-1 normal-case text-muted-foreground">
+              Tap + to write your first entry.
             </p>
           </div>
           <Button
@@ -987,8 +1019,8 @@ export default function JournalPage() {
           "fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,1rem))]",
           "flex h-14 w-14 items-center justify-center rounded-2xl shadow-xl shadow-black/30",
           "border border-primary/30 bg-gradient-to-b from-primary/20 via-primary/10 to-transparent backdrop-blur-md",
-          "text-primary transition-all hover:from-primary/30 hover:border-primary/50 active:scale-95",
-          "z-40"
+          "text-primary transition-all hover:border-primary/50 hover:from-primary/30 active:scale-95",
+          "z-40 press-scale touch-manipulation",
         )}
         aria-label="New journal entry"
       >
@@ -1009,7 +1041,7 @@ export default function JournalPage() {
 
       {/* Delete confirmation */}
       <Dialog open={!!deleteConfirm} onOpenChange={(o: boolean) => !o && setDeleteConfirm(null)}>
-        <DialogContent className="max-w-sm mx-auto inset-0 m-auto h-fit">
+        <DialogContent className="glass-frost mx-auto inset-0 m-auto h-fit max-w-sm">
           <DialogHeader>
             <DialogTitle>Delete entry?</DialogTitle>
           </DialogHeader>

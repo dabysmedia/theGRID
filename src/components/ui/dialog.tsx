@@ -57,7 +57,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "glass fixed grid w-full max-w-none gap-4 rounded-2xl p-4 pb-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom)))] text-sm text-foreground outline-none duration-100",
+          "glass-frost fixed grid w-full max-w-none gap-4 rounded-2xl p-4 pb-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom)))] text-sm text-foreground outline-none duration-100",
           layer,
           "overflow-y-auto overscroll-contain",
           "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
@@ -109,7 +109,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-2xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-2xl border-t border-border/30 bg-background/70 p-4 backdrop-blur-md sm:flex-row sm:justify-end",
         className
       )}
       {...props}

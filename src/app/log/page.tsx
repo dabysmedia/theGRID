@@ -3,75 +3,66 @@
 import Link from "next/link"
 import { useMemo } from "react"
 import { PageHeader } from "@/components/PageHeader"
-import {
-  Flame,
-  Footprints,
-  PersonStanding,
-  Dumbbell,
-  Moon,
-  Syringe,
-  Beer,
-  CircleDot,
-  Weight,
-  Activity,
-} from "lucide-react"
 import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
-import { cn } from "@/lib/utils"
+import {
+  CATEGORY_THEME,
+  QUICK_LOG_CATEGORIES,
+} from "@/lib/category-theme"
+import { cn, glassPanelAccentClass, glassPanelAccentStyle, glassPanelClass } from "@/lib/utils"
 import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
-
-const logCategories = [
-  { href: "/calories", label: "Calories", desc: "Track meals & macros", icon: Flame, color: "#ef4444" },
-  { href: "/weight", label: "Weight", desc: "Daily weigh-ins & trends", icon: Weight, color: "#22c55e" },
-  { href: "/steps", label: "Steps", desc: "Daily step count", icon: Footprints, color: "#22c55e" },
-  { href: "/running", label: "Running", desc: "Distance, time & pace", icon: PersonStanding, color: "#3b82f6" },
-  { href: "/workouts", label: "Workouts", desc: "Log your sessions", icon: Dumbbell, color: "#c4d632" },
-  { href: "/sleep", label: "Sleep", desc: "Track rest & quality", icon: Moon, color: "#6366f1" },
-  { href: "/peptides", label: "Peptides", desc: "Reta doses & effects", icon: Syringe, color: "#a855f7" },
-  { href: "/workouts#recovery", label: "Recovery", desc: "Muscle load from training", icon: Activity, color: "#2dd4bf" },
-  { href: "/bowel", label: "Bowel", desc: "Bristol scale tracking", icon: CircleDot, color: "#92400e" },
-  { href: "/alcohol", label: "Alcohol", desc: "Log drinks & units", icon: Beer, color: "#f59e0b" },
-]
 
 export default function LogPage() {
   const { user } = useUser()
   const { activeDate } = useActiveDate()
   const vacationBlocksBody = useMemo(
     () => isVacationBlockingCalendarDay(user?.vacationResumeDate, activeDate),
-    [user?.vacationResumeDate, activeDate]
+    [user?.vacationResumeDate, activeDate],
   )
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="space-y-2">
         <PageHeader title="Quick Log" />
-        <p className="text-[11px] leading-snug text-muted-foreground/75 sm:text-xs">
-          Select a category to enter data
+        <p className="type-hud-caption normal-case text-muted-foreground/75">
+          Jump into any tracker for today
         </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4">
-        {logCategories.map((cat) => {
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-4 lg:gap-3">
+        {QUICK_LOG_CATEGORIES.map((key, idx) => {
+          const cat = CATEGORY_THEME[key]
           const calPaused = cat.href === "/calories" && vacationBlocksBody
           const weightPaused = cat.href === "/weight" && vacationBlocksBody
           const tilePaused = calPaused || weightPaused
+          const Icon = cat.icon
           const tile = (
             <div
               className={cn(
-                "glass-panel flex h-full cursor-pointer flex-col items-center gap-3 p-4 text-center transition-all duration-200 hover:bg-glass-highlight/40 active:scale-[0.97] lg:p-5",
-                tilePaused && "cursor-not-allowed opacity-45 saturate-[0.4] hover:bg-transparent"
+                glassPanelClass,
+                glassPanelAccentClass,
+                "press-scale flex h-full flex-col items-center gap-3 p-4 text-center transition-all duration-200 hover:bg-glass-highlight/25 active:scale-[0.97] lg:p-5",
+                "animate-fade-up",
+                tilePaused && "cursor-not-allowed opacity-45 saturate-[0.4] hover:bg-transparent",
               )}
+              style={{
+                ...glassPanelAccentStyle(cat.color),
+                animationDelay: `${idx * 35}ms`,
+              }}
             >
               <div
-                className="flex h-12 w-12 items-center justify-center rounded-xl lg:h-14 lg:w-14"
-                style={{ backgroundColor: `${cat.color}12` }}
+                className="flex h-12 w-12 items-center justify-center rounded-2xl border lg:h-14 lg:w-14"
+                style={{
+                  backgroundColor: `${cat.color}14`,
+                  borderColor: `${cat.color}33`,
+                }}
               >
-                <cat.icon className="h-6 w-6 lg:h-7 lg:w-7" style={{ color: cat.color }} />
+                <Icon className="h-6 w-6 lg:h-7 lg:w-7" style={{ color: cat.color }} />
               </div>
               <div>
-                <p className="text-xs font-semibold tracking-[0.1em] uppercase">{cat.label}</p>
-                <p className="text-[10px] text-muted-foreground/65 mt-0.5 tracking-wide">
-                  {tilePaused ? "Paused (vacation)" : cat.desc}
+                <p className="type-hud-label text-foreground">{cat.label}</p>
+                <p className="type-hud-caption mt-1 normal-case tracking-wide text-muted-foreground/65">
+                  {tilePaused ? "Paused (vacation)" : cat.description}
                 </p>
               </div>
             </div>

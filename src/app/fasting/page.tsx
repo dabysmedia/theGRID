@@ -15,6 +15,7 @@ import {
 } from "recharts"
 import { Timer, Flame } from "lucide-react"
 import { PageHeader } from "@/components/PageHeader"
+import { PageHeroStrip } from "@/components/PageHeroStrip"
 import {
   aggregateFastHoursByDay,
   loadFastLogs,
@@ -22,9 +23,11 @@ import {
   type FastLogEntry,
   type FastingConfig,
 } from "@/lib/fasting"
-import { cn } from "@/lib/utils"
+import { CATEGORY_THEME } from "@/lib/category-theme"
+import { cn, glassPanelClass } from "@/lib/utils"
 
-const ORANGE = "#f97316"
+const FASTING_THEME = CATEGORY_THEME.fasting
+const ORANGE = FASTING_THEME.color
 
 function BarTip({
   active,
@@ -38,8 +41,8 @@ function BarTip({
   if (!active || !payload?.length) return null
   const v = payload[0].value
   return (
-    <div className="glass rounded-sm px-2.5 py-1.5 text-[10px] font-sans tabular-nums border border-border">
-      <div className="text-muted-foreground/70">{label}</div>
+    <div className="glass-frost rounded-xl border border-border/40 px-2.5 py-1.5 text-[10px] font-sans tabular-nums">
+      <div className="type-hud-caption">{label}</div>
       <div className="font-semibold tabular-nums">{v.toFixed(1)} h fast</div>
     </div>
   )
@@ -55,8 +58,8 @@ function AreaTip({
   if (!active || !payload?.length) return null
   const p = payload[0].payload
   return (
-    <div className="glass rounded-sm px-2.5 py-1.5 text-[10px] font-sans tabular-nums border border-border">
-      <div className="text-muted-foreground/70">{p.label}</div>
+    <div className="glass-frost rounded-xl border border-border/40 px-2.5 py-1.5 text-[10px] font-sans tabular-nums">
+      <div className="type-hud-caption">{p.label}</div>
       <div className="font-semibold tabular-nums">{p.hours.toFixed(1)} h fast</div>
     </div>
   )
@@ -136,44 +139,34 @@ export default function FastingPage() {
   const recent = useMemo(() => [...logs].reverse().slice(0, 20), [logs])
 
   return (
-    <div className="space-y-8 pb-8">
+    <div className="space-y-6 pb-8">
       <PageHeader title="Fasting" />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-fade-up">
-        <div className="glass-panel space-y-0.5 p-3">
-          <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60">7d avg (logged)</div>
-          <div className="text-lg font-bold tabular-nums" style={{ color: ORANGE }}>
-            {stats.avg7.toFixed(1)}h
-          </div>
-          <div className="text-[9px] text-muted-foreground/50">target {stats.planned}h</div>
-        </div>
-        <div className="glass-panel space-y-0.5 p-3">
-          <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60">vs target</div>
-          <div className="text-lg font-bold tabular-nums text-primary">
-            {stats.adherence != null ? `${stats.adherence}%` : "—"}
-          </div>
-          <div className="text-[9px] text-muted-foreground/50">7-day window</div>
-        </div>
-        <div className="glass-panel space-y-0.5 p-3">
-          <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60">Day streak</div>
-          <div className="text-lg font-bold tabular-nums">{stats.streak}</div>
-          <div className="text-[9px] text-muted-foreground/50">days with a log</div>
-        </div>
-        <div className="glass-panel space-y-0.5 p-3">
-          <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60">Completed fasts</div>
-          <div className="text-lg font-bold tabular-nums">{stats.total}</div>
-          <div className="text-[9px] text-muted-foreground/50">all time</div>
-        </div>
-      </div>
+      <PageHeroStrip
+        color={ORANGE}
+        icon={Timer}
+        eyebrow="7-day average"
+        value={stats.avg7 > 0 ? stats.avg7.toFixed(1) : "—"}
+        unit={stats.avg7 > 0 ? "hrs" : undefined}
+        hint={`target ${stats.planned}h`}
+        metrics={[
+          {
+            label: "Vs target",
+            value: stats.adherence != null ? `${stats.adherence}%` : "—",
+          },
+          { label: "Day streak", value: stats.streak > 0 ? String(stats.streak) : "—" },
+          { label: "Completed", value: String(stats.total) },
+        ]}
+      />
 
-      <section className="glass-panel animate-fade-up stagger-1 space-y-4 p-5 lg:p-6">
+      <section className={cn(glassPanelClass, "animate-fade-up stagger-1 space-y-4 p-4 lg:p-5")}>
         <div className="flex items-center gap-2">
           <Flame className="h-3.5 w-3.5" style={{ color: ORANGE }} />
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em]">Daily fast hours (14d)</h2>
+          <h2 className="type-hud-rail text-foreground">Daily fast hours · 14d</h2>
         </div>
-        <p className="text-[10px] text-muted-foreground/65 leading-relaxed">
-          Hours from completed fasts ending on each day (local time). The home timer logs a fast when you enter your
-          eating window; if you open the app anytime while eating, any missed completion is backfilled automatically.
+        <p className="type-hud-caption normal-case leading-relaxed text-muted-foreground/70">
+          Hours from completed fasts ending on each day. The home timer logs a fast when you enter
+          your eating window.
         </p>
         <div className="h-48 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -193,16 +186,16 @@ export default function FastingPage() {
                 domain={[0, "auto"]}
               />
               <Tooltip content={<BarTip />} cursor={{ fill: "oklch(0.82 0.18 110 / 6%)" }} />
-              <Bar dataKey="hours" fill={ORANGE} radius={[2, 2, 0, 0]} maxBarSize={28} />
+              <Bar dataKey="hours" fill={ORANGE} radius={[4, 4, 0, 0]} maxBarSize={28} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </section>
 
-      <section className="glass-panel animate-fade-up stagger-2 space-y-4 p-5 lg:p-6">
+      <section className={cn(glassPanelClass, "animate-fade-up stagger-2 space-y-4 p-4 lg:p-5")}>
         <div className="flex items-center gap-2">
           <Timer className="h-3.5 w-3.5 text-primary" />
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em]">Trend (30d)</h2>
+          <h2 className="type-hud-rail text-foreground">Trend · 30d</h2>
         </div>
         <div className="h-44 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -235,45 +228,46 @@ export default function FastingPage() {
         </div>
       </section>
 
-      <section className="animate-fade-up stagger-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] mb-3 text-muted-foreground/80">
-          Recent fasts
-        </h2>
-        <div className="glass-panel overflow-hidden">
+      <section className="animate-fade-up stagger-3 space-y-3">
+        <h2 className="type-hud-rail px-0.5 text-muted-foreground/80">Recent fasts</h2>
+        <div className={cn(glassPanelClass, "overflow-hidden")}>
           {recent.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground/70 text-center">
+            <p className="p-6 text-center text-sm text-muted-foreground/70">
               No fasts logged yet. Keep the home screen open when a fasting window ends to build history here.
             </p>
           ) : (
-            <ul className="divide-y divide-border/40">
-              {recent.map((log) => (
-                <li
-                  key={log.id}
-                  className="flex items-center justify-between gap-3 px-4 py-3 text-[11px] hover:bg-glass-highlight/15"
-                >
-                  <div>
-                    <div className="font-semibold tabular-nums">
-                      {(log.durationMinutes / 60).toFixed(1)}h
-                      <span className="text-muted-foreground/60 font-normal ml-2">
-                        planned {log.plannedFastHours}h
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-muted-foreground/55 mt-0.5">
-                      Ended {format(new Date(log.fastEndedAt), "MMM d, h:mm a")}
-                    </div>
-                  </div>
-                  <div
-                    className={cn(
-                      "shrink-0 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-sm",
-                      log.durationMinutes >= log.plannedFastHours * 60 * 0.95
-                        ? "bg-primary/15 text-primary"
-                        : "bg-muted/30 text-muted-foreground"
-                    )}
+            <ul className="divide-y divide-border/30">
+              {recent.map((log) => {
+                const onTarget = log.durationMinutes >= log.plannedFastHours * 60 * 0.95
+                return (
+                  <li
+                    key={log.id}
+                    className="flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-glass-highlight/15"
                   >
-                    {log.durationMinutes >= log.plannedFastHours * 60 * 0.95 ? "on target" : "short"}
-                  </div>
-                </li>
-              ))}
+                    <div className="min-w-0">
+                      <div className="type-hud-stat tabular-nums">
+                        {(log.durationMinutes / 60).toFixed(1)}h
+                        <span className="ml-2 type-hud-caption normal-case font-normal">
+                          planned {log.plannedFastHours}h
+                        </span>
+                      </div>
+                      <div className="type-hud-caption mt-1 normal-case text-muted-foreground/55">
+                        Ended {format(new Date(log.fastEndedAt), "MMM d, h:mm a")}
+                      </div>
+                    </div>
+                    <div
+                      className={cn(
+                        "shrink-0 rounded-lg px-2.5 py-1 type-hud-chip",
+                        onTarget
+                          ? "bg-primary/15 text-primary"
+                          : "bg-muted/30 text-muted-foreground",
+                      )}
+                    >
+                      {onTarget ? "On target" : "Short"}
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
