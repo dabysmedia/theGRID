@@ -371,6 +371,7 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         key={`${viewMode}-activity`}
         values={data.steps.last7}
         labels={dayLabels}
+        goal={stepsGoal}
         readiness={readinessValue}
         hrvMs={hrvMs}
         restingHeartRate={restingHeartRate}

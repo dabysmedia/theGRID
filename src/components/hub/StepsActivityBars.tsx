@@ -17,9 +17,14 @@ const BAND_ACCENT: Record<ReadinessBand, string> = {
   very_low: "#fb7185",
 }
 
+const BAR_AREA_PX = 58
+const BAR_MAX_PX = 56
+
 type Props = {
   values: number[]
   labels: string[]
+  /** Daily step goal — drawn as a dotted yellow projection line across the bars. */
+  goal?: number | null
   readiness?: number | null
   hrvMs?: number | null
   restingHeartRate?: number | null
@@ -33,13 +38,17 @@ type Props = {
 export function StepsActivityBars({
   values,
   labels,
+  goal = null,
   readiness = null,
   hrvMs = null,
   restingHeartRate = null,
   isWeekView = false,
   className,
 }: Props) {
-  const max = Math.max(...values, 1)
+  const goalValue =
+    goal != null && Number.isFinite(goal) && goal > 0 ? goal : null
+  // Include goal in the scale so the yellow line always sits inside the chart.
+  const scaleMax = Math.max(...values, goalValue ?? 0, 1)
   const todayIdx = values.length - 1
   const band = readinessBand(readiness)
   const accent = band ? BAND_ACCENT[band] : "#22c55e"
@@ -47,6 +56,10 @@ export function StepsActivityBars({
     readiness != null && Number.isFinite(readiness) ? String(Math.round(readiness)) : "—"
   const hrvLabel =
     hrvMs != null && Number.isFinite(hrvMs) ? String(Math.round(hrvMs)) : "—"
+  const goalLineBottomPx =
+    goalValue != null
+      ? Math.max(4, Math.round((goalValue / scaleMax) * BAR_MAX_PX))
+      : null
 
   return (
     <div className={cn("relative", className)}>
@@ -179,6 +192,12 @@ export function StepsActivityBars({
               {values[todayIdx] > 0
                 ? `${Math.round(values[todayIdx]).toLocaleString()} today`
                 : "No steps yet"}
+              {goalValue != null ? (
+                <span className="text-amber-300/70">
+                  {" "}
+                  · goal {Math.round(goalValue).toLocaleString()}
+                </span>
+              ) : null}
             </p>
           </div>
 
@@ -187,24 +206,38 @@ export function StepsActivityBars({
             aria-hidden
           />
 
-          <div
-            className="relative flex h-[4.5rem] items-end justify-between gap-1.5 px-0.5"
-            style={{ transformStyle: "preserve-3d" }}
-          >
-            {values.map((val, i) => {
-              const pct = max > 0 ? val / max : 0
-              const heightPx = Math.max(10, Math.round(pct * 56))
-              const isToday = i === todayIdx
-              const delay = 280 + i * 70
-
-              return (
+          <div className="relative" style={{ transformStyle: "preserve-3d" }}>
+            <div
+              className="relative flex items-end justify-between gap-1.5 px-0.5"
+              style={{ height: BAR_AREA_PX }}
+            >
+              {goalLineBottomPx != null ? (
                 <div
-                  key={i}
-                  className="flex min-w-0 flex-1 flex-col items-center gap-1.5"
+                  className="pointer-events-none absolute inset-x-0 z-20"
+                  style={{ bottom: goalLineBottomPx }}
+                  aria-hidden
                 >
                   <div
-                    className="relative flex w-full justify-center"
-                    style={{ height: 58, perspective: "240px" }}
+                    className="mx-0.5 h-0 border-t-[1.5px] border-dashed border-amber-300/90"
+                    style={{ boxShadow: "0 0 8px #fbbf2466" }}
+                  />
+                  <span className="absolute -top-3 right-0 text-[8px] font-semibold uppercase tracking-[0.14em] text-amber-300/85">
+                    Goal
+                  </span>
+                </div>
+              ) : null}
+
+              {values.map((val, i) => {
+                const pct = scaleMax > 0 ? val / scaleMax : 0
+                const heightPx = Math.max(10, Math.round(pct * BAR_MAX_PX))
+                const isToday = i === todayIdx
+                const delay = 280 + i * 70
+
+                return (
+                  <div
+                    key={i}
+                    className="relative flex min-w-0 flex-1 justify-center"
+                    style={{ height: BAR_AREA_PX, perspective: "240px" }}
                   >
                     <div
                       className="absolute bottom-0 origin-bottom animate-bar-grow"
@@ -274,10 +307,18 @@ export function StepsActivityBars({
                       </div>
                     </div>
                   </div>
+                )
+              })}
+            </div>
 
+            <div className="mt-1.5 flex justify-between gap-1.5 px-0.5">
+              {values.map((_, i) => {
+                const isToday = i === todayIdx
+                return (
                   <span
+                    key={`lbl-${i}`}
                     className={cn(
-                      "text-[10px] tracking-wider",
+                      "min-w-0 flex-1 text-center text-[10px] tracking-wider",
                       isToday
                         ? "font-semibold text-emerald-300"
                         : "text-muted-foreground/50",
@@ -285,9 +326,9 @@ export function StepsActivityBars({
                   >
                     {labels[i] ?? ""}
                   </span>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>
