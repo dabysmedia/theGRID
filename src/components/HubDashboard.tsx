@@ -44,6 +44,7 @@ interface DashboardData {
   alcohol: CategorySummary
   bowel: CategorySummary
   recovery: CategorySummary
+  vitals: CategorySummary
   weightTrend: {
     baselineTrend: "losing" | "maintaining" | "gaining"
     vsBaselineLb: number
@@ -62,6 +63,7 @@ const defaultData: DashboardData = {
   alcohol: { todayValue: 0, goal: null, unit: "units", last7: emptyLast7() },
   bowel: { todayValue: 0, goal: null, unit: "", last7: emptyLast7() },
   recovery: { todayValue: 0, goal: 7, unit: "/10", last7: emptyLast7() },
+  vitals: { todayValue: 0, goal: null, unit: "ms", last7: emptyLast7() },
   weightTrend: null,
 }
 
@@ -71,6 +73,7 @@ const categoryOrder = [
   "peptides",
   "workouts",
   "sleep",
+  "vitals",
   "running",
   "bowel",
   "alcohol",
