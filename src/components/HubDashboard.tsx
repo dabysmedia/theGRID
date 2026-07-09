@@ -12,6 +12,7 @@ import {
   HubCalorieFooter,
   HubPeptideFooter,
   HubSleepBedtimeFooter,
+  HubVitalsFooter,
   HubWorkoutFooter,
 } from "./hub/HubTileFooters"
 import { useActiveDate } from "@/context/DateContext"
@@ -260,6 +261,15 @@ export function HubDashboard() {
         <HubBowelFooter
           todayCount={data.bowel.todayValue}
           goal={data.bowel.goal}
+          color={color}
+        />
+      )
+    }
+    if (key === "vitals") {
+      return (
+        <HubVitalsFooter
+          hrvMs={data.readiness?.hrvMs ?? (data.vitals.todayValue > 0 ? data.vitals.todayValue : null)}
+          readiness={data.readiness?.todayValue ?? null}
           color={color}
         />
       )
