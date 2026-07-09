@@ -77,7 +77,7 @@ export function StepsActivityBars({
         aria-hidden
         style={{
           background:
-            "linear-gradient(180deg, oklch(0.52 0.02 250 / 10%) 0%, oklch(0.44 0.015 250 / 05%) 45%, transparent 100%)",
+            "linear-gradient(180deg, oklch(0.36 0.015 250 / 14%) 0%, oklch(0.24 0.01 250 / 16%) 42%, oklch(0.12 0.005 250 / 22%) 78%, oklch(0.06 0.005 250 / 28%) 100%)",
         }}
       />
 
@@ -87,7 +87,7 @@ export function StepsActivityBars({
         aria-hidden
         style={{
           backgroundImage:
-            "linear-gradient(to right, oklch(0.48 0.015 250 / 16%) 1px, transparent 1px), linear-gradient(to top, oklch(0.48 0.015 250 / 12%) 1px, transparent 1px)",
+            "linear-gradient(to right, oklch(0.32 0.01 250 / 18%) 1px, transparent 1px), linear-gradient(to top, oklch(0.32 0.01 250 / 14%) 1px, transparent 1px)",
           backgroundSize: "14% 8px, 100% 8px",
           /* Offset so the first vertical grid line is not a bright strip on the card edge */
           backgroundPosition: "7% 0, 0 0",
@@ -185,10 +185,10 @@ export function StepsActivityBars({
             background:
               readiness != null
                 ? `linear-gradient(90deg, ${accent}55 0%, ${accent} 42%, ${accent}cc 100%)`
-                : "linear-gradient(90deg, oklch(0.42 0.015 250 / 55%) 0%, oklch(0.48 0.015 250 / 70%) 50%, oklch(0.42 0.015 250 / 55%) 100%)",
+                : "linear-gradient(90deg, oklch(0.28 0.01 250 / 55%) 0%, oklch(0.34 0.01 250 / 70%) 50%, oklch(0.28 0.01 250 / 55%) 100%)",
             boxShadow: band
               ? `inset 0 1px 0 #ffffff44, 0 0 10px ${accent}55`
-              : "inset 0 1px 0 oklch(0.55 0.01 250 / 25%)",
+              : "inset 0 1px 0 oklch(0.40 0.01 250 / 22%)",
           }}
         >
           {readiness != null ? (

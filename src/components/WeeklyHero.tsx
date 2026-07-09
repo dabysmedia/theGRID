@@ -102,7 +102,7 @@ function ProgressRing({
   const circumference = 2 * Math.PI * radius
   const pct = disabled ? 0 : max > 0 ? Math.min(value / max, 1) : 0
   const offset = circumference - pct * circumference
-  const strokeColor = disabled ? "oklch(0.45 0.01 250 / 35%)" : color
+  const strokeColor = disabled ? "oklch(0.32 0.01 250 / 35%)" : color
   const clickable = Boolean(onClick) && !disabled
   const displayValue =
     disabled && centerLabel != null ? centerLabel : valueLabel ?? formatRingValue(value)
@@ -126,8 +126,8 @@ function ProgressRing({
           className="pointer-events-none absolute inset-[12%] rounded-full opacity-80"
           style={{
             background:
-              "radial-gradient(circle, oklch(0.52 0.02 250 / 16%) 0%, oklch(0.38 0.015 250 / 07%) 42%, transparent 72%)",
-            boxShadow: disabled ? undefined : "inset 0 0 18px oklch(0.48 0.02 250 / 14%)",
+              "radial-gradient(circle, oklch(0.36 0.015 250 / 18%) 0%, oklch(0.22 0.01 250 / 10%) 42%, transparent 72%)",
+            boxShadow: disabled ? undefined : "inset 0 0 18px oklch(0.28 0.015 250 / 16%)",
           }}
           aria-hidden
         />
@@ -145,7 +145,7 @@ function ProgressRing({
             cy="44"
             r={trackR + 2}
             fill="none"
-            stroke="oklch(0.52 0.02 250)"
+            stroke="oklch(0.38 0.015 250)"
             strokeWidth="0.6"
             opacity={disabled ? 0.12 : 0.32}
           />
@@ -154,7 +154,7 @@ function ProgressRing({
             cy="44"
             r={trackR}
             fill="none"
-            stroke="oklch(0.46 0.015 250)"
+            stroke="oklch(0.32 0.01 250)"
             strokeWidth={trackStroke}
             opacity={disabled ? 0.12 : 0.26}
           />
@@ -200,7 +200,7 @@ function ProgressRing({
                   y1={major ? 2.5 : 4}
                   x2="44"
                   y2={major ? 7 : 6}
-                  stroke="oklch(0.55 0.02 250)"
+                  stroke="oklch(0.40 0.015 250)"
                   strokeWidth={major ? 1 : 0.55}
                   opacity={major ? 0.42 : 0.22}
                   transform={`rotate(${deg} 44 44)`}
@@ -333,7 +333,7 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         aria-hidden
         style={{
           background:
-            "linear-gradient(180deg, oklch(0.52 0.02 250 / 12%) 0%, oklch(0.44 0.015 250 / 06%) 42%, oklch(0.36 0.01 250 / 04%) 72%, transparent 100%)",
+            "linear-gradient(180deg, oklch(0.36 0.015 250 / 16%) 0%, oklch(0.24 0.01 250 / 14%) 38%, oklch(0.12 0.005 250 / 20%) 72%, oklch(0.06 0.005 250 / 26%) 100%)",
         }}
       />
       <div
@@ -341,7 +341,7 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         aria-hidden
         style={{
           backgroundImage:
-            "linear-gradient(to right, oklch(0.55 0.015 250 / 20%) 1px, transparent 1px), linear-gradient(to bottom, oklch(0.55 0.015 250 / 14%) 1px, transparent 1px)",
+            "linear-gradient(to right, oklch(0.38 0.01 250 / 22%) 1px, transparent 1px), linear-gradient(to bottom, oklch(0.38 0.01 250 / 16%) 1px, transparent 1px)",
           backgroundSize: "22px 22px",
           maskImage: "linear-gradient(180deg, black 0%, transparent 78%)",
         }}
