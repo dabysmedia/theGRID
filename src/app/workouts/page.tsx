@@ -43,7 +43,7 @@ import {
   saveWorkoutRestConfig,
   type WorkoutRestConfig,
 } from "@/lib/workout-rest-config"
-import { cn, formatDate, formatDisplayDate, glassPanelClass, parseLocalDate } from "@/lib/utils"
+import { cn, formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { PlateCalculatorDialog } from "@/components/workouts/PlateCalculatorDialog"
 import { WorkoutRecoverySection } from "@/components/workouts/WorkoutRecoverySection"
 import { FALLBACK_EXERCISES, type ApiExercise } from "@/lib/workouts/exercise-library"
@@ -1987,21 +1987,30 @@ function ActiveWorkout({
   }
 
   /**
-   * Progressive overload coach "Apply": prefill the next planned set's load and
-   * rep target. Weight propagates down to later un-logged sets (same behavior
-   * as editing a weight input); nothing is marked completed.
+   * Progressive overload coach: prefill the next planned set's load and
+   * rep target. Weight propagates down to later un-logged sets.
+   * When `onlyEmpty` is true (auto-apply), never overwrite values the user
+   * already typed.
    */
   function applyRecToNextSet(
     exId: string,
     weight: number | null,
     reps: number | null,
+    onlyEmpty = false,
   ) {
     const ex = exercisesRef.current.find((e) => e.id === exId)
     if (!ex) return
     const idx = ex.sets.findIndex((s) => !s.completed)
     if (idx < 0) return
+    const target = ex.sets[idx]
+    const nextWeight =
+      weight != null && (!onlyEmpty || target.weight == null) ? weight : null
+    const nextReps =
+      reps != null && (!onlyEmpty || target.reps == null) ? reps : null
+    if (nextWeight == null && nextReps == null) return
+
     const affectedIds =
-      weight != null
+      nextWeight != null
         ? ex.sets.slice(idx).filter((s) => !s.completed).map((s) => s.id)
         : [ex.sets[idx].id]
     for (const id of affectedIds) touchedSetIdsRef.current.add(id)
@@ -2019,11 +2028,18 @@ function ActiveWorkout({
             if (i === idx) {
               return {
                 ...s,
-                ...(weight != null ? { weight } : {}),
-                ...(reps != null ? { reps } : {}),
+                ...(nextWeight != null ? { weight: nextWeight } : {}),
+                ...(nextReps != null ? { reps: nextReps } : {}),
               }
             }
-            if (weight != null && i > idx && !s.completed) return { ...s, weight }
+            if (
+              nextWeight != null &&
+              i > idx &&
+              !s.completed &&
+              (!onlyEmpty || s.weight == null)
+            ) {
+              return { ...s, weight: nextWeight }
+            }
             return s
           }),
         }
@@ -2155,7 +2171,7 @@ function ActiveWorkout({
 
   const heroCover = session.coverImageUrl?.trim() ?? ""
   const setInputClass =
-    "h-11 min-h-11 border-primary/30 bg-glass-highlight/30 px-1.5 text-center text-base tabular-nums backdrop-blur-sm ring-1 ring-inset ring-primary/15 focus-visible:border-primary/50 focus-visible:ring-primary/30 sm:h-9 sm:text-sm"
+    "h-10 min-h-10 border-primary/25 bg-glass-highlight/20 px-1 text-center text-base tabular-nums backdrop-blur-sm ring-1 ring-inset ring-primary/10 focus-visible:border-primary/50 focus-visible:ring-primary/30 sm:h-9 sm:text-sm"
   const setInputGhostClass =
     "border-primary/15 bg-glass-highlight/15 text-muted-foreground/50 ring-primary/10"
 
@@ -2165,42 +2181,40 @@ function ActiveWorkout({
         role="dialog"
         aria-modal="true"
         aria-labelledby="active-workout-heading"
-        className="fixed inset-0 z-[120] flex flex-col bg-background/50 backdrop-blur-xl supports-backdrop-filter:backdrop-blur-xl sm:items-center sm:justify-center sm:p-4"
+        className="fixed inset-0 z-[120] flex flex-col bg-background sm:items-center sm:justify-center sm:bg-background/50 sm:p-4 sm:backdrop-blur-xl sm:supports-backdrop-filter:backdrop-blur-xl"
       >
         <div
           className={cn(
-            "glass-frost relative flex min-h-0 w-full flex-1 flex-col overflow-hidden sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:max-w-lg sm:flex-none sm:rounded-2xl",
+            "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-background",
+            "sm:glass-frost sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:max-w-lg sm:flex-none sm:rounded-2xl",
           )}
         >
           {heroCover ? (
             <>
-              {/* Hero band only — top of panel, not full scroll height */}
+              {/* Full-bleed hero band sized for large phones */}
               <div
-                className="pointer-events-none absolute left-0 right-0 top-0 z-0 h-[min(22dvh,9rem)] bg-cover bg-[center_top] bg-no-repeat opacity-[0.18] dark:opacity-[0.24] sm:rounded-t-2xl"
+                className="pointer-events-none absolute left-0 right-0 top-0 z-0 h-[min(28dvh,11.5rem)] bg-cover bg-[center_20%] bg-no-repeat opacity-[0.32] dark:opacity-[0.38] sm:rounded-t-2xl"
                 style={{ backgroundImage: `url(${heroCover})` }}
                 aria-hidden
               />
               <div
-                className="pointer-events-none absolute left-0 right-0 top-0 z-[1] h-[min(22dvh,9rem)] bg-gradient-to-b from-background/90 via-background/40 to-transparent dark:from-background/94 dark:via-background/45 dark:to-transparent sm:rounded-t-2xl"
+                className="pointer-events-none absolute left-0 right-0 top-0 z-[1] h-[min(28dvh,11.5rem)] bg-gradient-to-b from-background/55 via-background/75 to-background sm:rounded-t-2xl"
                 aria-hidden
               />
             </>
-          ) : null}
+          ) : (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-40 bg-gradient-to-b from-primary/[0.08] via-transparent to-transparent"
+              aria-hidden
+            />
+          )}
           <div
-            className="pointer-events-none absolute inset-0 z-[2] bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]"
-            aria-hidden
-          />
-          <div
-            className="pointer-events-none absolute inset-x-10 top-0 z-[2] h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12"
-            aria-hidden
-          />
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-36 bg-gradient-to-b from-primary/[0.06] via-transparent to-transparent"
+            className="pointer-events-none absolute inset-0 z-[2] bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/10%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/8%),transparent_55%)]"
             aria-hidden
           />
           <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col overflow-hidden">
           {/* Compact header + progress + rest */}
-          <div className="shrink-0 space-y-2 border-b border-glass-border/25 px-4 pb-2.5 pt-[max(0.5rem,env(safe-area-inset-top))] sm:pt-3">
+          <div className="shrink-0 space-y-2.5 px-4 pb-3 pt-[max(0.65rem,env(safe-area-inset-top))] sm:px-5 sm:pt-4">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
@@ -2347,16 +2361,16 @@ function ActiveWorkout({
             ) : null}
           </div>
 
-          {/* One movement at a time */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-2 sm:px-4">
+          {/* One movement at a time — edge-to-edge on mobile */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-1 sm:px-5 sm:py-2">
             {exercises.length === 0 ? (
-              <div className="glass-subtle my-auto rounded-2xl border border-dashed border-glass-border/35 px-6 py-10 text-center">
+              <div className="my-auto rounded-2xl border border-dashed border-glass-border/35 px-6 py-10 text-center">
                 <Dumbbell className="mx-auto size-8 text-muted-foreground/35" aria-hidden />
                 <p className="mt-3 text-base font-medium text-foreground/90">
                   No exercises yet
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground/65">
-                  Add a movement below to start logging sets.
+                  Use More → Add exercise to start logging sets.
                 </p>
               </div>
             ) : displayedExercise ? (
@@ -2407,16 +2421,11 @@ function ActiveWorkout({
                         </div>
                       </div>
                     ) : null}
-                    <div
-                      className={cn(
-                        glassPanelClass,
-                        "flex min-h-0 flex-1 flex-col overflow-hidden p-3",
-                      )}
-                    >
-                      <div className="shrink-0 space-y-2">
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                      <div className="shrink-0 space-y-2 pb-1">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <h3 className="m-0 text-base font-semibold leading-snug text-foreground break-words">
+                            <h3 className="m-0 text-[1.05rem] font-semibold leading-snug text-foreground break-words sm:text-base">
                               {ex.name}
                             </h3>
                             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -2440,12 +2449,12 @@ function ActiveWorkout({
                               ) : null}
                             </div>
                           </div>
-                          <div className="flex shrink-0 gap-1.5">
+                          <div className="flex shrink-0 gap-1">
                             {queue.canSkip && ex.id === queue.current?.id ? (
                               <button
                                 type="button"
                                 onClick={() => skipExercise(ex.id)}
-                                className="glass-subtle flex size-10 items-center justify-center rounded-lg text-muted-foreground/55 transition-colors hover:border-amber-500/35 hover:bg-amber-500/10 hover:text-amber-400 active:scale-[0.97] touch-manipulation"
+                                className="flex size-9 items-center justify-center rounded-lg text-muted-foreground/55 transition-colors hover:bg-amber-500/10 hover:text-amber-400 active:scale-[0.97] touch-manipulation"
                                 aria-label={`Skip ${ex.name} for now`}
                               >
                                 <SkipForward className="size-4 shrink-0" aria-hidden />
@@ -2458,7 +2467,7 @@ function ActiveWorkout({
                                 setSwapExerciseId(ex.id)
                                 setShowPicker(true)
                               }}
-                              className="glass-subtle flex size-10 items-center justify-center rounded-lg text-muted-foreground/55 transition-colors hover:border-primary/30 hover:bg-glass-highlight/30 hover:text-primary active:scale-[0.97] touch-manipulation"
+                              className="flex size-9 items-center justify-center rounded-lg text-muted-foreground/55 transition-colors hover:bg-glass-highlight/30 hover:text-primary active:scale-[0.97] touch-manipulation"
                               aria-label={`Swap ${ex.name} for another exercise`}
                             >
                               <ArrowLeftRight className="size-4 shrink-0" aria-hidden />
@@ -2467,21 +2476,21 @@ function ActiveWorkout({
                         </div>
 
                         {!showMovementSummary ? (
-                          <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.5rem_4.75rem_4.75rem_3.25rem] gap-2 px-0.5 sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5">
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
+                          <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.25rem_4.5rem_4.5rem_3rem] gap-1.5 px-0.5 sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5">
+                            <span className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55">
                               Set
                             </span>
                             <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55">
                               Prev
                             </span>
                             <span aria-hidden className="min-w-0" />
-                            <span className="col-start-4 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
+                            <span className="col-start-4 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55">
                               lb
                             </span>
-                            <span className="col-start-5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
+                            <span className="col-start-5 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55">
                               Reps
                             </span>
-                            <span className="col-start-6 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55 text-center">
+                            <span className="col-start-6 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55">
                               Done
                             </span>
                           </div>
@@ -2540,7 +2549,7 @@ function ActiveWorkout({
                               ) : null}
                               <div
                                 className={cn(
-                                  "grid grid-cols-[2.75rem_minmax(0,1fr)_2.5rem_4.75rem_4.75rem_3.25rem] gap-2 items-center rounded-xl px-0.5 py-1 transition-colors sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5 sm:py-0.5",
+                                  "grid grid-cols-[2.5rem_minmax(0,1fr)_2.25rem_4.5rem_4.5rem_3rem] items-center gap-1.5 rounded-xl px-0.5 py-1 transition-colors sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5 sm:py-0.5",
                                   set.completed &&
                                     "border border-primary/20 bg-primary/10 ring-1 ring-primary/20",
                                 )}
@@ -2555,7 +2564,7 @@ function ActiveWorkout({
                                   type="button"
                                   onClick={() => cycleSetType(ex.id, set.id)}
                                   className={cn(
-                                    "flex min-h-11 min-w-11 items-center justify-center rounded-xl text-sm font-bold tabular-nums transition-colors touch-manipulation active:scale-[0.96]",
+                                    "flex min-h-10 min-w-10 items-center justify-center rounded-xl text-sm font-bold tabular-nums transition-colors touch-manipulation active:scale-[0.96]",
                                     typeInfo.color,
                                   )}
                                   title={`Type: ${set.type} (tap to change)`}
@@ -2563,7 +2572,7 @@ function ActiveWorkout({
                                   {set.type === "working" ? set.setNumber : typeInfo.short}
                                 </button>
 
-                                <span className="text-xs text-muted-foreground/55 tabular-nums truncate px-0.5">
+                                <span className="truncate px-0.5 text-xs tabular-nums text-muted-foreground/55">
                                   {prevSet
                                     ? `${prevSet.weight ?? "–"}×${prevSet.reps ?? "–"}`
                                     : "–"}
@@ -2571,7 +2580,7 @@ function ActiveWorkout({
 
                                 <button
                                   type="button"
-                                  className="glass-subtle flex size-10 min-h-10 min-w-10 items-center justify-center rounded-xl text-muted-foreground/50 transition-colors hover:border-primary/30 hover:bg-glass-highlight/30 hover:text-primary active:scale-[0.96] touch-manipulation sm:size-9 sm:min-h-9 sm:min-w-9"
+                                  className="flex size-9 min-h-9 min-w-9 items-center justify-center rounded-xl text-muted-foreground/50 transition-colors hover:bg-glass-highlight/30 hover:text-primary active:scale-[0.96] touch-manipulation"
                                   aria-label="Plate calculator"
                                   onClick={(e) => {
                                     e.preventDefault()
@@ -2583,7 +2592,7 @@ function ActiveWorkout({
                                     })
                                   }}
                                 >
-                                  <Calculator className="size-4 sm:size-3.5" aria-hidden />
+                                  <Calculator className="size-3.5" aria-hidden />
                                 </button>
 
                                 <Input
@@ -2628,13 +2637,13 @@ function ActiveWorkout({
                                   type="button"
                                   onClick={() => toggleSetComplete(ex.id, set.id)}
                                   className={cn(
-                                    "mx-auto flex size-11 items-center justify-center rounded-xl transition-all touch-manipulation active:scale-[0.94]",
+                                    "mx-auto flex size-10 items-center justify-center rounded-xl transition-all touch-manipulation active:scale-[0.94]",
                                     set.completed
                                       ? "bg-primary text-primary-foreground shadow-md shadow-primary/30"
-                                      : "glass-subtle text-muted-foreground/45 hover:bg-glass-highlight/25",
+                                      : "border border-glass-border/35 text-muted-foreground/45 hover:bg-glass-highlight/25",
                                   )}
                                 >
-                                  <Check className="size-5" />
+                                  <Check className="size-4" />
                                 </button>
                               </div>
                             </div>
@@ -2646,27 +2655,27 @@ function ActiveWorkout({
                         <button
                           type="button"
                           onClick={() => addSet(ex.id)}
-                          className="glass-subtle flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-dashed border-glass-border/40 py-2 text-sm font-semibold text-muted-foreground/70 transition-colors hover:bg-glass-highlight/20 hover:text-foreground active:scale-[0.99] touch-manipulation"
+                          className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-dashed border-glass-border/35 py-1.5 text-xs font-semibold text-muted-foreground/65 transition-colors hover:bg-glass-highlight/20 hover:text-foreground active:scale-[0.99] touch-manipulation"
                         >
-                          <Plus className="size-4" />
+                          <Plus className="size-3.5" />
                           Add set
                         </button>
                         <button
                           type="button"
                           onClick={() => removeExercise(ex.id)}
-                          className="glass-subtle flex size-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-glass-border/40 text-muted-foreground/45 transition-colors hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-400 active:scale-[0.97] touch-manipulation"
+                          className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-dashed border-glass-border/35 text-muted-foreground/40 transition-colors hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-400 active:scale-[0.97] touch-manipulation"
                           aria-label={`Remove ${ex.name}`}
                         >
-                          <Trash2 className="size-4" />
+                          <Trash2 className="size-3.5" />
                         </button>
                       </div>
 
-                      <div className="flex min-h-0 flex-1 flex-col pt-1.5">
+                      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                         {exComplete && summaryEditExId === ex.id ? (
                           <button
                             type="button"
                             onClick={() => setSummaryEditExId(null)}
-                            className="glass-subtle flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border border-primary/25 px-3 text-xs font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 touch-manipulation"
+                            className="mt-2 flex min-h-10 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border border-primary/25 px-3 text-xs font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 touch-manipulation"
                           >
                             <Check className="size-3.5" aria-hidden />
                             Done editing — view summary
@@ -2678,9 +2687,8 @@ function ActiveWorkout({
                             setCount={ex.sets.length}
                             sessions={previousSessions}
                             sessionId={session.id}
-                            className="min-h-0 flex-1"
-                            onApplyToNextSet={(weight, reps) =>
-                              applyRecToNextSet(ex.id, weight, reps)
+                            onApplyToNextSet={(weight, reps, onlyEmpty) =>
+                              applyRecToNextSet(ex.id, weight, reps, onlyEmpty)
                             }
                             onAddOptionalSet={(weight, reps) =>
                               addOptionalSet(ex.id, weight, reps)
@@ -2720,74 +2728,67 @@ function ActiveWorkout({
                 </Button>
               </div>
             ) : null}
-
-            {!queue.allSetsComplete ? (
-              <div className="shrink-0 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    swapTargetRef.current = null
-                    setSwapExerciseId(null)
-                    setShowPicker(true)
-                  }}
-                  className="glass-subtle flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/25 py-2.5 text-sm font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 active:scale-[0.99] touch-manipulation"
-                >
-                  <Plus className="size-4" />
-                  Add exercise
-                </button>
-              </div>
-            ) : null}
           </div>
 
-          {/* Footer — keep chrome light; Finish only when done or via overflow menu */}
-          <div className="glass-subtle shrink-0 border-t border-glass-border/25 px-3 py-2.5 pb-[max(0.75rem,calc(0.5rem+env(safe-area-inset-bottom)))] sm:px-4">
+          {/* Thin action bar — More menu holds Add / Finish / Discard */}
+          <div className="relative shrink-0 border-t border-glass-border/20 px-3 py-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))] sm:px-5">
             {queue.allSetsComplete ? (
-              <div className="flex items-stretch gap-2.5">
+              <div className="flex items-stretch gap-2">
                 <Button
                   type="button"
                   variant="outline"
-                  size="icon-lg"
-                  className="size-12 min-h-12 min-w-12 shrink-0 touch-manipulation rounded-xl border-red-500/30 text-red-400 hover:bg-red-500/10 active:scale-[0.97]"
+                  size="sm"
+                  className="h-10 min-h-10 shrink-0 rounded-xl border-red-500/30 px-3 text-red-400 hover:bg-red-500/10 touch-manipulation"
                   aria-label="Discard workout"
                   onClick={() => setConfirmEndAction("discard")}
                 >
-                  <X className="size-5" aria-hidden />
+                  <X className="size-4" aria-hidden />
                 </Button>
                 <Button
                   type="button"
                   variant="glass"
-                  size="lg"
-                  className="h-12 min-h-12 min-w-0 flex-1 gap-2 rounded-xl text-sm font-semibold press-scale touch-manipulation"
+                  size="sm"
+                  className="h-10 min-h-10 min-w-0 flex-1 gap-1.5 rounded-xl text-sm font-semibold press-scale touch-manipulation"
                   onClick={() => setConfirmEndAction("finish")}
                 >
-                  <Check className="size-4 shrink-0" />
-                  Finish workout
+                  <Check className="size-3.5 shrink-0" />
+                  Finish
                   {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
                 </Button>
               </div>
             ) : (
-              <div className="relative flex items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-[11px] text-muted-foreground/60">
+              <div className="flex items-center justify-between gap-2">
+                <p className="min-w-0 truncate text-[11px] tabular-nums text-muted-foreground/55">
                   {queue.current
-                    ? `${queue.completedSets}/${queue.totalSets} sets`
+                    ? `${queue.completedSets}/${queue.totalSets}`
                     : "Logging…"}
                   {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
                 </p>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-10 min-h-10 gap-1.5 rounded-xl px-3 text-xs font-semibold touch-manipulation"
-                    aria-expanded={endMenuOpen}
-                    onClick={() => setEndMenuOpen((o) => !o)}
-                  >
-                    <MoreHorizontal className="size-4" />
-                    More
-                  </Button>
-                </div>
+                <button
+                  type="button"
+                  className="flex h-8 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold text-muted-foreground/70 transition-colors hover:bg-glass-highlight/20 hover:text-foreground touch-manipulation"
+                  aria-expanded={endMenuOpen}
+                  aria-label="More workout actions"
+                  onClick={() => setEndMenuOpen((o) => !o)}
+                >
+                  <MoreHorizontal className="size-4" />
+                  More
+                </button>
                 {endMenuOpen ? (
-                  <div className="absolute bottom-[calc(100%+0.5rem)] right-0 z-30 min-w-[11rem] overflow-hidden rounded-xl border border-border/30 bg-popover p-1 shadow-xl animate-in fade-in slide-in-from-bottom-1 duration-150">
+                  <div className="absolute bottom-[calc(100%+0.35rem)] right-3 z-30 min-w-[11.5rem] overflow-hidden rounded-xl border border-border/30 bg-popover p-1 shadow-xl animate-in fade-in slide-in-from-bottom-1 duration-150 sm:right-5">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-glass-highlight/20 touch-manipulation"
+                      onClick={() => {
+                        setEndMenuOpen(false)
+                        swapTargetRef.current = null
+                        setSwapExerciseId(null)
+                        setShowPicker(true)
+                      }}
+                    >
+                      <Plus className="size-4 text-primary" />
+                      Add exercise
+                    </button>
                     <button
                       type="button"
                       className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-glass-highlight/20 touch-manipulation"

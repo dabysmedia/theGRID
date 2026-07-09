@@ -84,44 +84,6 @@ function postRecommendationEvent(
   }).catch(() => {})
 }
 
-/** Typography/spacing tiers — fewer sets leave more room for the coach panel. */
-function coachDensity(setCount: number) {
-  if (setCount <= 2) {
-    return {
-      pad: "px-3.5 py-3",
-      headline: "text-2xl sm:text-[1.65rem]",
-      detail: "text-sm",
-      context: "text-xs",
-      label: "text-[10px]",
-      actionH: "min-h-12 h-12 text-sm",
-      rirBtn: "min-h-12 text-base",
-      gap: "gap-3",
-    }
-  }
-  if (setCount <= 4) {
-    return {
-      pad: "px-3 py-2.5",
-      headline: "text-xl sm:text-2xl",
-      detail: "text-xs sm:text-sm",
-      context: "text-[11px]",
-      label: "text-[10px]",
-      actionH: "min-h-11 h-11 text-xs",
-      rirBtn: "min-h-11 text-sm",
-      gap: "gap-2.5",
-    }
-  }
-  return {
-    pad: "px-2.5 py-2",
-    headline: "text-lg sm:text-xl",
-    detail: "text-[11px]",
-    context: "text-[10px]",
-    label: "text-[9px]",
-    actionH: "min-h-10 h-10 text-[11px]",
-    rirBtn: "min-h-10 text-sm",
-    gap: "gap-2",
-  }
-}
-
 export function ProgressiveOverloadCoach({
   exercise,
   sessions,
@@ -137,7 +99,7 @@ export function ProgressiveOverloadCoach({
   sessionId: string
   setCount?: number
   className?: string
-  onApplyToNextSet: (weight: number | null, reps: number | null) => void
+  onApplyToNextSet: (weight: number | null, reps: number | null, onlyEmpty?: boolean) => void
   onAddOptionalSet: (weight: number | null, reps: number | null) => void
   onSetEffort: (setId: string, patch: SetEffortPatch) => void
 }) {
@@ -153,6 +115,7 @@ export function ProgressiveOverloadCoach({
     pain: false,
   })
   const shownKeyRef = useRef<string | null>(null)
+  const autoAppliedKeyRef = useRef<string | null>(null)
 
   const overrides = prefs.exercises[normalizeExerciseKey(exercise.name)]
   const disabled = !prefs.coachEnabled || overrides?.disabled === true
@@ -180,6 +143,20 @@ export function ProgressiveOverloadCoach({
     return candidates.length > 0 ? candidates[candidates.length - 1] : null
   }, [exercise.sets])
 
+  /* Auto-plug suggested weight/reps into the next open set — no Accept tap. */
+  useEffect(() => {
+    if (disabled || dismissed || pendingEffortSet != null) return
+    const apply = rec.apply
+    if (!apply || apply.addSet) return
+    if (apply.weight == null && apply.reps == null) return
+    const key = `${sessionId}:${exercise.id}:${apply.weight ?? "x"}:${apply.reps ?? "x"}:${rec.action}`
+    if (autoAppliedKeyRef.current === key) return
+    autoAppliedKeyRef.current = key
+    onApplyToNextSet(apply.weight, apply.reps, true)
+    postRecommendationEvent(rec, sessionId, exercise.name, "applied")
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply once per recommendation fingerprint
+  }, [disabled, dismissed, pendingEffortSet, rec.action, rec.apply?.weight, rec.apply?.reps, sessionId, exercise.id])
+
   /* Audit "shown" once per movement per session (after data settles). */
   useEffect(() => {
     if (disabled || pendingEffortSet != null) return
@@ -193,15 +170,8 @@ export function ProgressiveOverloadCoach({
   if (disabled || dismissed) return null
 
   const scale = prefs.effortScale
-  const density = coachDensity(setCount)
-  const panelClass = cn(
-    "glass-subtle flex min-h-0 flex-1 flex-col rounded-xl border border-glass-border/35",
-    density.pad,
-    density.gap,
-    className,
-  )
 
-  /* ── Effort (RIR/RPE) prompt takes over the card right after a set ── */
+  /* ── Effort (RIR/RPE) prompt — prominent, flat, hard to miss ── */
   if (pendingEffortSet != null) {
     const setNo = pendingEffortSet.setNumber
     const record = (rir: number | null, skipped: boolean) => {
@@ -216,31 +186,38 @@ export function ProgressiveOverloadCoach({
     return (
       <section
         aria-label={`Effort rating for set ${setNo}`}
-        className={cn(panelClass, "border-primary/20 justify-between")}
+        className={cn(
+          "animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-3 border-t border-primary/25 pt-3",
+          className,
+        )}
       >
-        <div className="flex items-center justify-between gap-2">
-          <p
-            className={cn(
-              "min-w-0 font-semibold text-foreground",
-              setCount <= 2 ? "text-sm" : "truncate text-[11px]",
-            )}
-          >
-            How hard was set {setNo}?
-            <span className="ml-1.5 font-normal text-muted-foreground/60">
-              {scale === "rir" ? "reps left in the tank" : "RPE"}
-            </span>
-          </p>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+              Rate this set
+            </p>
+            <p className="mt-0.5 text-sm font-semibold text-foreground">
+              How many reps left after set {setNo}?
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground/65">
+              {scale === "rir"
+                ? "Tap your RIR — this drives progressive overload"
+                : "Tap your RPE — this drives progressive overload"}
+            </p>
+          </div>
           <button
             type="button"
-            className="shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60 transition-colors hover:bg-glass-highlight/30 hover:text-foreground touch-manipulation"
+            className="shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/45 transition-colors hover:bg-glass-highlight/30 hover:text-foreground touch-manipulation"
             onClick={() => record(null, true)}
           >
             Skip
           </button>
         </div>
-        <div className="grid min-h-0 flex-1 grid-cols-6 content-center gap-1.5 sm:gap-2">
+
+        <div className="grid grid-cols-6 gap-1.5">
           {RIR_CHOICES.map((c) => {
             const label = scale === "rir" ? c.label : c.rir === 5 ? "≤5" : String(rirToRpe(c.rir))
+            const isTarget = c.rir === rec.targetRir
             return (
               <button
                 key={c.rir}
@@ -248,14 +225,20 @@ export function ProgressiveOverloadCoach({
                 onClick={() => record(c.rir, false)}
                 aria-label={`${scale === "rir" ? `${c.label} reps in reserve` : `RPE ${label}`}${c.hint ? ` — ${c.hint}` : ""}`}
                 className={cn(
-                  "glass-subtle flex flex-col items-center justify-center rounded-lg font-bold tabular-nums transition-colors touch-manipulation active:scale-[0.95] hover:border-primary/35 hover:bg-glass-highlight/25",
-                  density.rirBtn,
-                  c.rir === rec.targetRir && "border-primary/30 text-primary",
+                  "flex min-h-[3.25rem] flex-col items-center justify-center rounded-xl font-bold tabular-nums transition-all touch-manipulation active:scale-[0.95]",
+                  isTarget
+                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/25 ring-2 ring-primary/40"
+                    : "border border-primary/20 bg-primary/[0.07] text-foreground hover:bg-primary/15 hover:border-primary/40",
                 )}
               >
-                {label}
+                <span className="text-base leading-none">{label}</span>
                 {c.hint ? (
-                  <span className="text-[8px] font-medium leading-none text-muted-foreground/55">
+                  <span
+                    className={cn(
+                      "mt-0.5 text-[8px] font-medium leading-none",
+                      isTarget ? "text-primary-foreground/75" : "text-muted-foreground/55",
+                    )}
+                  >
                     {c.hint}
                   </span>
                 ) : null}
@@ -263,68 +246,57 @@ export function ProgressiveOverloadCoach({
             )
           })}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             aria-pressed={effortFlags.technique}
             onClick={() => setEffortFlags((f) => ({ ...f, technique: !f.technique }))}
             className={cn(
-              "flex min-h-10 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-[10px] font-semibold transition-colors touch-manipulation sm:min-h-11",
+              "flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-[10px] font-semibold transition-colors touch-manipulation",
               effortFlags.technique
                 ? "border border-amber-500/45 bg-amber-500/15 text-amber-400"
-                : "glass-subtle text-muted-foreground/60 hover:text-foreground",
+                : "text-muted-foreground/55 hover:bg-glass-highlight/20 hover:text-foreground",
             )}
           >
             <AlertTriangle className="size-3 shrink-0" aria-hidden />
-            Technique broke down
+            Form broke
           </button>
           <button
             type="button"
             aria-pressed={effortFlags.pain}
             onClick={() => setEffortFlags((f) => ({ ...f, pain: !f.pain }))}
             className={cn(
-              "flex min-h-10 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-[10px] font-semibold transition-colors touch-manipulation sm:min-h-11",
+              "flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-[10px] font-semibold transition-colors touch-manipulation",
               effortFlags.pain
                 ? "border border-rose-500/45 bg-rose-500/15 text-rose-400"
-                : "glass-subtle text-muted-foreground/60 hover:text-foreground",
+                : "text-muted-foreground/55 hover:bg-glass-highlight/20 hover:text-foreground",
             )}
           >
             <HeartPulse className="size-3 shrink-0" aria-hidden />
-            Pain or discomfort
+            Pain
           </button>
         </div>
       </section>
     )
   }
 
-  /* ── Default recommendation card ───────────────── */
+  /* ── Flat recommendation strip (no nested card) ───────────────── */
   const apply = rec.apply
-  const contextLines = [rec.basedOn, rec.sourceLabel ?? rec.goal].filter(
-    (l): l is string => !!l,
-  )
+  const contextLine = rec.basedOn || rec.sourceLabel || rec.goal
 
   return (
     <>
-      <section aria-label="Progressive overload coach" className={panelClass}>
-        <div className="flex shrink-0 items-center justify-between gap-2">
+      <section
+        aria-label="Progressive overload coach"
+        className={cn("space-y-2 border-t border-glass-border/20 pt-3", className)}
+      >
+        <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
-            <TrendingUp
-              className={cn(
-                "shrink-0 text-primary/80",
-                setCount <= 2 ? "size-4" : "size-3",
-              )}
-              aria-hidden
-            />
-            <h4
-              className={cn(
-                "truncate font-semibold uppercase tracking-wider text-muted-foreground/70",
-                density.label,
-              )}
-            >
-              Progressive overload
+            <TrendingUp className="size-3.5 shrink-0 text-primary/80" aria-hidden />
+            <h4 className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/65">
+              {rec.kind === "next-set" ? "Next set" : "Today’s target"}
             </h4>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
             <span
               className={cn(
                 "rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
@@ -333,10 +305,20 @@ export function ProgressiveOverloadCoach({
             >
               {COACH_STATUS_LABELS[rec.status]}
             </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => setWhyOpen(true)}
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-glass-highlight/25 hover:text-foreground touch-manipulation"
+              aria-label="Why this recommendation?"
+            >
+              <HelpCircle className="size-3.5" aria-hidden />
+            </button>
             <button
               type="button"
               aria-label="Dismiss recommendations for this movement"
-              className="flex size-6 items-center justify-center rounded-md text-muted-foreground/45 transition-colors hover:bg-glass-highlight/30 hover:text-foreground touch-manipulation"
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:bg-glass-highlight/25 hover:text-foreground touch-manipulation"
               onClick={() => {
                 setDismissed(true)
                 postRecommendationEvent(rec, sessionId, exercise.name, "dismissed")
@@ -347,105 +329,60 @@ export function ProgressiveOverloadCoach({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col justify-center gap-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                <p
-                  className={cn(
-                    "font-medium uppercase tracking-[0.15em] text-muted-foreground/55",
-                    density.label,
-                  )}
-                >
-                  {rec.kind === "next-set" ? "Next set" : "Today’s target"}
-                </p>
-                <span className="rounded-md border border-glass-border/40 bg-glass-highlight/15 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-muted-foreground/70">
-                  {rec.repMin}–{rec.repMax} reps
-                </span>
-                <span className="rounded-md border border-glass-border/40 bg-glass-highlight/15 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-muted-foreground/70">
-                  {scale === "rpe" ? `RPE ${rirToRpe(rec.targetRir)}` : `${rec.targetRir} RIR`}
-                </span>
-              </div>
-              <p
-                className={cn(
-                  "font-heading font-bold leading-tight text-foreground",
-                  density.headline,
-                  setCount > 4 && "truncate",
-                )}
-              >
-                {rec.headline}
-              </p>
-              <p className={cn("text-muted-foreground/70", density.detail, setCount > 4 && "truncate")}>
-                {scale === "rpe"
-                  ? rec.detail.replace(
-                      `${rec.targetRir} RIR`,
-                      `RPE ${rirToRpe(rec.targetRir)}`,
-                    )
-                  : rec.detail}
-              </p>
-            </div>
-            {rec.delta ? (
-              <span
-                className={cn(
-                  "shrink-0 rounded-lg border border-primary/25 bg-primary/10 px-2.5 py-1.5 font-bold tabular-nums text-primary",
-                  setCount <= 2 ? "text-sm" : "text-[11px]",
-                )}
-              >
-                {rec.delta}
-              </span>
-            ) : null}
-          </div>
-
-          {contextLines.length > 0 ? (
-            <div className="space-y-1">
-              {contextLines.slice(0, 2).map((line, i) => (
-                <p
-                  key={i}
-                  className={cn(
-                    "leading-snug text-muted-foreground/55",
-                    density.context,
-                    setCount > 3 ? "line-clamp-2" : "line-clamp-3",
-                  )}
-                >
-                  {line}
-                </p>
-              ))}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1.5">
-          {apply ? (
-            <Button
-              type="button"
-              variant="glass"
-              size="sm"
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p
               className={cn(
-                "min-w-0 flex-1 truncate px-2 font-semibold press-scale touch-manipulation",
-                density.actionH,
+                "font-heading font-bold leading-none text-foreground",
+                setCount <= 3 ? "text-2xl" : "text-xl",
               )}
-              onClick={() => {
-                if (apply.addSet) onAddOptionalSet(apply.weight, apply.reps)
-                else onApplyToNextSet(apply.weight, apply.reps)
-                postRecommendationEvent(rec, sessionId, exercise.name, "applied")
-              }}
             >
-              {apply.label}
-            </Button>
+              {rec.headline}
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground/65">
+              {scale === "rpe"
+                ? rec.detail.replace(
+                    `${rec.targetRir} RIR`,
+                    `RPE ${rirToRpe(rec.targetRir)}`,
+                  )
+                : rec.detail}
+              <span className="mx-1.5 text-muted-foreground/30">·</span>
+              <span className="tabular-nums">
+                {rec.repMin}–{rec.repMax}
+              </span>
+            </p>
+          </div>
+          {rec.delta ? (
+            <span className="mb-0.5 shrink-0 rounded-lg bg-primary/12 px-2.5 py-1 text-xs font-bold tabular-nums text-primary">
+              {rec.delta}
+            </span>
           ) : null}
-          <button
-            type="button"
-            onClick={() => setWhyOpen(true)}
-            className={cn(
-              "glass-subtle flex shrink-0 items-center gap-1 rounded-lg px-2.5 font-semibold text-muted-foreground/70 transition-colors hover:text-foreground touch-manipulation",
-              density.actionH,
-            )}
-            aria-label="Why this recommendation?"
-          >
-            <HelpCircle className="size-3.5" aria-hidden />
-            Why?
-          </button>
         </div>
+
+        {contextLine ? (
+          <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground/50">
+            {contextLine}
+          </p>
+        ) : null}
+
+        {apply?.addSet ? (
+          <Button
+            type="button"
+            variant="glass"
+            size="sm"
+            className="h-10 w-full text-xs font-semibold press-scale touch-manipulation"
+            onClick={() => {
+              onAddOptionalSet(apply.weight, apply.reps)
+              postRecommendationEvent(rec, sessionId, exercise.name, "applied")
+            }}
+          >
+            {apply.label}
+          </Button>
+        ) : apply ? (
+          <p className="text-[10px] font-medium text-primary/70">
+            Suggested load filled into the next set
+          </p>
+        ) : null}
       </section>
 
       <CoachWhyDialog
@@ -624,7 +561,9 @@ function CoachWhyDialog({
                       key={rir}
                       type="button"
                       onClick={() =>
-                        onPrefsChange(saveExerciseOverride(exercise.name, { targetRir: rir }))
+                        onPrefsChange(
+                          saveExerciseOverride(exercise.name, { targetRir: rir }),
+                        )
                       }
                       className={cn(
                         "min-h-9 rounded-lg px-3 text-[11px] font-semibold transition-colors touch-manipulation",
@@ -633,44 +572,41 @@ function CoachWhyDialog({
                           : "glass-subtle text-muted-foreground/75 hover:text-foreground",
                       )}
                     >
-                      {prefs.effortScale === "rpe" ? `RPE ${rirToRpe(rir)}` : `${rir} RIR`}
+                      {rir} RIR
                     </button>
                   )
                 })}
               </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    onPrefsChange(
-                      saveProgressionPrefs({
-                        effortScale: prefs.effortScale === "rir" ? "rpe" : "rir",
-                      }),
-                    )
-                  }
-                  className="glass-subtle min-h-9 flex-1 rounded-lg px-3 text-[11px] font-semibold text-muted-foreground/75 transition-colors hover:text-foreground touch-manipulation"
-                >
-                  Effort scale: {prefs.effortScale.toUpperCase()}
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onPrefsChange(
-                      saveExerciseOverride(exercise.name, {
-                        disabled: !(override?.disabled ?? false),
-                      }),
-                    )
-                  }
-                  className={cn(
-                    "min-h-9 flex-1 rounded-lg px-3 text-[11px] font-semibold transition-colors touch-manipulation",
-                    override?.disabled
-                      ? "border border-rose-500/40 bg-rose-500/10 text-rose-400"
-                      : "glass-subtle text-muted-foreground/75 hover:text-foreground",
-                  )}
-                >
-                  {override?.disabled ? "Coach off for this movement" : "Turn off for this movement"}
-                </button>
+              <div className="flex gap-1.5">
+                {(["rir", "rpe"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => onPrefsChange(saveProgressionPrefs({ effortScale: mode }))}
+                    className={cn(
+                      "min-h-9 flex-1 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-colors touch-manipulation",
+                      prefs.effortScale === mode
+                        ? "glass-panel-accent text-primary ring-1 ring-primary/35 [--panel-accent:var(--primary)]"
+                        : "glass-subtle text-muted-foreground/75 hover:text-foreground",
+                    )}
+                  >
+                    {mode}
+                  </button>
+                ))}
               </div>
+              <button
+                type="button"
+                onClick={() =>
+                  onPrefsChange(
+                    saveExerciseOverride(exercise.name, {
+                      disabled: !(override?.disabled === true),
+                    }),
+                  )
+                }
+                className="w-full rounded-lg py-2 text-[11px] font-semibold text-muted-foreground/60 transition-colors hover:text-foreground touch-manipulation"
+              >
+                {override?.disabled ? "Re-enable coach for this movement" : "Hide coach for this movement"}
+              </button>
             </div>
           </div>
         </div>
