@@ -3,8 +3,19 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { format } from "date-fns"
-import { ChevronRight, Dumbbell, Moon, Play, Plus, Syringe, Waves, X } from "lucide-react"
+import { addDays, format, startOfWeek } from "date-fns"
+import {
+  ChevronRight,
+  Dumbbell,
+  Moon,
+  Pencil,
+  Play,
+  Plus,
+  RefreshCw,
+  Syringe,
+  Waves,
+  X,
+} from "lucide-react"
 import {
   ResponsiveContainer,
   AreaChart,
@@ -36,7 +47,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { LogPeptideDailyDialog } from "@/components/quick-log/LogPeptideDailyDialog"
+import { LogPeptideInjectionDialog } from "@/components/quick-log/LogPeptideInjectionDialog"
+import { LogWeightDialog } from "@/components/quick-log/LogWeightDialog"
 import { ProgressionSummaryHero } from "@/components/workouts/ProgressionSummaryHero"
+import { WorkoutMuscleMap } from "@/components/workouts/WorkoutMuscleMap"
 import { useActiveDate } from "@/context/DateContext"
 import { useQuickLog } from "@/context/QuickLogContext"
 import { apiFetch } from "@/lib/api-fetch"
@@ -47,7 +62,13 @@ import {
 } from "@/lib/readiness-score"
 import { displaySleepScore, qualityToScore } from "@/lib/sleep-score"
 import { sleepDurationHours } from "@/lib/sleepDuration"
-import { cn, parseLocalDate } from "@/lib/utils"
+import {
+  aggregateMuscleStats,
+  formatVolumeLb,
+  muscleStatsToSegmentScores,
+  type WorkoutSessionLike,
+} from "@/lib/workouts/muscle-volume"
+import { cn, formatDate, parseLocalDate } from "@/lib/utils"
 
 export type HubExpandedPanel =
   | "calories"
@@ -122,14 +143,23 @@ export function HubCaloriesExpand({
               size="default"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => openQuickLog("calories")}
-            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:w-auto sm:px-4"
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden />
-            Add food
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => openQuickLog("calories")}
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:flex-none sm:px-4"
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+              Add food
+            </button>
+            <Link
+              href="/calories"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:flex-none sm:px-4"
+            >
+              Open calories
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          </div>
         </>
       )}
     </div>
@@ -250,16 +280,17 @@ export function HubSleepExpand({
             Sync Fitbit / Google Health for deep, light, REM, and awake timelines — or log sleep
             manually below.
           </p>
-          <button
-            type="button"
-            onClick={() => openQuickLog("sleep")}
-            className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-indigo-400/30 hover:bg-indigo-400/[0.06] hover:text-indigo-100/90"
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden />
-            Log sleep
-          </button>
         </div>
       )}
+
+      <button
+        type="button"
+        onClick={() => openQuickLog("sleep")}
+        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-indigo-400/30 hover:bg-indigo-400/[0.06] hover:text-indigo-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/30 sm:w-auto sm:px-4"
+      >
+        <Plus className="h-3.5 w-3.5" aria-hidden />
+        Log sleep
+      </button>
 
       <div className="space-y-2">
         <p className="type-hud-caption">Last 7 nights</p>
@@ -302,6 +333,8 @@ export function HubWeightExpand({ onDismiss }: { onDismiss: () => void }) {
   const { activeDate } = useActiveDate()
   const [daily, setDaily] = useState<WeightCorrelationDayData[] | null>(null)
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
+  const [logOpen, setLogOpen] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
   const month = useMemo(() => activeDate.slice(0, 7), [activeDate])
 
   useEffect(() => {
@@ -329,9 +362,16 @@ export function HubWeightExpand({ onDismiss }: { onDismiss: () => void }) {
     return () => {
       cancelled = true
     }
-  }, [month])
+  }, [month, reloadKey])
 
   const hasWeight = daily?.some((d) => d.weight != null || d.weightForward != null) ?? false
+  const todayRow = daily?.find((d) => d.date === activeDate)
+  const todayWeight =
+    todayRow?.weight != null
+      ? String(todayRow.weight)
+      : todayRow?.weightForward != null
+        ? String(todayRow.weightForward)
+        : ""
 
   return (
     <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-3 px-0.5">
@@ -344,6 +384,15 @@ export function HubWeightExpand({ onDismiss }: { onDismiss: () => void }) {
         </div>
         <HubExpandDismiss onDismiss={onDismiss} />
       </div>
+
+      <button
+        type="button"
+        onClick={() => setLogOpen(true)}
+        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-emerald-400/30 hover:bg-emerald-400/[0.06] hover:text-emerald-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/30 sm:w-auto sm:px-4"
+      >
+        <Plus className="h-3.5 w-3.5" aria-hidden />
+        Log weight
+      </button>
 
       {status === "loading" ? (
         <p className="type-hud-caption text-muted-foreground/55">Loading month…</p>
@@ -358,6 +407,18 @@ export function HubWeightExpand({ onDismiss }: { onDismiss: () => void }) {
       ) : (
         <WeightCorrelationPanel daily={daily!} embedded className="min-w-0" />
       )}
+
+      <LogWeightDialog
+        open={logOpen}
+        onOpenChange={setLogOpen}
+        initialValue={todayWeight}
+        editing={todayRow?.weight != null}
+        onSaved={() => {
+          setLogOpen(false)
+          setReloadKey((k) => k + 1)
+          window.dispatchEvent(new CustomEvent("grid:log-saved"))
+        }}
+      />
     </div>
   )
 }
@@ -425,6 +486,9 @@ export function HubVitalsExpand({
   const { activeDate } = useActiveDate()
   const [data, setData] = useState<VitalsPayload | null>(null)
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -450,7 +514,34 @@ export function HubVitalsExpand({
     return () => {
       cancelled = true
     }
-  }, [activeDate])
+  }, [activeDate, reloadKey])
+
+  async function syncNow() {
+    setSyncing(true)
+    setSyncMessage(null)
+    try {
+      const res = await apiFetch("/api/google-health/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days: 14 }),
+      })
+      const result = (await res.json().catch(() => ({}))) as {
+        error?: string
+        vitalsUpserted?: number
+      }
+      if (!res.ok) {
+        setSyncMessage(result.error || "Sync failed. Connect Google Health in Settings first.")
+      } else {
+        setSyncMessage(`Synced ${result.vitalsUpserted ?? 0} days of vitals.`)
+        setReloadKey((k) => k + 1)
+        window.dispatchEvent(new CustomEvent("grid:log-saved"))
+      }
+    } catch {
+      setSyncMessage("Sync failed.")
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const hrvMs = data?.hrvMs ?? fallbackHrvMs ?? null
   const rhr = data?.restingHeartRate ?? fallbackRhr ?? null
@@ -509,6 +600,23 @@ export function HubVitalsExpand({
         <HubExpandDismiss onDismiss={onDismiss} />
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={syncing}
+          onClick={() => void syncNow()}
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#f43f5e]/30 hover:bg-[#f43f5e]/[0.06] hover:text-rose-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f43f5e]/30 disabled:opacity-50"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} aria-hidden />
+          {syncing ? "Syncing…" : "Sync Google Health"}
+        </button>
+        {syncMessage ? (
+          <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/60">
+            {syncMessage}
+          </p>
+        ) : null}
+      </div>
+
       <div className="grid grid-cols-3 gap-2">
         {[
           {
@@ -552,7 +660,7 @@ export function HubVitalsExpand({
         <p className="type-hud-caption text-muted-foreground/55">Loading vitals…</p>
       ) : status === "error" ? (
         <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-[12px] text-muted-foreground/70">
-          Couldn’t load vitals. Open the Vitals page to sync Google Health.
+          Couldn’t load vitals. Sync Google Health above, or open the Vitals page.
         </p>
       ) : (
         <>
@@ -768,6 +876,9 @@ export function HubPeptidesExpand({
   dayLabels: string[]
   onDismiss: () => void
 }) {
+  const [injectionOpen, setInjectionOpen] = useState(false)
+  const [dailyOpen, setDailyOpen] = useState(false)
+
   let untilLabel = "Log first shot"
   if (nextInjection) {
     if (nextInjection.overdue) untilLabel = `${Math.abs(nextInjection.daysUntil)}d overdue`
@@ -780,6 +891,10 @@ export function HubPeptidesExpand({
     lastInjectedAt != null
       ? format(new Date(lastInjectedAt), "MMM d · h:mm a")
       : null
+
+  function bumpHub() {
+    window.dispatchEvent(new CustomEvent("grid:log-saved"))
+  }
 
   return (
     <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
@@ -824,6 +939,25 @@ export function HubPeptidesExpand({
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setInjectionOpen(true)}
+          className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-violet-400/30 hover:bg-violet-400/[0.06] hover:text-violet-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30 sm:flex-none sm:px-4"
+        >
+          <Syringe className="h-3.5 w-3.5" aria-hidden />
+          Log injection
+        </button>
+        <button
+          type="button"
+          onClick={() => setDailyOpen(true)}
+          className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-violet-400/30 hover:bg-violet-400/[0.06] hover:text-violet-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30 sm:flex-none sm:px-4"
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden />
+          Log appetite
+        </button>
+      </div>
+
       <div className="space-y-2">
         <p className="type-hud-caption">Last 7 days</p>
         <div className="flex items-end justify-between gap-1" style={{ height: 44 }}>
@@ -860,9 +994,26 @@ export function HubPeptidesExpand({
         href="/peptides"
         className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-violet-400/30 hover:bg-violet-400/[0.06] hover:text-violet-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30 sm:w-auto sm:px-4"
       >
-        <Syringe className="h-3.5 w-3.5" aria-hidden />
         Open peptides
+        <ChevronRight className="h-3.5 w-3.5" aria-hidden />
       </Link>
+
+      <LogPeptideInjectionDialog
+        open={injectionOpen}
+        onOpenChange={setInjectionOpen}
+        onSaved={() => {
+          setInjectionOpen(false)
+          bumpHub()
+        }}
+      />
+      <LogPeptideDailyDialog
+        open={dailyOpen}
+        onOpenChange={setDailyOpen}
+        onSaved={() => {
+          setDailyOpen(false)
+          bumpHub()
+        }}
+      />
     </div>
   )
 }
@@ -952,12 +1103,39 @@ export function HubWorkoutsExpand({
   onDismiss: () => void
 }) {
   const router = useRouter()
+  const { activeDate } = useActiveDate()
   const [templates, setTemplates] = useState<HubRoutineTemplate[]>([])
   const [templatesStatus, setTemplatesStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   )
+  const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading")
+  const [completedSessions, setCompletedSessions] = useState<WorkoutSessionLike[]>([])
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [startingId, setStartingId] = useState<string | null>(null)
+
+  const { weekStart, weekEnd } = useMemo(() => {
+    const ref = parseLocalDate(activeDate)
+    const start = startOfWeek(ref, { weekStartsOn: 1 })
+    return {
+      weekStart: formatDate(start),
+      weekEnd: formatDate(addDays(start, 6)),
+    }
+  }, [activeDate])
+
+  const muscleStats = useMemo(
+    () => aggregateMuscleStats(completedSessions, weekStart, weekEnd),
+    [completedSessions, weekStart, weekEnd],
+  )
+
+  const segmentScores = useMemo(() => {
+    const scores = muscleStatsToSegmentScores(muscleStats)
+    return Object.keys(scores).length > 0 ? scores : null
+  }, [muscleStats])
+
+  const topMuscles = useMemo(
+    () => muscleStats.filter((m) => m.sets > 0).slice(0, 6),
+    [muscleStats],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -974,6 +1152,28 @@ export function HubWorkoutsExpand({
         if (cancelled) return
         setTemplates([])
         setTemplatesStatus("error")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadStatus("loading")
+    void apiFetch(`/api/workout-sessions?status=completed&_=${Date.now()}`, {
+      cache: "no-store",
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
+      .then((rows: unknown) => {
+        if (cancelled) return
+        setCompletedSessions(Array.isArray(rows) ? (rows as WorkoutSessionLike[]) : [])
+        setLoadStatus("ready")
+      })
+      .catch(() => {
+        if (cancelled) return
+        setCompletedSessions([])
+        setLoadStatus("error")
       })
     return () => {
       cancelled = true
@@ -1075,6 +1275,64 @@ export function HubWorkoutsExpand({
       />
 
       <div className="space-y-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="type-hud-caption">Load · this week</p>
+          {loadStatus === "ready" ? (
+            <span className="type-hud-micro tabular-nums text-muted-foreground/50">
+              {weekStart.slice(5).replace("-", "/")} – {weekEnd.slice(5).replace("-", "/")}
+            </span>
+          ) : null}
+        </div>
+        {loadStatus === "loading" ? (
+          <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+            Loading load map…
+          </p>
+        ) : null}
+        {loadStatus === "error" ? (
+          <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+            Couldn’t load muscle map.
+          </p>
+        ) : null}
+        {loadStatus === "ready" ? (
+          <>
+            <WorkoutMuscleMap
+              segmentScores={segmentScores}
+              className="[&_.anatomy-figure-chassis]:border-white/[0.06] [&_.anatomy-figure-chassis]:bg-white/[0.02]"
+            />
+            {topMuscles.length > 0 ? (
+              <div className="space-y-1.5 pt-1">
+                <p className="type-hud-micro text-muted-foreground/50">Top load</p>
+                <ul className="space-y-1">
+                  {topMuscles.map((row) => (
+                    <li
+                      key={row.muscle}
+                      className="flex items-baseline justify-between gap-2 type-hud-caption normal-case tracking-normal"
+                    >
+                      <span className="min-w-0 truncate text-foreground/85">{row.muscle}</span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground/60">
+                        {Number.isInteger(row.sets) ? row.sets : row.sets.toFixed(1)} sets
+                        {" · "}
+                        {formatVolumeLb(row.volumeLb)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+                No completed work this week yet — finish a session to light up the map.
+              </p>
+            )}
+          </>
+        ) : null}
+      </div>
+
+      <div
+        className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/8 to-transparent"
+        aria-hidden
+      />
+
+      <div className="space-y-2">
         <p className="type-hud-caption">Sessions · last 7</p>
         <div className="flex items-end justify-between gap-1" style={{ height: 44 }}>
           {last7.map((v, i) => {
@@ -1121,11 +1379,20 @@ export function HubWorkoutsExpand({
       <div className="space-y-2.5">
         <div className="flex items-baseline justify-between gap-2">
           <p className="type-hud-caption">Routines</p>
-          {templatesStatus === "ready" && templates.length > 0 ? (
-            <span className="type-hud-micro tabular-nums text-muted-foreground/50">
-              {templates.length}
-            </span>
-          ) : null}
+          <div className="flex items-center gap-2">
+            {templatesStatus === "ready" && templates.length > 0 ? (
+              <span className="type-hud-micro tabular-nums text-muted-foreground/50">
+                {templates.length}
+              </span>
+            ) : null}
+            <Link
+              href="/workouts?newRoutine=1"
+              className="inline-flex h-7 items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2 type-hud-micro text-muted-foreground/80 transition-colors hover:border-[#c4d632]/35 hover:text-[#e8f07a]"
+            >
+              <Plus className="size-3" aria-hidden />
+              New
+            </Link>
+          </div>
         </div>
 
         {templatesStatus === "loading" ? (
@@ -1146,7 +1413,7 @@ export function HubWorkoutsExpand({
         ) : null}
         {templatesStatus === "ready" && templates.length === 0 ? (
           <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-            No routines yet — create one on the workouts page, or start free-form below.
+            No routines yet — tap New above, or start free-form below.
           </p>
         ) : null}
 
@@ -1206,15 +1473,24 @@ export function HubWorkoutsExpand({
                       ) : null}
                     </div>
                   </button>
-                  <button
-                    type="button"
-                    disabled={startingId != null}
-                    onClick={() => goStartRoutine(tmpl.id)}
-                    className="inline-flex h-9 shrink-0 items-center gap-1 self-center rounded-xl border border-white/10 bg-white/[0.03] px-2.5 type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
-                  >
-                    <Play className="size-3 shrink-0" aria-hidden />
-                    {busy ? "…" : "Start"}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5 self-center">
+                    <Link
+                      href={`/workouts?editRoutine=${encodeURIComponent(tmpl.id)}`}
+                      className="inline-flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-muted-foreground/70 transition-colors hover:border-[#c4d632]/30 hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30"
+                      aria-label={`Edit ${tmpl.name}`}
+                    >
+                      <Pencil className="size-3.5" aria-hidden />
+                    </Link>
+                    <button
+                      type="button"
+                      disabled={startingId != null}
+                      onClick={() => goStartRoutine(tmpl.id)}
+                      className="inline-flex h-9 items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
+                    >
+                      <Play className="size-3 shrink-0" aria-hidden />
+                      {busy ? "…" : "Start"}
+                    </button>
+                  </div>
                 </div>
               )
             })}
@@ -1324,18 +1600,28 @@ export function HubWorkoutsExpand({
                     })}
                   </div>
                 )}
-                <button
-                  type="button"
-                  disabled={startingId != null}
-                  onClick={() => {
-                    setPreviewId(null)
-                    goStartRoutine(previewTmpl.id)
-                  }}
-                  className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
-                >
-                  <Play className="size-3.5" aria-hidden />
-                  Start this routine
-                </button>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    disabled={startingId != null}
+                    onClick={() => {
+                      setPreviewId(null)
+                      goStartRoutine(previewTmpl.id)
+                    }}
+                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
+                  >
+                    <Play className="size-3.5" aria-hidden />
+                    Start this routine
+                  </button>
+                  <Link
+                    href={`/workouts?editRoutine=${encodeURIComponent(previewTmpl.id)}`}
+                    onClick={() => setPreviewId(null)}
+                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/30 hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30"
+                  >
+                    <Pencil className="size-3.5" aria-hidden />
+                    Edit routine
+                  </Link>
+                </div>
               </div>
             </div>
           ) : null}

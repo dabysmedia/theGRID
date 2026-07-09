@@ -3307,6 +3307,53 @@ function HubStartFromQuery({
   return null
 }
 
+/**
+ * Hub deep-link: `?newRoutine=1` or `?editRoutine=<id>` opens the routine editor.
+ */
+function HubRoutineEditorFromQuery({
+  templatesLoaded,
+  templates,
+  onNew,
+  onEdit,
+}: {
+  templatesLoaded: boolean
+  templates: WorkoutTemplate[]
+  onNew: () => void
+  onEdit: (tmpl: WorkoutTemplate) => void
+}) {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const handledRef = useRef<string | null>(null)
+  const onNewRef = useRef(onNew)
+  const onEditRef = useRef(onEdit)
+  onNewRef.current = onNew
+  onEditRef.current = onEdit
+
+  useEffect(() => {
+    if (!templatesLoaded) return
+
+    const newRoutine = searchParams.get("newRoutine")
+    const editId = searchParams.get("editRoutine")?.trim() || null
+    const key = newRoutine ? `new:${newRoutine}` : editId ? `edit:${editId}` : null
+    if (!key) return
+    if (handledRef.current === key) return
+
+    handledRef.current = key
+    router.replace("/workouts", { scroll: false })
+
+    if (newRoutine) {
+      onNewRef.current()
+      return
+    }
+    if (editId) {
+      const tmpl = templates.find((t) => t.id === editId)
+      if (tmpl) onEditRef.current(tmpl)
+    }
+  }, [searchParams, templatesLoaded, templates, router])
+
+  return null
+}
+
 /* ──────────────────────────────────────────────────────────
    Main Page
    ────────────────────────────────────────────────────────── */
@@ -4537,6 +4584,12 @@ export default function WorkoutsPage() {
               tmpl.id,
             )
           }}
+        />
+        <HubRoutineEditorFromQuery
+          templatesLoaded={templatesLoaded}
+          templates={templates}
+          onNew={openNewRoutineEditor}
+          onEdit={openEditRoutineEditor}
         />
       </Suspense>
 

@@ -1,6 +1,8 @@
 "use client"
 
+import { Plus } from "lucide-react"
 import { MeshHeartSvg } from "@/components/hub/MeshHeartSvg"
+import { useQuickLog } from "@/context/QuickLogContext"
 import { cn } from "@/lib/utils"
 import {
   READINESS_BAND_LABEL,
@@ -58,6 +60,7 @@ export function StepsActivityBars({
   hideSteps = false,
   className,
 }: Props) {
+  const { openQuickLog } = useQuickLog()
   const goalValue =
     goal != null && Number.isFinite(goal) && goal > 0 ? goal : null
   // Include goal in the scale so the yellow line always sits inside the chart.
@@ -440,6 +443,17 @@ export function StepsActivityBars({
             })}
           </div>
         </div>
+
+        {expanded ? (
+          <button
+            type="button"
+            onClick={() => openQuickLog("steps")}
+            className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-emerald-400/30 hover:bg-emerald-400/[0.06] hover:text-emerald-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/30 sm:w-auto sm:px-4"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            Log steps
+          </button>
+        ) : null}
       </div>
       ) : null}
     </div>
