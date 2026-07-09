@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react"
 import { format, subDays } from "date-fns"
-import { ChevronDown, Moon, Star, Trash2, TrendingUp } from "lucide-react"
+import { ChevronDown, Moon, Plus, Star, Trash2, TrendingUp } from "lucide-react"
 import { apiFetch } from "@/lib/api-fetch"
 import {
   ResponsiveContainer,
@@ -20,7 +20,7 @@ import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { SleepLogFields } from "@/components/sleep/SleepLogFields"
+import { LogSleepDialog } from "@/components/quick-log/LogSleepDialog"
 import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
 import {
@@ -279,15 +279,11 @@ export default function SleepPage() {
   const { activeDate } = useActiveDate()
   const { user } = useUser()
   const [entries, setEntries] = useState<SleepEntry[]>([])
-  const [bedtime, setBedtime] = useState("22:30")
-  const [wakeTime, setWakeTime] = useState("06:30")
+  const [logOpen, setLogOpen] = useState(false)
   const [desiredWakeTime, setDesiredWakeTime] = useState("06:30")
   const [sleepGoalHours, setSleepGoalHours] = useState(8)
-  const [quality, setQuality] = useState(3)
-  const [notes, setNotes] = useState("")
   const [chartRange, setChartRange] = useState<"7d" | "30d" | "all">("30d")
   const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set())
-  const [submitting, setSubmitting] = useState(false)
 
   const today = activeDate
   const yesterday = formatDate(subDays(parseLocalDate(activeDate), 1))
@@ -326,12 +322,6 @@ export default function SleepPage() {
   }, [])
 
   const refDate = parseLocalDate(activeDate)
-
-  const previewDuration = useMemo(() => {
-    const bedDatetime = new Date(`${today}T${bedtime}:00`)
-    const wakeDatetime = new Date(`${today}T${wakeTime}:00`)
-    return sleepDurationHours(bedDatetime, wakeDatetime)
-  }, [today, bedtime, wakeTime])
 
   const last7DaysEntries = useMemo(() => {
     const refKey = activeDate
@@ -430,37 +420,6 @@ export default function SleepPage() {
     [historyByDate, today]
   )
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (submitting) return
-
-    const bedDatetime = new Date(`${today}T${bedtime}:00`)
-    const wakeDatetime = new Date(`${today}T${wakeTime}:00`)
-
-    setSubmitting(true)
-    try {
-      const res = await apiFetch("/api/sleep", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date: today,
-          bedtime: bedDatetime.toISOString(),
-          wakeTime: wakeDatetime.toISOString(),
-          quality,
-          notes: notes || null,
-        }),
-      })
-
-      if (res.ok) {
-        const entry = await res.json()
-        setEntries([entry, ...entries])
-        setNotes("")
-      }
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   async function handleDelete(id: string) {
     const res = await apiFetch(`/api/sleep?id=${id}`, { method: "DELETE" })
     if (res.ok) setEntries(entries.filter((e) => e.id !== id))
@@ -493,41 +452,43 @@ export default function SleepPage() {
         color={SLEEP_COLOR}
       />
 
-      <div className="glass-panel animate-fade-up stagger-2 p-5">
-        <div className="mb-5 text-center lg:text-left">
-          <p className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">Duration preview</p>
-          <p
-            className="text-4xl font-bold tabular-nums tracking-tight"
-            style={{ color: SLEEP_COLOR }}
+      <div
+        className={cn(glassPanelClass, glassPanelAccentClass, "animate-fade-up stagger-1 p-4 lg:p-5")}
+        style={glassPanelAccentStyle(SLEEP_COLOR)}
+      >
+        <div
+          className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"
+          style={{ backgroundColor: SLEEP_COLOR }}
+          aria-hidden
+        />
+        <div className="relative space-y-4">
+          <div className="min-w-0">
+            <p className="type-hud-label-soft mb-1">Last night</p>
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="type-hud-value-xl tabular-nums">{stats.lastNight}</span>
+              {stats.lastNight !== "—" && <span className="type-hud-unit">logged</span>}
+            </div>
+            <p className="type-hud-caption mt-1.5 normal-case">
+              Hub target bedtime{" "}
+              <span className="font-semibold tabular-nums text-foreground/90">{targetBedtime}</span>
+              {" · "}
+              {sleepGoalHours}h goal
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            variant="glass"
+            size="lg"
+            className="h-12 w-full gap-2 touch-manipulation"
+            onClick={() => setLogOpen(true)}
           >
-            {previewDuration}h
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {formatDisplayDate(parseLocalDate(activeDate))}
-          </p>
-          <p className="mt-1.5 text-[11px] text-muted-foreground/90">
-            Hub target bedtime{" "}
-            <span className="font-semibold tabular-nums text-foreground/90">{targetBedtime}</span>
-            {" · "}
-            {sleepGoalHours}h goal
-          </p>
-        </div>
+            <Plus className="h-4 w-4 shrink-0" />
+            Log sleep
+          </Button>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <SleepLogFields
-            bedtime={bedtime}
-            wakeTime={wakeTime}
-            quality={quality}
-            notes={notes}
-            onBedtimeChange={setBedtime}
-            onWakeTimeChange={setWakeTime}
-            onQualityChange={setQuality}
-            onNotesChange={setNotes}
-            idPrefix="sleep-page"
-          />
-
-          <div className="space-y-1.5">
-            <Label htmlFor="desiredWake" className="text-xs uppercase tracking-wider text-muted-foreground">
+          <div className="space-y-1.5 border-t border-border/20 pt-3">
+            <Label htmlFor="desiredWake" className="type-hud-label-soft">
               Desired wake (hub)
             </Label>
             <Input
@@ -538,14 +499,10 @@ export default function SleepPage() {
                 setDesiredWakeTime(e.target.value)
                 if (user?.id) writeDesiredWakeTime(user.id, e.target.value)
               }}
-              className="tabular-nums"
+              className="h-11 tabular-nums"
             />
           </div>
-
-          <Button type="submit" variant="glass" className="w-full press-scale" size="lg" disabled={submitting}>
-            {submitting ? "Saving…" : "Log sleep"}
-          </Button>
-        </form>
+        </div>
       </div>
 
       <section className="animate-fade-up stagger-2 space-y-4">
@@ -565,7 +522,7 @@ export default function SleepPage() {
           >
             <p className="type-hud-stat-sm text-muted-foreground/80">No sleep logged yet</p>
             <p className="type-hud-caption mx-auto mt-2 max-w-sm normal-case">
-              Log bedtime, wake time, and quality above to start tracking your nights.
+              Tap Log sleep to record bedtime, wake time, and quality.
             </p>
           </div>
         ) : (
@@ -745,6 +702,23 @@ export default function SleepPage() {
           <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
         </section>
       )}
+
+      <LogSleepDialog
+        open={logOpen}
+        onOpenChange={setLogOpen}
+        onSaved={(entry) => {
+          if (entry && typeof entry === "object" && "id" in entry) {
+            setEntries((prev) => [entry as SleepEntry, ...prev])
+          } else {
+            apiFetch("/api/sleep")
+              .then(async (r) => {
+                const data = await r.json()
+                setEntries(Array.isArray(data) ? data : [])
+              })
+              .catch(() => {})
+          }
+        }}
+      />
     </div>
   )
 }

@@ -289,15 +289,14 @@ export default function BowelPage() {
               <p className="text-[10px] text-muted-foreground/70 mt-0.5">
                 Log when you had no movement this day (still counts as a check-in).
               </p>
-              <div className="flex flex-wrap gap-1.5 mt-2">
+              <div className="mt-2 grid grid-cols-7 gap-1.5">
                 {[1, 2, 3, 4, 5, 6, 7].map((s) => (
                   <Button
                     key={s}
                     type="button"
                     variant={bristolScale === s ? "default" : "outline"}
-                    size="sm"
                     onClick={() => setBristolScale(s)}
-                    className="w-9"
+                    className="h-11 min-w-0 touch-manipulation px-0"
                   >
                     {s}
                   </Button>

@@ -3,23 +3,21 @@
 import { useEffect, useState } from "react"
 import { Moon } from "lucide-react"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
+  CategoryLogDialog,
+  CategoryLogSubmitButton,
+} from "@/components/trackers/CategoryLogDialog"
 import { SleepLogFields } from "@/components/sleep/SleepLogFields"
 import { useActiveDate } from "@/context/DateContext"
 import { formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { sleepDurationHours } from "@/lib/sleepDuration"
 
+const SLEEP_COLOR = "#6366f1"
+
 export interface LogSleepDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSaved?: () => void
+  onSaved?: (entry?: unknown) => void
 }
 
 export function LogSleepDialog({ open, onOpenChange, onSaved }: LogSleepDialogProps) {
@@ -62,8 +60,9 @@ export function LogSleepDialog({ open, onOpenChange, onSaved }: LogSleepDialogPr
       })
 
       if (res.ok) {
+        const entry = await res.json().catch(() => null)
         onOpenChange(false)
-        onSaved?.()
+        onSaved?.(entry)
       }
     } finally {
       setSubmitting(false)
@@ -72,50 +71,52 @@ export function LogSleepDialog({ open, onOpenChange, onSaved }: LogSleepDialogPr
 
   const previewDuration = sleepDurationHours(
     new Date(`${activeDate}T${bedtime}:00`),
-    new Date(`${activeDate}T${wakeTime}:00`)
+    new Date(`${activeDate}T${wakeTime}:00`),
   )
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-frost max-h-[min(90dvh,720px)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto overscroll-contain sm:p-5">
-        <DialogHeader>
-          <DialogTitle className="type-hud-title flex items-center gap-2 font-sans normal-case tracking-normal">
-            <Moon className="h-4 w-4 text-[#6366f1]" aria-hidden />
-            Log sleep
-          </DialogTitle>
-          <DialogDescription className="type-hud-caption normal-case">
-            Last night · {formatDisplayDate(parseLocalDate(activeDate))}
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <p className="text-center text-[11px] text-muted-foreground tabular-nums lg:text-left">
-            ≈ {previewDuration}h sleep
-          </p>
-
-          <SleepLogFields
-            bedtime={bedtime}
-            wakeTime={wakeTime}
-            quality={quality}
-            notes={notes}
-            onBedtimeChange={setBedtime}
-            onWakeTimeChange={setWakeTime}
-            onQualityChange={setQuality}
-            onNotesChange={setNotes}
-            idPrefix="quick-log-sleep"
-          />
-
-          <Button
-            type="submit"
-            variant="glass"
-            className="w-full press-scale"
-            size="lg"
-            disabled={submitting}
+    <CategoryLogDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Log sleep"
+      description={`Last night · ${formatDisplayDate(parseLocalDate(activeDate))}`}
+      icon={Moon}
+      accentColor={SLEEP_COLOR}
+      footer={
+        <CategoryLogSubmitButton form="log-sleep-form" disabled={submitting}>
+          {submitting ? "Saving…" : `Log ${previewDuration}h sleep`}
+        </CategoryLogSubmitButton>
+      }
+    >
+      <form id="log-sleep-form" onSubmit={handleSubmit} className="space-y-5">
+        <div
+          className="relative overflow-hidden rounded-2xl border border-border/25 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-[#6366f1]/[0.08] px-4 py-6 text-center"
+        >
+          <p className="type-hud-label-soft mb-1">Duration</p>
+          <p
+            className="font-heading text-5xl font-semibold tabular-nums tracking-tight"
+            style={{ color: SLEEP_COLOR }}
           >
-            {submitting ? "Saving…" : "Log sleep"}
-          </Button>
-        </form>
-      </DialogContent>
-    </Dialog>
+            {previewDuration}
+            <span className="type-hud-unit ml-1 text-2xl">h</span>
+          </p>
+          <p className="type-hud-caption mt-2 normal-case text-muted-foreground/65">
+            Updates as you set bedtime & wake
+          </p>
+        </div>
+
+        <SleepLogFields
+          bedtime={bedtime}
+          wakeTime={wakeTime}
+          quality={quality}
+          notes={notes}
+          onBedtimeChange={setBedtime}
+          onWakeTimeChange={setWakeTime}
+          onQualityChange={setQuality}
+          onNotesChange={setNotes}
+          idPrefix="quick-log-sleep"
+        />
+      </form>
+    </CategoryLogDialog>
   )
 }
