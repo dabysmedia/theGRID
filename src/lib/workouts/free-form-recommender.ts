@@ -6,7 +6,9 @@ import {
 } from "./muscle-volume"
 import {
   calculateExerciseSimilarity,
+  inferMovementPattern,
   normalizeExerciseKey,
+  type MovementPattern,
 } from "./progressive-overload"
 
 export type BodySplit = "upper" | "lower"
@@ -79,14 +81,18 @@ type PatternBucket =
   | "vertical_pull"
   | "elbow_flexion"
   | "elbow_extension"
+  | "chest_isolation"
+  | "shoulder_isolation"
   | "squat"
   | "hinge"
   | "lunge"
   | "glute"
+  | "leg_isolation"
   | "calf"
   | "core"
   | "other"
 
+/** Compounds first, then accessories / isolations. */
 const UPPER_BUCKET_ORDER: PatternBucket[] = [
   "horizontal_push",
   "vertical_pull",
@@ -94,6 +100,8 @@ const UPPER_BUCKET_ORDER: PatternBucket[] = [
   "vertical_push",
   "elbow_extension",
   "elbow_flexion",
+  "chest_isolation",
+  "shoulder_isolation",
   "core",
 ]
 
@@ -102,9 +110,31 @@ const LOWER_BUCKET_ORDER: PatternBucket[] = [
   "hinge",
   "lunge",
   "glute",
+  "leg_isolation",
   "calf",
   "other",
 ]
+
+const COMPOUND_BUCKETS: ReadonlySet<PatternBucket> = new Set([
+  "horizontal_push",
+  "vertical_push",
+  "horizontal_pull",
+  "vertical_pull",
+  "squat",
+  "hinge",
+  "lunge",
+  "glute",
+])
+
+const ISOLATION_BUCKETS: ReadonlySet<PatternBucket> = new Set([
+  "chest_isolation",
+  "shoulder_isolation",
+  "elbow_flexion",
+  "elbow_extension",
+  "leg_isolation",
+  "calf",
+  "core",
+])
 
 export function isUpperBodyMuscle(name: string): boolean {
   return UPPER_MUSCLES.has(name.trim().toLowerCase())
@@ -120,27 +150,79 @@ export function muscleMatchesSplit(name: string, split: BodySplit): boolean {
   return LOWER_MUSCLES.has(key)
 }
 
+/** True for multi-joint presses, pulls, squats, hinges — not flies/raises/curls. */
+export function isCompoundMovement(name: string, primaryMuscle?: string): boolean {
+  const bucket = inferPatternBucket(name, primaryMuscle)
+  return COMPOUND_BUCKETS.has(bucket)
+}
+
 export function inferPatternBucket(name: string, primaryMuscle?: string): PatternBucket {
   const n = normalizeExerciseKey(name)
   const m = (primaryMuscle ?? "").trim().toLowerCase()
+  const pattern: MovementPattern = inferMovementPattern(name)
 
-  if (/bench|chest press|push.?up|fly|pec/.test(n) || m === "chest") return "horizontal_push"
-  if (/overhead|shoulder press|military|arnold|landmine press/.test(n)) return "vertical_push"
-  if (/lateral raise|front raise|rear delt|face.?pull|upright row/.test(n) || m === "shoulders") {
-    return "vertical_push"
+  // Prefer progressive-overload pattern when it cleanly maps to a free-form bucket
+  switch (pattern) {
+    case "chest_isolation":
+      return "chest_isolation"
+    case "shoulder_isolation":
+      return "shoulder_isolation"
+    case "leg_isolation":
+      return "leg_isolation"
+    case "elbow_flexion":
+      return "elbow_flexion"
+    case "elbow_extension":
+      return "elbow_extension"
+    case "core":
+      return "core"
+    case "calf":
+      return "calf"
+    case "lunge":
+      return "lunge"
+    case "squat":
+      return "squat"
+    case "hinge":
+      return "hinge"
+    case "vertical_pull":
+      return "vertical_pull"
+    case "horizontal_pull":
+      return "horizontal_pull"
+    case "vertical_push":
+      return "vertical_push"
+    case "horizontal_push":
+      return "horizontal_push"
+    default:
+      break
   }
+
+  // Muscle fallbacks when name didn't match a pattern rule
+  if (/fly|flye|crossover|pec deck|pullover/.test(n)) return "chest_isolation"
+  if (/lateral raise|front raise|rear delt|face.?pull|y.?raise|upright row/.test(n)) {
+    return "shoulder_isolation"
+  }
+  if (/bench|chest press|push.?up|dip|floor press/.test(n) || m === "chest") {
+    return "horizontal_push"
+  }
+  if (/overhead|shoulder press|military|arnold|landmine press/.test(n)) return "vertical_push"
+  if (m === "shoulders" || m === "deltoids") return "shoulder_isolation"
   if (/row|seated row|chest.?supported|meadows|seal row/.test(n)) return "horizontal_pull"
   if (/pulldown|pull.?up|chin.?up|lat /.test(n) || m === "lats") return "vertical_pull"
   if (/curl|bicep/.test(n) || m === "biceps") return "elbow_flexion"
   if (/tricep|pushdown|skull|dip/.test(n) || m === "triceps") return "elbow_extension"
-  if (/crunch|sit.?up|plank|ab |core|woodchop|knee raise/.test(n) || m === "abdominals" || m === "obliques" || m === "core") {
+  if (
+    /crunch|sit.?up|plank|ab |core|woodchop|knee raise/.test(n) ||
+    m === "abdominals" ||
+    m === "obliques" ||
+    m === "core"
+  ) {
     return "core"
   }
-  if (/squat|leg press|lunge|split squat|step.?up|hack|pendulum|sissy/.test(n) || m === "quadriceps") {
-    if (/lunge|split squat|step.?up|bulgarian/.test(n)) return "lunge"
-    return "squat"
-  }
-  if (/deadlift|rdl|romanian|good morning|hip hinge|back extension|hyperextension|rack pull/.test(n) || m === "hamstrings" || m === "lower back") {
+  if (/squat|leg press|hack|pendulum|sissy/.test(n) || m === "quadriceps") return "squat"
+  if (
+    /deadlift|rdl|romanian|good morning|hip hinge|back extension|hyperextension|rack pull/.test(n) ||
+    m === "hamstrings" ||
+    m === "lower back"
+  ) {
     return "hinge"
   }
   if (/hip thrust|glute|kickback|abduction|abductor/.test(n) || m === "glutes" || m === "abductors") {
@@ -201,6 +283,75 @@ export function aggregateExerciseFrequency(
   return map
 }
 
+/**
+ * Rank library exercises for the picker: favorites first, then compounds,
+ * then alphabetical. Used to keep the default list focused.
+ */
+export function rankExercisesForPicker(
+  exercises: ApiExercise[],
+  freq: Map<string, ExerciseFrequency>,
+): ApiExercise[] {
+  return [...exercises].sort((a, b) => {
+    const fa = freq.get(normalizeExerciseKey(a.name))?.sessionCount ?? 0
+    const fb = freq.get(normalizeExerciseKey(b.name))?.sessionCount ?? 0
+    if (fb !== fa) return fb - fa
+    const ca = isCompoundMovement(a.name, a.primaryMuscles[0]?.name) ? 1 : 0
+    const cb = isCompoundMovement(b.name, b.primaryMuscles[0]?.name) ? 1 : 0
+    if (cb !== ca) return cb - ca
+    return a.name.localeCompare(b.name)
+  })
+}
+
+/** Top frequently logged exercises from the library (min 1 session). */
+export function topFrequentExercises(
+  library: ApiExercise[],
+  freq: Map<string, ExerciseFrequency>,
+  limit = 12,
+  opts?: { muscleFilter?: string | null; excludeKeys?: Set<string> },
+): ApiExercise[] {
+  const muscle = opts?.muscleFilter?.trim()
+  const exclude = opts?.excludeKeys ?? new Set<string>()
+  const ranked = rankExercisesForPicker(library, freq).filter((ex) => {
+    const key = normalizeExerciseKey(ex.name)
+    if (exclude.has(key)) return false
+    const count = freq.get(key)?.sessionCount ?? 0
+    if (count < 1) return false
+    if (muscle && muscle !== "All") {
+      if (!ex.primaryMuscles.some((m) => m.name === muscle)) return false
+    }
+    return true
+  })
+  return ranked.slice(0, Math.max(1, limit))
+}
+
+/**
+ * Suggested compounds for a muscle group (or general compounds) when the user
+ * has little history — keeps the picker useful for new accounts.
+ */
+export function suggestedCompoundExercises(
+  library: ApiExercise[],
+  opts?: {
+    muscleFilter?: string | null
+    excludeKeys?: Set<string>
+    limit?: number
+  },
+): ApiExercise[] {
+  const muscle = opts?.muscleFilter?.trim()
+  const exclude = opts?.excludeKeys ?? new Set<string>()
+  const limit = opts?.limit ?? 8
+  const hits = library.filter((ex) => {
+    const key = normalizeExerciseKey(ex.name)
+    if (exclude.has(key)) return false
+    if (!isCompoundMovement(ex.name, ex.primaryMuscles[0]?.name)) return false
+    if (muscle && muscle !== "All") {
+      if (!ex.primaryMuscles.some((m) => m.name === muscle)) return false
+    }
+    return true
+  })
+  hits.sort((a, b) => a.name.localeCompare(b.name))
+  return hits.slice(0, limit)
+}
+
 function muscleDeficitMap(
   stats: MuscleWeekStats[],
   split: BodySplit,
@@ -235,6 +386,7 @@ function toPickedMuscles(ex: ApiExercise) {
 type Candidate = RecommendedExercise & {
   bucket: PatternBucket
   primaryKey: string
+  compound: boolean
   api: ApiExercise
 }
 
@@ -257,9 +409,15 @@ function isTooSimilar(candidate: Candidate, picked: Candidate[]): boolean {
   return false
 }
 
+function bucketPriority(bucket: PatternBucket): number {
+  if (COMPOUND_BUCKETS.has(bucket)) return 0
+  if (ISOLATION_BUCKETS.has(bucket)) return 2
+  return 1
+}
+
 /**
  * Build a free-form Upper/Lower session: favor undertrained muscles this week
- * and movements the user already trains often.
+ * and movements the user already trains often. Heavy compounds fill first.
  */
 export function recommendFreeFormWorkout(
   input: FreeFormRecommendInput,
@@ -289,6 +447,8 @@ export function recommendFreeFormWorkout(
     if (primary.name.trim().toLowerCase() === "cardio") continue
 
     const primaryKey = primary.name.trim().toLowerCase()
+    const bucket = inferPatternBucket(ex.name, primary.name)
+    const compound = COMPOUND_BUCKETS.has(bucket)
     const deficit = deficits.get(primaryKey) ?? weeklySetTarget
     const f = freq.get(key)
     const sessionCount = f?.sessionCount ?? 0
@@ -305,9 +465,13 @@ export function recommendFreeFormWorkout(
     const deficitBonus = deficit * 3.2
     // Mild novelty so we don't only pick the same 5 forever
     const novelty = sessionCount === 0 ? 0.8 : 0
+    // Heavy compounds always outrank flies / raises / curls for the same muscle
+    const compoundBonus = compound ? 5.5 : 0
 
-    const score = deficitBonus + favoriteBonus + recencyBonus + novelty
+    const score =
+      deficitBonus + favoriteBonus + recencyBonus + novelty + compoundBonus
     const reasonParts: string[] = []
+    if (compound) reasonParts.push("compound lift")
     if (deficit >= weeklySetTarget * 0.7) {
       reasonParts.push(`fills ${primary.name} volume`)
     } else if (deficit > 0) {
@@ -315,26 +479,32 @@ export function recommendFreeFormWorkout(
     }
     if (sessionCount >= 3) reasonParts.push("a favorite of yours")
     else if (sessionCount > 0) reasonParts.push("you've logged this before")
-    else reasonParts.push("fresh for this week")
+    else if (!compound) reasonParts.push("fresh for this week")
 
     candidates.push({
       name: ex.name,
       ...toPickedMuscles(ex),
       reason: reasonParts.join(" · "),
       score,
-      bucket: inferPatternBucket(ex.name, primary.name),
+      bucket,
       primaryKey,
+      compound,
       api: ex,
     })
   }
 
-  candidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+  candidates.sort(
+    (a, b) =>
+      b.score - a.score ||
+      Number(b.compound) - Number(a.compound) ||
+      a.name.localeCompare(b.name),
+  )
 
   const picked: Candidate[] = []
   const usedBuckets = new Set<PatternBucket>()
   const usedPrimaries = new Set<string>()
 
-  // Pass 1: one exercise per pattern bucket in preferred order
+  // Pass 1: one exercise per pattern bucket in preferred order (compounds first)
   for (const bucket of bucketOrder) {
     if (picked.length >= count) break
     const hit = candidates.find(
@@ -361,7 +531,17 @@ export function recommendFreeFormWorkout(
     usedPrimaries.add(c.primaryKey)
   }
 
-  return picked.map(({ api: _api, bucket: _b, primaryKey: _pk, ...rest }) => rest)
+  // Session order: compounds first, then accessories — never open with a fly/raise
+  picked.sort(
+    (a, b) =>
+      bucketPriority(a.bucket) - bucketPriority(b.bucket) ||
+      Number(b.compound) - Number(a.compound) ||
+      b.score - a.score,
+  )
+
+  return picked.map(
+    ({ api: _api, bucket: _b, primaryKey: _pk, compound: _c, ...rest }) => rest,
+  )
 }
 
 /** Default working sets for a free-form recommendation. */

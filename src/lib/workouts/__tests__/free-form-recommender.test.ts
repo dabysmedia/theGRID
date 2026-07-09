@@ -3,9 +3,11 @@ import type { ApiExercise } from "../exercise-library"
 import {
   aggregateExerciseFrequency,
   inferPatternBucket,
+  isCompoundMovement,
   isLowerBodyMuscle,
   isUpperBodyMuscle,
   recommendFreeFormWorkout,
+  topFrequentExercises,
 } from "../free-form-recommender"
 
 function muscle(name: string, code = name.slice(0, 2).toUpperCase()) {
@@ -32,13 +34,17 @@ function libEx(
 const LIBRARY: ApiExercise[] = [
   libEx("Barbell Bench Press", "Chest", "Free weight", ["Triceps"]),
   libEx("Incline Dumbbell Press", "Chest", "Free weight"),
+  libEx("Cable Fly", "Chest", "Cable"),
   libEx("Lat Pulldown", "Lats", "Cable"),
   libEx("Seated Cable Row", "Upper Back", "Cable"),
   libEx("Dumbbell Shoulder Press", "Shoulders", "Free weight"),
+  libEx("Dumbbell Lateral Raise", "Shoulders", "Free weight"),
+  libEx("Y Raise", "Shoulders", "Free weight"),
   libEx("Triceps Pushdown", "Triceps", "Cable"),
   libEx("Barbell Curl", "Biceps", "Free weight"),
   libEx("Cable Crunch", "Abdominals", "Cable"),
   libEx("Back Squat", "Quadriceps", "Free weight", ["Glutes"]),
+  libEx("Leg Extension", "Quadriceps", "Machine"),
   libEx("Romanian Deadlift", "Hamstrings", "Free weight", ["Glutes"]),
   libEx("Walking Lunge", "Quadriceps", "Free weight", ["Glutes"]),
   libEx("Hip Thrust", "Glutes", "Free weight"),
@@ -77,9 +83,27 @@ describe("body split helpers", () => {
 
   it("infers pattern buckets", () => {
     expect(inferPatternBucket("Barbell Bench Press", "Chest")).toBe("horizontal_push")
+    expect(inferPatternBucket("Cable Fly", "Chest")).toBe("chest_isolation")
+    expect(inferPatternBucket("Dumbbell Lateral Raise", "Shoulders")).toBe(
+      "shoulder_isolation",
+    )
+    expect(inferPatternBucket("Y Raise", "Shoulders")).toBe("shoulder_isolation")
+    expect(inferPatternBucket("Dumbbell Shoulder Press", "Shoulders")).toBe(
+      "vertical_push",
+    )
     expect(inferPatternBucket("Lat Pulldown", "Lats")).toBe("vertical_pull")
     expect(inferPatternBucket("Back Squat", "Quadriceps")).toBe("squat")
+    expect(inferPatternBucket("Leg Extension", "Quadriceps")).toBe("leg_isolation")
     expect(inferPatternBucket("Romanian Deadlift", "Hamstrings")).toBe("hinge")
+  })
+
+  it("classifies compounds vs isolations", () => {
+    expect(isCompoundMovement("Barbell Bench Press", "Chest")).toBe(true)
+    expect(isCompoundMovement("Cable Fly", "Chest")).toBe(false)
+    expect(isCompoundMovement("Dumbbell Shoulder Press", "Shoulders")).toBe(true)
+    expect(isCompoundMovement("Y Raise", "Shoulders")).toBe(false)
+    expect(isCompoundMovement("Back Squat", "Quadriceps")).toBe(true)
+    expect(isCompoundMovement("Leg Extension", "Quadriceps")).toBe(false)
   })
 })
 
@@ -174,5 +198,72 @@ describe("recommendFreeFormWorkout", () => {
     })
     expect(recs.every((r) => r.name !== "Barbell Bench Press")).toBe(true)
     expect(recs.every((r) => r.name !== "Lat Pulldown")).toBe(true)
+  })
+
+  it("starts with heavy compounds before flies and raises", () => {
+    const recs = recommendFreeFormWorkout({
+      library: LIBRARY,
+      sessions: [
+        // Make isolations "favorites" so score alone would prefer them
+        session(1, [{ name: "Cable Fly", primary: "Chest", sets: 4 }]),
+        session(3, [{ name: "Cable Fly", primary: "Chest", sets: 4 }]),
+        session(5, [{ name: "Cable Fly", primary: "Chest", sets: 4 }]),
+        session(7, [{ name: "Y Raise", primary: "Shoulders", sets: 3 }]),
+        session(9, [{ name: "Y Raise", primary: "Shoulders", sets: 3 }]),
+        session(11, [{ name: "Y Raise", primary: "Shoulders", sets: 3 }]),
+      ],
+      split: "upper",
+      weekStart,
+      weekEnd,
+      count: 5,
+    })
+    expect(recs.length).toBeGreaterThanOrEqual(3)
+    const first = recs[0]
+    expect(isCompoundMovement(first.name, first.primaryMuscles[0]?.name)).toBe(
+      true,
+    )
+    expect(first.name).not.toMatch(/fly|raise/i)
+    // Press should appear before fly when both are present
+    const names = recs.map((r) => r.name)
+    const pressIdx = names.findIndex((n) => /press|bench/i.test(n))
+    const flyIdx = names.findIndex((n) => /fly/i.test(n))
+    if (pressIdx >= 0 && flyIdx >= 0) {
+      expect(pressIdx).toBeLessThan(flyIdx)
+    }
+  })
+
+  it("starts lower sessions with squat/hinge before leg isolation", () => {
+    const recs = recommendFreeFormWorkout({
+      library: LIBRARY,
+      sessions: [
+        session(1, [{ name: "Leg Extension", primary: "Quadriceps", sets: 5 }]),
+        session(4, [{ name: "Leg Extension", primary: "Quadriceps", sets: 5 }]),
+        session(8, [{ name: "Leg Extension", primary: "Quadriceps", sets: 5 }]),
+      ],
+      split: "lower",
+      weekStart,
+      weekEnd,
+      count: 5,
+    })
+    expect(recs[0].name).not.toMatch(/extension|curl|calf/i)
+    expect(isCompoundMovement(recs[0].name, recs[0].primaryMuscles[0]?.name)).toBe(
+      true,
+    )
+  })
+})
+
+describe("topFrequentExercises", () => {
+  it("returns favorites ranked by session count", () => {
+    const freq = aggregateExerciseFrequency([
+      session(1, [{ name: "Barbell Bench Press", primary: "Chest" }]),
+      session(2, [{ name: "Barbell Bench Press", primary: "Chest" }]),
+      session(3, [{ name: "Lat Pulldown", primary: "Lats" }]),
+    ])
+    const top = topFrequentExercises(LIBRARY, freq, 5)
+    expect(top[0]?.name).toBe("Barbell Bench Press")
+    expect(top.some((e) => e.name === "Lat Pulldown")).toBe(true)
+    expect(top.every((e) => (freq.get(e.name.toLowerCase())?.sessionCount ?? 0) >= 1)).toBe(
+      true,
+    )
   })
 })
