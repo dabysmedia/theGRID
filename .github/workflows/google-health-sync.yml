@@ -1,0 +1,35 @@
+name: Google Health sync
+
+# Pulls Fitbit/Google Health steps + sleep into theGRID every 15 minutes.
+# Requires repo secrets:
+#   APP_URL      e.g. https://itslos.com
+#   CRON_SECRET  same value as Railway CRON_SECRET
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync Google Health
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Missing APP_URL or CRON_SECRET secrets — skipping."
+            exit 0
+          fi
+          BASE="${APP_URL%/}"
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${BASE}/api/google-health/cron?days=3" \
+            | tee /tmp/gh-sync.json
+          echo
+          # Fail the job if the API returned an error payload with HTTP success edge cases
+          if grep -q '"error"' /tmp/gh-sync.json && ! grep -q '"ok":true' /tmp/gh-sync.json; then
+            exit 1
+          fi

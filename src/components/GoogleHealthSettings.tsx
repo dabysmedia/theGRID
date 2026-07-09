@@ -149,6 +149,7 @@ export function GoogleHealthSettings() {
           </h3>
           <p className="text-[11px] leading-relaxed text-muted-foreground/80">
             Import steps, sleep, and weight from your Fitbit account via Google Health.
+            After connecting, steps and sleep refresh automatically every few minutes.
           </p>
         </div>
       </div>

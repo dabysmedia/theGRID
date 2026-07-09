@@ -15,6 +15,12 @@ import { subDays } from "date-fns"
 
 const GRAMS_PER_LB = 453.59237
 
+export type SyncMetrics = {
+  steps?: boolean
+  sleep?: boolean
+  weight?: boolean
+}
+
 export type SyncResult = {
   stepsUpserted: number
   sleepUpserted: number
@@ -22,6 +28,13 @@ export type SyncResult = {
   weightSkippedVacation: number
   rangeStart: string
   rangeEnd: string
+}
+
+export type SyncAllResult = {
+  users: number
+  ok: number
+  failed: number
+  results: Array<{ userId: string; ok: boolean; error?: string; sync?: SyncResult }>
 }
 
 async function getOrCreateBodyweightGoal(userId: string) {
@@ -50,17 +63,22 @@ function gramsToLbs(grams: number): number {
 
 export async function syncGoogleHealthForUser(
   userId: string,
-  opts?: { days?: number },
+  opts?: { days?: number; metrics?: SyncMetrics },
 ): Promise<SyncResult> {
   const days = Math.min(Math.max(opts?.days ?? 30, 1), 90)
+  const metrics: Required<SyncMetrics> = {
+    steps: opts?.metrics?.steps ?? true,
+    sleep: opts?.metrics?.sleep ?? true,
+    weight: opts?.metrics?.weight ?? true,
+  }
   const endYmd = formatDate(new Date())
   const startYmd = formatDate(subDays(new Date(), days - 1))
   const endExclusive = addDaysYmd(endYmd, 1)
 
   const [steps, sleep, weights] = await Promise.all([
-    fetchDailySteps(userId, startYmd, endExclusive),
-    fetchSleepSessions(userId, startYmd),
-    fetchDailyWeight(userId, startYmd, endExclusive),
+    metrics.steps ? fetchDailySteps(userId, startYmd, endExclusive) : Promise.resolve([]),
+    metrics.sleep ? fetchSleepSessions(userId, startYmd) : Promise.resolve([]),
+    metrics.weight ? fetchDailyWeight(userId, startYmd, endExclusive) : Promise.resolve([]),
   ])
 
   let stepsUpserted = 0
@@ -204,4 +222,35 @@ export async function syncGoogleHealthForUser(
     rangeStart: startYmd,
     rangeEnd: endYmd,
   }
+}
+
+/** Background sync for every connected account (used by cron). */
+export async function syncGoogleHealthForAllUsers(opts?: {
+  days?: number
+  metrics?: SyncMetrics
+}): Promise<SyncAllResult> {
+  const connections = await prisma.googleHealthConnection.findMany({
+    select: { userId: true },
+  })
+  const results: SyncAllResult["results"] = []
+  let ok = 0
+  let failed = 0
+
+  for (const { userId } of connections) {
+    try {
+      const sync = await syncGoogleHealthForUser(userId, opts)
+      results.push({ userId, ok: true, sync })
+      ok++
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Sync failed"
+      await prisma.googleHealthConnection.update({
+        where: { userId },
+        data: { lastSyncError: message },
+      })
+      results.push({ userId, ok: false, error: message })
+      failed++
+    }
+  }
+
+  return { users: connections.length, ok, failed, results }
 }

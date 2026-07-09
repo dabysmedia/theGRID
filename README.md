@@ -95,6 +95,20 @@ http://localhost:3000/api/google-health/callback
    - `.../auth/googlehealth.health_metrics_and_measurements.readonly`
 4. Create **OAuth client → Web application** with the redirect URI above
 
+### Automatic sync (steps + sleep)
+
+Once a profile is connected, theGRID pulls steps and sleep in the background:
+
+1. **Bundled with notification cron** — `GET/POST /api/notifications/run` (already used every ~5 min) also syncs Google Health for connected users (last 3 days, steps + sleep).
+2. **Dedicated endpoint** — `GET/POST /api/google-health/cron?secret=CRON_SECRET` (optional `days=3`, `weight=1`).
+3. **GitHub Actions** — `.github/workflows/google-health-sync.yml` runs every 15 minutes. Set repo secrets `APP_URL=https://itslos.com` and `CRON_SECRET` (same as Railway).
+
+Also set on Railway:
+
+| Variable | Notes |
+|----------|--------|
+| `CRON_SECRET` | Shared secret for cron endpoints (required for auto sync) |
+
 ## Project Structure
 
 ```
