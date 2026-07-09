@@ -64,12 +64,22 @@ export function StepsActivityBars({
   return (
     <div className={cn("relative", className)}>
       <div
-        className="relative overflow-hidden rounded-xl border border-emerald-500/15 bg-gradient-to-b from-emerald-500/[0.08] via-transparent to-transparent"
+        className="relative overflow-hidden rounded-xl border border-emerald-500/15"
         style={{
           perspective: "520px",
           perspectiveOrigin: "50% 120%",
         }}
       >
+        {/* Full-panel green wash — fades out at the bottom of the steps section */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden
+          style={{
+            background:
+              "linear-gradient(180deg, oklch(0.72 0.17 150 / 14%) 0%, oklch(0.72 0.17 150 / 08%) 38%, oklch(0.72 0.17 150 / 04%) 68%, transparent 100%)",
+          }}
+        />
+
         {/* Floor grid behind bars */}
         <div
           className="pointer-events-none absolute inset-x-0 bottom-8 h-14 opacity-35"
