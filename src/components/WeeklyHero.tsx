@@ -620,8 +620,9 @@ export function WeeklyHero({
               aria-hidden
             />
           ) : null}
+          {/* Keep StepsActivityBars mounted across expand/collapse — no key flip on
+              expanded so the isometric bars grow in place instead of remounting. */}
           <StepsActivityBars
-            key={`${viewMode}-activity-${expanded === "steps" ? "x" : "n"}`}
             values={data.steps.last7}
             labels={dayLabels}
             goal={stepsGoal}
@@ -630,13 +631,11 @@ export function WeeklyHero({
             restingHeartRate={restingHeartRate}
             isWeekView={isWeekView}
             expanded={expanded === "steps"}
+            onStepsClick={() => toggleExpand("steps")}
             onReadinessClick={() => toggleExpand("vitals")}
             readinessSelected={expanded === "vitals"}
             hideSteps={expanded === "vitals"}
-            className={cn(
-              "animate-fade-up stagger-3 motion-safe:animate-fade-up motion-reduce:animate-none",
-              expanded === "steps" && "scale-[1.02] transition-transform duration-500 ease-out",
-            )}
+            className="animate-fade-up stagger-3 motion-safe:animate-fade-up motion-reduce:animate-none"
           />
         </FadeSection>
 

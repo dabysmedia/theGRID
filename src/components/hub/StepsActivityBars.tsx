@@ -20,6 +20,22 @@ const BAND_ACCENT: Record<ReadinessBand, string> = {
 
 const BAR_AREA_PX = 58
 const BAR_MAX_PX = 56
+/** Expanded chart: room for per-day value labels above taller bars. */
+const BAR_AREA_EXPANDED_PX = 128
+const BAR_MAX_EXPANDED_PX = 100
+const VALUE_LABEL_SLOT_PX = 22
+
+/** Compact step count for bar caps (e.g. 8.2k, 450). */
+function formatBarSteps(value: number): string {
+  const n = Math.round(value)
+  if (n <= 0) return "—"
+  if (n >= 10_000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k`
+  if (n >= 1000) {
+    const k = n / 1000
+    return Number.isInteger(k) ? `${k}k` : `${k.toFixed(1)}k`
+  }
+  return n.toLocaleString()
+}
 
 type Props = {
   values: number[]
@@ -30,8 +46,10 @@ type Props = {
   hrvMs?: number | null
   restingHeartRate?: number | null
   isWeekView?: boolean
-  /** Hub expand: taller bars + today/goal/week summary strip. */
+  /** Hub expand: taller bars + per-day values + today/goal/week summary + log. */
   expanded?: boolean
+  /** Tap the steps chart (collapsed) or header to expand/collapse steps. */
+  onStepsClick?: () => void
   /** When set, readiness/HRV row toggles vitals expand instead of navigating away. */
   onReadinessClick?: () => void
   readinessSelected?: boolean
@@ -55,6 +73,7 @@ export function StepsActivityBars({
   restingHeartRate = null,
   isWeekView = false,
   expanded = false,
+  onStepsClick,
   onReadinessClick,
   readinessSelected = false,
   hideSteps = false,
@@ -66,8 +85,8 @@ export function StepsActivityBars({
   // Include goal in the scale so the yellow line always sits inside the chart.
   const scaleMax = Math.max(...values, goalValue ?? 0, 1)
   const todayIdx = values.length - 1
-  const barAreaPx = expanded ? 96 : BAR_AREA_PX
-  const barMaxPx = expanded ? 92 : BAR_MAX_PX
+  const barAreaPx = expanded ? BAR_AREA_EXPANDED_PX : BAR_AREA_PX
+  const barMaxPx = expanded ? BAR_MAX_EXPANDED_PX : BAR_MAX_PX
   const band = readinessBand(readiness)
   const accent = band ? BAND_ACCENT[band] : "#64748b"
   const readinessScore =
@@ -90,6 +109,9 @@ export function StepsActivityBars({
       : 0
   const daysHitGoal =
     goalValue != null ? values.filter((v) => v >= goalValue).length : 0
+  const stepsInteractive = Boolean(onStepsClick) && !hideSteps
+  /** Chart surface expands when collapsed; collapse via ring / back / title. */
+  const chartExpandsOnTap = stepsInteractive && !expanded
 
   return (
     <div
@@ -268,11 +290,28 @@ export function StepsActivityBars({
         />
       ) : null}
 
-      {/* Steps bars — re-inset to match card content padding */}
+      {/* Steps bars — same instance grows in place on expand (no remount). */}
       {!hideSteps ? (
-      <div className="relative z-10 px-4 pb-1 pt-2.5 lg:px-5">
+      <div
+        className={cn(
+          "relative z-10 px-4 pb-1 pt-2.5 transition-[padding] duration-500 ease-out lg:px-5",
+          expanded && "pb-3 pt-3",
+        )}
+      >
         <div className="mb-2 flex items-end justify-between gap-1.5">
-          <p className="min-w-0 shrink type-hud-subsection">Steps Activity</p>
+          {stepsInteractive ? (
+            <button
+              type="button"
+              onClick={onStepsClick}
+              aria-label={expanded ? "Collapse steps" : "Expand steps"}
+              aria-expanded={expanded}
+              className="min-w-0 shrink rounded-md text-left type-hud-subsection transition-colors hover:text-emerald-200/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/30"
+            >
+              Steps Activity
+            </button>
+          ) : (
+            <p className="min-w-0 shrink type-hud-subsection">Steps Activity</p>
+          )}
           <p className="-mr-0.5 shrink-0 whitespace-nowrap text-[10px] tabular-nums tracking-normal text-muted-foreground/55">
             {todaySteps > 0
               ? `${Math.round(todaySteps).toLocaleString()} today`
@@ -286,47 +325,79 @@ export function StepsActivityBars({
           </p>
         </div>
 
-        {expanded ? (
-          <div className="mb-3 grid grid-cols-3 gap-2 motion-safe:animate-fade-up motion-reduce:animate-none">
-            <div className="min-w-0">
-              <p className="type-hud-micro text-muted-foreground/55">Today</p>
-              <p className="type-hud-stat-sm tabular-nums text-emerald-300">
-                {Math.round(todaySteps).toLocaleString()}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="type-hud-micro text-muted-foreground/55">Goal</p>
-              <p className="type-hud-stat-sm tabular-nums text-amber-200/90">
-                {goalValue != null ? Math.round(goalValue).toLocaleString() : "—"}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="type-hud-micro text-muted-foreground/55">7-day avg</p>
-              <p className="type-hud-stat-sm tabular-nums text-foreground/85">
-                {weekAvg > 0 ? weekAvg.toLocaleString() : "—"}
-              </p>
-              {goalValue != null ? (
-                <p className="mt-0.5 text-[9px] text-muted-foreground/50">
-                  {daysHitGoal}/{values.length} hit goal
+        {/* Summary strip — grid-rows collapse so expand grows from the chart */}
+        <div
+          className={cn(
+            "grid transition-[grid-template-rows,opacity,margin] duration-500 ease-out motion-reduce:transition-none",
+            expanded
+              ? "mb-3 grid-rows-[1fr] opacity-100"
+              : "pointer-events-none mb-0 grid-rows-[0fr] opacity-0",
+          )}
+          aria-hidden={!expanded}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="min-w-0">
+                <p className="type-hud-micro text-muted-foreground/55">Today</p>
+                <p className="type-hud-stat-sm tabular-nums text-emerald-300">
+                  {Math.round(todaySteps).toLocaleString()}
                 </p>
-              ) : null}
+              </div>
+              <div className="min-w-0">
+                <p className="type-hud-micro text-muted-foreground/55">Goal</p>
+                <p className="type-hud-stat-sm tabular-nums text-amber-200/90">
+                  {goalValue != null ? Math.round(goalValue).toLocaleString() : "—"}
+                </p>
+              </div>
+              <div className="min-w-0">
+                <p className="type-hud-micro text-muted-foreground/55">7-day avg</p>
+                <p className="type-hud-stat-sm tabular-nums text-foreground/85">
+                  {weekAvg > 0 ? weekAvg.toLocaleString() : "—"}
+                </p>
+                {goalValue != null ? (
+                  <p className="mt-0.5 text-[9px] text-muted-foreground/50">
+                    {daysHitGoal}/{values.length} hit goal
+                  </p>
+                ) : null}
+              </div>
             </div>
           </div>
-        ) : null}
+        </div>
 
         <div
           className="pointer-events-none absolute inset-x-4 bottom-[2.15rem] h-px bg-gradient-to-r from-transparent via-white/8 to-transparent lg:inset-x-5"
           aria-hidden
         />
 
-        <div className="relative" style={{ transformStyle: "preserve-3d" }}>
+        <div
+          role={chartExpandsOnTap ? "button" : undefined}
+          tabIndex={chartExpandsOnTap ? 0 : undefined}
+          aria-label={chartExpandsOnTap ? "Expand steps chart" : undefined}
+          onClick={chartExpandsOnTap ? onStepsClick : undefined}
+          onKeyDown={
+            chartExpandsOnTap
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    onStepsClick?.()
+                  }
+                }
+              : undefined
+          }
+          className={cn(
+            "relative outline-none",
+            chartExpandsOnTap &&
+              "cursor-pointer rounded-lg focus-visible:ring-2 focus-visible:ring-emerald-400/30",
+          )}
+          style={{ transformStyle: "preserve-3d" }}
+        >
           <div
-            className="relative flex items-end justify-between gap-1 px-0.5 transition-[height] duration-500 ease-out"
+            className="relative flex items-end justify-between gap-1 px-0.5 transition-[height] duration-500 ease-out motion-reduce:transition-none"
             style={{ height: barAreaPx }}
           >
             {goalLineBottomPx != null ? (
               <div
-                className="pointer-events-none absolute inset-x-0 z-20"
+                className="pointer-events-none absolute inset-x-0 z-20 transition-[bottom] duration-500 ease-out"
                 style={{ bottom: goalLineBottomPx }}
                 aria-hidden
               >
@@ -345,6 +416,7 @@ export function StepsActivityBars({
               const heightPx = Math.max(10, Math.round(pct * barMaxPx))
               const isToday = i === todayIdx
               const delay = 280 + i * 70
+              const hitGoal = goalValue != null && val >= goalValue
 
               return (
                 <div
@@ -352,11 +424,44 @@ export function StepsActivityBars({
                   className="relative flex min-w-0 flex-1 justify-center"
                   style={{ height: barAreaPx, perspective: "240px" }}
                 >
+                  {/* Per-day step value — fades in as the chart grows */}
                   <div
-                    className="absolute bottom-0 origin-bottom animate-bar-grow"
+                    className={cn(
+                      "pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 text-center transition-[opacity,transform] duration-500 ease-out motion-reduce:transition-none",
+                      expanded
+                        ? "translate-y-0 opacity-100"
+                        : "translate-y-1 opacity-0",
+                    )}
+                    style={{
+                      bottom: heightPx + (expanded ? 10 : 4),
+                      minHeight: VALUE_LABEL_SLOT_PX,
+                    }}
+                    aria-hidden={!expanded}
+                  >
+                    <span
+                      className={cn(
+                        "block text-[9px] font-semibold tabular-nums leading-none tracking-tight sm:text-[10px]",
+                        isToday
+                          ? "text-emerald-200"
+                          : hitGoal
+                            ? "text-emerald-300/80"
+                            : "text-muted-foreground/70",
+                      )}
+                      style={
+                        isToday
+                          ? { textShadow: "0 0 10px #22c55e66" }
+                          : undefined
+                      }
+                    >
+                      {formatBarSteps(val)}
+                    </span>
+                  </div>
+
+                  <div
+                    className="absolute bottom-0 origin-bottom animate-bar-grow transition-[height] duration-500 ease-out motion-reduce:transition-none"
                     style={{
                       width: "78%",
-                      maxWidth: 30,
+                      maxWidth: expanded ? 34 : 30,
                       height: heightPx,
                       animationDelay: `${delay}ms`,
                       transformStyle: "preserve-3d",
@@ -444,16 +549,29 @@ export function StepsActivityBars({
           </div>
         </div>
 
-        {expanded ? (
-          <button
-            type="button"
-            onClick={() => openQuickLog("steps")}
-            className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-emerald-400/30 hover:bg-emerald-400/[0.06] hover:text-emerald-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/30 sm:w-auto sm:px-4"
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden />
-            Log steps
-          </button>
-        ) : null}
+        <div
+          className={cn(
+            "grid transition-[grid-template-rows,opacity,margin] duration-500 ease-out motion-reduce:transition-none",
+            expanded
+              ? "mt-3 grid-rows-[1fr] opacity-100"
+              : "pointer-events-none mt-0 grid-rows-[0fr] opacity-0",
+          )}
+          aria-hidden={!expanded}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                openQuickLog("steps")
+              }}
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-emerald-400/30 hover:bg-emerald-400/[0.06] hover:text-emerald-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/30 sm:w-auto sm:px-4"
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+              Log steps
+            </button>
+          </div>
+        </div>
       </div>
       ) : null}
     </div>
