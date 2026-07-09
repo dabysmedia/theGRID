@@ -65,7 +65,7 @@ interface DailyWeighInProps {
   embedded?: boolean
   /** Baseline weight trend from the hub dashboard (shown under the large weight). */
   weightTrend?: WeightTrendSummary | null
-  /** Hub: tap the weigh-in title to expand correlations (does not fire on form controls). */
+  /** Hub: tap the weigh-in header row to expand correlations (does not fire on form controls). */
   onActivate?: () => void
 }
 
@@ -227,60 +227,68 @@ export function DailyWeighIn({
       ? `${trendLabel} ${trendDelta > 0 ? `+${trendDelta}` : trendDelta} lb`
       : null
 
+  const titleClass = embedded
+    ? "type-hud-subsection"
+    : "text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/85"
+  const titleText = logged ? "Logged weight" : "Weigh-in"
+  const lastHint =
+    logged && previousWeight != null ? (
+      <p className="text-[11px] text-muted-foreground/65">
+        Last recorded{" "}
+        <span className="tabular-nums text-foreground/75">
+          {previousWeight} {unit}
+        </span>
+      </p>
+    ) : !logged && latestWeight != null ? (
+      <p className="type-hud-caption">
+        Last <span className="tabular-nums text-foreground/75">{latestWeight}</span> {unit}
+      </p>
+    ) : null
+  const trendChip =
+    trendIcon && trendValue ? (
+      <p
+        className={cn(
+          "flex shrink-0 items-center gap-1 px-1 py-0.5 tabular-nums text-foreground/75",
+          embedded ? "type-hud-micro normal-case tracking-normal" : "text-[11px] font-medium",
+        )}
+      >
+        {trendIcon}
+        <span>{trendValue}</span>
+      </p>
+    ) : null
+
   const formInner = (
     <div className={cn(embedded ? "space-y-2.5" : "space-y-3.5")}>
-      <div className="flex items-end justify-between gap-2">
-        <div className="min-w-0 space-y-0.5">
-          {onActivate ? (
-            <button
-              type="button"
-              onClick={onActivate}
-              className={cn(
-                embedded
-                  ? "type-hud-subsection"
-                  : "text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/85",
-                "text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25",
-              )}
-            >
-              {logged ? "Logged weight" : "Weigh-in"}
-            </button>
-          ) : (
-            <p
-              className={cn(
-                embedded
-                  ? "type-hud-subsection"
-                  : "text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/85",
-              )}
-            >
-              {logged ? "Logged weight" : "Weigh-in"}
+      {onActivate ? (
+        <button
+          type="button"
+          onClick={onActivate}
+          aria-label="Expand weight correlations"
+          className="group -mx-0.5 flex min-h-11 w-[calc(100%+0.25rem)] touch-manipulation items-center justify-between gap-2 rounded-sm px-0.5 text-left transition-colors hover:bg-white/[0.03] active:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25"
+        >
+          <div className="min-w-0 space-y-0.5">
+            <p className={cn(titleClass, "transition-colors group-hover:text-foreground/90")}>
+              {titleText}
             </p>
-          )}
-          {logged && previousWeight != null ? (
-            <p className="text-[11px] text-muted-foreground/65">
-              Last recorded{" "}
-              <span className="tabular-nums text-foreground/75">
-                {previousWeight} {unit}
-              </span>
-            </p>
-          ) : null}
-          {!logged && latestWeight != null ? (
-            <p className="type-hud-caption">
-              Last <span className="tabular-nums text-foreground/75">{latestWeight}</span> {unit}
-            </p>
-          ) : null}
+            {lastHint}
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {trendChip}
+            <ChevronRight
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground/55 transition-colors group-hover:text-foreground/80"
+              aria-hidden
+            />
+          </div>
+        </button>
+      ) : (
+        <div className="flex items-end justify-between gap-2">
+          <div className="min-w-0 space-y-0.5">
+            <p className={titleClass}>{titleText}</p>
+            {lastHint}
+          </div>
+          {trendChip}
         </div>
-        {trendIcon && trendValue ? (
-          <p
-            className={cn(
-              "flex shrink-0 items-center gap-1 px-1 py-0.5 tabular-nums text-foreground/75",
-              embedded ? "type-hud-micro normal-case tracking-normal" : "text-[11px] font-medium",
-            )}
-          >
-            {trendIcon}
-            <span>{trendValue}</span>
-          </p>
-        ) : null}
-      </div>
+      )}
 
       <div className="space-y-2">
         <div
