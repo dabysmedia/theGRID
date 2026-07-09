@@ -1007,13 +1007,21 @@ export function HubWorkoutsExpand({
 
   function goStartRoutine(id: string) {
     setStartingId(id)
-    onDismiss()
+    try {
+      sessionStorage.setItem("theGRID_hubStartWorkout", id)
+    } catch {
+      /* private mode */
+    }
     router.push(`/workouts?start=${encodeURIComponent(id)}`)
   }
 
   function goStartFreeForm() {
     setStartingId("free")
-    onDismiss()
+    try {
+      sessionStorage.setItem("theGRID_hubStartWorkout", "free")
+    } catch {
+      /* private mode */
+    }
     router.push("/workouts?start=free")
   }
 
