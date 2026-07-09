@@ -294,6 +294,20 @@ export function HubDashboard() {
           vacationBlocksCalories={vacationBlocksCalLog}
           expanded={hubExpanded}
           onExpandedChange={setHubExpanded}
+          peptideSummary={{
+            lastDoseMg: lastPeptide?.doseMg ?? null,
+            lastInjectedAt: lastPeptide?.injectedAt ?? null,
+            nextInjection,
+            todayMg: data.peptides.todayValue,
+            last7: data.peptides.last7,
+          }}
+          workoutSummary={{
+            weekCount: weekWorkoutCount,
+            todayCount: data.workouts.todayValue,
+            last7: data.workouts.last7,
+            recoveryScore:
+              data.recovery.todayValue > 0 ? data.recovery.todayValue : null,
+          }}
         />
       </div>
 
@@ -337,6 +351,20 @@ export function HubDashboard() {
             const footer = tileFooter(cat.key, cat.color)
             const chartData =
               footer == null ? summary.last7.map((v) => ({ value: v })) : undefined
+            const expandKey =
+              cat.key === "vitals"
+                ? ("vitals" as const)
+                : cat.key === "peptides"
+                  ? ("peptides" as const)
+                  : cat.key === "workouts"
+                    ? ("workouts" as const)
+                    : cat.key === "calories"
+                      ? ("calories" as const)
+                      : cat.key === "steps"
+                        ? ("steps" as const)
+                        : cat.key === "sleep"
+                          ? ("sleep" as const)
+                          : null
             return (
               <div
                 key={cat.key}
@@ -356,6 +384,13 @@ export function HubDashboard() {
                   color={cat.color}
                   disabled={cat.key === "calories" && vacationBlocksCalLog}
                   disabledHint={cat.key === "calories" && vacationBlocksCalLog ? "Vacation mode" : undefined}
+                  onActivate={
+                    expandKey
+                      ? () =>
+                          setHubExpanded((prev) => (prev === expandKey ? null : expandKey))
+                      : undefined
+                  }
+                  selected={expandKey != null && hubExpanded === expandKey}
                 />
               </div>
             )
