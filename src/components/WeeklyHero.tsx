@@ -126,8 +126,8 @@ function ProgressRing({
           className="pointer-events-none absolute inset-[12%] rounded-full opacity-80"
           style={{
             background:
-              "radial-gradient(circle, oklch(0.72 0.02 250 / 14%) 0%, oklch(0.55 0.015 250 / 06%) 42%, transparent 72%)",
-            boxShadow: disabled ? undefined : "inset 0 0 18px oklch(0.7 0.02 250 / 12%)",
+              "radial-gradient(circle, oklch(0.52 0.02 250 / 16%) 0%, oklch(0.38 0.015 250 / 07%) 42%, transparent 72%)",
+            boxShadow: disabled ? undefined : "inset 0 0 18px oklch(0.48 0.02 250 / 14%)",
           }}
           aria-hidden
         />
@@ -145,18 +145,18 @@ function ProgressRing({
             cy="44"
             r={trackR + 2}
             fill="none"
-            stroke="oklch(0.72 0.02 250)"
+            stroke="oklch(0.52 0.02 250)"
             strokeWidth="0.6"
-            opacity={disabled ? 0.12 : 0.28}
+            opacity={disabled ? 0.12 : 0.32}
           />
           <circle
             cx="44"
             cy="44"
             r={trackR}
             fill="none"
-            stroke="oklch(0.68 0.015 250)"
+            stroke="oklch(0.46 0.015 250)"
             strokeWidth={trackStroke}
-            opacity={disabled ? 0.12 : 0.22}
+            opacity={disabled ? 0.12 : 0.26}
           />
           <circle
             cx="44"
@@ -200,9 +200,9 @@ function ProgressRing({
                   y1={major ? 2.5 : 4}
                   x2="44"
                   y2={major ? 7 : 6}
-                  stroke="oklch(0.75 0.02 250)"
+                  stroke="oklch(0.55 0.02 250)"
                   strokeWidth={major ? 1 : 0.55}
-                  opacity={major ? 0.4 : 0.2}
+                  opacity={major ? 0.42 : 0.22}
                   transform={`rotate(${deg} 44 44)`}
                 />
               )
@@ -333,15 +333,15 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         aria-hidden
         style={{
           background:
-            "linear-gradient(180deg, oklch(0.72 0.02 250 / 10%) 0%, oklch(0.65 0.015 250 / 05%) 42%, oklch(0.55 0.01 250 / 03%) 72%, transparent 100%)",
+            "linear-gradient(180deg, oklch(0.52 0.02 250 / 12%) 0%, oklch(0.44 0.015 250 / 06%) 42%, oklch(0.36 0.01 250 / 04%) 72%, transparent 100%)",
         }}
       />
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.14]"
+        className="pointer-events-none absolute inset-0 opacity-[0.16]"
         aria-hidden
         style={{
           backgroundImage:
-            "linear-gradient(to right, oklch(0.75 0.015 250 / 18%) 1px, transparent 1px), linear-gradient(to bottom, oklch(0.75 0.015 250 / 12%) 1px, transparent 1px)",
+            "linear-gradient(to right, oklch(0.55 0.015 250 / 20%) 1px, transparent 1px), linear-gradient(to bottom, oklch(0.55 0.015 250 / 14%) 1px, transparent 1px)",
           backgroundSize: "22px 22px",
           maskImage: "linear-gradient(180deg, black 0%, transparent 78%)",
         }}

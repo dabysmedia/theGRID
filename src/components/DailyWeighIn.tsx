@@ -212,7 +212,7 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
     ) : trend === "gaining" ? (
       <TrendingUp className="h-3.5 w-3.5 shrink-0" style={{ color: "#ef4444" }} aria-hidden />
     ) : trend === "maintaining" ? (
-      <Minus className="h-3.5 w-3.5 shrink-0" style={{ color: "#94a3b8" }} aria-hidden />
+      <Minus className="h-3.5 w-3.5 shrink-0" style={{ color: "#64748b" }} aria-hidden />
     ) : null
   const trendLabel =
     trend === "losing" ? "Losing" : trend === "gaining" ? "Gaining" : trend === "maintaining" ? "Maintaining" : null
