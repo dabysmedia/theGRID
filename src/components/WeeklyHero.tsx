@@ -95,8 +95,10 @@ function ProgressRing({
   ariaLabel,
   animationIndex = 0,
 }: ProgressRingProps) {
-  const radius = 38
-  const stroke = 3
+  const radius = 34
+  const trackR = 38
+  const stroke = 5
+  const trackStroke = 2.5
   const circumference = 2 * Math.PI * radius
   const pct = disabled ? 0 : max > 0 ? Math.min(value / max, 1) : 0
   const offset = circumference - pct * circumference
@@ -106,16 +108,57 @@ function ProgressRing({
     disabled && centerLabel != null ? centerLabel : valueLabel ?? formatRingValue(value)
   const staggerClass =
     animationIndex === 1 ? "stagger-2" : animationIndex === 2 ? "stagger-3" : "stagger-1"
+  const goalLabel =
+    max >= 1000
+      ? `${(max / 1000).toFixed(max % 1000 === 0 ? 0 : 1)}k`
+      : String(max)
 
   const ringBody = (
     <>
       <div
         className={cn(
-          "relative w-[108px] h-[108px] lg:w-[120px] lg:h-[120px] motion-safe:animate-ring-pop motion-reduce:animate-none",
-          staggerClass
+          "relative h-[112px] w-[112px] motion-safe:animate-ring-pop motion-reduce:animate-none lg:h-[124px] lg:w-[124px]",
+          staggerClass,
         )}
       >
-        <svg className="w-full h-full -rotate-90" viewBox="0 0 88 88">
+        {/* Soft instrument wash behind the ring */}
+        <div
+          className="pointer-events-none absolute inset-[12%] rounded-full opacity-80"
+          style={{
+            background: disabled
+              ? "radial-gradient(circle, oklch(0.5 0.01 250 / 12%) 0%, transparent 70%)"
+              : `radial-gradient(circle, ${color}22 0%, ${color}08 42%, transparent 72%)`,
+            boxShadow: disabled ? undefined : `inset 0 0 18px ${color}18`,
+          }}
+          aria-hidden
+        />
+        <svg className="relative z-10 h-full w-full -rotate-90" viewBox="0 0 88 88">
+          <defs>
+            <linearGradient id={`ring-grad-${label}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={color} stopOpacity="1" />
+              <stop offset="55%" stopColor={color} stopOpacity="0.85" />
+              <stop offset="100%" stopColor={color} stopOpacity="0.55" />
+            </linearGradient>
+          </defs>
+          {/* Outer bezel */}
+          <circle
+            cx="44"
+            cy="44"
+            r={trackR + 2}
+            fill="none"
+            stroke={color}
+            strokeWidth="0.6"
+            opacity={disabled ? 0.12 : 0.22}
+          />
+          <circle
+            cx="44"
+            cy="44"
+            r={trackR}
+            fill="none"
+            stroke={color}
+            strokeWidth={trackStroke}
+            opacity={disabled ? 0.12 : 0.18}
+          />
           <circle
             cx="44"
             cy="44"
@@ -123,14 +166,14 @@ function ProgressRing({
             fill="none"
             stroke="currentColor"
             strokeWidth={stroke}
-            className="text-muted/30"
+            className="text-muted/25"
           />
           <circle
             cx="44"
             cy="44"
             r={radius}
             fill="none"
-            stroke={strokeColor}
+            stroke={disabled ? strokeColor : `url(#ring-grad-${label})`}
             strokeWidth={stroke}
             strokeLinecap="butt"
             strokeDasharray={circumference}
@@ -139,7 +182,7 @@ function ProgressRing({
               disabled
                 ? undefined
                 : {
-                    filter: `drop-shadow(0 0 8px ${color}50)`,
+                    filter: `drop-shadow(0 0 10px ${color}55)`,
                     animation: `draw-ring 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both`,
                     // @ts-expect-error CSS custom properties
                     "--ring-circumference": circumference,
@@ -148,26 +191,31 @@ function ProgressRing({
             }
           />
           {!disabled &&
-            [0, 90, 180, 270].map((deg) => (
-              <line
-                key={deg}
-                x1="44"
-                y1="3"
-                x2="44"
-                y2="5"
-                stroke={color}
-                strokeWidth="0.5"
-                opacity="0.3"
-                transform={`rotate(${deg} 44 44)`}
-              />
-            ))}
+            Array.from({ length: 12 }, (_, i) => {
+              const deg = i * 30
+              const major = i % 3 === 0
+              return (
+                <line
+                  key={deg}
+                  x1="44"
+                  y1={major ? 2.5 : 4}
+                  x2="44"
+                  y2={major ? 7 : 6}
+                  stroke={color}
+                  strokeWidth={major ? 1 : 0.55}
+                  opacity={major ? 0.45 : 0.22}
+                  transform={`rotate(${deg} 44 44)`}
+                />
+              )
+            })}
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center">
           <span
             className={cn(
               disabled ? "opacity-40" : undefined,
-              "motion-safe:animate-scale-in motion-reduce:animate-none"
+              "motion-safe:animate-scale-in motion-reduce:animate-none",
             )}
+            style={disabled ? undefined : { filter: `drop-shadow(0 0 6px ${color}66)` }}
           >
             {icon}
           </span>
@@ -175,7 +223,7 @@ function ProgressRing({
             key={displayValue}
             className={cn(
               "type-hud-stat mt-0.5 motion-safe:animate-count-up motion-reduce:animate-none",
-              disabled && "text-muted-foreground/50 tabular-nums"
+              disabled && "tabular-nums text-muted-foreground/50",
             )}
           >
             {displayValue}
@@ -185,7 +233,7 @@ function ProgressRing({
       <div className="text-center">
         <p className={cn("type-hud-label", disabled && "text-muted-foreground/55")}>{label}</p>
         <p className={cn("type-hud-caption", disabled && "text-muted-foreground/40")}>
-          {disabled ? "Vacation" : `/ ${max >= 1000 ? `${(max / 1000).toFixed(max % 1000 === 0 ? 0 : 1)}k` : max} ${unit}`}
+          {disabled ? "Vacation" : `/ ${goalLabel} ${unit}`}
         </p>
       </div>
     </>
@@ -276,21 +324,36 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
     <div
       className={cn(
         glassPanelClass,
-        "bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] p-5 lg:p-6 transition-opacity duration-500 dark:from-glass-highlight/[0.1] dark:to-primary/[0.05]",
-        loading ? "opacity-50" : "opacity-100"
+        "overflow-hidden p-4 transition-opacity duration-500 lg:p-5",
+        loading ? "opacity-50" : "opacity-100",
       )}
     >
+      {/* Full-card HUD wash — matches readiness/steps panel language */}
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]"
+        className="pointer-events-none absolute inset-0"
         aria-hidden
+        style={{
+          background:
+            "linear-gradient(180deg, oklch(0.72 0.12 150 / 10%) 0%, oklch(0.72 0.08 200 / 05%) 42%, oklch(0.65 0.06 220 / 03%) 72%, transparent 100%)",
+        }}
       />
       <div
-        className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12"
+        className="pointer-events-none absolute inset-0 opacity-[0.14]"
+        aria-hidden
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, oklch(0.75 0.04 200 / 18%) 1px, transparent 1px), linear-gradient(to bottom, oklch(0.75 0.04 200 / 12%) 1px, transparent 1px)",
+          backgroundSize: "22px 22px",
+          maskImage: "linear-gradient(180deg, black 0%, transparent 78%)",
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/35 to-transparent"
         aria-hidden
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-5 relative z-10">
+      <div className="relative z-10 mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="status-dot" />
           <h2
@@ -311,12 +374,12 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
             type="button"
             onClick={() => setViewMode((mode) => (mode === "today" ? "week" : "today"))}
             aria-label={isWeekView ? "Show today's values" : "Show weekly values"}
-            className="flex h-7 w-7 items-center justify-center rounded-lg glass-subtle text-muted-foreground transition-colors hover:text-foreground hover:bg-glass-highlight/30 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-500/15 bg-emerald-500/[0.06] text-muted-foreground transition-colors hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/35"
           >
             <ChevronRight
               className={cn(
                 "h-3.5 w-3.5 transition-transform duration-300 ease-out",
-                isWeekView && "rotate-180"
+                isWeekView && "rotate-180",
               )}
               aria-hidden
             />
@@ -326,65 +389,85 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
 
       <div
         key={viewMode}
-        className="relative z-10 motion-safe:animate-fade-up motion-reduce:animate-none"
+        className="relative z-10 space-y-3 motion-safe:animate-fade-up motion-reduce:animate-none"
       >
-      {/* Progress rings row */}
-      <div className="flex justify-around mb-6">
-        <ProgressRing
-          value={calValue}
-          max={calGoal}
-          label="Calories"
-          unit={isWeekView ? "avg" : "cal"}
-          color="#ef4444"
-          icon={<Flame className="h-4 w-4 text-[#ef4444]" />}
-          disabled={vacationBlocksCalories}
-          centerLabel="—"
-          onClick={() => openQuickLog("calories")}
-          ariaLabel="Log food"
-          animationIndex={0}
-        />
-        <ProgressRing
-          value={stepsValue}
-          max={stepsGoal}
-          label="Steps"
-          unit={isWeekView ? "avg" : "steps"}
-          color="#22c55e"
-          icon={<Footprints className="h-4 w-4 text-[#22c55e]" />}
-          onClick={() => openQuickLog("steps")}
-          ariaLabel="Log steps"
-          animationIndex={1}
-        />
-        <ProgressRing
-          value={sleepValue}
-          max={sleepGoal}
-          label="Sleep"
-          unit={isWeekView ? "hrs avg" : "hrs"}
-          color="#6366f1"
-          icon={<Moon className="h-4 w-4 text-[#6366f1]" />}
-          onClick={() => openQuickLog("sleep")}
-          ariaLabel="Log sleep"
-          animationIndex={2}
-        />
-      </div>
-
-      <StepsActivityBars
-        key={`${viewMode}-activity`}
-        values={data.steps.last7}
-        labels={dayLabels}
-        goal={stepsGoal}
-        readiness={readinessValue}
-        hrvMs={hrvMs}
-        restingHeartRate={restingHeartRate}
-        isWeekView={isWeekView}
-        className="animate-fade-up stagger-3 motion-safe:animate-fade-up motion-reduce:animate-none"
-      />
-      </div>
-
-      {showWeighInPrompt && (
-        <div className="mt-5 pt-5 border-t border-glass-border relative z-10">
-          <DailyWeighIn embedded weightTrend={data.weightTrend} />
+        {/* Rings instrument bay */}
+        <div className="relative overflow-hidden rounded-xl border border-emerald-500/15 px-2 py-3.5 sm:px-3">
+          <div
+            className="pointer-events-none absolute inset-0"
+            aria-hidden
+            style={{
+              background:
+                "linear-gradient(180deg, oklch(0.72 0.17 150 / 12%) 0%, oklch(0.72 0.12 180 / 06%) 55%, transparent 100%)",
+            }}
+          />
+          <div className="relative z-10 flex justify-around">
+            <ProgressRing
+              value={calValue}
+              max={calGoal}
+              label="Calories"
+              unit={isWeekView ? "avg" : "cal"}
+              color="#ef4444"
+              icon={<Flame className="h-4 w-4 text-[#ef4444]" />}
+              disabled={vacationBlocksCalories}
+              centerLabel="—"
+              onClick={() => openQuickLog("calories")}
+              ariaLabel="Log food"
+              animationIndex={0}
+            />
+            <ProgressRing
+              value={stepsValue}
+              max={stepsGoal}
+              label="Steps"
+              unit={isWeekView ? "avg" : "steps"}
+              color="#22c55e"
+              icon={<Footprints className="h-4 w-4 text-[#22c55e]" />}
+              onClick={() => openQuickLog("steps")}
+              ariaLabel="Log steps"
+              animationIndex={1}
+            />
+            <ProgressRing
+              value={sleepValue}
+              max={sleepGoal}
+              label="Sleep"
+              unit={isWeekView ? "hrs avg" : "hrs"}
+              color="#6366f1"
+              icon={<Moon className="h-4 w-4 text-[#6366f1]" />}
+              onClick={() => openQuickLog("sleep")}
+              ariaLabel="Log sleep"
+              animationIndex={2}
+            />
+          </div>
         </div>
-      )}
+
+        <StepsActivityBars
+          key={`${viewMode}-activity`}
+          values={data.steps.last7}
+          labels={dayLabels}
+          goal={stepsGoal}
+          readiness={readinessValue}
+          hrvMs={hrvMs}
+          restingHeartRate={restingHeartRate}
+          isWeekView={isWeekView}
+          className="animate-fade-up stagger-3 motion-safe:animate-fade-up motion-reduce:animate-none"
+        />
+
+        {showWeighInPrompt ? (
+          <div className="relative overflow-hidden rounded-xl border border-teal-500/15">
+            <div
+              className="pointer-events-none absolute inset-0"
+              aria-hidden
+              style={{
+                background:
+                  "linear-gradient(180deg, oklch(0.72 0.12 180 / 12%) 0%, oklch(0.7 0.1 160 / 06%) 50%, transparent 100%)",
+              }}
+            />
+            <div className="relative z-10 px-3 py-3">
+              <DailyWeighIn embedded weightTrend={data.weightTrend} />
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }
