@@ -835,6 +835,18 @@ html {
   }
 }
 
+/* Calorie isometric pips — rise into place when filled (tilt lives on parent) */
+@keyframes calorie-pip-rise {
+  from {
+    opacity: 0.15;
+    transform: scaleY(0.12) translateY(55%);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
+}
+
 @keyframes workout-card-exit {
   from {
     opacity: 1;
@@ -938,6 +950,11 @@ html {
     animation: mesh-heart-node-shimmer 2.8s ease-in-out infinite;
   }
 
+  .animate-calorie-pip-rise {
+    animation: calorie-pip-rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+    transform-origin: bottom center;
+  }
+
   .animate-workout-card-exit {
     animation: workout-card-exit 0.38s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
@@ -966,6 +983,7 @@ html {
     .animate-ring-pop,
     .animate-mesh-heart-pulse,
     .animate-mesh-heart-nodes,
+    .animate-calorie-pip-rise,
     .animate-workout-card-exit,
     .animate-workout-card-enter,
     .animate-workout-complete-pop {

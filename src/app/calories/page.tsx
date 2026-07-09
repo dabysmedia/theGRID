@@ -880,10 +880,13 @@ export default function CaloriesPage() {
               aria-hidden
             />
             <div className="relative min-w-0 space-y-4">
-              <CaloriePipTracker
-                consumed={weekPlan.consumedToday}
-                target={weekPlan.todayTarget}
-              />
+              <div className="relative h-48 w-full sm:h-56">
+                <CaloriePipTracker
+                  consumed={weekPlan.consumedToday}
+                  target={weekPlan.todayTarget}
+                  className="h-full"
+                />
+              </div>
 
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
