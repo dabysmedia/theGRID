@@ -83,9 +83,9 @@ export function useLogFoodDialog({
   const [savingSavedMealEdit, setSavingSavedMealEdit] = useState(false)
   const [showSavePrompt, setShowSavePrompt] = useState(false)
   const [saveMealError, setSaveMealError] = useState<string | null>(null)
-  const [logFoodSearchOpen, setLogFoodSearchOpen] = useState(false)
-  const [logFoodManualOpen, setLogFoodManualOpen] = useState(false)
+  const [logFoodMode, setLogFoodMode] = useState<"saved" | "search" | "estimate">("saved")
   const [logFoodPhotoOpen, setLogFoodPhotoOpen] = useState(false)
+  const [showEstimateMacros, setShowEstimateMacros] = useState(false)
   const [flashSavedMealId, setFlashSavedMealId] = useState<string | null>(null)
   const [postingMeal, setPostingMeal] = useState(false)
   const [pendingSavedDelete, setPendingSavedDelete] =
@@ -129,13 +129,19 @@ export function useLogFoodDialog({
 
   useEffect(() => {
     if (!open) {
-      setLogFoodSearchOpen(false)
-      setLogFoodManualOpen(false)
+      setLogFoodMode("saved")
       setLogFoodPhotoOpen(false)
+      setShowEstimateMacros(false)
       setEditingSavedMealId(null)
       setEditSavedError(null)
+      return
     }
-  }, [open])
+    if (!editingEntry) {
+      setLogFoodMode("saved")
+      setLogFoodPhotoOpen(false)
+      setShowEstimateMacros(false)
+    }
+  }, [open, editingEntry])
 
   useEffect(() => {
     if (!open) return
@@ -160,13 +166,17 @@ export function useLogFoodDialog({
     setCarbs(editingEntry.carbs != null ? String(editingEntry.carbs) : "")
     setFat(editingEntry.fat != null ? String(editingEntry.fat) : "")
     setShowSavePrompt(false)
-    setLogFoodManualOpen(true)
+    setLogFoodMode("estimate")
+    setShowEstimateMacros(
+      editingEntry.protein != null || editingEntry.carbs != null || editingEntry.fat != null
+    )
   }, [editingEntry, open])
 
   const displayedSavedMeals = useMemo(() => {
-    if (!mealType) return savedMeals
+    const sorted = [...savedMeals].sort((a, b) => b.useCount - a.useCount || a.name.localeCompare(b.name))
+    if (!mealType) return sorted
     const mt = mealType.toLowerCase()
-    return savedMeals.filter((m) => savedMealTagList(m).includes(mt))
+    return sorted.filter((m) => savedMealTagList(m).includes(mt))
   }, [savedMeals, mealType])
 
   const estimateCalDisplay =
@@ -270,7 +280,7 @@ export function useLogFoodDialog({
         unitFat: food.fat != null ? Math.round(food.fat) : null,
       })
     )
-    setLogFoodSearchOpen(false)
+    setLogFoodMode("saved")
   }
 
   const handlePhotoPrefill = useCallback(
@@ -282,7 +292,11 @@ export function useLogFoodDialog({
       setCarbs(prefill.carbs != null ? String(prefill.carbs) : "")
       setFat(prefill.fat != null ? String(prefill.fat) : "")
       setShowSavePrompt(true)
-      setLogFoodManualOpen(true)
+      setShowEstimateMacros(
+        prefill.protein != null || prefill.carbs != null || prefill.fat != null
+      )
+      setLogFoodMode("estimate")
+      setLogFoodPhotoOpen(false)
     },
     [vacationBlocksLog, editingEntry]
   )
@@ -323,7 +337,8 @@ export function useLogFoodDialog({
       })
     )
     resetCurrentItemFields()
-    setLogFoodManualOpen(false)
+    setShowEstimateMacros(false)
+    setLogFoodMode("saved")
   }
 
   function updateDraftItemQuantity(id: string, nextQuantity: number) {
@@ -590,8 +605,15 @@ export function useLogFoodDialog({
     mealType,
     setMealType,
     description,
+    setDescription,
     calories,
     setCalories,
+    protein,
+    setProtein,
+    carbs,
+    setCarbs,
+    fat,
+    setFat,
     lastAddedDraftId,
     updateDraftItemQuantity,
     adjustDraftItemQuantity,
@@ -629,12 +651,12 @@ export function useLogFoodDialog({
     showSavePrompt,
     saveMealError,
     setSaveMealError: setSaveMealError,
-    logFoodSearchOpen,
-    setLogFoodSearchOpen,
-    logFoodManualOpen,
-    setLogFoodManualOpen,
+    logFoodMode,
+    setLogFoodMode,
     logFoodPhotoOpen,
     setLogFoodPhotoOpen,
+    showEstimateMacros,
+    setShowEstimateMacros,
     flashSavedMealId,
     postingMeal,
     draftMealItems,

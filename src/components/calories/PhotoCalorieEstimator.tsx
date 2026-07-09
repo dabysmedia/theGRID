@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Camera, ChevronDown, RefreshCcw, Sparkles, X } from "lucide-react"
 import { apiFetch } from "@/lib/api-fetch"
 import { cn } from "@/lib/utils"
@@ -29,6 +29,8 @@ interface PhotoCalorieEstimatorProps {
   onUsePrefill: (prefill: PhotoEstimatePrefill) => void
   /** Disable everything (e.g. vacation mode, edit mode). */
   disabled?: boolean
+  /** Skip the collapsible header and always show the estimator body. */
+  embedded?: boolean
 }
 
 const CONFIDENCE_TONE: Record<
@@ -54,6 +56,7 @@ export function PhotoCalorieEstimator({
   onOpenChange,
   onUsePrefill,
   disabled = false,
+  embedded = false,
 }: PhotoCalorieEstimatorProps) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -193,40 +196,51 @@ export function PhotoCalorieEstimator({
     fileInputRef.current?.click()
   }, [busy, disabled])
 
+  // In embedded mode, open the camera/file picker once when first shown.
+  const autoPickRef = useRef(false)
+  useEffect(() => {
+    if (!embedded || disabled || busy || estimate || imageUrl || autoPickRef.current) return
+    autoPickRef.current = true
+    const t = window.setTimeout(() => fileInputRef.current?.click(), 50)
+    return () => window.clearTimeout(t)
+  }, [embedded, disabled, busy, estimate, imageUrl])
+
   return (
     <div className="space-y-2">
-      <button
-        type="button"
-        onClick={handleToggle}
-        disabled={disabled}
-        aria-expanded={open}
-        className={cn(
-          "flex w-full items-center justify-between gap-2 rounded-xl border border-border/25 bg-glass-highlight/[0.04] py-2.5 px-3 text-left text-[11px] font-medium text-muted-foreground transition-colors",
-          "hover:text-foreground hover:bg-glass-highlight/10",
-          "disabled:pointer-events-none disabled:opacity-45",
-          (estimate || imageUrl) && "border-primary/30 text-foreground"
-        )}
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <Camera className="h-3.5 w-3.5 shrink-0 opacity-60" />
-          <span className="truncate">
-            {estimate
-              ? "Photo estimate ready"
-              : imageUrl
-              ? "Photo uploaded"
-              : "Estimate from photo"}
-          </span>
-          <span className="shrink-0 text-[9px] uppercase tracking-wider text-primary/70">
-            AI
-          </span>
-        </span>
-        <ChevronDown
+      {!embedded && (
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={disabled}
+          aria-expanded={open}
           className={cn(
-            "h-3.5 w-3.5 shrink-0 opacity-40 transition-transform duration-200",
-            open && "rotate-180"
+            "flex w-full items-center justify-between gap-2 rounded-xl border border-border/25 bg-glass-highlight/[0.04] py-2.5 px-3 text-left text-[11px] font-medium text-muted-foreground transition-colors",
+            "hover:text-foreground hover:bg-glass-highlight/10",
+            "disabled:pointer-events-none disabled:opacity-45",
+            (estimate || imageUrl) && "border-primary/30 text-foreground"
           )}
-        />
-      </button>
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Camera className="h-3.5 w-3.5 shrink-0 opacity-60" />
+            <span className="truncate">
+              {estimate
+                ? "Photo estimate ready"
+                : imageUrl
+                ? "Photo uploaded"
+                : "Estimate from photo"}
+            </span>
+            <span className="shrink-0 text-[9px] uppercase tracking-wider text-primary/70">
+              AI
+            </span>
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 shrink-0 opacity-40 transition-transform duration-200",
+              open && "rotate-180"
+            )}
+          />
+        </button>
+      )}
 
       <input
         ref={fileInputRef}
@@ -236,8 +250,14 @@ export function PhotoCalorieEstimator({
         onChange={handleFile}
       />
 
-      {open && (
-        <div className="rounded-xl border border-border/25 bg-glass-highlight/[0.04] p-3 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
+      {(open || embedded) && (
+        <div
+          className={cn(
+            "space-y-2.5",
+            !embedded &&
+              "rounded-xl border border-border/25 bg-glass-highlight/[0.04] p-3 animate-in fade-in slide-in-from-top-1 duration-200"
+          )}
+        >
           {error && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-[11px] text-destructive">
               {error}
