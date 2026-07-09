@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, useRef } from "react"
+import { useEffect, useMemo, useState, useRef, Suspense } from "react"
 import {
   ArrowLeftRight,
   Calculator,
@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react"
 import { addDays, format, startOfWeek, subDays } from "date-fns"
+import { useRouter, useSearchParams } from "next/navigation"
 import { PageHeader } from "@/components/PageHeader"
 import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
@@ -3217,6 +3218,67 @@ function sessionsListUrl(): string {
   return `/api/workout-sessions?_=${Date.now()}`
 }
 
+/**
+ * Hub deep-link: `?start=<templateId>` or `?start=free` starts a session once templates load.
+ * Wrapped in Suspense by the page because it reads search params.
+ */
+function HubStartFromQuery({
+  templatesLoaded,
+  templates,
+  hasActiveSession,
+  startingWorkout,
+  onStartRoutine,
+  onStartFree,
+}: {
+  templatesLoaded: boolean
+  templates: WorkoutTemplate[]
+  hasActiveSession: boolean
+  startingWorkout: boolean
+  onStartRoutine: (tmpl: WorkoutTemplate) => void
+  onStartFree: () => void
+}) {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const handledRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const start = searchParams.get("start")?.trim()
+    if (!start || !templatesLoaded || startingWorkout) return
+    if (handledRef.current === start) return
+
+    const clearQuery = () => {
+      handledRef.current = start
+      router.replace("/workouts", { scroll: false })
+    }
+
+    if (hasActiveSession) {
+      clearQuery()
+      return
+    }
+
+    if (start === "free" || start === "empty") {
+      clearQuery()
+      onStartFree()
+      return
+    }
+
+    const tmpl = templates.find((t) => t.id === start)
+    clearQuery()
+    if (tmpl) onStartRoutine(tmpl)
+  }, [
+    searchParams,
+    templatesLoaded,
+    templates,
+    hasActiveSession,
+    startingWorkout,
+    onStartRoutine,
+    onStartFree,
+    router,
+  ])
+
+  return null
+}
+
 /* ──────────────────────────────────────────────────────────
    Main Page
    ────────────────────────────────────────────────────────── */
@@ -3248,6 +3310,8 @@ export default function WorkoutsPage() {
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null)
   /** Bumped after a workout is finished so the progression hero re-fetches. */
   const [progressionRefresh, setProgressionRefresh] = useState(0)
+  /** Hub deep-link: wait until templates load before honoring `?start=`. */
+  const [templatesLoaded, setTemplatesLoaded] = useState(false)
 
   templatesRef.current = templates
 
@@ -3264,10 +3328,12 @@ export default function WorkoutsPage() {
       .then(([s, t]) => {
         setSessions(Array.isArray(s) ? s : [])
         setTemplates(Array.isArray(t) ? t : [])
+        setTemplatesLoaded(true)
       })
       .catch(() => {
         setSessions([])
         setTemplates([])
+        setTemplatesLoaded(true)
       })
   }, [])
 
@@ -4423,6 +4489,28 @@ export default function WorkoutsPage() {
           </div>
         </div>
       )}
+
+      {/* Hub deep-link start (?start=templateId|free) */}
+      <Suspense fallback={null}>
+        <HubStartFromQuery
+          templatesLoaded={templatesLoaded}
+          templates={templates}
+          hasActiveSession={activeSession != null}
+          startingWorkout={startingWorkout}
+          onStartFree={() => {
+            void startSession("Workout")
+          }}
+          onStartRoutine={(tmpl) => {
+            const exs = parseExercises<TemplateExercise>(tmpl.exercises)
+            void startSession(
+              tmpl.name,
+              exs,
+              tmpl.coverImageUrl?.trim() ?? null,
+              tmpl.id,
+            )
+          }}
+        />
+      </Suspense>
 
       {/* ── Routine editor dialog ────────────── */}
       <RoutineEditor

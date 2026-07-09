@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { format } from "date-fns"
-import { Dumbbell, Moon, Plus, Syringe, Waves, X } from "lucide-react"
+import { ChevronRight, Dumbbell, Moon, Play, Plus, Syringe, Waves, X } from "lucide-react"
 import {
   ResponsiveContainer,
   AreaChart,
@@ -28,6 +29,14 @@ import {
   WeightCorrelationPanel,
   type WeightCorrelationDayData,
 } from "@/components/stats/WeightCorrelationPanel"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { ProgressionSummaryHero } from "@/components/workouts/ProgressionSummaryHero"
 import { useActiveDate } from "@/context/DateContext"
 import { useQuickLog } from "@/context/QuickLogContext"
 import { apiFetch } from "@/lib/api-fetch"
@@ -861,6 +870,73 @@ export function HubPeptidesExpand({
 
 /* ─── Workouts ───────────────────────────────────────────── */
 
+interface HubRoutineTemplate {
+  id: string
+  name: string
+  exercises: string | HubRoutineExercise[]
+  tags?: string | null
+  coverImageUrl?: string | null
+  sortOrder?: number
+}
+
+interface HubRoutineExercise {
+  id?: string
+  name: string
+  notes?: string
+  setRows?: Array<{ id?: string; weight?: string; reps?: string }>
+  targetSets?: number
+  targetReps?: string
+  primaryMuscles?: Array<{ name: string; color?: string; code?: string }>
+}
+
+function parseHubRoutineExercises(raw: string | HubRoutineExercise[]): HubRoutineExercise[] {
+  if (Array.isArray(raw)) return raw
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? (parsed as HubRoutineExercise[]) : []
+  } catch {
+    return []
+  }
+}
+
+function parseHubRoutineTags(raw: string | string[] | null | undefined): string[] {
+  if (Array.isArray(raw)) {
+    return [...new Set(raw.map((t) => String(t).trim()).filter(Boolean))].slice(0, 12)
+  }
+  if (raw == null || raw === "") return []
+  try {
+    const a = JSON.parse(raw) as unknown
+    if (Array.isArray(a)) return parseHubRoutineTags(a as string[])
+  } catch {
+    /* fall through */
+  }
+  if (raw.includes(",")) {
+    return [
+      ...new Set(
+        raw
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ),
+    ].slice(0, 12)
+  }
+  return []
+}
+
+function hubRoutinePreview(exs: HubRoutineExercise[]): string {
+  if (exs.length === 0) return "No exercises"
+  if (exs.length <= 2) return exs.map((e) => e.name).join(" · ")
+  return `${exs[0].name} · ${exs[1].name} +${exs.length - 2}`
+}
+
+function hubRoutineSetCount(ex: HubRoutineExercise): number {
+  if (Array.isArray(ex.setRows) && ex.setRows.length > 0) return ex.setRows.length
+  if (typeof ex.targetSets === "number" && Number.isFinite(ex.targetSets)) {
+    return Math.max(1, ex.targetSets)
+  }
+  return 3
+}
+
 export function HubWorkoutsExpand({
   weekCount,
   todayCount,
@@ -876,6 +952,35 @@ export function HubWorkoutsExpand({
   recoveryScore: number | null
   onDismiss: () => void
 }) {
+  const router = useRouter()
+  const [templates, setTemplates] = useState<HubRoutineTemplate[]>([])
+  const [templatesStatus, setTemplatesStatus] = useState<"loading" | "ready" | "error">(
+    "loading",
+  )
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const [startingId, setStartingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setTemplatesStatus("loading")
+    void apiFetch(`/api/workout-templates?_=${Date.now()}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
+      .then((rows: unknown) => {
+        if (cancelled) return
+        const list = Array.isArray(rows) ? (rows as HubRoutineTemplate[]) : []
+        setTemplates(list)
+        setTemplatesStatus("ready")
+      })
+      .catch(() => {
+        if (cancelled) return
+        setTemplates([])
+        setTemplatesStatus("error")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const met = weekCount >= WEEKLY_WORKOUT_GOAL
   const remaining = Math.max(0, WEEKLY_WORKOUT_GOAL - weekCount)
   const lastSessionIdx = [...last7].reverse().findIndex((v) => v > 0)
@@ -892,8 +997,28 @@ export function HubWorkoutsExpand({
   else if (recoveryScore != null && recoveryScore >= 5) recoveryCue = "Moderate recovery — ease in"
   else if (recoveryScore != null) recoveryCue = "Prioritize recovery today"
 
+  const previewTmpl = previewId
+    ? templates.find((t) => t.id === previewId) ?? null
+    : null
+  const previewExs = previewTmpl
+    ? parseHubRoutineExercises(previewTmpl.exercises)
+    : []
+  const previewTags = previewTmpl ? parseHubRoutineTags(previewTmpl.tags) : []
+
+  function goStartRoutine(id: string) {
+    setStartingId(id)
+    onDismiss()
+    router.push(`/workouts?start=${encodeURIComponent(id)}`)
+  }
+
+  function goStartFreeForm() {
+    setStartingId("free")
+    onDismiss()
+    router.push("/workouts?start=free")
+  }
+
   return (
-    <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
+    <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-5 px-0.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="type-hud-subsection">Workouts</p>
@@ -909,23 +1034,23 @@ export function HubWorkoutsExpand({
 
       <div className="flex items-center gap-4">
         <WeekWorkoutGoalRing count={weekCount} size="lg" color="#c4d632" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
-              <p className="type-hud-micro text-muted-foreground/55">This week</p>
-              <p
-                className="type-hud-stat-sm tabular-nums"
-                style={met ? { color: "#c4d632" } : undefined}
-              >
-                {weekCount}/{WEEKLY_WORKOUT_GOAL}
-              </p>
-            </div>
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
-              <p className="type-hud-micro text-muted-foreground/55">Recovery</p>
-              <p className="type-hud-stat-sm tabular-nums text-teal-200/85">
-                {recoveryScore != null ? `${recoveryScore}/10` : "—"}
-              </p>
-            </div>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <p
+              className="type-hud-stat-sm tabular-nums"
+              style={met ? { color: "#c4d632" } : undefined}
+            >
+              {weekCount}/{WEEKLY_WORKOUT_GOAL}
+              <span className="ml-1.5 type-hud-micro font-normal text-muted-foreground/55">
+                week
+              </span>
+            </p>
+            <p className="type-hud-stat-sm tabular-nums text-teal-200/85">
+              {recoveryScore != null ? `${recoveryScore}/10` : "—"}
+              <span className="ml-1.5 type-hud-micro font-normal text-muted-foreground/55">
+                recovery
+              </span>
+            </p>
           </div>
           <p className="text-[12px] font-medium text-foreground/80">{lastCue}</p>
           <p className="text-[11px] text-muted-foreground/60">{recoveryCue}</p>
@@ -969,13 +1094,212 @@ export function HubWorkoutsExpand({
         </div>
       </div>
 
+      <ProgressionSummaryHero className="!rounded-none border-0 border-y border-white/[0.06] bg-transparent px-0 shadow-none dark:bg-transparent" />
+
+      <div className="space-y-2.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="type-hud-caption">Routines</p>
+          {templatesStatus === "ready" && templates.length > 0 ? (
+            <span className="type-hud-micro tabular-nums text-muted-foreground/50">
+              {templates.length}
+            </span>
+          ) : null}
+        </div>
+
+        {templatesStatus === "loading" ? (
+          <p className="text-[12px] text-muted-foreground/55">Loading routines…</p>
+        ) : null}
+        {templatesStatus === "error" ? (
+          <p className="text-[12px] text-muted-foreground/55">
+            Couldn’t load routines.{" "}
+            <Link href="/workouts" className="underline-offset-2 hover:underline">
+              Open workouts
+            </Link>
+          </p>
+        ) : null}
+        {templatesStatus === "ready" && templates.length === 0 ? (
+          <p className="text-[12px] text-muted-foreground/55">
+            No routines yet — create one on the workouts page, or start free-form below.
+          </p>
+        ) : null}
+
+        {templates.length > 0 ? (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {templates.map((tmpl) => {
+              const exs = parseHubRoutineExercises(tmpl.exercises)
+              const tags = parseHubRoutineTags(tmpl.tags)
+              const cover = tmpl.coverImageUrl?.trim()
+              const preview = hubRoutinePreview(exs)
+              const busy = startingId === tmpl.id
+              return (
+                <div
+                  key={tmpl.id}
+                  className="flex min-w-0 items-stretch gap-2.5 border-b border-white/[0.05] py-2 last:border-b-0 sm:border-b-0 sm:rounded-xl sm:border sm:border-white/[0.06] sm:bg-white/[0.02] sm:px-2.5 sm:py-2.5"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setPreviewId(tmpl.id)}
+                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30"
+                    aria-label={`Preview ${tmpl.name}`}
+                  >
+                    <div className="relative size-12 shrink-0 overflow-hidden rounded-lg bg-muted/25 sm:size-14">
+                      {cover ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={cover}
+                          alt=""
+                          className="absolute inset-0 size-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex size-full items-center justify-center bg-gradient-to-br from-white/[0.06] to-transparent">
+                          <Dumbbell className="size-5 text-muted-foreground/25" aria-hidden />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <p className="truncate text-[13px] font-semibold text-foreground/90">
+                          {tmpl.name}
+                        </p>
+                        <ChevronRight
+                          className="size-3.5 shrink-0 text-muted-foreground/40"
+                          aria-hidden
+                        />
+                      </div>
+                      <p
+                        className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground/55"
+                        title={exs.map((e) => e.name).join(", ")}
+                      >
+                        {preview}
+                      </p>
+                      {tags.length > 0 ? (
+                        <p className="mt-1 truncate text-[9px] text-muted-foreground/45">
+                          {tags.slice(0, 3).join(" · ")}
+                        </p>
+                      ) : null}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={startingId != null}
+                    onClick={() => goStartRoutine(tmpl.id)}
+                    className="inline-flex h-9 shrink-0 items-center gap-1 self-center rounded-lg border border-[#c4d632]/25 bg-[#c4d632]/[0.08] px-2.5 text-[11px] font-semibold text-[#e8f07a] transition-colors hover:border-[#c4d632]/45 hover:bg-[#c4d632]/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
+                  >
+                    <Play className="size-3 shrink-0" aria-hidden />
+                    {busy ? "…" : "Start"}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        <p className="type-hud-caption">Free-form</p>
+        <button
+          type="button"
+          disabled={startingId != null}
+          onClick={goStartFreeForm}
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
+        >
+          <Play className="h-3.5 w-3.5" aria-hidden />
+          {startingId === "free" ? "Starting…" : "Start empty workout"}
+        </button>
+        <p className="text-[10px] leading-relaxed text-muted-foreground/50">
+          Opens the active workout flow — pick upper/lower for a recommended session, or add
+          exercises manually.
+        </p>
+      </div>
+
       <Link
         href="/workouts"
-        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 sm:w-auto sm:px-4"
+        className="inline-flex h-9 w-full items-center justify-center gap-2 type-hud-micro text-muted-foreground/70 transition-colors hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 sm:w-auto"
       >
         <Dumbbell className="h-3.5 w-3.5" aria-hidden />
-        Open workouts
+        Open full workouts
       </Link>
+
+      <Dialog open={previewTmpl != null} onOpenChange={(open) => !open && setPreviewId(null)}>
+        <DialogContent
+          showCloseButton
+          className={cn(
+            "glass-frost max-w-md gap-0 p-0",
+            "[&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3",
+          )}
+        >
+          {previewTmpl ? (
+            <div className="max-h-[82dvh] overflow-y-auto overscroll-contain">
+              {previewTmpl.coverImageUrl?.trim() ? (
+                <div className="relative aspect-[16/9] w-full overflow-hidden border-b border-white/[0.06] bg-muted/20">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={previewTmpl.coverImageUrl.trim()}
+                    alt=""
+                    className="absolute inset-0 size-full object-cover"
+                  />
+                </div>
+              ) : null}
+              <div className="space-y-1 px-4 pb-2 pt-4 pr-12">
+                <DialogHeader className="space-y-1 text-left">
+                  <DialogTitle>{previewTmpl.name}</DialogTitle>
+                  <DialogDescription>
+                    {previewExs.length} exercise{previewExs.length === 1 ? "" : "s"}
+                    {previewTags.length > 0 ? ` · ${previewTags.join(" · ")}` : ""}
+                  </DialogDescription>
+                </DialogHeader>
+              </div>
+              <div className="space-y-2 px-4 pb-4">
+                {previewExs.length === 0 ? (
+                  <p className="text-[12px] text-muted-foreground/60">No exercises in this routine.</p>
+                ) : (
+                  previewExs.map((ex, i) => {
+                    const sets = hubRoutineSetCount(ex)
+                    const reps =
+                      Array.isArray(ex.setRows) && ex.setRows[0]?.reps
+                        ? String(ex.setRows[0].reps)
+                        : ex.targetReps
+                          ? String(ex.targetReps)
+                          : null
+                    const muscles = (ex.primaryMuscles ?? [])
+                      .map((m) => m.name)
+                      .filter(Boolean)
+                      .slice(0, 3)
+                    return (
+                      <div
+                        key={ex.id ?? `${ex.name}-${i}`}
+                        className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+                      >
+                        <p className="text-sm font-semibold text-foreground/90">{ex.name}</p>
+                        <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground/60">
+                          {sets} set{sets === 1 ? "" : "s"}
+                          {reps ? ` · ${reps} reps` : ""}
+                          {muscles.length > 0 ? ` · ${muscles.join(", ")}` : ""}
+                        </p>
+                        {ex.notes?.trim() ? (
+                          <p className="mt-1 text-[11px] text-muted-foreground/55">{ex.notes}</p>
+                        ) : null}
+                      </div>
+                    )
+                  })
+                )}
+                <button
+                  type="button"
+                  disabled={startingId != null}
+                  onClick={() => {
+                    setPreviewId(null)
+                    goStartRoutine(previewTmpl.id)
+                  }}
+                  className="mt-1 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#c4d632]/30 bg-[#c4d632]/[0.1] text-[12px] font-semibold text-[#e8f07a] transition-colors hover:bg-[#c4d632]/[0.16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
+                >
+                  <Play className="size-3.5" aria-hidden />
+                  Start this routine
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
