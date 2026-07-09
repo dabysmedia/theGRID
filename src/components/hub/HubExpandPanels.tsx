@@ -237,138 +237,155 @@ export function HubCaloriesExpand({
         </p>
       ) : (
         <>
-          <div className="relative -mx-1 w-[calc(100%+0.5rem)] sm:-mx-2 sm:w-[calc(100%+1rem)]">
+          <div className="relative -mx-1 w-[calc(100%+0.5rem)] overflow-hidden sm:-mx-2 sm:w-[calc(100%+1rem)]">
             <CaloriePipTracker
               consumed={consumed}
               target={target}
               size="default"
             />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={openAddFood}
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:flex-none sm:px-4"
-            >
-              <Plus className="h-3.5 w-3.5" aria-hidden />
-              Add food
-            </button>
-            <button
-              type="button"
-              onClick={() => openQuickLog("calories")}
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:flex-none sm:px-4"
-            >
-              Quick log
-            </button>
-          </div>
 
-          <div
-            className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/8 to-transparent"
-            aria-hidden
-          />
+            {/* Today's food — steel HUD overlay on the pip scene */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex max-h-[min(52%,18.5rem)] flex-col sm:max-h-[min(48%,20rem)]">
+              <div
+                className="pointer-events-none h-10 shrink-0 bg-gradient-to-t from-[oklch(0.16_0.012_250/92%)] via-[oklch(0.16_0.012_250/55%)] to-transparent sm:h-12"
+                aria-hidden
+              />
+              <div className="pointer-events-auto flex min-h-0 flex-1 flex-col border-t border-white/[0.06] bg-[oklch(0.16_0.012_250/88%)] px-2.5 pb-2.5 pt-1.5 backdrop-blur-md sm:px-3 sm:pb-3">
+                <div className="mb-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={openAddFood}
+                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:h-10 sm:flex-none sm:px-4"
+                  >
+                    <Plus className="h-3.5 w-3.5" aria-hidden />
+                    Add food
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openQuickLog("calories")}
+                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:h-10 sm:flex-none sm:px-4"
+                  >
+                    Quick log
+                  </button>
+                </div>
 
-          <div className="space-y-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="type-hud-caption">Today&apos;s food</p>
-              {entriesStatus === "ready" && entries.length > 0 ? (
-                <span className="type-hud-micro tabular-nums text-muted-foreground/50">
-                  {entries.length}
-                </span>
-              ) : null}
-            </div>
-
-            {entriesStatus === "loading" ? (
-              <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-                Loading food log…
-              </p>
-            ) : null}
-            {entriesStatus === "error" ? (
-              <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-                Couldn&apos;t load food log.{" "}
-                <button
-                  type="button"
-                  onClick={() => setReloadKey((k) => k + 1)}
-                  className="text-foreground/75 underline-offset-2 hover:underline hover:text-red-200/90"
-                >
-                  Retry
-                </button>
-              </p>
-            ) : null}
-            {entriesStatus === "ready" && entries.length === 0 ? (
-              <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-                Nothing logged yet — tap Add food above.
-              </p>
-            ) : null}
-
-            {entriesStatus === "ready" && mealGroups.length > 0 ? (
-              <div className="space-y-3">
-                {mealGroups.map(({ meal, items }) => (
-                  <div key={meal} className="space-y-1">
-                    <p className="type-hud-micro capitalize text-muted-foreground/50">{meal}</p>
-                    <ul className="divide-y divide-white/[0.05] border-y border-white/[0.05]">
-                      {items.map((entry) => (
-                        <li
-                          key={entry.id}
-                          className="group/row flex items-stretch gap-2 py-2.5"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                              <span className="type-hud-stat-sm tabular-nums text-foreground/90">
-                                {entry.calories.toLocaleString()}
-                              </span>
-                              <span className="type-hud-unit text-muted-foreground/55">cal</span>
-                            </div>
-                            {(entry.protein != null ||
-                              entry.carbs != null ||
-                              entry.fat != null) && (
-                              <p className="mt-0.5 type-hud-micro normal-case tracking-normal tabular-nums text-muted-foreground/45">
-                                {[
-                                  entry.protein != null ? `P ${entry.protein}g` : null,
-                                  entry.carbs != null ? `C ${entry.carbs}g` : null,
-                                  entry.fat != null ? `F ${entry.fat}g` : null,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </p>
-                            )}
-                            {entry.description?.trim() ? (
-                              <p className="mt-1 line-clamp-2 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-                                {entry.description}
-                              </p>
-                            ) : null}
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1 self-center">
-                            <button
-                              type="button"
-                              onClick={() => startEdit(entry)}
-                              className="history-row-edit !min-h-9 !min-w-9 !m-0"
-                              title="Edit"
-                              aria-label={`Edit ${entry.description?.trim() || entry.calories + " cal"}`}
-                            >
-                              <Pencil />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                requestDelete(
-                                  entry.id,
-                                  entry.description?.trim() ||
-                                    `${entry.calories} cal · ${entry.mealType}`,
-                                )
-                              }
-                              className="history-row-delete-row !min-h-9 !min-w-9 !m-0"
-                              aria-label={`Delete ${entry.description?.trim() || entry.calories + " cal"}`}
-                            >
-                              <Trash2 />
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                <div className="flex min-h-0 flex-1 flex-col space-y-2">
+                  <div className="flex shrink-0 items-baseline justify-between gap-2">
+                    <p className="type-hud-caption">Today&apos;s food</p>
+                    {entriesStatus === "ready" && entries.length > 0 ? (
+                      <span className="type-hud-micro tabular-nums text-muted-foreground/50">
+                        {entries.length}
+                      </span>
+                    ) : null}
                   </div>
-                ))}
+
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+                    {entriesStatus === "loading" ? (
+                      <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+                        Loading food log…
+                      </p>
+                    ) : null}
+                    {entriesStatus === "error" ? (
+                      <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+                        Couldn&apos;t load food log.{" "}
+                        <button
+                          type="button"
+                          onClick={() => setReloadKey((k) => k + 1)}
+                          className="text-foreground/75 underline-offset-2 hover:underline hover:text-red-200/90"
+                        >
+                          Retry
+                        </button>
+                      </p>
+                    ) : null}
+                    {entriesStatus === "ready" && entries.length === 0 ? (
+                      <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+                        Nothing logged yet — tap Add food.
+                      </p>
+                    ) : null}
+
+                    {entriesStatus === "ready" && mealGroups.length > 0 ? (
+                      <div className="space-y-3 pb-0.5">
+                        {mealGroups.map(({ meal, items }) => (
+                          <div key={meal} className="space-y-1">
+                            <p className="type-hud-micro capitalize text-muted-foreground/50">
+                              {meal}
+                            </p>
+                            <ul className="divide-y divide-white/[0.05] border-y border-white/[0.05]">
+                              {items.map((entry) => (
+                                <li
+                                  key={entry.id}
+                                  className="group/row flex items-stretch gap-2 py-2"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                      <span className="type-hud-stat-sm tabular-nums text-foreground/90">
+                                        {entry.calories.toLocaleString()}
+                                      </span>
+                                      <span className="type-hud-unit text-muted-foreground/55">
+                                        cal
+                                      </span>
+                                    </div>
+                                    {(entry.protein != null ||
+                                      entry.carbs != null ||
+                                      entry.fat != null) && (
+                                      <p className="mt-0.5 type-hud-micro normal-case tracking-normal tabular-nums text-muted-foreground/45">
+                                        {[
+                                          entry.protein != null
+                                            ? `P ${entry.protein}g`
+                                            : null,
+                                          entry.carbs != null
+                                            ? `C ${entry.carbs}g`
+                                            : null,
+                                          entry.fat != null
+                                            ? `F ${entry.fat}g`
+                                            : null,
+                                        ]
+                                          .filter(Boolean)
+                                          .join(" · ")}
+                                      </p>
+                                    )}
+                                    {entry.description?.trim() ? (
+                                      <p className="mt-1 line-clamp-2 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
+                                        {entry.description}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-1 self-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => startEdit(entry)}
+                                      className="history-row-edit !min-h-9 !min-w-9 !m-0"
+                                      title="Edit"
+                                      aria-label={`Edit ${entry.description?.trim() || entry.calories + " cal"}`}
+                                    >
+                                      <Pencil />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        requestDelete(
+                                          entry.id,
+                                          entry.description?.trim() ||
+                                            `${entry.calories} cal · ${entry.mealType}`,
+                                        )
+                                      }
+                                      className="history-row-delete-row !min-h-9 !min-w-9 !m-0"
+                                      aria-label={`Delete ${entry.description?.trim() || entry.calories + " cal"}`}
+                                    >
+                                      <Trash2 />
+                                    </button>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               </div>
-            ) : null}
+            </div>
           </div>
 
           <LogFoodDialog
