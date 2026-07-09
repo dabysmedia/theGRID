@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
+import { HUB_RESET_OVERVIEW_EVENT } from "@/lib/hub-tile-prefs"
 import { useUser } from "@/context/UserContext"
 import { useActiveDate } from "@/context/DateContext"
 import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
@@ -249,7 +250,14 @@ export function BottomNav() {
                         <Link
                           key={item.href}
                           href={item.href}
-                          onClick={close}
+                          onClick={() => {
+                            close()
+                            if (item.href === "/") {
+                              window.dispatchEvent(
+                                new CustomEvent(HUB_RESET_OVERVIEW_EVENT)
+                              )
+                            }
+                          }}
                           className={cn(
                             "relative flex min-h-0 min-w-0 touch-manipulation flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-[10px] font-medium tracking-[0.15em] uppercase transition-colors duration-150 sm:text-[11px]",
                             isActive

@@ -12,6 +12,7 @@ import { apiFetch } from "@/lib/api-fetch"
 import { isVacationBlockingCalendarDay, vacationCalorieDayMask } from "@/lib/vacation-mode"
 import {
   HUB_PREFS_CHANGED_EVENT,
+  HUB_RESET_OVERVIEW_EVENT,
   computeNextInjection,
   readInjectionIntervalDays,
 } from "@/lib/hub-tile-prefs"
@@ -130,6 +131,14 @@ export function HubDashboard() {
   useEffect(() => {
     setHubExpanded(null)
   }, [activeDate])
+
+  useEffect(() => {
+    function onResetOverview() {
+      setHubExpanded(null)
+    }
+    window.addEventListener(HUB_RESET_OVERVIEW_EVENT, onResetOverview)
+    return () => window.removeEventListener(HUB_RESET_OVERVIEW_EVENT, onResetOverview)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
