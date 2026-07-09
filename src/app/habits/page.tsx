@@ -28,11 +28,27 @@ import {
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { PageHeader } from "@/components/PageHeader"
+import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { cn } from "@/lib/utils"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import {
+  cn,
+  glassPanelAccentClass,
+  glassPanelAccentStyle,
+  glassPanelClass,
+} from "@/lib/utils"
+import { CATEGORY_THEME } from "@/lib/category-theme"
 import { useActiveDate } from "@/context/DateContext"
 import { format, subDays, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from "date-fns"
+
+const HABIT_THEME = CATEGORY_THEME.habits
 
 const ICON_MAP: Record<string, LucideIcon> = {
   check: CheckSquare,
@@ -126,28 +142,6 @@ function getMonthRate(completions: HabitCompletion[], monthDays: Date[], todaySt
   return Math.round((count / pastDays.length) * 100)
 }
 
-function NewHabitCTA({ onClick, className }: { onClick: () => void; className?: string }) {
-  return (
-    <Button
-      type="button"
-      onClick={onClick}
-      variant="ghost"
-      size="sm"
-      className={cn(
-        "glass relative h-10 min-h-10 w-full justify-center gap-2 overflow-hidden rounded-xl px-3.5 text-foreground shadow-md shadow-black/25 ring-1 ring-white/10 hud-corners",
-        "hover:bg-glass-highlight/25",
-        className
-      )}
-    >
-      <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-[oklch(0.82_0.18_110_/_35%)] to-transparent" />
-      <span className="relative z-[1] flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-glass-highlight/35 ring-1 ring-white/5 backdrop-blur-sm">
-        <Plus className="h-3.5 w-3.5 text-grid-accent" strokeWidth={2.5} />
-      </span>
-      <span className="relative z-[1] text-gradient text-sm font-semibold tracking-wide">New Habit</span>
-    </Button>
-  )
-}
-
 export default function HabitsPage() {
   const { activeDate } = useActiveDate()
   const [habits, setHabits] = useState<Habit[]>([])
@@ -197,6 +191,12 @@ export default function HabitsPage() {
     return set
   }, [habits, completionMap, todayStr])
 
+  const bestStreak = useMemo(() => {
+    let best = 0
+    for (const h of habits) best = Math.max(best, getStreak(h.completions))
+    return best
+  }, [habits])
+
   function openCreate() {
     setEditingHabit(null)
     setFormName("")
@@ -242,7 +242,7 @@ export default function HabitsPage() {
             }
           }
           return { ...h, completions: h.completions.filter((c) => dateKey(c.date) !== todayStr) }
-        })
+        }),
       )
     }
   }
@@ -259,7 +259,7 @@ export default function HabitsPage() {
       })
       if (res.ok) {
         const updated = await res.json()
-        setHabits((prev) => prev.map((h) => h.id === updated.id ? updated : h))
+        setHabits((prev) => prev.map((h) => (h.id === updated.id ? updated : h)))
         closeForm()
       }
     } else {
@@ -285,23 +285,61 @@ export default function HabitsPage() {
     }
   }
 
+  const doneCount = completedToday.size
+  const totalCount = habits.length
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-6">
       <PageHeader title="Habits" />
 
-      {/* Habit cards */}
+      <PageHeroStrip
+        color={HABIT_THEME.color}
+        icon={CheckSquare}
+        eyebrow="Today"
+        value={totalCount === 0 ? "—" : `${doneCount}`}
+        unit={totalCount === 0 ? undefined : `/ ${totalCount}`}
+        hint={totalCount === 0 ? "add a habit" : "complete"}
+        metrics={[
+          { label: "Habits", value: String(totalCount) },
+          { label: "Best streak", value: bestStreak > 0 ? `${bestStreak}d` : "—" },
+          {
+            label: "Done today",
+            value: totalCount === 0 ? "—" : `${Math.round((doneCount / Math.max(totalCount, 1)) * 100)}%`,
+          },
+        ]}
+      />
+
       {loading ? (
-        <div className="flex items-center justify-center py-10">
-          <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <div className="flex items-center justify-center py-12">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
         </div>
       ) : habits.length === 0 ? (
-        <div className="glass-panel animate-fade-up p-6 text-center">
-          <CheckSquare className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
-          <p className="text-xs text-muted-foreground mb-4">No habits yet. Add your first one to get started.</p>
-          {!showForm && <NewHabitCTA onClick={openCreate} />}
+        <div className={cn(glassPanelClass, "animate-fade-up p-8 text-center")}>
+          <CheckSquare className="mx-auto mb-3 h-7 w-7 text-muted-foreground/30" />
+          <p className="type-hud-caption mb-4 normal-case text-muted-foreground">
+            No habits yet. Add your first one to start a streak.
+          </p>
+          <Button type="button" variant="glass" onClick={openCreate} className="mx-auto">
+            <Plus className="mr-1.5 h-4 w-4" />
+            New Habit
+          </Button>
         </div>
       ) : (
-        <div className="space-y-2">
+        <section className="space-y-2.5">
+          <div className="flex items-center justify-between gap-3 px-0.5">
+            <p className="type-hud-rail">Today&apos;s checklist</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={openCreate}
+              className="h-8 gap-1.5 rounded-xl px-2.5 text-primary hover:bg-primary/10"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span className="type-hud-chip">New</span>
+            </Button>
+          </div>
+
           {habits.map((habit, idx) => {
             const Icon = ICON_MAP[habit.icon] ?? CheckSquare
             const done = completedToday.has(habit.id)
@@ -313,61 +351,80 @@ export default function HabitsPage() {
             return (
               <div
                 key={habit.id}
-                className="glass animate-fade-up space-y-1.5 rounded-xl px-2.5 py-2"
-                style={{ animationDelay: `${idx * 40}ms` }}
+                className={cn(
+                  glassPanelClass,
+                  glassPanelAccentClass,
+                  "animate-fade-up space-y-3 p-3.5 sm:p-4",
+                )}
+                style={{
+                  ...glassPanelAccentStyle(habit.color),
+                  animationDelay: `${idx * 40}ms`,
+                }}
               >
-                {/* Header: check + name + stats + edit */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <button
+                    type="button"
                     onClick={() => toggleHabit(habit.id)}
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-all duration-300 active:scale-90 ${
-                      done ? "" : "hover:scale-105"
-                    }`}
+                    className={cn(
+                      "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-all duration-300 touch-manipulation active:scale-90",
+                      done ? "border-transparent" : "hover:scale-105",
+                    )}
                     style={{
                       backgroundColor: done ? habit.color : `${habit.color}15`,
+                      borderColor: done ? "transparent" : `${habit.color}33`,
                     }}
+                    aria-label={done ? `Uncheck ${habit.name}` : `Complete ${habit.name}`}
                   >
                     {done ? (
-                      <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+                      <Check className="h-5 w-5 text-white" strokeWidth={3} />
                     ) : (
-                      <Icon className="h-3.5 w-3.5" style={{ color: habit.color }} strokeWidth={1.8} />
+                      <Icon className="h-4 w-4" style={{ color: habit.color }} strokeWidth={1.8} />
                     )}
                   </button>
 
-                  <span className={`flex-1 text-xs font-medium tracking-wide min-w-0 truncate ${done ? "line-through text-muted-foreground/50" : ""}`}>
-                    {habit.name}
-                  </span>
-
-                  {streak > 0 && (
-                    <div className="flex items-center gap-0.5 shrink-0" title="Streak">
-                      <Flame className="h-2.5 w-2.5 text-orange-400" />
-                      <span className="text-[9px] font-bold tabular-nums">{streak}</span>
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={cn(
+                        "truncate font-heading text-sm font-semibold tracking-wide",
+                        done && "text-muted-foreground/50 line-through",
+                      )}
+                    >
+                      {habit.name}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                      {streak > 0 && (
+                        <span className="inline-flex items-center gap-1 type-hud-caption normal-case">
+                          <Flame className="h-3 w-3 text-orange-400" />
+                          <span className="tabular-nums text-foreground/80">{streak}d</span>
+                        </span>
+                      )}
+                      {best > 0 && (
+                        <span className="inline-flex items-center gap-1 type-hud-caption normal-case text-muted-foreground/55">
+                          <Trophy className="h-3 w-3" />
+                          <span className="tabular-nums">{best}d best</span>
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 type-hud-caption normal-case text-primary">
+                        <TrendingUp className="h-3 w-3" />
+                        <span className="tabular-nums font-semibold">{monthRate}%</span>
+                      </span>
                     </div>
-                  )}
-                  {best > 0 && (
-                    <div className="flex items-center gap-0.5 shrink-0 text-muted-foreground/45" title="Best">
-                      <Trophy className="h-2.5 w-2.5" />
-                      <span className="text-[9px] tabular-nums">{best}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-0.5 shrink-0 text-primary" title="Month completion">
-                    <TrendingUp className="h-2.5 w-2.5" />
-                    <span className="text-[9px] font-semibold tabular-nums">{monthRate}%</span>
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => openEdit(habit)}
-                    className="shrink-0 rounded-md p-0.5 opacity-35 transition-colors hover:bg-glass-highlight/40 hover:opacity-100"
+                    className="shrink-0 rounded-xl p-2 opacity-40 transition-colors hover:bg-glass-highlight/40 hover:opacity-100 touch-manipulation"
                     title="Edit"
+                    aria-label={`Edit ${habit.name}`}
                   >
-                    <Pencil className="h-2.5 w-2.5" />
+                    <Pencil className="h-3.5 w-3.5" />
                   </button>
                 </div>
 
-                {/* Compact month calendar */}
-                <div className="grid grid-cols-7 gap-[1px]">
+                <div className="grid grid-cols-7 gap-1">
                   {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
-                    <div key={i} className="text-[6px] text-center text-muted-foreground/30 font-medium leading-none pb-[1px]">
+                    <div key={i} className="type-hud-micro pb-0.5 text-center text-muted-foreground/35">
                       {day}
                     </div>
                   ))}
@@ -382,12 +439,14 @@ export default function HabitsPage() {
                     return (
                       <div
                         key={dk}
-                        className={`h-5 flex items-center justify-center text-[9px] tabular-nums leading-none ${
-                          isFuture ? "text-muted-foreground/12" : isActive && !isDone ? "ring-1 ring-primary/35" : ""
-                        }`}
+                        className={cn(
+                          "flex h-7 items-center justify-center rounded-md text-[10px] tabular-nums leading-none",
+                          isFuture && "text-muted-foreground/15",
+                          isActive && !isDone && "ring-1 ring-primary/40",
+                          !isDone && !isFuture && "bg-glass-highlight/[0.06]",
+                        )}
                         style={{
-                          borderRadius: "3px",
-                          backgroundColor: isDone ? habit.color : isFuture ? "transparent" : "oklch(1 0 0 / 3%)",
+                          backgroundColor: isDone ? habit.color : undefined,
                           color: isDone ? "#fff" : undefined,
                           fontWeight: isDone || isActive ? 700 : 400,
                         }}
@@ -400,124 +459,108 @@ export default function HabitsPage() {
               </div>
             )
           })}
-          {!showForm && <NewHabitCTA onClick={openCreate} className="mt-1" />}
-        </div>
+        </section>
       )}
 
-      {/* Create / Edit form (bottom sheet) */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in px-4" onClick={closeForm}>
-          <div
-            className="glass-panel animate-scale-in w-full max-w-[400px] space-y-3 p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-semibold uppercase tracking-[0.12em]">
-                {editingHabit ? "Edit Habit" : "New Habit"}
-              </h2>
-              <button
-                onClick={closeForm}
-                className="rounded-lg p-1 transition-colors hover:bg-glass-highlight/40"
-              >
-                <X className="h-4 w-4 text-muted-foreground" />
-              </button>
-            </div>
+      <Dialog
+        open={showForm}
+        onOpenChange={(open) => {
+          if (!open) closeForm()
+        }}
+      >
+        <DialogContent className="mx-auto max-w-[400px] gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border/30 px-4 py-3.5">
+            <DialogTitle className="type-hud-label text-foreground">
+              {editingHabit ? "Edit Habit" : "New Habit"}
+            </DialogTitle>
+          </DialogHeader>
 
-            {deleteConfirm && editingHabit ? (
-              <div className="space-y-3 pt-1">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Delete <span className="text-foreground font-medium">&ldquo;{formName}&rdquo;</span>? This cannot be undone.
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    size="default"
-                    onClick={() => setDeleteConfirm(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    className="flex-1"
-                    size="default"
-                    onClick={confirmDeleteHabit}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                    Delete
-                  </Button>
+          {deleteConfirm && editingHabit ? (
+            <div className="space-y-4 p-4">
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Delete <span className="font-medium text-foreground">&ldquo;{formName}&rdquo;</span>? This cannot be undone.
+              </p>
+              <DialogFooter className="mx-0 mb-0 rounded-none border-0 bg-transparent p-0 sm:justify-stretch">
+                <Button type="button" variant="outline" className="flex-1" onClick={() => setDeleteConfirm(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" variant="destructive" className="flex-1" onClick={confirmDeleteHabit}>
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Delete
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4 p-4">
+              <Input
+                placeholder="Habit name"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                autoFocus
+              />
+
+              <div>
+                <p className="type-hud-label-soft mb-2">Icon</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {ICON_OPTIONS.map((key) => {
+                    const Ic = ICON_MAP[key]
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setFormIcon(key)}
+                        className={cn(
+                          "flex h-10 w-10 items-center justify-center rounded-xl transition-all touch-manipulation sm:h-9 sm:w-9",
+                          formIcon === key
+                            ? "bg-primary/10 ring-1 ring-primary/40"
+                            : "glass-subtle hover:bg-glass-highlight/30",
+                        )}
+                      >
+                        <Ic className="h-3.5 w-3.5" style={{ color: formIcon === key ? formColor : undefined }} />
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <Input
-                  placeholder="Habit name"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  autoFocus
-                />
 
-                <div>
-                  <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60 mb-1.5">Icon</div>
-                  <div className="flex flex-wrap gap-1">
-                    {ICON_OPTIONS.map((key) => {
-                      const Ic = ICON_MAP[key]
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setFormIcon(key)}
-                          className={`flex h-10 w-10 touch-manipulation items-center justify-center rounded-lg transition-all sm:h-8 sm:w-8 ${
-                            formIcon === key ? "ring-1 ring-primary/40 bg-primary/10" : "hover:bg-glass-highlight/30"
-                          }`}
-                        >
-                          <Ic className="h-3.5 w-3.5" style={{ color: formIcon === key ? formColor : undefined }} />
-                        </button>
-                      )
-                    })}
-                  </div>
+              <div>
+                <p className="type-hud-label-soft mb-2">Color</p>
+                <div className="flex flex-wrap gap-2">
+                  {COLOR_OPTIONS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setFormColor(c)}
+                      className={cn(
+                        "h-7 w-7 rounded-lg transition-all touch-manipulation",
+                        formColor === c ? "scale-110 ring-2 ring-white/40" : "hover:scale-110",
+                      )}
+                      style={{ backgroundColor: c }}
+                      aria-label={`Color ${c}`}
+                    />
+                  ))}
                 </div>
+              </div>
 
-                <div>
-                  <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60 mb-1.5">Color</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {COLOR_OPTIONS.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => setFormColor(c)}
-                        className={`h-6 w-6 rounded-md transition-all ${
-                          formColor === c ? "ring-2 ring-white/40 scale-110" : "hover:scale-110"
-                        }`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
-                  </div>
-                </div>
+              <Button type="submit" variant="glass" className="w-full" disabled={!formName.trim()}>
+                {editingHabit ? "Save Changes" : "Create Habit"}
+              </Button>
 
-                <Button type="submit" variant="glass" className="w-full" size="default" disabled={!formName.trim()}>
-                  {editingHabit ? "Save Changes" : "Create Habit"}
+              {editingHabit && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setDeleteConfirm(true)}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Delete habit
                 </Button>
-
-                {editingHabit && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    size="default"
-                    onClick={() => setDeleteConfirm(true)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                    Delete habit
-                  </Button>
-                )}
-              </form>
-            )}
-          </div>
-        </div>
-      )}
+              )}
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

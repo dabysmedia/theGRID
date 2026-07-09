@@ -17,12 +17,22 @@ import {
 } from "lucide-react"
 import { ResponsiveContainer, LineChart, Line, YAxis, Tooltip } from "recharts"
 import { PageHeader } from "@/components/PageHeader"
+import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { apiFetch } from "@/lib/api-fetch"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { formatDate } from "@/lib/utils"
+import { CATEGORY_THEME } from "@/lib/category-theme"
+import {
+  cn,
+  formatDate,
+  glassPanelAccentClass,
+  glassPanelAccentStyle,
+  glassPanelClass,
+} from "@/lib/utils"
 import { DEFAULT_WEIGHT_UNIT } from "@/lib/units"
+
+const GOALS_THEME = CATEGORY_THEME.goals
 
 interface GoalEntry {
   id: string
@@ -227,9 +237,38 @@ export default function GoalsPage() {
     if (res.ok) setGoals(goals.filter((g) => g.id !== id))
   }
 
+  const activeCount = goals.length
+  const avgProgress = (() => {
+    const pcts = goals
+      .map((g) => progressPercent(g))
+      .filter((p): p is number => p != null)
+    if (!pcts.length) return null
+    return Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length)
+  })()
+
   return (
     <div className="space-y-6">
       <PageHeader title="Goals" />
+
+      <PageHeroStrip
+        color={GOALS_THEME.color}
+        icon={Target}
+        eyebrow="Long-term targets"
+        value={activeCount === 0 ? "—" : String(activeCount)}
+        unit={activeCount === 0 ? undefined : "active"}
+        hint={avgProgress != null ? `${avgProgress}% avg progress` : "set a target"}
+        metrics={[
+          { label: "Active", value: String(activeCount) },
+          {
+            label: "Avg progress",
+            value: avgProgress != null ? `${avgProgress}%` : "—",
+          },
+          {
+            label: "Logged",
+            value: String(goals.reduce((n, g) => n + g.entries.length, 0)),
+          },
+        ]}
+      />
 
       {/* Create button or form */}
       {!showForm ? (
@@ -247,11 +286,9 @@ export default function GoalsPage() {
           New Goal
         </Button>
       ) : (
-        <div className="glass-panel p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wider">
-              Create Goal
-            </h2>
+        <div className={cn(glassPanelClass, "animate-fade-up p-5")}>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="type-hud-rail text-foreground">Create Goal</h2>
             <button
               onClick={resetForm}
               className="p-1.5 rounded-lg hover:bg-glass-highlight/40 transition-colors"
@@ -411,15 +448,15 @@ export default function GoalsPage() {
       {/* Goal cards */}
       <div className="space-y-4">
         {goals.length === 0 && !showForm && (
-          <div className="glass-subtle rounded-2xl p-8 text-center">
-            <Target className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">
+          <div className={cn(glassPanelClass, "p-8 text-center")}>
+            <Target className="mx-auto mb-3 h-8 w-8 text-muted-foreground/30" />
+            <p className="type-hud-caption normal-case text-muted-foreground">
               No goals yet. Create one to start tracking progress.
             </p>
           </div>
         )}
 
-        {goals.map((goal) => {
+        {goals.map((goal, idx) => {
           const Icon = getGoalIcon(goal.category)
           const color = getGoalColor(goal.category)
           const pct = progressPercent(goal)
@@ -430,20 +467,34 @@ export default function GoalsPage() {
             .map((e) => ({ value: e.value, date: e.date.split("T")[0] }))
 
           return (
-            <div key={goal.id} className="glass-panel overflow-hidden">
+            <div
+              key={goal.id}
+              className={cn(
+                glassPanelClass,
+                glassPanelAccentClass,
+                "animate-fade-up overflow-hidden",
+              )}
+              style={{
+                ...glassPanelAccentStyle(color),
+                animationDelay: `${idx * 40}ms`,
+              }}
+            >
               {/* Goal header */}
               <div className="p-4 lg:p-5">
-                <div className="flex items-start justify-between mb-3">
+                <div className="mb-3 flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div
-                      className="flex items-center justify-center w-10 h-10 rounded-xl shrink-0"
-                      style={{ backgroundColor: `${color}18` }}
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border"
+                      style={{
+                        backgroundColor: `${color}18`,
+                        borderColor: `${color}33`,
+                      }}
                     >
                       <Icon className="h-5 w-5" style={{ color }} />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-sm">{goal.name}</h3>
-                      <p className="text-[11px] text-muted-foreground">
+                      <h3 className="font-heading text-sm font-semibold">{goal.name}</h3>
+                      <p className="type-hud-caption mt-0.5 normal-case text-muted-foreground">
                         Target: {goal.target} {goal.unit}{" "}
                         <span className="inline-flex items-center gap-0.5">
                           {goal.direction === "up" ? (
@@ -457,36 +508,29 @@ export default function GoalsPage() {
                   </div>
                   <button
                     onClick={() => handleDeleteGoal(goal.id)}
-                    className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
+                    className="rounded-xl p-1.5 transition-colors hover:bg-destructive/10"
                   >
                     <Trash2 className="h-3.5 w-3.5 text-muted-foreground/50" />
                   </button>
                 </div>
 
                 {/* Current / progress row */}
-                <div className="flex items-end justify-between mb-3">
+                <div className="mb-3 flex items-end justify-between">
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">
+                    <p className="type-hud-label-soft mb-0.5">
                       {latest != null ? "Latest" : "No entries"}
                     </p>
-                    <p className="text-2xl font-bold tabular-nums tracking-tight">
+                    <p className="type-hud-value-lg tabular-nums tracking-tight">
                       {latest != null ? latest : "—"}
                       {latest != null && (
-                        <span className="text-xs font-medium text-muted-foreground ml-1">
-                          {goal.unit}
-                        </span>
+                        <span className="type-hud-unit ml-1">{goal.unit}</span>
                       )}
                     </p>
                   </div>
                   {pct != null && (
                     <div className="text-right">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">
-                        Progress
-                      </p>
-                      <p
-                        className="text-lg font-bold tabular-nums"
-                        style={{ color }}
-                      >
+                      <p className="type-hud-label-soft mb-0.5">Progress</p>
+                      <p className="type-hud-stat text-lg" style={{ color }}>
                         {Math.round(pct)}%
                       </p>
                     </div>
@@ -572,7 +616,7 @@ export default function GoalsPage() {
                     onClick={() =>
                       setExpandedGoal(isExpanded ? null : goal.id)
                     }
-                    className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground border-t border-glass-border hover:bg-glass-highlight/30 transition-colors"
+                    className="type-hud-chip flex w-full items-center justify-center gap-1.5 border-t border-glass-border py-2.5 text-muted-foreground transition-colors hover:bg-glass-highlight/30"
                   >
                     {isExpanded ? "Hide" : "Show"} History ({goal.entries.length})
                     {isExpanded ? (

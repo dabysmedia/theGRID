@@ -509,7 +509,7 @@ export default function CoachPage() {
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden md:flex-row md:items-stretch">
         {/* Sidebar — always visible on md+, sheet on mobile */}
         <aside className="hidden min-h-0 overflow-hidden md:flex md:w-72 md:shrink-0 md:flex-col">
-          <div className="glass flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-2xl p-3">
+          <div className="glass-frost flex min-h-0 flex-1 flex-col gap-3 overflow-hidden rounded-2xl p-3">
             <ConversationList
               conversations={conversations}
               activeId={activeId}
@@ -548,7 +548,7 @@ export default function CoachPage() {
           {/* Messages — grows to fill space above the composer */}
           <div
             className={cn(
-              "glass relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl p-3"
+              "glass-frost relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl p-3",
             )}
           >
             {error && (
@@ -631,12 +631,12 @@ export default function CoachPage() {
 function EmptyState({ onStart }: { onStart: () => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-      <div className="glass flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl">
+      <div className="glass-frost flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl">
         <CoachAvatar className="size-14" />
       </div>
       <div className="space-y-1">
         <h3 className="font-heading text-lg">Coach</h3>
-        <p className="max-w-md text-sm text-muted-foreground">
+        <p className="type-hud-caption max-w-md normal-case text-muted-foreground">
           Ask about training, nutrition, recovery, sleep, or motivation. The
           coach can see your recent stats from theGRID. For meal-photo calorie
           estimates, use the camera button inside the Log food dialog on the

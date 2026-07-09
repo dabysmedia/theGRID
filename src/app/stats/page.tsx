@@ -129,8 +129,8 @@ function ChartTooltipContent({ active, payload, label, unit, formatter }: {
   const val = payload[0].value
   const display = formatter ? formatter(val) : `${val}`
   return (
-    <div className="glass rounded-lg border border-border px-2.5 py-1.5 font-sans text-[10px] tabular-nums">
-      <div className="text-muted-foreground/70">{label}</div>
+    <div className="glass-frost rounded-xl border border-border/40 px-2.5 py-1.5 font-sans text-[10px] tabular-nums">
+      <div className="type-hud-caption">{label}</div>
       <div className="font-semibold">{display}{unit ? ` ${unit}` : ""}</div>
     </div>
   )
@@ -150,14 +150,14 @@ function StatCard({ label, value, sub, color }: {
           style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}66` }}
         />
       )}
-      <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60">{label}</div>
+      <div className="type-hud-label-soft">{label}</div>
       <div
-        className="text-base font-bold tabular-nums tracking-wide"
+        className="type-hud-stat text-base tracking-wide"
         style={color ? { color } : undefined}
       >
         {value}
       </div>
-      {sub && <div className="text-[9px] tabular-nums text-muted-foreground/50">{sub}</div>}
+      {sub && <div className="type-hud-caption tabular-nums">{sub}</div>}
     </div>
   )
 }
@@ -186,11 +186,11 @@ function SectionChart({
           >
             <Icon className="h-3.5 w-3.5" style={{ color }} />
           </div>
-          <h2 className="text-xs font-semibold uppercase tracking-[0.12em]">{title}</h2>
+          <h2 className="type-hud-rail text-foreground">{title}</h2>
         </div>
         <Link
           href={href}
-          className="press-scale rounded-lg px-2 py-1.5 text-[9px] uppercase tracking-[0.1em] text-primary/70 transition-colors hover:text-primary"
+          className="press-scale type-hud-chip rounded-lg px-2 py-1.5 text-primary/70 transition-colors hover:text-primary"
         >
           View all &rarr;
         </Link>
@@ -1142,30 +1142,30 @@ export default function StatsPage() {
     <div className="space-y-6">
       <div className="space-y-2">
         <PageHeader title="Statistics" />
-        <p className="text-[11px] leading-snug text-muted-foreground/75 sm:text-xs">
+        <p className="type-hud-caption normal-case text-muted-foreground/75">
           Monthly analytics overview
         </p>
       </div>
 
       {/* Month navigator — swipe horizontally to flip months */}
       <div
-        className="glass-panel animate-fade-up flex touch-pan-y items-center justify-between gap-2 px-2 py-2"
+        className="glass-panel animate-fade-up flex touch-pan-y items-center justify-between gap-2 px-2 py-2.5"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
         <button
           onClick={prevMonth}
           aria-label="Previous month"
-          className="press-scale glass-subtle flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-glass-highlight/30"
+          className="press-scale glass-subtle flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-glass-highlight/30 touch-manipulation"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div className="min-w-0 text-center">
-          <div className="truncate text-sm font-bold uppercase tracking-[0.15em]">
+          <div className="truncate font-heading text-sm font-bold uppercase tracking-[0.15em]">
             {data?.monthLabel ?? month}
           </div>
           {isCurrentMonth && data && (
-            <div className="text-[9px] uppercase tracking-[0.14em] text-primary/70 tabular-nums">
+            <div className="type-hud-caption mt-0.5 text-primary/70 tabular-nums">
               Day {daysElapsed} of {data.daysInMonth} · In progress
             </div>
           )}
