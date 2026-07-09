@@ -1,6 +1,8 @@
 import { addDays, differenceInCalendarDays, format, startOfDay } from "date-fns"
 
 export const HUB_PREFS_CHANGED_EVENT = "grid:hub-prefs-changed"
+/** Bottom nav Home → collapse hub expand back to the default overview. */
+export const HUB_RESET_OVERVIEW_EVENT = "grid:hub-reset-overview"
 
 const sleepWakeKey = (userId: string) => `theGRID_sleepWake_${userId}`
 const peptideIntervalKey = (userId: string) => `theGRID_peptideIntervalDays_${userId}`
