@@ -231,7 +231,7 @@ export function StepsActivityBars({
 
         <div className="relative" style={{ transformStyle: "preserve-3d" }}>
           <div
-            className="relative flex items-end justify-between gap-1.5 px-0.5"
+            className="relative flex items-end justify-between gap-1 px-0.5"
             style={{ height: BAR_AREA_PX }}
           >
             {goalLineBottomPx != null ? (
@@ -265,8 +265,8 @@ export function StepsActivityBars({
                   <div
                     className="absolute bottom-0 origin-bottom animate-bar-grow"
                     style={{
-                      width: "62%",
-                      maxWidth: 22,
+                      width: "78%",
+                      maxWidth: 30,
                       height: heightPx,
                       animationDelay: `${delay}ms`,
                       transformStyle: "preserve-3d",
@@ -276,8 +276,8 @@ export function StepsActivityBars({
                     <div
                       className="absolute left-0 right-0 top-0"
                       style={{
-                        height: 7,
-                        transform: "translateY(-6px) rotateX(72deg)",
+                        height: 9,
+                        transform: "translateY(-7px) rotateX(72deg)",
                         transformOrigin: "bottom",
                         background: isToday
                           ? "linear-gradient(135deg, #86efac, #22c55e)"
@@ -290,8 +290,8 @@ export function StepsActivityBars({
                     <div
                       className="absolute bottom-0 top-0"
                       style={{
-                        width: 6,
-                        right: -5,
+                        width: 8,
+                        right: -7,
                         transform: "skewY(-38deg)",
                         transformOrigin: "left bottom",
                         background: isToday
@@ -334,7 +334,7 @@ export function StepsActivityBars({
             })}
           </div>
 
-          <div className="mt-1.5 flex justify-between gap-1.5 px-0.5">
+          <div className="mt-1.5 flex justify-between gap-1 px-0.5">
             {values.map((_, i) => {
               const isToday = i === todayIdx
               return (
