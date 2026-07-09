@@ -151,7 +151,7 @@ export function GoogleHealthSettings() {
           <p className="text-[11px] leading-relaxed text-muted-foreground/80">
             Import steps, sleep, weight, and heart-rate vitals from your Fitbit account via
             Google Health. After connecting, steps, sleep, and vitals refresh automatically
-            every few minutes.
+            every 15 minutes.
           </p>
         </div>
       </div>
