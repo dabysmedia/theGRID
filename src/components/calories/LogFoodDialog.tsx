@@ -3,7 +3,6 @@
 import { createPortal } from "react-dom"
 import { format } from "date-fns"
 import {
-  ChevronDown,
   Search,
   Trash2,
   Plus,
@@ -12,6 +11,8 @@ import {
   X,
   Pencil,
   Target,
+  Bookmark,
+  Camera,
 } from "lucide-react"
 import { FoodSearch } from "@/components/FoodSearch"
 import { Button } from "@/components/ui/button"
@@ -33,9 +34,18 @@ import { useLogFoodDialog, type UseLogFoodDialogOptions } from "@/components/cal
 
 export type LogFoodDialogProps = UseLogFoodDialogOptions
 
+const LOG_MODES = [
+  { id: "saved" as const, label: "Saved", icon: Bookmark },
+  { id: "search" as const, label: "Search", icon: Search },
+  { id: "estimate" as const, label: "Estimate", icon: Target },
+]
+
+const QUICK_CALS = [100, 250, 500, 750] as const
+
 export function LogFoodDialog(props: LogFoodDialogProps) {
   const { open, onOpenChange } = props
   const s = useLogFoodDialog(props)
+  const estimateDisabled = (s.vacationBlocksLog && !s.editingEntry) || s.vacationBlocksEditingEntry
 
   return (
     <>
@@ -43,19 +53,22 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
         <DialogContent
           showCloseButton
           className={cn(
-            "glass-frost flex h-[95vh] max-h-[95vh] sm:h-auto sm:max-h-[90vh] flex-col gap-0 overflow-hidden p-0",
+            "glass-frost flex h-[95dvh] max-h-[95dvh] sm:h-auto sm:max-h-[90vh] flex-col gap-0 overflow-hidden p-0",
+            "w-[min(100%,calc(100vw-0.75rem))] sm:max-w-lg",
             "[&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3"
           )}
         >
-          <div className="shrink-0 px-4 pt-4 pb-3 pr-12">
+          <div className="shrink-0 border-b border-border/20 bg-gradient-to-b from-primary/[0.07] to-transparent px-4 pt-4 pb-3 pr-12">
             <DialogHeader className="space-y-0">
-              <DialogTitle>{s.editingEntry ? "Edit entry" : "Log food"}</DialogTitle>
+              <DialogTitle className="font-heading text-lg tracking-tight">
+                {s.editingEntry ? "Edit entry" : "Log food"}
+              </DialogTitle>
               <DialogDescription className="sr-only">
                 {s.editingEntry ? "Edit a calorie entry" : "Add food to your daily log"}
               </DialogDescription>
             </DialogHeader>
             {s.editingEntry && (
-              <p className="mt-1 truncate text-[10px] capitalize text-muted-foreground/60">
+              <p className="mt-1 truncate text-[11px] capitalize text-muted-foreground/65">
                 {format(parseLocalDate(s.editingEntry.date.split("T")[0]), "MMM d")} · {s.editingEntry.mealType}
                 {s.editingEntry.description && <> · {s.editingEntry.description}</>}
               </p>
@@ -73,7 +86,8 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
                 <span className="font-semibold tabular-nums">{s.vacationResumeLabel}</span>). Editing is disabled.
               </p>
             )}
-            <div className="mt-3 flex rounded-lg bg-muted/20 p-0.5">
+
+            <div className="mt-3 flex gap-1.5">
               {mealTypes.map((m) => (
                 <button
                   key={m}
@@ -81,10 +95,10 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
                   disabled={s.vacationBlocksLog && !s.editingEntry}
                   onClick={() => s.setMealType(s.mealType === m ? null : m)}
                   className={cn(
-                    "flex-1 rounded-md py-2.5 text-xs font-medium capitalize transition-all duration-150",
+                    "flex-1 rounded-full py-2 text-[11px] font-semibold capitalize tracking-wide transition-all duration-200 touch-manipulation",
                     s.mealType === m
-                      ? "bg-background text-foreground shadow-sm shadow-black/10"
-                      : "text-muted-foreground/50 hover:text-muted-foreground",
+                      ? "bg-primary text-primary-foreground shadow-[0_0_0_1px_color-mix(in_oklch,var(--primary)_40%,transparent)]"
+                      : "bg-muted/25 text-muted-foreground/70 hover:bg-muted/40 hover:text-foreground",
                     s.vacationBlocksLog && !s.editingEntry && "opacity-45"
                   )}
                 >
@@ -92,142 +106,102 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
                 </button>
               ))}
             </div>
-          </div>
 
-          <div className="relative z-20 shrink-0 border-y border-border/20 px-4 py-2.5">
-            <button
-              type="button"
-              disabled={s.vacationBlocksLog && !s.editingEntry}
-              onClick={() => s.setLogFoodSearchOpen((v) => !v)}
-              className="flex w-full items-center justify-between gap-2 rounded-lg py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-45"
-            >
-              <span className="flex items-center gap-2 min-w-0">
-                <Search className="h-3.5 w-3.5 shrink-0 opacity-60" />
-                <span className="truncate">Search foods</span>
-              </span>
-              <ChevronDown
-                className={cn(
-                  "h-3.5 w-3.5 shrink-0 opacity-50 transition-transform duration-200",
-                  s.logFoodSearchOpen && "rotate-180"
-                )}
-              />
-            </button>
-            {s.logFoodSearchOpen && (
-              <div className="overflow-visible pt-2.5">
-                <FoodSearch onSelect={s.handleFoodSelect} compact instantAdd />
+            {!s.editingEntry && (
+              <div className="mt-3 grid grid-cols-3 gap-1 rounded-xl bg-muted/20 p-1">
+                {LOG_MODES.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    disabled={s.vacationBlocksLog}
+                    onClick={() => {
+                      s.setLogFoodMode(id)
+                      if (id !== "estimate") s.setLogFoodPhotoOpen(false)
+                    }}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-semibold transition-all duration-200 touch-manipulation",
+                      s.logFoodMode === id
+                        ? "bg-background text-foreground shadow-sm shadow-black/15"
+                        : "text-muted-foreground/55 hover:text-muted-foreground",
+                      s.vacationBlocksLog && "opacity-45"
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                    {label}
+                  </button>
+                ))}
               </div>
             )}
           </div>
 
-          <div className="relative z-0 min-h-0 flex-1 overflow-y-auto px-4 py-4">
-            <div className="space-y-4">
+          <div className="relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            <div className="flex min-h-full flex-col gap-4">
               {!s.editingEntry && s.draftMealItems.length > 0 && (
                 <DraftMealsSection s={s} />
               )}
 
-              {!s.editingEntry && (
+              {s.editingEntry ? (
+                <EstimatePanel s={s} disabled={estimateDisabled} />
+              ) : s.logFoodMode === "saved" ? (
                 <SavedMealsSection s={s} />
-              )}
-
-              {!s.editingEntry && (
-                <PhotoCalorieEstimator
-                  open={s.logFoodPhotoOpen}
-                  onOpenChange={s.setLogFoodPhotoOpen}
-                  onUsePrefill={s.handlePhotoPrefill}
-                  disabled={s.vacationBlocksLog}
-                />
-              )}
-
-              {!s.editingEntry && (
-                <button
-                  type="button"
-                  disabled={s.vacationBlocksLog && !s.editingEntry}
-                  onClick={() => s.setLogFoodManualOpen((v) => !v)}
-                  className="flex w-full items-center justify-between gap-2 rounded-xl border border-border/25 bg-glass-highlight/[0.04] py-2.5 px-3 text-left text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-glass-highlight/10 disabled:pointer-events-none disabled:opacity-45"
-                >
-                  <span className="flex items-center gap-2 min-w-0">
-                    <Target className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                    <span className="truncate">Estimate calories</span>
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      "h-3.5 w-3.5 shrink-0 opacity-40 transition-transform duration-200",
-                      s.logFoodManualOpen && "rotate-180"
-                    )}
-                  />
-                </button>
-              )}
-
-              {(s.editingEntry || s.logFoodManualOpen) && (
-                <form id="log-food-form" onSubmit={s.handleSubmit} className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="calories"
-                      type="number"
-                      min="0"
-                      step="1"
-                      inputMode="numeric"
-                      placeholder="Calories"
-                      value={s.calories}
-                      onChange={(e) => s.setCalories(e.target.value)}
-                      className="flex-1 min-w-0 h-11"
-                      required
-                      disabled={s.vacationBlocksLog && !s.editingEntry ? true : s.vacationBlocksEditingEntry}
-                    />
-                    {([
-                      { n: 250, label: "+250" },
-                      { n: 500, label: "+500" },
-                      { n: 1000, label: "+1k" },
-                    ] as const).map(({ n, label }) => (
-                      <button
-                        key={n}
-                        type="button"
-                        disabled={(s.vacationBlocksLog && !s.editingEntry) || s.vacationBlocksEditingEntry}
-                        onClick={() => s.addCalories(n)}
-                        className="h-11 rounded-md border border-glass-border px-3 text-xs font-medium tabular-nums text-muted-foreground/50 hover:bg-glass-highlight/15 hover:text-foreground transition-colors touch-manipulation disabled:pointer-events-none disabled:opacity-40"
-                        title={`Add ${n.toLocaleString()} cal`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    {s.showSavePrompt && s.description && s.calories && (
+              ) : s.logFoodMode === "search" ? (
+                <div className="animate-in fade-in slide-in-from-bottom-1 duration-200">
+                  <p className="mb-2 text-[11px] leading-snug text-muted-foreground/70">
+                    Search the food database — tap a result to add it instantly.
+                  </p>
+                  <FoodSearch onSelect={s.handleFoodSelect} compact instantAdd />
+                </div>
+              ) : (
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                  <EstimatePanel s={s} disabled={estimateDisabled} />
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-px flex-1 bg-border/30" />
+                      <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/45">
+                        or snap a photo
+                      </span>
+                      <div className="h-px flex-1 bg-border/30" />
+                    </div>
+                    {!s.logFoodPhotoOpen ? (
                       <button
                         type="button"
-                        onClick={() => void s.handleSaveCurrentAsFrequent()}
-                        className="flex items-center gap-1.5 rounded-md border border-dashed border-primary/20 px-3 py-2.5 text-xs font-medium text-primary/50 hover:text-primary hover:bg-primary/5 transition-colors touch-manipulation"
+                        disabled={s.vacationBlocksLog}
+                        onClick={() => s.setLogFoodPhotoOpen(true)}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-primary/30 bg-primary/[0.06] py-3.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-45 touch-manipulation"
                       >
-                        <Star className="h-3.5 w-3.5" />
-                        Save
+                        <Camera className="h-4 w-4" />
+                        Estimate from photo
+                        <span className="rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">
+                          AI
+                        </span>
                       </button>
-                    )}
-                    {!s.editingEntry && (
-                      <Button type="submit" variant="glass" size="sm" className="flex-1 h-11 text-sm" disabled={s.vacationBlocksLog}>
-                        {s.estimateCalDisplay != null
-                          ? `Add ${s.estimateCalDisplay.toLocaleString()} cal`
-                          : "Add to meal"}
-                      </Button>
+                    ) : (
+                      <PhotoCalorieEstimator
+                        open
+                        embedded
+                        onOpenChange={s.setLogFoodPhotoOpen}
+                        onUsePrefill={s.handlePhotoPrefill}
+                        disabled={s.vacationBlocksLog}
+                      />
                     )}
                   </div>
-                </form>
+                </div>
               )}
-
             </div>
           </div>
 
           {(s.editingEntry || s.draftMealItems.length > 0 || s.postingMeal) && (
-            <div className="shrink-0 border-t border-border/30 px-4 py-3 bg-background/60 backdrop-blur-sm">
+            <div className="shrink-0 border-t border-border/30 bg-background/70 px-4 py-3 backdrop-blur-md pb-[max(0.75rem,calc(0.5rem+env(safe-area-inset-bottom)))]">
               {s.editingEntry ? (
                 <div className="flex gap-2">
-                  <Button type="button" variant="outline" className="flex-1 h-11" size="default" onClick={s.cancelEdit}>
+                  <Button type="button" variant="outline" className="flex-1 h-12" size="default" onClick={s.cancelEdit}>
                     Cancel
                   </Button>
                   <Button
                     type="submit"
                     variant="glass"
                     form="log-food-form"
-                    className="flex-1 press-scale h-11"
+                    className="flex-1 press-scale h-12"
                     size="default"
                     disabled={s.vacationBlocksEditingEntry}
                   >
@@ -235,18 +209,29 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
                   </Button>
                 </div>
               ) : (
-                <Button
-                  type="button"
-                  variant="glass"
-                  className="w-full press-scale h-11 text-sm"
-                  size="default"
-                  disabled={s.postingMeal || s.vacationBlocksLog}
-                  onClick={() => void s.handlePostMealToDay()}
-                >
-                  {s.postingMeal
-                    ? "Posting..."
-                    : `Post meal · ${s.draftMealItems.length} item${s.draftMealItems.length === 1 ? "" : "s"}`}
-                </Button>
+                <div className="space-y-2">
+                  <div className="flex items-baseline justify-between px-0.5">
+                    <p className="text-[11px] text-muted-foreground/60">
+                      {s.draftMealItems.length} item{s.draftMealItems.length === 1 ? "" : "s"} ready
+                    </p>
+                    <p className="font-heading text-sm font-semibold tabular-nums text-foreground">
+                      {s.draftTotals.calories.toLocaleString()}
+                      <span className="ml-1 text-[11px] font-medium text-muted-foreground/55">cal</span>
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="glass"
+                    className="w-full press-scale h-12 text-sm font-semibold"
+                    size="default"
+                    disabled={s.postingMeal || s.vacationBlocksLog}
+                    onClick={() => void s.handlePostMealToDay()}
+                  >
+                    {s.postingMeal
+                      ? "Posting..."
+                      : `Post meal · ${s.draftTotals.calories.toLocaleString()} cal`}
+                  </Button>
+                </div>
               )}
             </div>
           )}
@@ -304,13 +289,169 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
   )
 }
 
+function EstimatePanel({
+  s,
+  disabled,
+}: {
+  s: ReturnType<typeof useLogFoodDialog>
+  disabled: boolean
+}) {
+  return (
+    <form id="log-food-form" onSubmit={s.handleSubmit} className="space-y-4">
+      <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.12] via-primary/[0.04] to-transparent p-4">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-primary/15 blur-2xl"
+        />
+        <Label htmlFor="calories" className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary/70">
+          Calories
+        </Label>
+        <div className="mt-1 flex items-end gap-2">
+          <Input
+            id="calories"
+            type="number"
+            min="0"
+            step="1"
+            inputMode="numeric"
+            placeholder="0"
+            value={s.calories}
+            onChange={(e) => s.setCalories(e.target.value)}
+            className="h-14 flex-1 border-0 bg-transparent px-0 font-heading text-4xl font-bold tabular-nums shadow-none focus-visible:ring-0"
+            required
+            disabled={disabled}
+            autoFocus={!s.editingEntry}
+          />
+          <span className="mb-2.5 shrink-0 text-sm font-medium text-muted-foreground/50">cal</span>
+        </div>
+        <div className="mt-3 grid grid-cols-4 gap-1.5">
+          {QUICK_CALS.map((n) => (
+            <button
+              key={n}
+              type="button"
+              disabled={disabled}
+              onClick={() => s.addCalories(n)}
+              className="h-10 rounded-xl border border-primary/20 bg-background/40 text-xs font-semibold tabular-nums text-foreground/80 transition-colors hover:bg-primary/15 hover:text-primary touch-manipulation disabled:pointer-events-none disabled:opacity-40"
+            >
+              +{n}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Input
+        placeholder="What did you eat? (optional)"
+        value={s.description}
+        onChange={(e) => s.setDescription(e.target.value)}
+        disabled={disabled}
+        className="h-11 bg-background/35 border-border/30"
+      />
+
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => s.setShowEstimateMacros((v) => !v)}
+          className="text-[11px] font-medium text-muted-foreground/60 transition-colors hover:text-foreground"
+        >
+          {s.showEstimateMacros ? "Hide macros" : "Add macros (optional)"}
+        </button>
+        {s.showEstimateMacros && (
+          <div className="grid grid-cols-3 gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            <MacroField
+              label="Protein"
+              value={s.protein}
+              onChange={s.setProtein}
+              disabled={disabled}
+            />
+            <MacroField
+              label="Carbs"
+              value={s.carbs}
+              onChange={s.setCarbs}
+              disabled={disabled}
+            />
+            <MacroField
+              label="Fat"
+              value={s.fat}
+              onChange={s.setFat}
+              disabled={disabled}
+            />
+          </div>
+        )}
+      </div>
+
+      {!s.editingEntry && (
+        <div className="flex items-center gap-2">
+          {s.showSavePrompt && s.description && s.calories && (
+            <button
+              type="button"
+              onClick={() => void s.handleSaveCurrentAsFrequent()}
+              className="flex items-center gap-1.5 rounded-xl border border-dashed border-primary/25 px-3 py-3 text-xs font-medium text-primary/70 transition-colors hover:bg-primary/5 hover:text-primary touch-manipulation"
+            >
+              <Star className="h-3.5 w-3.5" />
+              Save
+            </button>
+          )}
+          <Button
+            type="submit"
+            variant="glass"
+            size="sm"
+            className="flex-1 h-12 text-sm font-semibold"
+            disabled={s.vacationBlocksLog || s.estimateCalDisplay == null}
+          >
+            {s.estimateCalDisplay != null
+              ? `Add ${s.estimateCalDisplay.toLocaleString()} cal`
+              : "Enter calories"}
+          </Button>
+        </div>
+      )}
+    </form>
+  )
+}
+
+function MacroField({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">{label}</Label>
+      <div className="relative">
+        <Input
+          type="number"
+          min="0"
+          inputMode="decimal"
+          placeholder="0"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className="h-10 bg-background/40 border-border/30 pr-7 text-sm tabular-nums"
+        />
+        <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground/40">
+          g
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function DraftMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
   return (
-    <div>
-      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/40 mb-1.5">
-        In this meal · {s.draftMealItems.length}
-      </p>
-      <div className="rounded-lg border border-glass-border/30 divide-y divide-glass-border/20 overflow-hidden">
+    <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+      <div className="mb-1.5 flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/45">
+          This meal
+        </p>
+        <p className="text-[11px] tabular-nums text-muted-foreground/55">
+          {s.draftTotals.calories.toLocaleString()} cal
+        </p>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-glass-border/30 divide-y divide-glass-border/20">
         {s.draftMealItems.map((item) => {
           const totals = draftMealItemTotals(item)
           const isNew = s.lastAddedDraftId === item.id
@@ -318,13 +459,13 @@ function DraftMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
             <div
               key={item.id}
               className={cn(
-                "flex items-center gap-2 px-3 py-3 text-xs transition-colors",
-                isNew && "bg-primary/[0.06] ring-1 ring-inset ring-primary/25"
+                "flex items-center gap-2 px-3 py-2.5 text-xs transition-colors",
+                isNew && "bg-primary/[0.07] ring-1 ring-inset ring-primary/25"
               )}
             >
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium leading-tight text-sm">{item.description || "Quick add"}</p>
-                <p className="mt-0.5 text-[11px] capitalize tabular-nums text-muted-foreground/40">
+                <p className="truncate text-sm font-medium leading-tight">{item.description || "Quick add"}</p>
+                <p className="mt-0.5 text-[11px] capitalize tabular-nums text-muted-foreground/45">
                   {item.mealType} · {totals.calories} cal
                 </p>
               </div>
@@ -340,7 +481,7 @@ function DraftMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
               <button
                 type="button"
                 onClick={() => s.setDraftMealItems((prev) => prev.filter((x) => x.id !== item.id))}
-                className="p-2 rounded-md hover:bg-destructive/10 shrink-0 touch-manipulation"
+                className="shrink-0 rounded-md p-2 hover:bg-destructive/10 touch-manipulation"
                 aria-label={`Remove ${item.description || "item"}`}
               >
                 <X className="h-4 w-4 text-muted-foreground/30" />
@@ -348,16 +489,6 @@ function DraftMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
             </div>
           )
         })}
-        <div className="px-3 py-1.5 text-[10px] tabular-nums font-medium text-muted-foreground/50 bg-glass-highlight/5">
-          {s.draftTotals.calories.toLocaleString()} cal
-          {(s.draftTotals.protein > 0 || s.draftTotals.carbs > 0 || s.draftTotals.fat > 0) && (
-            <span className="text-muted-foreground/30">
-              {" "}
-              · P {Math.round(s.draftTotals.protein)}g · C {Math.round(s.draftTotals.carbs)}g · F{" "}
-              {Math.round(s.draftTotals.fat)}g
-            </span>
-          )}
-        </div>
       </div>
     </div>
   )
@@ -365,9 +496,18 @@ function DraftMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
 
 function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50">Saved</p>
+    <div className="flex min-h-0 flex-1 flex-col animate-in fade-in duration-200">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/45">
+            Saved meals
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground/55">
+            {s.mealType
+              ? `Showing ${s.mealType}`
+              : "Tap one to add · filter with meal chips above"}
+          </p>
+        </div>
         <button
           type="button"
           onClick={() => {
@@ -376,7 +516,7 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
             if (!s.showCreateMeal) s.setNewMealTags(s.mealType ? [s.mealType] : [])
             s.setShowCreateMeal(!s.showCreateMeal)
           }}
-          className="min-h-10 shrink-0 rounded-lg border border-primary/25 bg-primary/10 px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-primary transition-colors hover:border-primary/40 hover:bg-primary/18 active:scale-[0.98] touch-manipulation"
+          className="min-h-10 shrink-0 rounded-xl border border-primary/25 bg-primary/10 px-3.5 py-2 text-xs font-semibold text-primary transition-colors hover:border-primary/40 hover:bg-primary/18 active:scale-[0.98] touch-manipulation"
         >
           {s.showCreateMeal ? "Cancel" : "+ New"}
         </button>
@@ -385,7 +525,7 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
       {s.showCreateMeal && (
         <div
           data-create-meal
-          className="glass-subtle rounded-lg p-3 mb-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200"
+          className="glass-subtle mb-3 space-y-2 rounded-xl p-3 animate-in fade-in slide-in-from-top-1 duration-200"
           onKeyDownCapture={(e) => {
             if (e.key === "Enter" && (e.target as HTMLElement).closest("[data-create-meal]")) {
               e.preventDefault()
@@ -456,17 +596,50 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
         </div>
       )}
 
+      {s.savedMeals.length === 0 && !s.showCreateMeal && (
+        <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border/30 px-6 py-10 text-center">
+          <Bookmark className="mb-3 h-8 w-8 text-muted-foreground/30" />
+          <p className="text-sm font-medium text-foreground/80">No saved meals yet</p>
+          <p className="mt-1 max-w-[16rem] text-[12px] leading-relaxed text-muted-foreground/60">
+            Save frequent meals for one-tap logging, or switch to Estimate for a quick calorie entry.
+          </p>
+          <div className="mt-4 flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-10"
+              onClick={() => s.setLogFoodMode("estimate")}
+            >
+              Estimate
+            </Button>
+            <Button
+              type="button"
+              variant="glass"
+              size="sm"
+              className="h-10"
+              onClick={() => {
+                s.setNewMealTags(s.mealType ? [s.mealType] : [])
+                s.setShowCreateMeal(true)
+              }}
+            >
+              + New meal
+            </Button>
+          </div>
+        </div>
+      )}
+
       {s.savedMeals.length > 0 && s.displayedSavedMeals.length === 0 && s.mealType && (
         <p className="mb-2 text-[11px] text-muted-foreground/70">
-          No saved meals tagged for <span className="capitalize font-medium text-foreground/80">{s.mealType}</span>. Switch
-          meal type or add one with this tag.
+          No saved meals tagged for <span className="capitalize font-medium text-foreground/80">{s.mealType}</span>. Tap
+          the chip again to show all, or add one with this tag.
         </p>
       )}
 
       {s.displayedSavedMeals.length > 0 && (
         <div
-          className="max-h-[70vh] sm:max-h-[50vh] overflow-y-auto overscroll-y-contain touch-pan-y space-y-0.5 pr-0.5 [-webkit-overflow-scrolling:touch]"
-          aria-label="Saved meals for this meal type"
+          className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-y-contain touch-pan-y pr-0.5 [-webkit-overflow-scrolling:touch]"
+          aria-label="Saved meals"
         >
           {s.displayedSavedMeals.map((meal) => {
             const inDraftCount = s.savedMealCountsInDraft.get(meal.id) ?? 0
@@ -477,9 +650,9 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
               <div key={meal.id} className="space-y-0">
                 <div
                   className={cn(
-                    "group flex items-center gap-2 rounded-xl px-2.5 py-2.5 transition-all duration-300",
+                    "group flex items-center gap-2 rounded-2xl px-2.5 py-2.5 transition-all duration-300",
                     inDraftCount > 0
-                      ? "ring-1 ring-primary/35 bg-gradient-to-r from-primary/[0.09] to-transparent shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)]"
+                      ? "bg-gradient-to-r from-primary/[0.12] to-transparent ring-1 ring-primary/35"
                       : "hover:bg-glass-highlight/15",
                     flash && "animate-in zoom-in-95 duration-300 ring-2 ring-primary/45"
                   )}
@@ -487,50 +660,39 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
                   <button
                     type="button"
                     onClick={() => s.handleUseSavedMeal(meal)}
-                    className="flex items-center gap-3 min-w-0 flex-1 text-left touch-manipulation"
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left touch-manipulation"
                   >
                     <div
                       className={cn(
-                        "flex h-7 w-7 items-center justify-center rounded-md shrink-0 transition-colors duration-300",
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors duration-300",
                         inDraftCount > 0 ? "bg-primary/20 text-primary" : "bg-primary/10"
                       )}
                     >
                       {inDraftCount > 0 ? (
-                        <span className="text-[11px] font-bold tabular-nums">{inDraftCount}</span>
+                        <span className="text-sm font-bold tabular-nums">{inDraftCount}</span>
                       ) : (
-                        <Plus className="h-3.5 w-3.5 text-primary/60" />
+                        <Plus className="h-4 w-4 text-primary/70" />
                       )}
                     </div>
-                    <span className="flex min-w-0 flex-1 flex-col gap-1 text-left sm:flex-row sm:items-center sm:flex-wrap sm:gap-2">
-                      <span className="text-sm font-medium truncate">{meal.name}</span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+                      <span className="truncate text-sm font-semibold">{meal.name}</span>
                       <span className="flex flex-wrap items-center gap-1">
+                        <span className="text-xs font-medium tabular-nums text-muted-foreground/55">
+                          {meal.calories} cal
+                        </span>
                         {tags.map((t) => (
                           <span
                             key={t}
                             className={cn(
                               "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium capitalize",
-                              t === s.mealType ? "bg-primary/15 text-primary/90" : "bg-muted/40 text-muted-foreground/80"
+                              t === s.mealType ? "bg-primary/15 text-primary/90" : "bg-muted/40 text-muted-foreground/70"
                             )}
                           >
                             {t}
                           </span>
                         ))}
-                        {inDraftCount > 0 && (
-                          <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary/80">
-                            {inDraftCount} in meal
-                          </span>
-                        )}
                       </span>
                     </span>
-                  </button>
-                  <span className="text-xs tabular-nums text-muted-foreground/40 shrink-0">{meal.calories}</span>
-                  <button
-                    type="button"
-                    onClick={() => s.requestDeleteSavedMeal(meal.id, meal.name)}
-                    className="history-row-delete rounded-md"
-                    aria-label={`Delete saved meal ${meal.name}`}
-                  >
-                    <Trash2 />
                   </button>
                   <button
                     type="button"
@@ -540,11 +702,19 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
                   >
                     <Pencil />
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => s.requestDeleteSavedMeal(meal.id, meal.name)}
+                    className="history-row-delete rounded-md"
+                    aria-label={`Delete saved meal ${meal.name}`}
+                  >
+                    <Trash2 />
+                  </button>
                 </div>
                 {editingThis && (
                   <div
                     data-edit-saved-meal
-                    className="glass-subtle mt-1 mb-2 rounded-lg p-3 space-y-2 border border-border/25"
+                    className="glass-subtle mb-2 mt-1 space-y-2 rounded-xl border border-border/25 p-3"
                     onKeyDownCapture={(e) => {
                       if (e.key === "Enter" && (e.target as HTMLElement).closest("[data-edit-saved-meal]")) {
                         e.preventDefault()
@@ -701,26 +871,6 @@ function QuantityStepper({
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
-        {!compact && (
-          <div className="ml-1 flex gap-1">
-            {[1, 2, 3].map((v) => (
-              <button
-                key={v}
-                type="button"
-                disabled={disabled}
-                onClick={() => onChange(String(v))}
-                className={cn(
-                  "rounded-md border px-2 py-1.5 text-[11px] tabular-nums transition-colors touch-manipulation",
-                  numeric === v
-                    ? "border-primary/30 bg-primary/15 font-semibold text-primary"
-                    : "border-glass-border text-muted-foreground/60 hover:bg-glass-highlight/15"
-                )}
-              >
-                {v}x
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   )
