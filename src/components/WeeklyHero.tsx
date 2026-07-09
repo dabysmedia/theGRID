@@ -8,7 +8,6 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { DailyWeighIn } from "@/components/DailyWeighIn"
-import { ReadinessHeartTile } from "@/components/hub/ReadinessHeartTile"
 import { StepsActivityBars } from "@/components/hub/StepsActivityBars"
 import { useActiveDate } from "@/context/DateContext"
 import { useQuickLog } from "@/context/QuickLogContext"
@@ -368,19 +367,15 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         />
       </div>
 
-      <ReadinessHeartTile
-        key={`${viewMode}-readiness`}
+      <StepsActivityBars
+        key={`${viewMode}-activity`}
+        values={data.steps.last7}
+        labels={dayLabels}
         readiness={readinessValue}
         hrvMs={hrvMs}
         restingHeartRate={restingHeartRate}
         isWeekView={isWeekView}
-        className="motion-safe:animate-fade-up motion-reduce:animate-none"
-      />
-
-      <StepsActivityBars
-        values={data.steps.last7}
-        labels={dayLabels}
-        className="animate-fade-up stagger-3"
+        className="animate-fade-up stagger-3 motion-safe:animate-fade-up motion-reduce:animate-none"
       />
       </div>
 
