@@ -42,7 +42,9 @@ function hexToColor(hex: string): THREE.Color {
 /**
  * WebGL isometric calorie tank — 20×10 instanced cubes.
  * Rich Standard materials + floor grid; zoomed so the tank fills the panel.
- * Still pauses RAF when settled / offscreen for mobile.
+ * Gentle continuous sway while visible (honors prefers-reduced-motion).
+ * Fill animation can sleep once settled; sway keeps a light RAF when allowed.
+ * Pauses entirely when offscreen or document.hidden.
  */
 export function CaloriePipScene({ consumed, target, accent, className }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -56,7 +58,6 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     if (!host) return
 
     const mobile = isCoarsePointer()
-    const reducedInit = prefersReducedMotion()
 
     const scene = new THREE.Scene()
     scene.fog = new THREE.FogExp2(0x05070c, 0.028)
@@ -264,46 +265,64 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       last = now
       const reducedMotion = prefersReducedMotion()
       const waveElapsed = (now - waveStart) / 1000
+      const swayAllowed = !reducedMotion
 
       syncTargets()
 
+      // Per-pip fill lerp only while settling; once quiet, skip that work (sway stays cheap).
       let maxDelta = 0
-      for (let i = 0; i < THREE_PIP_COUNT; i++) {
-        const want = targetRise[i]!
-        const delay = stagger[i]!
-        const gate = reducedMotion
-          ? 1
-          : Math.min(1, Math.max(0, (waveElapsed - delay) * (mobile ? 3.4 : 2.8)))
-        const goal = want > 0.5 ? gate : 0
-        const speed = reducedMotion ? 16 : mobile ? 9 : 6.5
-        const next = rise[i]! + (goal - rise[i]!) * Math.min(1, dt * speed)
-        maxDelta = Math.max(maxDelta, Math.abs(next - rise[i]!))
-        rise[i] = next
-
-        const r = rise[i]!
-        dummy.position.set(posX[i]!, -0.35 * (1 - r), posZ[i]!)
-        dummy.scale.setScalar(Math.max(0.05, 0.68 + 0.32 * r))
-        dummy.rotation.set(0, 0, 0)
-        dummy.updateMatrix()
-        mesh.setMatrixAt(i, dummy.matrix)
+      let fillBusy = dirty
+      if (!fillBusy) {
+        for (let i = 0; i < THREE_PIP_COUNT; i++) {
+          if (Math.abs(rise[i]! - targetRise[i]!) > 0.0015) {
+            fillBusy = true
+            break
+          }
+        }
       }
-      mesh.instanceMatrix.needsUpdate = true
 
-      // Soft idle sway while settling (desktop); brief settle sway on mobile too
-      if (!reducedMotion && (maxDelta > 0.002 || waveElapsed < 1.8)) {
-        group.rotation.y = Math.sin((now / 1000) * 0.32) * (mobile ? 0.025 : 0.04)
-        dirty = true
-      } else if (group.rotation.y !== 0 && (reducedMotion || reducedInit)) {
+      if (fillBusy) {
+        for (let i = 0; i < THREE_PIP_COUNT; i++) {
+          const want = targetRise[i]!
+          const delay = stagger[i]!
+          const gate = reducedMotion
+            ? 1
+            : Math.min(1, Math.max(0, (waveElapsed - delay) * (mobile ? 3.4 : 2.8)))
+          const goal = want > 0.5 ? gate : 0
+          const speed = reducedMotion ? 16 : mobile ? 9 : 6.5
+          const next = rise[i]! + (goal - rise[i]!) * Math.min(1, dt * speed)
+          maxDelta = Math.max(maxDelta, Math.abs(next - rise[i]!))
+          rise[i] = next
+
+          const r = rise[i]!
+          dummy.position.set(posX[i]!, -0.35 * (1 - r), posZ[i]!)
+          dummy.scale.setScalar(Math.max(0.05, 0.68 + 0.32 * r))
+          dummy.rotation.set(0, 0, 0)
+          dummy.updateMatrix()
+          mesh.setMatrixAt(i, dummy.matrix)
+        }
+        mesh.instanceMatrix.needsUpdate = true
+      }
+
+      // Continuous gentle sway while visible (skipped for reduced motion)
+      if (swayAllowed) {
+        const t = now / 1000
+        const ampY = mobile ? 0.028 : 0.045
+        const ampX = mobile ? 0.006 : 0.01
+        group.rotation.y = Math.sin(t * 0.55) * ampY
+        group.rotation.x = Math.sin(t * 0.37 + 0.8) * ampX
+      } else if (group.rotation.y !== 0 || group.rotation.x !== 0) {
         group.rotation.y = 0
+        group.rotation.x = 0
       }
 
-      if (dirty || maxDelta > 0.0015) {
+      if (dirty || maxDelta > 0.0015 || swayAllowed) {
         renderer.render(scene, camera)
         dirty = false
       }
 
-      // Sleep the loop once settled — critical for mobile scroll/battery
-      if (maxDelta > 0.0015 || (!reducedMotion && waveElapsed < 1.8)) {
+      // Keep RAF for continuous sway; sleep fully only when reduced-motion + settled
+      if (swayAllowed || maxDelta > 0.0015 || fillBusy) {
         raf = requestAnimationFrame(tick)
       } else {
         running = false
