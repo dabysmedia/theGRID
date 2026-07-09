@@ -58,7 +58,7 @@ export function MeshHeartSvg({ accent = "#f43f5e", className }: Props) {
         <linearGradient id={fillId} x1="20" y1="10" x2="80" y2="90">
           <stop offset="0%" stopColor={accent} stopOpacity="0.07" />
           <stop offset="55%" stopColor={accent} stopOpacity="0.02" />
-          <stop offset="100%" stopColor="#94a3b8" stopOpacity="0.04" />
+          <stop offset="100%" stopColor="#64748b" stopOpacity="0.05" />
         </linearGradient>
         <filter id={glowId} x="-25%" y="-25%" width="150%" height="150%">
           <feGaussianBlur stdDeviation="0.85" result="b" />
@@ -86,9 +86,9 @@ export function MeshHeartSvg({ accent = "#f43f5e", className }: Props) {
             y1={a.y}
             x2={b.x}
             y2={b.y}
-            stroke={i % 3 === 0 ? "#94a3b8" : accent}
+            stroke={i % 3 === 0 ? "#64748b" : accent}
             strokeWidth="0.5"
-            strokeOpacity={0.32 + (i % 4) * 0.04}
+            strokeOpacity={0.36 + (i % 4) * 0.04}
           />
         ))}
         {nodes.map((p, i) => (
@@ -97,7 +97,7 @@ export function MeshHeartSvg({ accent = "#f43f5e", className }: Props) {
             cx={p.x}
             cy={p.y}
             r={i % 5 === 0 ? 1.4 : 1}
-            fill={i % 3 === 0 ? "#cbd5e1" : accent}
+            fill={i % 3 === 0 ? "#94a3b8" : accent}
             fillOpacity={0.8}
             filter={i % 4 === 0 ? `url(#${nodeGlowId})` : undefined}
           />

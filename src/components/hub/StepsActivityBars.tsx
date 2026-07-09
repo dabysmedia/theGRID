@@ -51,7 +51,7 @@ export function StepsActivityBars({
   const scaleMax = Math.max(...values, goalValue ?? 0, 1)
   const todayIdx = values.length - 1
   const band = readinessBand(readiness)
-  const accent = band ? BAND_ACCENT[band] : "#94a3b8"
+  const accent = band ? BAND_ACCENT[band] : "#64748b"
   const readinessLabel =
     readiness != null && Number.isFinite(readiness) ? String(Math.round(readiness)) : "—"
   const hrvLabel =
@@ -75,7 +75,7 @@ export function StepsActivityBars({
         aria-hidden
         style={{
           background:
-            "linear-gradient(180deg, oklch(0.72 0.02 250 / 08%) 0%, oklch(0.65 0.015 250 / 04%) 45%, transparent 100%)",
+            "linear-gradient(180deg, oklch(0.52 0.02 250 / 10%) 0%, oklch(0.44 0.015 250 / 05%) 45%, transparent 100%)",
         }}
       />
 
@@ -85,7 +85,7 @@ export function StepsActivityBars({
         aria-hidden
         style={{
           backgroundImage:
-            "linear-gradient(to right, oklch(0.7 0.015 250 / 14%) 1px, transparent 1px), linear-gradient(to top, oklch(0.7 0.015 250 / 10%) 1px, transparent 1px)",
+            "linear-gradient(to right, oklch(0.48 0.015 250 / 16%) 1px, transparent 1px), linear-gradient(to top, oklch(0.48 0.015 250 / 12%) 1px, transparent 1px)",
           backgroundSize: "14% 8px, 100% 8px",
           maskImage: "linear-gradient(to top, black, transparent)",
           transform: "rotateX(58deg) scaleY(0.85)",
@@ -107,7 +107,7 @@ export function StepsActivityBars({
           >
             <MeshHeartSvg
               accent={accent}
-              className="absolute inset-0 h-full w-full drop-shadow-[0_0_10px_rgba(148,163,184,0.22)]"
+              className="absolute inset-0 h-full w-full drop-shadow-[0_0_10px_rgba(100,116,139,0.28)]"
             />
             <div className="relative z-10 flex flex-col items-center justify-center pt-px text-center">
               <span
@@ -171,24 +171,28 @@ export function StepsActivityBars({
                 ) : null}
               </p>
             </div>
-            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-sm bg-muted/40 shadow-[inset_0_1px_0_rgba(0,0,0,0.35)]">
-              <div
-                className="relative h-full w-full overflow-hidden rounded-sm transition-opacity duration-700 ease-out"
-                style={{
-                  opacity: readiness != null ? 1 : 0,
-                  background: `linear-gradient(90deg, ${accent}55 0%, ${accent} 42%, ${accent}cc 100%)`,
-                  boxShadow: band
-                    ? `inset 0 1px 0 #ffffff55, 0 0 10px ${accent}55`
-                    : undefined,
-                }}
-              >
+            {/* Edge-to-edge band gradient — no muted track frame */}
+            <div
+              className="relative mt-1.5 h-1.5 w-full overflow-hidden rounded-sm transition-opacity duration-700 ease-out"
+              style={{
+                opacity: readiness != null ? 1 : 0.45,
+                background:
+                  readiness != null
+                    ? `linear-gradient(90deg, ${accent}55 0%, ${accent} 42%, ${accent}cc 100%)`
+                    : "linear-gradient(90deg, oklch(0.42 0.015 250 / 55%) 0%, oklch(0.48 0.015 250 / 70%) 50%, oklch(0.42 0.015 250 / 55%) 100%)",
+                boxShadow: band
+                  ? `inset 0 1px 0 #ffffff44, 0 0 10px ${accent}55`
+                  : "inset 0 1px 0 oklch(0.55 0.01 250 / 25%)",
+              }}
+            >
+              {readiness != null ? (
                 <div
                   className="absolute inset-x-0 top-0 h-1/2 opacity-40"
                   style={{
                     background: "linear-gradient(180deg, #ffffff66, transparent)",
                   }}
                 />
-              </div>
+              ) : null}
             </div>
           </div>
       </Link>
