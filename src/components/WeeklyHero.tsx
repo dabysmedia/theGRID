@@ -98,7 +98,7 @@ function ProgressRing({
     <>
       <div
         className={cn(
-          "relative w-[88px] h-[88px] lg:w-[96px] lg:h-[96px] motion-safe:animate-ring-pop motion-reduce:animate-none",
+          "relative h-[112px] w-[112px] sm:h-[120px] sm:w-[120px] lg:h-[132px] lg:w-[132px] motion-safe:animate-ring-pop motion-reduce:animate-none",
           staggerClass
         )}
       >
@@ -126,7 +126,7 @@ function ProgressRing({
               disabled
                 ? undefined
                 : {
-                    filter: `drop-shadow(0 0 6px ${color}50)`,
+                    filter: `drop-shadow(0 0 8px ${color}50)`,
                     animation: `draw-ring 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both`,
                     // @ts-expect-error CSS custom properties
                     "--ring-circumference": circumference,
@@ -161,7 +161,7 @@ function ProgressRing({
           <span
             key={displayValue}
             className={cn(
-              "type-hud-stat mt-0.5 motion-safe:animate-count-up motion-reduce:animate-none",
+              "type-hud-stat mt-1 text-base sm:text-lg motion-safe:animate-count-up motion-reduce:animate-none",
               disabled && "text-muted-foreground/50 tabular-nums"
             )}
           >
@@ -184,14 +184,14 @@ function ProgressRing({
         type="button"
         onClick={onClick}
         aria-label={ariaLabel ?? `Log ${label.toLowerCase()}`}
-        className="group flex flex-col items-center gap-1.5 rounded-xl px-1 py-0.5 touch-manipulation transition-transform duration-150 hover:scale-[1.03] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        className="group flex flex-col items-center gap-2 rounded-xl px-1 py-1 touch-manipulation transition-transform duration-150 hover:scale-[1.03] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         {ringBody}
       </button>
     )
   }
 
-  return <div className="flex flex-col items-center gap-1.5">{ringBody}</div>
+  return <div className="flex flex-col items-center gap-2">{ringBody}</div>
 }
 
 interface WeeklyHeroProps {
@@ -218,66 +218,7 @@ function currentWeekValuesFromLast7(last7: number[], refDate: Date): number[] {
   return last7.slice(Math.max(0, last7.length - daysIntoWeek))
 }
 
-/** 0–1, caps over-performance at 100% for scoring */
-function clamp01(n: number): number {
-  if (!Number.isFinite(n) || n < 0) return 0
-  return Math.min(n, 1)
-}
-
 type OverviewView = "today" | "week"
-
-/**
- * Daily score 0–100: same weighting as weekly score but uses the hub day’s logged values.
- */
-function computeDailyScore(d: DashboardData, skipCalories: boolean): number {
-  const calGoal = d.calories.goal ?? 2000
-  const stepsGoal = d.steps.goal ?? 10000
-
-  const calScore = calGoal > 0 ? clamp01(d.calories.todayValue / calGoal) : 0
-  const stepsScore = stepsGoal > 0 ? clamp01(d.steps.todayValue / stepsGoal) : 0
-
-  const runGoalDaily = d.running.goal ?? 3
-  const runScore = runGoalDaily > 0 ? clamp01(d.running.todayValue / runGoalDaily) : 0
-
-  const workoutGoalDaily = d.workouts.goal ?? 1
-  const workoutScore =
-    workoutGoalDaily > 0 ? clamp01(d.workouts.todayValue / workoutGoalDaily) : 0
-
-  const activityScore = (runScore + workoutScore) / 2
-  if (skipCalories) {
-    return Math.round(((stepsScore + activityScore) / 2) * 100)
-  }
-  return Math.round(((calScore + stepsScore + activityScore) / 3) * 100)
-}
-
-/**
- * Weekly score 0–100: equal weight on calories avg vs goal, steps avg vs goal, and avg of
- * running + workout vs goals. When `skipCalories`, calories are omitted (vacation on hub day).
- */
-function computeWeeklyScore(d: DashboardData, skipCalories: boolean): number {
-  const calGoal = d.calories.goal ?? 2000
-  const stepsGoal = d.steps.goal ?? 10000
-  const calAvg = weekAvgFromLoggedDays(d.calories.last7)
-  const stepsAvg = weekAvgFromLoggedDays(d.steps.last7)
-
-  const calScore = calGoal > 0 ? clamp01(calAvg / calGoal) : 0
-  const stepsScore = stepsGoal > 0 ? clamp01(stepsAvg / stepsGoal) : 0
-
-  const runGoalDaily = d.running.goal ?? 3
-  const runAvg = weekAvgFromLoggedDays(d.running.last7)
-  const runScore = runGoalDaily > 0 ? clamp01(runAvg / runGoalDaily) : 0
-
-  const workoutGoalDaily = d.workouts.goal ?? 1
-  const workoutAvg = weekAvgFromLoggedDays(d.workouts.last7)
-  const workoutScore =
-    workoutGoalDaily > 0 ? clamp01(workoutAvg / workoutGoalDaily) : 0
-
-  const activityScore = (runScore + workoutScore) / 2
-  if (skipCalories) {
-    return Math.round(((stepsScore + activityScore) / 2) * 100)
-  }
-  return Math.round(((calScore + stepsScore + activityScore) / 3) * 100)
-}
 
 export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: WeeklyHeroProps) {
   const { activeDate, isToday } = useActiveDate()
@@ -315,9 +256,6 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
   const calValue = isWeekView ? calAvg : data.calories.todayValue
   const stepsValue = isWeekView ? stepsAvg : data.steps.todayValue
   const sleepValue = isWeekView ? sleepAvg : data.sleep.todayValue
-  const score = isWeekView
-    ? computeWeeklyScore(data, vacationBlocksCalories)
-    : computeDailyScore(data, vacationBlocksCalories)
 
   const weightTrend = data.weightTrend?.baselineTrend ?? "maintaining"
   const weightDelta = data.weightTrend?.vsBaselineLb ?? 0
@@ -444,14 +382,14 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         className="relative z-10 motion-safe:animate-fade-up motion-reduce:animate-none"
       >
       {/* Progress rings row */}
-      <div className="flex justify-around mb-5">
+      <div className="mb-6 flex justify-around gap-1 px-0.5 sm:gap-2 sm:px-1">
         <ProgressRing
           value={calValue}
           max={calGoal}
           label="Calories"
           unit={isWeekView ? "avg" : "cal"}
           color="#ef4444"
-          icon={<Flame className="h-3.5 w-3.5 text-[#ef4444]" />}
+          icon={<Flame className="h-4 w-4 text-[#ef4444]" />}
           disabled={vacationBlocksCalories}
           centerLabel="—"
           onClick={() => openQuickLog("calories")}
@@ -464,7 +402,7 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
           label="Steps"
           unit={isWeekView ? "avg" : "steps"}
           color="#22c55e"
-          icon={<Footprints className="h-3.5 w-3.5 text-[#22c55e]" />}
+          icon={<Footprints className="h-4 w-4 text-[#22c55e]" />}
           onClick={() => openQuickLog("steps")}
           ariaLabel="Log steps"
           animationIndex={1}
@@ -475,33 +413,11 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
           label="Sleep"
           unit={isWeekView ? "hrs avg" : "hrs"}
           color="#6366f1"
-          icon={<Moon className="h-3.5 w-3.5 text-[#6366f1]" />}
+          icon={<Moon className="h-4 w-4 text-[#6366f1]" />}
           onClick={() => openQuickLog("sleep")}
           ariaLabel="Log sleep"
           animationIndex={2}
         />
-      </div>
-
-      {/* Score */}
-      <div className="mb-5">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="type-hud-label-soft">{isWeekView ? "Weekly score" : "Daily score"}</span>
-          <span
-            key={`${viewMode}-score`}
-            className="type-hud-stat-xs text-primary tracking-wider motion-safe:animate-fade-up motion-reduce:animate-none"
-          >
-            {score}%
-          </span>
-        </div>
-        <div className="h-1 w-full bg-muted/20 overflow-hidden">
-          <div
-            className="h-full bg-primary transition-all duration-700 ease-out"
-            style={{
-              width: `${score}%`,
-              boxShadow: '0 0 8px oklch(0.82 0.18 110 / 25%)',
-            }}
-          />
-        </div>
       </div>
 
       {/* Weekly activity bars */}
