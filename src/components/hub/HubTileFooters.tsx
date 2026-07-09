@@ -233,22 +233,22 @@ export function HubVitalsFooter({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-1.5 text-center">
-      <div className="relative flex h-[4.75rem] w-[4.75rem] shrink-0 items-center justify-center sm:h-[5.25rem] sm:w-[5.25rem]">
+      <div className="relative flex h-[6.25rem] w-[6.25rem] shrink-0 items-center justify-center sm:h-[6.75rem] sm:w-[6.75rem]">
         <MeshHeartSvg
           accent={accent}
-          className="absolute inset-0 h-full w-full drop-shadow-[0_0_14px_rgba(244,63,94,0.3)]"
+          className="absolute inset-0 h-full w-full drop-shadow-[0_0_18px_rgba(244,63,94,0.32)]"
         />
         <div className="relative z-10 flex flex-col items-center justify-center pt-0.5">
           <span
             className="font-semibold tabular-nums leading-none tracking-tight text-foreground"
             style={{
-              fontSize: hrvLabel.length > 3 ? "1.05rem" : "1.35rem",
-              textShadow: `0 0 16px ${accent}77`,
+              fontSize: hrvLabel.length > 3 ? "1.2rem" : "1.55rem",
+              textShadow: `0 0 18px ${accent}77`,
             }}
           >
             {hrvLabel}
           </span>
-          <span className="mt-0.5 text-[8px] font-semibold uppercase tracking-[0.18em] text-rose-100/70">
+          <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-rose-100/70">
             ms
           </span>
         </div>
