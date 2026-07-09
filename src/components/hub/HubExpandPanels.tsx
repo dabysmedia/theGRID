@@ -84,24 +84,22 @@ export type HubExpandedPanel =
   | "peptides"
   | "workouts"
 
-/** Full-width HUD back control — sticky-friendly, ~44px touch target. */
+/** Flush HUD back rail — text + chevron, no nested card/chip. ~44px touch target. */
 export function HubBackToOverview({ onBack }: { onBack: () => void }) {
   return (
     <button
       type="button"
       onClick={onBack}
       aria-label="Back to overview"
-      className="group flex min-h-11 w-full touch-manipulation items-center gap-2.5 border border-white/[0.08] bg-white/[0.03] px-3.5 py-2.5 text-left transition-colors hover:border-white/[0.14] hover:bg-white/[0.055] active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
+      className="group flex min-h-11 w-full touch-manipulation items-center gap-1.5 text-left transition-colors hover:bg-white/[0.03] active:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25"
     >
-      <span
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.04] text-muted-foreground transition-colors group-hover:border-white/20 group-hover:text-foreground"
+      <ArrowLeft
+        className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70 transition-colors group-hover:text-foreground/85"
         aria-hidden
-      >
-        <ArrowLeft className="h-4 w-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block type-hud-micro text-muted-foreground/70">Hub</span>
-        <span className="block text-[13px] font-semibold tracking-wide text-foreground/90">
+      />
+      <span className="min-w-0 flex items-baseline gap-2">
+        <span className="type-hud-micro text-muted-foreground/55">Hub</span>
+        <span className="text-[13px] font-medium tracking-wide text-foreground/80 transition-colors group-hover:text-foreground/95">
           Back to overview
         </span>
       </span>
