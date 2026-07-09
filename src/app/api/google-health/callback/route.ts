@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { resolveGoogleRedirectUri } from "@/lib/google-health/config"
+import {
+  resolveGoogleRedirectUri,
+  resolvePublicOrigin,
+} from "@/lib/google-health/config"
 import { parseOAuthState } from "@/lib/google-health/oauth-state"
 import { exchangeAuthorizationCode } from "@/lib/google-health/tokens"
 import { syncGoogleHealthForUser } from "@/lib/google-health/sync"
 
 function redirectToMore(req: NextRequest, params: Record<string, string>) {
-  const url = new URL("/more", req.url)
+  // Never base redirects on req.url — on Railway it is often http://0.0.0.0:8080
+  const url = new URL("/more", `${resolvePublicOrigin(req)}/`)
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, v)
   }
