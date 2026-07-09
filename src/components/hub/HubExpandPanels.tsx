@@ -115,7 +115,7 @@ export function HubCaloriesExpand({
         </p>
       ) : (
         <>
-          <div className="relative w-full pb-5">
+          <div className="relative w-full">
             <CaloriePipTracker
               consumed={consumed}
               target={target}
