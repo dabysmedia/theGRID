@@ -6,6 +6,7 @@ import { CATEGORY_THEME, type CategoryKey } from "@/lib/category-theme"
 import { DailySummaryCard } from "./DailySummaryCard"
 import { PageHeader } from "./PageHeader"
 import { WeeklyHero } from "./WeeklyHero"
+import type { HubExpandedPanel } from "./hub/HubExpandPanels"
 import { FastingTimer } from "./FastingTimer"
 import {
   HubBowelFooter,
@@ -126,6 +127,7 @@ export function HubDashboard() {
   const [othersOpen, setOthersOpen] = useState(false)
   const [desiredWakeTime, setDesiredWakeTime] = useState("06:30")
   const [injectionIntervalDays, setInjectionIntervalDays] = useState(7)
+  const [hubExpanded, setHubExpanded] = useState<HubExpandedPanel | null>(null)
 
   useEffect(() => {
     if (!user?.id) return
@@ -163,6 +165,10 @@ export function HubDashboard() {
       },
     }
   }, [data, calorieDayMask])
+
+  useEffect(() => {
+    setHubExpanded(null)
+  }, [activeDate])
 
   useEffect(() => {
     let cancelled = false
@@ -286,14 +292,35 @@ export function HubDashboard() {
           data={dashboardForHero}
           loading={loading}
           vacationBlocksCalories={vacationBlocksCalLog}
+          expanded={hubExpanded}
+          onExpandedChange={setHubExpanded}
         />
       </div>
 
-      <div className="animate-fade-up stagger-3">
-        <FastingTimer />
+      <div
+        className={cn(
+          "animate-fade-up stagger-3 grid transition-[grid-template-rows,opacity] duration-500 ease-out motion-reduce:transition-none",
+          hubExpanded
+            ? "pointer-events-none grid-rows-[0fr] opacity-0"
+            : "grid-rows-[1fr] opacity-100",
+        )}
+        aria-hidden={hubExpanded != null}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <FastingTimer />
+        </div>
       </div>
 
-      <div className="animate-fade-up stagger-4">
+      <div
+        className={cn(
+          "animate-fade-up stagger-4 grid transition-[grid-template-rows,opacity] duration-500 ease-out motion-reduce:transition-none",
+          hubExpanded
+            ? "pointer-events-none grid-rows-[0fr] opacity-0"
+            : "grid-rows-[1fr] opacity-100",
+        )}
+        aria-hidden={hubExpanded != null}
+      >
+        <div className="min-h-0 overflow-hidden">
         <div className="flex items-center gap-2 mb-4">
           <div className="hud-divider flex-1" />
           <span className="type-hud-rail shrink-0">SYSTEMS</span>
@@ -377,6 +404,7 @@ export function HubDashboard() {
               })}
             </div>
           )}
+        </div>
         </div>
       </div>
     </div>

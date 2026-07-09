@@ -29,6 +29,8 @@ type Props = {
   hrvMs?: number | null
   restingHeartRate?: number | null
   isWeekView?: boolean
+  /** Hub expand: taller bars + today/goal/week summary strip. */
+  expanded?: boolean
   className?: string
 }
 
@@ -46,6 +48,7 @@ export function StepsActivityBars({
   hrvMs = null,
   restingHeartRate = null,
   isWeekView = false,
+  expanded = false,
   className,
 }: Props) {
   const goalValue =
@@ -53,6 +56,8 @@ export function StepsActivityBars({
   // Include goal in the scale so the yellow line always sits inside the chart.
   const scaleMax = Math.max(...values, goalValue ?? 0, 1)
   const todayIdx = values.length - 1
+  const barAreaPx = expanded ? 96 : BAR_AREA_PX
+  const barMaxPx = expanded ? 92 : BAR_MAX_PX
   const band = readinessBand(readiness)
   const accent = band ? BAND_ACCENT[band] : "#64748b"
   const readinessScore =
@@ -65,8 +70,16 @@ export function StepsActivityBars({
     hrvMs != null && Number.isFinite(hrvMs) ? String(Math.round(hrvMs)) : "—"
   const goalLineBottomPx =
     goalValue != null
-      ? Math.max(4, Math.round((goalValue / scaleMax) * BAR_MAX_PX))
+      ? Math.max(4, Math.round((goalValue / scaleMax) * barMaxPx))
       : null
+  const todaySteps = values[todayIdx] ?? 0
+  const loggedDays = values.filter((v) => v > 0)
+  const weekAvg =
+    loggedDays.length > 0
+      ? Math.round(loggedDays.reduce((s, v) => s + v, 0) / loggedDays.length)
+      : 0
+  const daysHitGoal =
+    goalValue != null ? values.filter((v) => v >= goalValue).length : 0
 
   return (
     <div
@@ -241,8 +254,8 @@ export function StepsActivityBars({
         <div className="mb-2 flex items-end justify-between gap-2">
           <p className="type-hud-subsection">Steps Activity</p>
           <p className="text-[10px] tabular-nums tracking-wide text-muted-foreground/55">
-            {values[todayIdx] > 0
-              ? `${Math.round(values[todayIdx]).toLocaleString()} today`
+            {todaySteps > 0
+              ? `${Math.round(todaySteps).toLocaleString()} today`
               : "No steps yet"}
             {goalValue != null ? (
               <span className="text-amber-300/70">
@@ -253,6 +266,34 @@ export function StepsActivityBars({
           </p>
         </div>
 
+        {expanded ? (
+          <div className="mb-3 grid grid-cols-3 gap-2 motion-safe:animate-fade-up motion-reduce:animate-none">
+            <div className="min-w-0">
+              <p className="type-hud-micro text-muted-foreground/55">Today</p>
+              <p className="type-hud-stat-sm tabular-nums text-emerald-300">
+                {Math.round(todaySteps).toLocaleString()}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="type-hud-micro text-muted-foreground/55">Goal</p>
+              <p className="type-hud-stat-sm tabular-nums text-amber-200/90">
+                {goalValue != null ? Math.round(goalValue).toLocaleString() : "—"}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="type-hud-micro text-muted-foreground/55">7-day avg</p>
+              <p className="type-hud-stat-sm tabular-nums text-foreground/85">
+                {weekAvg > 0 ? weekAvg.toLocaleString() : "—"}
+              </p>
+              {goalValue != null ? (
+                <p className="mt-0.5 text-[9px] text-muted-foreground/50">
+                  {daysHitGoal}/{values.length} hit goal
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <div
           className="pointer-events-none absolute inset-x-4 bottom-[2.15rem] h-px bg-gradient-to-r from-transparent via-white/8 to-transparent lg:inset-x-5"
           aria-hidden
@@ -260,8 +301,8 @@ export function StepsActivityBars({
 
         <div className="relative" style={{ transformStyle: "preserve-3d" }}>
           <div
-            className="relative flex items-end justify-between gap-1 px-0.5"
-            style={{ height: BAR_AREA_PX }}
+            className="relative flex items-end justify-between gap-1 px-0.5 transition-[height] duration-500 ease-out"
+            style={{ height: barAreaPx }}
           >
             {goalLineBottomPx != null ? (
               <div
@@ -281,7 +322,7 @@ export function StepsActivityBars({
 
             {values.map((val, i) => {
               const pct = scaleMax > 0 ? val / scaleMax : 0
-              const heightPx = Math.max(10, Math.round(pct * BAR_MAX_PX))
+              const heightPx = Math.max(10, Math.round(pct * barMaxPx))
               const isToday = i === todayIdx
               const delay = 280 + i * 70
 
@@ -289,7 +330,7 @@ export function StepsActivityBars({
                 <div
                   key={i}
                   className="relative flex min-w-0 flex-1 justify-center"
-                  style={{ height: BAR_AREA_PX, perspective: "240px" }}
+                  style={{ height: barAreaPx, perspective: "240px" }}
                 >
                   <div
                     className="absolute bottom-0 origin-bottom animate-bar-grow"

@@ -9,8 +9,14 @@ import {
 } from "lucide-react"
 import { DailyWeighIn } from "@/components/DailyWeighIn"
 import { StepsActivityBars } from "@/components/hub/StepsActivityBars"
+import {
+  HubCaloriesExpand,
+  HubSleepExpand,
+  HubWeightExpand,
+  HubExpandDismiss,
+  type HubExpandedPanel,
+} from "@/components/hub/HubExpandPanels"
 import { useActiveDate } from "@/context/DateContext"
-import { useQuickLog } from "@/context/QuickLogContext"
 import { cn, glassPanelClass, parseLocalDate } from "@/lib/utils"
 
 /** Show today’s weigh-in prompt on the hub only from this local hour onward (inclusive). */
@@ -71,6 +77,8 @@ interface ProgressRingProps {
   ariaLabel?: string
   /** Stagger index (0–2) for ring pop-in when the overview view changes. */
   animationIndex?: number
+  /** Selected / expanded ring — slight scale + brighter wash. */
+  selected?: boolean
 }
 
 function formatRingValue(value: number): string {
@@ -94,6 +102,7 @@ function ProgressRing({
   onClick,
   ariaLabel,
   animationIndex = 0,
+  selected = false,
 }: ProgressRingProps) {
   const radius = 34
   const trackR = 38
@@ -119,6 +128,7 @@ function ProgressRing({
         className={cn(
           "relative h-[112px] w-[112px] motion-safe:animate-ring-pop motion-reduce:animate-none lg:h-[124px] lg:w-[124px]",
           staggerClass,
+          selected && "scale-[1.06]",
         )}
       >
         {/* Soft steel instrument wash behind the ring */}
@@ -127,7 +137,11 @@ function ProgressRing({
           style={{
             background:
               "radial-gradient(circle, oklch(0.36 0.015 250 / 18%) 0%, oklch(0.22 0.01 250 / 10%) 42%, transparent 72%)",
-            boxShadow: disabled ? undefined : "inset 0 0 18px oklch(0.28 0.015 250 / 16%)",
+            boxShadow: disabled
+              ? undefined
+              : selected
+                ? `inset 0 0 22px ${color}33, 0 0 28px ${color}22`
+                : "inset 0 0 18px oklch(0.28 0.015 250 / 16%)",
           }}
           aria-hidden
         />
@@ -147,7 +161,7 @@ function ProgressRing({
             fill="none"
             stroke="oklch(0.38 0.015 250)"
             strokeWidth="0.6"
-            opacity={disabled ? 0.12 : 0.32}
+            opacity={disabled ? 0.12 : selected ? 0.5 : 0.32}
           />
           <circle
             cx="44"
@@ -243,8 +257,12 @@ function ProgressRing({
       <button
         type="button"
         onClick={onClick}
-        aria-label={ariaLabel ?? `Log ${label.toLowerCase()}`}
-        className="group flex flex-col items-center gap-1.5 rounded-xl px-1 py-0.5 touch-manipulation transition-transform duration-150 hover:scale-[1.03] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        aria-label={ariaLabel ?? `Expand ${label.toLowerCase()}`}
+        aria-expanded={selected}
+        className={cn(
+          "group flex flex-col items-center gap-1.5 rounded-xl px-1 py-0.5 touch-manipulation transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          selected && "scale-[1.02]",
+        )}
       >
         {ringBody}
       </button>
@@ -259,6 +277,9 @@ interface WeeklyHeroProps {
   loading: boolean
   /** Hub day is in vacation — hide calories ring from scoring and show paused UI. */
   vacationBlocksCalories?: boolean
+  /** Controlled expansion from HubDashboard (fades SYSTEMS when set). */
+  expanded?: HubExpandedPanel | null
+  onExpandedChange?: (panel: HubExpandedPanel | null) => void
 }
 
 /** Mean over days with logged data only (0 = no data for that day in dashboard aggregates). */
@@ -270,11 +291,50 @@ function weekAvgFromLoggedDays(last7: number[]): number {
 
 type OverviewView = "today" | "week"
 
-export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: WeeklyHeroProps) {
+function FadeSection({
+  show,
+  children,
+  className,
+}: {
+  show: boolean
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div
+      className={cn(
+        "grid transition-[grid-template-rows,opacity] duration-500 ease-out motion-reduce:transition-none",
+        show ? "grid-rows-[1fr] opacity-100" : "pointer-events-none grid-rows-[0fr] opacity-0",
+        className,
+      )}
+      aria-hidden={!show}
+    >
+      <div className="min-h-0 overflow-hidden">{children}</div>
+    </div>
+  )
+}
+
+export function WeeklyHero({
+  data,
+  loading,
+  vacationBlocksCalories = false,
+  expanded: expandedProp,
+  onExpandedChange,
+}: WeeklyHeroProps) {
   const { activeDate, isToday } = useActiveDate()
-  const { openQuickLog } = useQuickLog()
   const [showWeighInPrompt, setShowWeighInPrompt] = useState(false)
   const [viewMode, setViewMode] = useState<OverviewView>("today")
+  const [expandedLocal, setExpandedLocal] = useState<HubExpandedPanel | null>(null)
+  const expanded = expandedProp !== undefined ? expandedProp : expandedLocal
+  const setExpanded = (panel: HubExpandedPanel | null) => {
+    onExpandedChange?.(panel)
+    if (expandedProp === undefined) setExpandedLocal(panel)
+  }
+
+  const toggleExpand = (panel: HubExpandedPanel) => {
+    setExpanded(expanded === panel ? null : panel)
+  }
+
   const refDate = parseLocalDate(activeDate)
   const dayOfWeek = refDate.getDay()
   const weekStart = new Date(refDate)
@@ -293,6 +353,13 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
     const id = setInterval(apply, 60_000)
     return () => clearInterval(id)
   }, [isToday])
+
+  // Collapse when the active day changes
+  useLayoutEffect(() => {
+    setExpanded(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset on date change
+  }, [activeDate])
+
   const calAvg = weekAvgFromLoggedDays(data.calories.last7)
   const stepsAvg = weekAvgFromLoggedDays(data.steps.last7)
   const sleepAvg = Math.round(weekAvgFromLoggedDays(data.sleep.last7) * 10) / 10
@@ -318,6 +385,13 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
     : `${monthNames[refDate.getMonth()]} ${refDate.getDate()}`
 
   const dayLabels = lastNWeekdayLabels(refDate, data.steps.last7.length)
+
+  const showRings =
+    expanded == null || expanded === "calories" || expanded === "steps" || expanded === "sleep"
+  const showStepsBars = expanded == null || expanded === "steps"
+  const showWeighIn = showWeighInPrompt && (expanded == null || expanded === "weight")
+  const dimUnrelatedRings =
+    expanded === "calories" || expanded === "steps" || expanded === "sleep"
 
   return (
     <div
@@ -363,26 +437,32 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
           </h2>
         </div>
         <div className="flex items-center gap-1.5">
-          <span
-            key={`${viewMode}-eyebrow`}
-            className="type-hud-eyebrow motion-safe:animate-fade-up motion-reduce:animate-none"
-          >
-            {isWeekView ? dateRange : dayLabel}
-          </span>
-          <button
-            type="button"
-            onClick={() => setViewMode((mode) => (mode === "today" ? "week" : "today"))}
-            aria-label={isWeekView ? "Show today's values" : "Show weekly values"}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
-          >
-            <ChevronRight
-              className={cn(
-                "h-3.5 w-3.5 transition-transform duration-300 ease-out",
-                isWeekView && "rotate-180",
-              )}
-              aria-hidden
-            />
-          </button>
+          {expanded != null ? (
+            <HubExpandDismiss onDismiss={() => setExpanded(null)} />
+          ) : (
+            <>
+              <span
+                key={`${viewMode}-eyebrow`}
+                className="type-hud-eyebrow motion-safe:animate-fade-up motion-reduce:animate-none"
+              >
+                {isWeekView ? dateRange : dayLabel}
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewMode((mode) => (mode === "today" ? "week" : "today"))}
+                aria-label={isWeekView ? "Show today's values" : "Show weekly values"}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
+              >
+                <ChevronRight
+                  className={cn(
+                    "h-3.5 w-3.5 transition-transform duration-300 ease-out",
+                    isWeekView && "rotate-180",
+                  )}
+                  aria-hidden
+                />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -391,74 +471,156 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         className="relative z-10 space-y-4 motion-safe:animate-fade-up motion-reduce:animate-none"
       >
         {/* Rings — open instrument bay (no nested frame) */}
-        <div className="relative px-0.5 py-1 sm:px-1">
-          <div className="relative z-10 flex justify-around">
-            <ProgressRing
-              value={calValue}
-              max={calGoal}
-              label="Calories"
-              unit={isWeekView ? "avg" : "cal"}
-              color="#ef4444"
-              icon={<Flame className="h-4 w-4 text-[#ef4444]" />}
-              disabled={vacationBlocksCalories}
-              centerLabel="—"
-              onClick={() => openQuickLog("calories")}
-              ariaLabel="Log food"
-              animationIndex={0}
-            />
-            <ProgressRing
-              value={stepsValue}
-              max={stepsGoal}
-              label="Steps"
-              unit={isWeekView ? "avg" : "steps"}
-              color="#22c55e"
-              icon={<Footprints className="h-4 w-4 text-[#22c55e]" />}
-              onClick={() => openQuickLog("steps")}
-              ariaLabel="Log steps"
-              animationIndex={1}
-            />
-            <ProgressRing
-              value={sleepValue}
-              max={sleepGoal}
-              label="Sleep"
-              unit={isWeekView ? "hrs avg" : "hrs"}
-              color="#6366f1"
-              icon={<Moon className="h-4 w-4 text-[#6366f1]" />}
-              onClick={() => openQuickLog("sleep")}
-              ariaLabel="Log sleep"
-              animationIndex={2}
-            />
+        <FadeSection show={showRings}>
+          <div className="relative px-0.5 py-1 sm:px-1">
+            <div className="relative z-10 flex justify-around">
+              <div
+                className={cn(
+                  "transition-opacity duration-500 ease-out",
+                  dimUnrelatedRings && expanded !== "calories" && "pointer-events-none opacity-25",
+                )}
+              >
+                <ProgressRing
+                  value={calValue}
+                  max={calGoal}
+                  label="Calories"
+                  unit={isWeekView ? "avg" : "cal"}
+                  color="#ef4444"
+                  icon={<Flame className="h-4 w-4 text-[#ef4444]" />}
+                  disabled={vacationBlocksCalories}
+                  centerLabel="—"
+                  onClick={() => toggleExpand("calories")}
+                  ariaLabel={expanded === "calories" ? "Collapse calories" : "Expand calories"}
+                  animationIndex={0}
+                  selected={expanded === "calories"}
+                />
+              </div>
+              <div
+                className={cn(
+                  "transition-opacity duration-500 ease-out",
+                  dimUnrelatedRings && expanded !== "steps" && "pointer-events-none opacity-25",
+                )}
+              >
+                <ProgressRing
+                  value={stepsValue}
+                  max={stepsGoal}
+                  label="Steps"
+                  unit={isWeekView ? "avg" : "steps"}
+                  color="#22c55e"
+                  icon={<Footprints className="h-4 w-4 text-[#22c55e]" />}
+                  onClick={() => toggleExpand("steps")}
+                  ariaLabel={expanded === "steps" ? "Collapse steps" : "Expand steps"}
+                  animationIndex={1}
+                  selected={expanded === "steps"}
+                />
+              </div>
+              <div
+                className={cn(
+                  "transition-opacity duration-500 ease-out",
+                  dimUnrelatedRings && expanded !== "sleep" && "pointer-events-none opacity-25",
+                )}
+              >
+                <ProgressRing
+                  value={sleepValue}
+                  max={sleepGoal}
+                  label="Sleep"
+                  unit={isWeekView ? "hrs avg" : "hrs"}
+                  color="#6366f1"
+                  icon={<Moon className="h-4 w-4 text-[#6366f1]" />}
+                  onClick={() => toggleExpand("sleep")}
+                  ariaLabel={expanded === "sleep" ? "Collapse sleep" : "Expand sleep"}
+                  animationIndex={2}
+                  selected={expanded === "sleep"}
+                />
+              </div>
+            </div>
           </div>
-        </div>
+        </FadeSection>
 
-        <div
-          className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
-          aria-hidden
-        />
-
-        <StepsActivityBars
-          key={`${viewMode}-activity`}
-          values={data.steps.last7}
-          labels={dayLabels}
-          goal={stepsGoal}
-          readiness={readinessValue}
-          hrvMs={hrvMs}
-          restingHeartRate={restingHeartRate}
-          isWeekView={isWeekView}
-          className="animate-fade-up stagger-3 motion-safe:animate-fade-up motion-reduce:animate-none"
-        />
-
-        {showWeighInPrompt ? (
+        {expanded === "calories" ? (
           <>
             <div
               className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
               aria-hidden
             />
-            <div className="relative z-10 px-0.5 py-0.5">
-              <DailyWeighIn embedded weightTrend={data.weightTrend} />
-            </div>
+            <HubCaloriesExpand
+              consumed={data.calories.todayValue}
+              target={calGoal}
+              vacationBlocked={vacationBlocksCalories}
+              onDismiss={() => setExpanded(null)}
+            />
           </>
         ) : null}
+
+        {expanded === "sleep" ? (
+          <>
+            <div
+              className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
+              aria-hidden
+            />
+            <HubSleepExpand
+              hours={data.sleep.todayValue}
+              goal={sleepGoal}
+              last7={data.sleep.last7}
+              dayLabels={dayLabels}
+              onDismiss={() => setExpanded(null)}
+            />
+          </>
+        ) : null}
+
+        <FadeSection show={showStepsBars}>
+          {expanded == null ? (
+            <div
+              className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
+              aria-hidden
+            />
+          ) : null}
+          <StepsActivityBars
+            key={`${viewMode}-activity-${expanded === "steps" ? "x" : "n"}`}
+            values={data.steps.last7}
+            labels={dayLabels}
+            goal={stepsGoal}
+            readiness={readinessValue}
+            hrvMs={hrvMs}
+            restingHeartRate={restingHeartRate}
+            isWeekView={isWeekView}
+            expanded={expanded === "steps"}
+            className={cn(
+              "animate-fade-up stagger-3 motion-safe:animate-fade-up motion-reduce:animate-none",
+              expanded === "steps" && "scale-[1.02] transition-transform duration-500 ease-out",
+            )}
+          />
+        </FadeSection>
+
+        <FadeSection show={showWeighIn}>
+          <div
+            className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
+            aria-hidden
+          />
+          <div className="relative z-10 space-y-3 px-0.5 py-0.5">
+            {expanded !== "weight" ? (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => toggleExpand("weight")}
+                  aria-label="Expand weight correlations"
+                  className="inline-flex h-7 items-center gap-1 rounded-lg px-2 type-hud-micro text-muted-foreground/70 transition-colors hover:bg-muted/20 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
+                >
+                  Correlations
+                  <ChevronRight className="h-3 w-3 opacity-60" aria-hidden />
+                </button>
+              </div>
+            ) : null}
+            <DailyWeighIn
+              embedded
+              weightTrend={data.weightTrend}
+              onActivate={expanded === "weight" ? undefined : () => toggleExpand("weight")}
+            />
+            {expanded === "weight" ? (
+              <HubWeightExpand onDismiss={() => setExpanded(null)} />
+            ) : null}
+          </div>
+        </FadeSection>
       </div>
     </div>
   )

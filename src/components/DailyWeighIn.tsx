@@ -65,9 +65,15 @@ interface DailyWeighInProps {
   embedded?: boolean
   /** Baseline weight trend from the hub dashboard (shown under the large weight). */
   weightTrend?: WeightTrendSummary | null
+  /** Hub: tap the weigh-in title to expand correlations (does not fire on form controls). */
+  onActivate?: () => void
 }
 
-export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeighInProps) {
+export function DailyWeighIn({
+  embedded = false,
+  weightTrend = null,
+  onActivate,
+}: DailyWeighInProps) {
   const { activeDate } = useActiveDate()
   const { user } = useUser()
   const [status, setStatus] = useState<Status>("loading")
@@ -225,15 +231,30 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
     <div className={cn(embedded ? "space-y-2.5" : "space-y-3.5")}>
       <div className="flex items-end justify-between gap-2">
         <div className="min-w-0 space-y-0.5">
-          <p
-            className={cn(
-              embedded
-                ? "type-hud-subsection"
-                : "text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/85",
-            )}
-          >
-            {logged ? "Logged weight" : "Weigh-in"}
-          </p>
+          {onActivate ? (
+            <button
+              type="button"
+              onClick={onActivate}
+              className={cn(
+                embedded
+                  ? "type-hud-subsection"
+                  : "text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/85",
+                "text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25",
+              )}
+            >
+              {logged ? "Logged weight" : "Weigh-in"}
+            </button>
+          ) : (
+            <p
+              className={cn(
+                embedded
+                  ? "type-hud-subsection"
+                  : "text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/85",
+              )}
+            >
+              {logged ? "Logged weight" : "Weigh-in"}
+            </p>
+          )}
           {logged && previousWeight != null ? (
             <p className="text-[11px] text-muted-foreground/65">
               Last recorded{" "}
