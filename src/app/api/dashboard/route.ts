@@ -174,8 +174,6 @@ export async function GET(req: NextRequest) {
       alcoholEntries,
       bowelEntries,
       recoveryEntries,
-      vitalEntries,
-      vitalBaselineEntries,
       goals,
       bodyWeightGoal,
     ] = await Promise.all([
@@ -188,17 +186,39 @@ export async function GET(req: NextRequest) {
       prisma.alcoholEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.bowelEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.recoveryDailyEntry.findMany({ where: { date: dateInRange, userId } }),
-      prisma.vitalDailyEntry.findMany({ where: { date: dateInRange, userId } }),
-      prisma.vitalDailyEntry.findMany({
-        where: { date: vitalsBaselineRange, userId },
-        select: { date: true, hrvMs: true, restingHeartRate: true },
-      }),
       prisma.goal.findMany({ where: { active: true, userId } }),
       prisma.longGoal.findFirst({
         where: { category: "bodyweight", userId },
         select: { id: true },
       }),
     ])
+
+    let vitalEntries: Array<{
+      date: Date
+      hrvMs: number | null
+      restingHeartRate: number | null
+    }> = []
+    let vitalBaselineEntries: Array<{
+      date: Date
+      hrvMs: number | null
+      restingHeartRate: number | null
+    }> = []
+    try {
+      const [weekVitals, baselineVitals] = await Promise.all([
+        prisma.vitalDailyEntry.findMany({ where: { date: dateInRange, userId } }),
+        prisma.vitalDailyEntry.findMany({
+          where: { date: vitalsBaselineRange, userId },
+          select: { date: true, hrvMs: true, restingHeartRate: true },
+        }),
+      ])
+      vitalEntries = weekVitals
+      vitalBaselineEntries = baselineVitals
+    } catch (err) {
+      console.warn(
+        "[dashboard] vitalDailyEntry query failed, continuing without vitals/readiness:",
+        (err as Error).message,
+      )
+    }
 
     let workoutSessions: DatedRow[] = []
     try {
@@ -462,6 +482,7 @@ export async function GET(req: NextRequest) {
         { status: e.status, headers: { "Cache-Control": "no-store, must-revalidate" } }
       )
     }
+    console.error("[dashboard] GET failed:", e)
     return NextResponse.json(
       { error: "Database not connected" },
       {

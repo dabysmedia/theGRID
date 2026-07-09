@@ -3218,9 +3218,31 @@ function sessionsListUrl(): string {
   return `/api/workout-sessions?_=${Date.now()}`
 }
 
+const HUB_START_STORAGE_KEY = "theGRID_hubStartWorkout"
+
+function readHubStartIntent(): string | null {
+  if (typeof window === "undefined") return null
+  try {
+    const fromStorage = sessionStorage.getItem(HUB_START_STORAGE_KEY)?.trim()
+    if (fromStorage) return fromStorage
+  } catch {
+    /* private mode */
+  }
+  return null
+}
+
+function clearHubStartIntent() {
+  if (typeof window === "undefined") return
+  try {
+    sessionStorage.removeItem(HUB_START_STORAGE_KEY)
+  } catch {
+    /* private mode */
+  }
+}
+
 /**
- * Hub deep-link: `?start=<templateId>` or `?start=free` starts a session once templates load.
- * Wrapped in Suspense by the page because it reads search params.
+ * Hub deep-link: `?start=<templateId>` or `?start=free` (plus sessionStorage backup)
+ * starts a session once templates load. Suspense-wrapped because it reads search params.
  */
 function HubStartFromQuery({
   templatesLoaded,
@@ -3240,39 +3262,45 @@ function HubStartFromQuery({
   const searchParams = useSearchParams()
   const router = useRouter()
   const handledRef = useRef<string | null>(null)
+  const onStartRoutineRef = useRef(onStartRoutine)
+  const onStartFreeRef = useRef(onStartFree)
+  onStartRoutineRef.current = onStartRoutine
+  onStartFreeRef.current = onStartFree
 
   useEffect(() => {
-    const start = searchParams.get("start")?.trim()
-    if (!start || !templatesLoaded || startingWorkout) return
+    if (!templatesLoaded || startingWorkout) return
+
+    const fromQuery = searchParams.get("start")?.trim() || null
+    const start = fromQuery || readHubStartIntent()
+    if (!start) return
     if (handledRef.current === start) return
 
-    const clearQuery = () => {
+    const finish = () => {
       handledRef.current = start
-      router.replace("/workouts", { scroll: false })
+      clearHubStartIntent()
+      if (fromQuery) router.replace("/workouts", { scroll: false })
     }
 
     if (hasActiveSession) {
-      clearQuery()
+      finish()
       return
     }
 
     if (start === "free" || start === "empty") {
-      clearQuery()
-      onStartFree()
+      finish()
+      onStartFreeRef.current()
       return
     }
 
     const tmpl = templates.find((t) => t.id === start)
-    clearQuery()
-    if (tmpl) onStartRoutine(tmpl)
+    finish()
+    if (tmpl) onStartRoutineRef.current(tmpl)
   }, [
     searchParams,
     templatesLoaded,
     templates,
     hasActiveSession,
     startingWorkout,
-    onStartRoutine,
-    onStartFree,
     router,
   ])
 
