@@ -259,7 +259,7 @@ export function CaloriePipTracker({
         }}
         aria-hidden
       />
-      <div className="relative h-48 w-full sm:h-56 md:h-64">
+      <div className="relative h-44 w-full touch-none sm:h-52 md:h-60">
         <CaloriePipScene
           consumed={consumed}
           target={target}
