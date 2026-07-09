@@ -327,27 +327,27 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         loading ? "opacity-50" : "opacity-100",
       )}
     >
-      {/* Full-card HUD wash — steel chrome */}
+      {/* Full-card HUD wash — one continuous dark steel → near-black fade */}
       <div
         className="pointer-events-none absolute inset-0"
         aria-hidden
         style={{
           background:
-            "linear-gradient(180deg, oklch(0.36 0.015 250 / 16%) 0%, oklch(0.24 0.01 250 / 14%) 38%, oklch(0.12 0.005 250 / 20%) 72%, oklch(0.06 0.005 250 / 26%) 100%)",
+            "linear-gradient(180deg, oklch(0.20 0.01 250 / 10%) 0%, oklch(0.14 0.008 250 / 14%) 34%, oklch(0.08 0.005 250 / 22%) 68%, oklch(0.04 0.004 250 / 32%) 100%)",
         }}
       />
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.16]"
+        className="pointer-events-none absolute inset-0 opacity-[0.10]"
         aria-hidden
         style={{
           backgroundImage:
-            "linear-gradient(to right, oklch(0.38 0.01 250 / 22%) 1px, transparent 1px), linear-gradient(to bottom, oklch(0.38 0.01 250 / 16%) 1px, transparent 1px)",
+            "linear-gradient(to right, oklch(0.30 0.01 250 / 18%) 1px, transparent 1px), linear-gradient(to bottom, oklch(0.30 0.01 250 / 12%) 1px, transparent 1px)",
           backgroundSize: "22px 22px",
-          maskImage: "linear-gradient(180deg, black 0%, transparent 78%)",
+          maskImage: "linear-gradient(180deg, black 0%, transparent 62%)",
         }}
       />
       <div
-        className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent"
+        className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/14 to-transparent"
         aria-hidden
       />
 
@@ -432,7 +432,7 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         </div>
 
         <div
-          className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
+          className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
           aria-hidden
         />
 
@@ -451,7 +451,7 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         {showWeighInPrompt ? (
           <>
             <div
-              className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
+              className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
               aria-hidden
             />
             <div className="relative z-10 px-0.5 py-0.5">
