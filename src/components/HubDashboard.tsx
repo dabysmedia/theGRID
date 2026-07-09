@@ -1,31 +1,18 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { ChevronDown } from "lucide-react"
-import { CATEGORY_THEME, type CategoryKey } from "@/lib/category-theme"
-import { DailySummaryCard } from "./DailySummaryCard"
 import { PageHeader } from "./PageHeader"
 import { WeeklyHero } from "./WeeklyHero"
 import type { HubExpandedPanel } from "./hub/HubExpandPanels"
 import { FastingTimer } from "./FastingTimer"
-import {
-  HubBowelFooter,
-  HubCalorieFooter,
-  HubPeptideFooter,
-  HubSleepBedtimeFooter,
-  HubVitalsFooter,
-  HubWorkoutFooter,
-} from "./hub/HubTileFooters"
 import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
-import { cn, parseLocalDate } from "@/lib/utils"
+import { parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { isVacationBlockingCalendarDay, vacationCalorieDayMask } from "@/lib/vacation-mode"
 import {
   HUB_PREFS_CHANGED_EVENT,
   computeNextInjection,
-  computeTargetBedtime,
-  readDesiredWakeTime,
   readInjectionIntervalDays,
 } from "@/lib/hub-tile-prefs"
 
@@ -83,18 +70,6 @@ const defaultData: DashboardData = {
   weightTrend: null,
 }
 
-const categoryOrder = [
-  "calories",
-  "steps",
-  "peptides",
-  "workouts",
-  "sleep",
-  "vitals",
-  "running",
-  "bowel",
-  "alcohol",
-] satisfies CategoryKey[]
-
 interface PeptideHubEntry {
   injectedAt: string
   doseMg: number
@@ -108,37 +83,23 @@ function workoutsThisWeek(last7: number[], refDateKey: string): number {
   return slice.reduce((s, v) => s + v, 0)
 }
 
-const OTHERS_KEYS = new Set<CategoryKey>(["running", "alcohol"])
-
-const categories = categoryOrder.map((key) => {
-  const t = CATEGORY_THEME[key]
-  return { key, title: t.label, icon: t.icon, href: t.href, color: t.color }
-})
-
-const mainCategories = categories.filter((c) => !OTHERS_KEYS.has(c.key))
-const othersCategories = categories.filter((c) => OTHERS_KEYS.has(c.key))
-
 export function HubDashboard() {
   const { activeDate } = useActiveDate()
   const { user } = useUser()
   const [data, setData] = useState<DashboardData>(defaultData)
   const [peptideEntries, setPeptideEntries] = useState<PeptideHubEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const [othersOpen, setOthersOpen] = useState(false)
-  const [desiredWakeTime, setDesiredWakeTime] = useState("06:30")
   const [injectionIntervalDays, setInjectionIntervalDays] = useState(7)
   const [hubExpanded, setHubExpanded] = useState<HubExpandedPanel | null>(null)
 
   useEffect(() => {
     if (!user?.id) return
-    setDesiredWakeTime(readDesiredWakeTime(user.id))
     setInjectionIntervalDays(readInjectionIntervalDays(user.id))
   }, [user?.id])
 
   useEffect(() => {
     function onPrefsChanged() {
       if (!user?.id) return
-      setDesiredWakeTime(readDesiredWakeTime(user.id))
       setInjectionIntervalDays(readInjectionIntervalDays(user.id))
     }
     window.addEventListener(HUB_PREFS_CHANGED_EVENT, onPrefsChanged)
@@ -222,67 +183,6 @@ export function HubDashboard() {
     [lastPeptide?.injectedAt, injectionIntervalDays, activeDate]
   )
 
-  const sleepHoursGoal = data.sleep.goal ?? 8
-  const targetBedtime = useMemo(
-    () => computeTargetBedtime(desiredWakeTime, sleepHoursGoal),
-    [desiredWakeTime, sleepHoursGoal]
-  )
-
-  const staggerClasses = ["stagger-1", "stagger-2", "stagger-3", "stagger-4", "stagger-5", "stagger-6", "stagger-7"]
-
-  function tileFooter(key: CategoryKey, color: string) {
-    if (key === "calories") {
-      return (
-        <HubCalorieFooter
-          consumed={vacationBlocksCalLog ? 0 : data.calories.todayValue}
-          target={data.calories.goal ?? 2000}
-          color={color}
-        />
-      )
-    }
-    if (key === "workouts") {
-      return <HubWorkoutFooter weekCount={weekWorkoutCount} color={color} />
-    }
-    if (key === "peptides") {
-      return (
-        <HubPeptideFooter
-          lastDoseMg={lastPeptide?.doseMg ?? null}
-          nextInjection={nextInjection}
-          color={color}
-        />
-      )
-    }
-    if (key === "sleep") {
-      return (
-        <HubSleepBedtimeFooter
-          targetBedtime={targetBedtime}
-          desiredWakeTime={desiredWakeTime}
-          sleepHoursGoal={sleepHoursGoal}
-          color={color}
-        />
-      )
-    }
-    if (key === "bowel") {
-      return (
-        <HubBowelFooter
-          todayCount={data.bowel.todayValue}
-          goal={data.bowel.goal}
-          color={color}
-        />
-      )
-    }
-    if (key === "vitals") {
-      return (
-        <HubVitalsFooter
-          hrvMs={data.readiness?.hrvMs ?? (data.vitals.todayValue > 0 ? data.vitals.todayValue : null)}
-          readiness={data.readiness?.todayValue ?? null}
-          color={color}
-        />
-      )
-    }
-    return undefined
-  }
-
   return (
     <div className="space-y-8">
       <PageHeader title="THEGRID" />
@@ -311,127 +211,14 @@ export function HubDashboard() {
         />
       </div>
 
-      {/* Unmount fasting + SYSTEMS while a hub panel is expanded — they will
-          eventually be replaced by expand-in-place; keep them off the tree so
-          mobile isn't paying for hidden charts/tiles during WebGL expands. */}
+      {/* Unmount fasting while a hub panel is expanded so mobile isn't paying
+          for the timer UI during expand-in-place views. */}
       {hubExpanded == null ? (
-      <div className="animate-fade-up stagger-3">
-        <div className="min-h-0">
-          <FastingTimer />
+        <div className="animate-fade-up stagger-3">
+          <div className="min-h-0">
+            <FastingTimer />
+          </div>
         </div>
-      </div>
-      ) : null}
-
-      {hubExpanded == null ? (
-      <div className="animate-fade-up stagger-4">
-        <div className="min-h-0">
-        <div className="mb-4 flex items-center gap-2">
-          <div className="hud-divider flex-1" />
-          <span className="type-hud-rail shrink-0">SYSTEMS</span>
-          <div className="hud-divider flex-1" />
-        </div>
-
-        <div
-          className={`grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4 items-stretch transition-opacity duration-500 ${
-            loading ? "opacity-50" : "opacity-100"
-          }`}
-        >
-          {mainCategories.map((cat, i) => {
-            const summary = data[cat.key]
-            const footer = tileFooter(cat.key, cat.color)
-            const chartData =
-              footer == null ? summary.last7.map((v) => ({ value: v })) : undefined
-            const expandKey =
-              cat.key === "vitals"
-                ? ("vitals" as const)
-                : cat.key === "peptides"
-                  ? ("peptides" as const)
-                  : cat.key === "workouts"
-                    ? ("workouts" as const)
-                    : cat.key === "calories"
-                      ? ("calories" as const)
-                      : cat.key === "steps"
-                        ? ("steps" as const)
-                        : cat.key === "sleep"
-                          ? ("sleep" as const)
-                          : null
-            return (
-              <div
-                key={cat.key}
-                className={`animate-scale-in aspect-square min-h-0 w-full max-w-full ${staggerClasses[i] ?? ""}`}
-              >
-                <DailySummaryCard
-                  title={cat.title}
-                  value={
-                    cat.key === "calories" && vacationBlocksCalLog ? "—" : summary.todayValue
-                  }
-                  goal={summary.goal ?? undefined}
-                  unit={summary.unit}
-                  icon={cat.icon}
-                  href={cat.href}
-                  chartData={chartData}
-                  footer={footer}
-                  color={cat.color}
-                  disabled={cat.key === "calories" && vacationBlocksCalLog}
-                  disabledHint={cat.key === "calories" && vacationBlocksCalLog ? "Vacation mode" : undefined}
-                  onActivate={
-                    expandKey
-                      ? () =>
-                          setHubExpanded((prev) => (prev === expandKey ? null : expandKey))
-                      : undefined
-                  }
-                  selected={expandKey != null && hubExpanded === expandKey}
-                />
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="relative z-10 mt-3 space-y-2 pb-1">
-          <button
-            type="button"
-            onClick={() => setOthersOpen((o) => !o)}
-            aria-expanded={othersOpen}
-            className="glass-subtle flex min-h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl py-3 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/80 transition-colors hover:text-foreground hover:bg-glass-highlight/25 active:scale-[0.98]"
-          >
-            <ChevronDown
-              className={cn("h-3.5 w-3.5 shrink-0 transition-transform duration-200", othersOpen && "rotate-180")}
-              aria-hidden
-            />
-            Others
-          </button>
-
-          {othersOpen && (
-            <div
-              className={`grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4 animate-fade-up ${
-                loading ? "opacity-50" : "opacity-100"
-              }`}
-            >
-              {othersCategories.map((cat, i) => {
-                const summary = data[cat.key]
-                return (
-                  <div
-                    key={cat.key}
-                    className={`animate-scale-in aspect-square min-h-0 w-full max-w-full ${staggerClasses[i + 5] ?? "stagger-6"}`}
-                  >
-                    <DailySummaryCard
-                      title={cat.title}
-                      value={summary.todayValue}
-                      goal={summary.goal ?? undefined}
-                      unit={summary.unit}
-                      icon={cat.icon}
-                      href={cat.href}
-                      chartData={summary.last7.map((v) => ({ value: v }))}
-                      color={cat.color}
-                    />
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-        </div>
-      </div>
       ) : null}
     </div>
   )

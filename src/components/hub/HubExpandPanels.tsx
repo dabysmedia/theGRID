@@ -15,7 +15,7 @@ import {
   Syringe,
   Trash2,
   Waves,
-  X,
+  ArrowLeft,
 } from "lucide-react"
 import {
   ResponsiveContainer,
@@ -84,22 +84,27 @@ export type HubExpandedPanel =
   | "peptides"
   | "workouts"
 
-export function HubExpandDismiss({
-  onDismiss,
-  label = "Close",
-}: {
-  onDismiss: () => void
-  label?: string
-}) {
+/** Full-width HUD back control — sticky-friendly, ~44px touch target. */
+export function HubBackToOverview({ onBack }: { onBack: () => void }) {
   return (
     <button
       type="button"
-      onClick={onDismiss}
-      aria-label={label}
-      className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 type-hud-micro text-muted-foreground/80 transition-colors hover:bg-muted/20 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
+      onClick={onBack}
+      aria-label="Back to overview"
+      className="group flex min-h-11 w-full touch-manipulation items-center gap-2.5 border border-white/[0.08] bg-white/[0.03] px-3.5 py-2.5 text-left transition-colors hover:border-white/[0.14] hover:bg-white/[0.055] active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
     >
-      <X className="h-3.5 w-3.5" aria-hidden />
-      Close
+      <span
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.04] text-muted-foreground transition-colors group-hover:border-white/20 group-hover:text-foreground"
+        aria-hidden
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block type-hud-micro text-muted-foreground/70">Hub</span>
+        <span className="block text-[13px] font-semibold tracking-wide text-foreground/90">
+          Back to overview
+        </span>
+      </span>
     </button>
   )
 }
@@ -110,12 +115,10 @@ export function HubCaloriesExpand({
   consumed,
   target,
   vacationBlocked,
-  onDismiss,
 }: {
   consumed: number
   target: number
   vacationBlocked?: boolean
-  onDismiss: () => void
 }) {
   const { activeDate } = useActiveDate()
   const { openQuickLog } = useQuickLog()
@@ -221,16 +224,13 @@ export function HubCaloriesExpand({
 
   return (
     <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-3 px-0.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="min-w-0">
           <p className="type-hud-subsection">Calories</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
             {vacationBlocked
               ? "Vacation mode — intake tracking paused."
               : `${consumed.toLocaleString()} of ${target.toLocaleString()} · ${remaining.toLocaleString()} left · ${pct}%`}
           </p>
-        </div>
-        <HubExpandDismiss onDismiss={onDismiss} />
       </div>
 
       {vacationBlocked ? (
@@ -484,13 +484,11 @@ export function HubSleepExpand({
   goal,
   last7,
   dayLabels,
-  onDismiss,
 }: {
   hours: number
   goal: number
   last7: number[]
   dayLabels: string[]
-  onDismiss: () => void
 }) {
   const { activeDate } = useActiveDate()
   const { openQuickLog } = useQuickLog()
@@ -539,8 +537,7 @@ export function HubSleepExpand({
 
   return (
     <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="min-w-0">
           <p className="type-hud-subsection">Sleep stages</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
             {durationLabel != null
@@ -548,8 +545,6 @@ export function HubSleepExpand({
               : `Goal ${goal}h`}
             {score != null ? ` · score ${displaySleepScore(score)}` : ""}
           </p>
-        </div>
-        <HubExpandDismiss onDismiss={onDismiss} />
       </div>
 
       {status === "loading" ? (
@@ -626,7 +621,7 @@ export function HubSleepExpand({
 
 /* ─── Weight ─────────────────────────────────────────────── */
 
-export function HubWeightExpand({ onDismiss }: { onDismiss: () => void }) {
+export function HubWeightExpand() {
   const { activeDate } = useActiveDate()
   const [daily, setDaily] = useState<WeightCorrelationDayData[] | null>(null)
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
@@ -672,14 +667,11 @@ export function HubWeightExpand({ onDismiss }: { onDismiss: () => void }) {
 
   return (
     <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-3 px-0.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="min-w-0">
           <p className="type-hud-subsection">Weight correlation</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
             {month} · vs steps, calories, sleep
           </p>
-        </div>
-        <HubExpandDismiss onDismiss={onDismiss} />
       </div>
 
       <button
@@ -773,12 +765,10 @@ export function HubVitalsExpand({
   readiness,
   fallbackHrvMs,
   fallbackRhr,
-  onDismiss,
 }: {
   readiness?: number | null
   fallbackHrvMs?: number | null
   fallbackRhr?: number | null
-  onDismiss: () => void
 }) {
   const { activeDate } = useActiveDate()
   const [data, setData] = useState<VitalsPayload | null>(null)
@@ -931,8 +921,7 @@ export function HubVitalsExpand({
 
   return (
     <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="min-w-0">
           <p className="type-hud-subsection">Vitals</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
             {band ? `${READINESS_BAND_LABEL[band]} · ` : ""}
@@ -941,8 +930,6 @@ export function HubVitalsExpand({
             RHR {dash(rhr, " bpm")}
             {readiness != null ? ` · readiness ${Math.round(readiness)}` : ""}
           </p>
-        </div>
-        <HubExpandDismiss onDismiss={onDismiss} />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -1274,7 +1261,6 @@ export function HubPeptidesExpand({
   todayMg,
   last7,
   dayLabels,
-  onDismiss,
 }: {
   lastDoseMg: number | null
   lastInjectedAt: string | null
@@ -1282,7 +1268,6 @@ export function HubPeptidesExpand({
   todayMg: number
   last7: number[]
   dayLabels: string[]
-  onDismiss: () => void
 }) {
   const [injectionOpen, setInjectionOpen] = useState(false)
   const [dailyOpen, setDailyOpen] = useState(false)
@@ -1306,15 +1291,12 @@ export function HubPeptidesExpand({
 
   return (
     <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="min-w-0">
           <p className="type-hud-subsection">Peptides</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
             {untilLabel}
             {lastDoseMg != null ? ` · last ${lastDoseMg} mg` : ""}
           </p>
-        </div>
-        <HubExpandDismiss onDismiss={onDismiss} />
       </div>
 
       <div className="flex items-center gap-4">
@@ -1493,14 +1475,12 @@ export function HubWorkoutsExpand({
   last7,
   dayLabels,
   recoveryScore,
-  onDismiss,
 }: {
   weekCount: number
   todayCount: number
   last7: number[]
   dayLabels: string[]
   recoveryScore: number | null
-  onDismiss: () => void
 }) {
   const router = useRouter()
   const [templates, setTemplates] = useState<HubRoutineTemplate[]>([])
@@ -1577,8 +1557,7 @@ export function HubWorkoutsExpand({
 
   return (
     <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="min-w-0">
           <p className="type-hud-subsection">Workouts</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
             {met
@@ -1586,8 +1565,6 @@ export function HubWorkoutsExpand({
               : `${weekCount}/${WEEKLY_WORKOUT_GOAL} this week`}
             {todayCount > 0 ? ` · ${todayCount} today` : ""}
           </p>
-        </div>
-        <HubExpandDismiss onDismiss={onDismiss} />
       </div>
 
       <div className="flex items-center gap-4">
