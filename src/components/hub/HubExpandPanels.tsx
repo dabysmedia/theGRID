@@ -1,11 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { addDays, format, startOfWeek } from "date-fns"
 import {
-  ChevronRight,
   Dumbbell,
   Moon,
   Pencil,
@@ -13,6 +13,7 @@ import {
   Plus,
   RefreshCw,
   Syringe,
+  Trash2,
   Waves,
   X,
 } from "lucide-react"
@@ -29,7 +30,9 @@ import {
   ReferenceLine,
 } from "recharts"
 import { CaloriePipTracker } from "@/components/calories/CaloriePipTracker"
+import { LogFoodDialog } from "@/components/calories/LogFoodDialog"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
+import { Button } from "@/components/ui/button"
 import { WeekWorkoutGoalRing, WEEKLY_WORKOUT_GOAL } from "@/components/WeekWorkoutGoalRing"
 import {
   StageMinuteBars,
@@ -68,6 +71,8 @@ import {
   muscleStatsToSegmentScores,
   type WorkoutSessionLike,
 } from "@/lib/workouts/muscle-volume"
+import type { CalorieEntry, DraftMealItem } from "@/lib/calories/log-food"
+import { mealTypes } from "@/lib/calories/log-food"
 import { cn, formatDate, parseLocalDate } from "@/lib/utils"
 
 export type HubExpandedPanel =
@@ -112,9 +117,107 @@ export function HubCaloriesExpand({
   vacationBlocked?: boolean
   onDismiss: () => void
 }) {
+  const { activeDate } = useActiveDate()
   const { openQuickLog } = useQuickLog()
   const remaining = Math.max(0, target - consumed)
   const pct = target > 0 ? Math.round((consumed / target) * 100) : 0
+
+  const [entries, setEntries] = useState<CalorieEntry[]>([])
+  const [entriesStatus, setEntriesStatus] = useState<"loading" | "ready" | "error">("loading")
+  const [logFoodOpen, setLogFoodOpen] = useState(false)
+  const [editingEntry, setEditingEntry] = useState<CalorieEntry | null>(null)
+  const [draftMealItems, setDraftMealItems] = useState<DraftMealItem[]>([])
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; label: string } | null>(null)
+  const [pendingDeleteBusy, setPendingDeleteBusy] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    setEntriesStatus("loading")
+    void apiFetch(`/api/calories?date=${activeDate}&_=${Date.now()}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
+      .then((rows: unknown) => {
+        if (cancelled) return
+        setEntries(Array.isArray(rows) ? (rows as CalorieEntry[]) : [])
+        setEntriesStatus("ready")
+      })
+      .catch(() => {
+        if (cancelled) return
+        setEntries([])
+        setEntriesStatus("error")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeDate, reloadKey])
+
+  useEffect(() => {
+    if (!pendingDelete) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !pendingDeleteBusy) setPendingDelete(null)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [pendingDelete, pendingDeleteBusy])
+
+  const mealGroups = useMemo(() => {
+    const map = new Map<string, CalorieEntry[]>()
+    for (const entry of entries) {
+      const key = entry.mealType.toLowerCase().trim() || "other"
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(entry)
+    }
+    const order = mealTypes as readonly string[]
+    const ordered: { meal: string; items: CalorieEntry[] }[] = order
+      .filter((m) => map.has(m))
+      .map((meal) => ({ meal, items: map.get(meal)! }))
+    for (const [meal, mealItems] of map) {
+      if (!order.includes(meal)) ordered.push({ meal, items: mealItems })
+    }
+    return ordered
+  }, [entries])
+
+  function bumpHub() {
+    window.dispatchEvent(new CustomEvent("grid:log-saved"))
+  }
+
+  function openAddFood() {
+    setEditingEntry(null)
+    setLogFoodOpen(true)
+  }
+
+  function startEdit(entry: CalorieEntry) {
+    setEditingEntry(entry)
+    setLogFoodOpen(true)
+  }
+
+  function requestDelete(id: string, summary?: string) {
+    const detail =
+      summary && summary.trim().length > 0
+        ? summary.trim().length > 90
+          ? `${summary.trim().slice(0, 90)}…`
+          : summary.trim()
+        : null
+    setPendingDelete({ id, label: detail ?? "this log entry" })
+  }
+
+  async function executePendingDelete() {
+    if (!pendingDelete || pendingDeleteBusy) return
+    setPendingDeleteBusy(true)
+    try {
+      const id = pendingDelete.id
+      const res = await apiFetch(`/api/calories?id=${id}`, { method: "DELETE" })
+      if (res.ok) {
+        setEntries((prev) => prev.filter((e) => e.id !== id))
+        setEditingEntry((cur) => (cur?.id === id ? null : cur))
+        if (logFoodOpen) setLogFoodOpen(false)
+        bumpHub()
+      }
+      setPendingDelete(null)
+    } finally {
+      setPendingDeleteBusy(false)
+    }
+  }
 
   return (
     <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-3 px-0.5">
@@ -146,20 +249,214 @@ export function HubCaloriesExpand({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => openQuickLog("calories")}
+              onClick={openAddFood}
               className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:flex-none sm:px-4"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden />
               Add food
             </button>
-            <Link
-              href="/calories"
+            <button
+              type="button"
+              onClick={() => openQuickLog("calories")}
               className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:flex-none sm:px-4"
             >
-              Open calories
-              <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-            </Link>
+              Quick log
+            </button>
           </div>
+
+          <div
+            className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/8 to-transparent"
+            aria-hidden
+          />
+
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="type-hud-caption">Today&apos;s food</p>
+              {entriesStatus === "ready" && entries.length > 0 ? (
+                <span className="type-hud-micro tabular-nums text-muted-foreground/50">
+                  {entries.length}
+                </span>
+              ) : null}
+            </div>
+
+            {entriesStatus === "loading" ? (
+              <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+                Loading food log…
+              </p>
+            ) : null}
+            {entriesStatus === "error" ? (
+              <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+                Couldn&apos;t load food log.{" "}
+                <button
+                  type="button"
+                  onClick={() => setReloadKey((k) => k + 1)}
+                  className="text-foreground/75 underline-offset-2 hover:underline hover:text-red-200/90"
+                >
+                  Retry
+                </button>
+              </p>
+            ) : null}
+            {entriesStatus === "ready" && entries.length === 0 ? (
+              <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+                Nothing logged yet — tap Add food above.
+              </p>
+            ) : null}
+
+            {entriesStatus === "ready" && mealGroups.length > 0 ? (
+              <div className="space-y-3">
+                {mealGroups.map(({ meal, items }) => (
+                  <div key={meal} className="space-y-1">
+                    <p className="type-hud-micro capitalize text-muted-foreground/50">{meal}</p>
+                    <ul className="divide-y divide-white/[0.05] border-y border-white/[0.05]">
+                      {items.map((entry) => (
+                        <li
+                          key={entry.id}
+                          className="group/row flex items-stretch gap-2 py-2.5"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                              <span className="type-hud-stat-sm tabular-nums text-foreground/90">
+                                {entry.calories.toLocaleString()}
+                              </span>
+                              <span className="type-hud-unit text-muted-foreground/55">cal</span>
+                            </div>
+                            {(entry.protein != null ||
+                              entry.carbs != null ||
+                              entry.fat != null) && (
+                              <p className="mt-0.5 type-hud-micro normal-case tracking-normal tabular-nums text-muted-foreground/45">
+                                {[
+                                  entry.protein != null ? `P ${entry.protein}g` : null,
+                                  entry.carbs != null ? `C ${entry.carbs}g` : null,
+                                  entry.fat != null ? `F ${entry.fat}g` : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </p>
+                            )}
+                            {entry.description?.trim() ? (
+                              <p className="mt-1 line-clamp-2 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
+                                {entry.description}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1 self-center">
+                            <button
+                              type="button"
+                              onClick={() => startEdit(entry)}
+                              className="history-row-edit !min-h-9 !min-w-9 !m-0"
+                              title="Edit"
+                              aria-label={`Edit ${entry.description?.trim() || entry.calories + " cal"}`}
+                            >
+                              <Pencil />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                requestDelete(
+                                  entry.id,
+                                  entry.description?.trim() ||
+                                    `${entry.calories} cal · ${entry.mealType}`,
+                                )
+                              }
+                              className="history-row-delete-row !min-h-9 !min-w-9 !m-0"
+                              aria-label={`Delete ${entry.description?.trim() || entry.calories + " cal"}`}
+                            >
+                              <Trash2 />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          <LogFoodDialog
+            open={logFoodOpen}
+            onOpenChange={(open) => {
+              setLogFoodOpen(open)
+              if (!open) setEditingEntry(null)
+            }}
+            editingEntry={editingEntry}
+            onEditingEntryChange={setEditingEntry}
+            draftMealItems={draftMealItems}
+            onDraftMealItemsChange={setDraftMealItems}
+            onPosted={(created) => {
+              setEntries((prev) => [...created.reverse(), ...prev])
+              bumpHub()
+            }}
+            onUpdated={(updated) => {
+              setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
+              setEditingEntry(null)
+              bumpHub()
+            }}
+          />
+
+          {pendingDelete
+            ? createPortal(
+                <div
+                  className="fixed inset-0 z-[300] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[3px]"
+                  role="alertdialog"
+                  aria-modal="true"
+                  aria-labelledby="hub-cal-delete-title"
+                  aria-describedby="hub-cal-delete-desc"
+                  onClick={() => {
+                    if (!pendingDeleteBusy) setPendingDelete(null)
+                  }}
+                >
+                  <div
+                    className="w-full max-w-sm rounded-2xl border border-border/35 bg-popover p-5 shadow-2xl ring-1 ring-foreground/5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <h2
+                      id="hub-cal-delete-title"
+                      className="font-heading text-base font-semibold text-foreground"
+                    >
+                      Delete log entry?
+                    </h2>
+                    <p
+                      id="hub-cal-delete-desc"
+                      className="mt-2 text-sm leading-relaxed text-muted-foreground"
+                    >
+                      {pendingDelete.label === "this log entry" ? (
+                        <>This will remove the entry from your history. This cannot be undone.</>
+                      ) : (
+                        <>
+                          This will remove{" "}
+                          <span className="font-medium text-foreground">
+                            &quot;{pendingDelete.label}&quot;
+                          </span>{" "}
+                          from your history. This cannot be undone.
+                        </>
+                      )}
+                    </p>
+                    <div className="mt-5 flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11 flex-1"
+                        disabled={pendingDeleteBusy}
+                        onClick={() => setPendingDelete(null)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="h-11 flex-1"
+                        disabled={pendingDeleteBusy}
+                        onClick={() => void executePendingDelete()}
+                      >
+                        {pendingDeleteBusy ? "Deleting…" : "Delete"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>,
+                document.body,
+              )
+            : null}
         </>
       )}
     </div>
@@ -990,14 +1287,6 @@ export function HubPeptidesExpand({
         </div>
       </div>
 
-      <Link
-        href="/peptides"
-        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-violet-400/30 hover:bg-violet-400/[0.06] hover:text-violet-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30 sm:w-auto sm:px-4"
-      >
-        Open peptides
-        <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-      </Link>
-
       <LogPeptideInjectionDialog
         open={injectionOpen}
         onOpenChange={setInjectionOpen}
@@ -1269,11 +1558,6 @@ export function HubWorkoutsExpand({
         </div>
       </div>
 
-      <div
-        className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/8 to-transparent"
-        aria-hidden
-      />
-
       <div className="space-y-2">
         <div className="flex items-baseline justify-between gap-2">
           <p className="type-hud-caption">Load · this week</p>
@@ -1290,7 +1574,7 @@ export function HubWorkoutsExpand({
         ) : null}
         {loadStatus === "error" ? (
           <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-            Couldn’t load muscle map.
+            Couldn&apos;t load muscle map.
           </p>
         ) : null}
         {loadStatus === "ready" ? (
@@ -1402,13 +1686,27 @@ export function HubWorkoutsExpand({
         ) : null}
         {templatesStatus === "error" ? (
           <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-            Couldn’t load routines.{" "}
-            <Link
-              href="/workouts"
+            Couldn&apos;t load routines.{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setTemplatesStatus("loading")
+                void apiFetch(`/api/workout-templates?_=${Date.now()}`, { cache: "no-store" })
+                  .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
+                  .then((rows: unknown) => {
+                    const list = Array.isArray(rows) ? (rows as HubRoutineTemplate[]) : []
+                    setTemplates(list)
+                    setTemplatesStatus("ready")
+                  })
+                  .catch(() => {
+                    setTemplates([])
+                    setTemplatesStatus("error")
+                  })
+              }}
               className="text-foreground/75 underline-offset-2 hover:underline hover:text-[#e8f07a]"
             >
-              Open workouts
-            </Link>
+              Retry
+            </button>
           </p>
         ) : null}
         {templatesStatus === "ready" && templates.length === 0 ? (
@@ -1418,7 +1716,7 @@ export function HubWorkoutsExpand({
         ) : null}
 
         {templates.length > 0 ? (
-          <div className="divide-y divide-white/[0.05]">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {templates.map((tmpl) => {
               const exs = parseHubRoutineExercises(tmpl.exercises)
               const tags = parseHubRoutineTags(tmpl.tags)
@@ -1428,55 +1726,46 @@ export function HubWorkoutsExpand({
               return (
                 <div
                   key={tmpl.id}
-                  className="flex min-w-0 items-center gap-2.5 py-2.5 first:pt-0 last:pb-0"
+                  className="group flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.02]"
                 >
                   <button
                     type="button"
                     onClick={() => setPreviewId(tmpl.id)}
-                    className="flex min-w-0 flex-1 items-center gap-2.5 text-left touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30"
+                    className="relative aspect-[4/3] w-full overflow-hidden bg-white/[0.03] text-left touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#c4d632]/30"
                     aria-label={`Preview ${tmpl.name}`}
                   >
-                    <div className="relative size-11 shrink-0 overflow-hidden rounded-lg bg-white/[0.04] ring-1 ring-white/[0.06] sm:size-12">
-                      {cover ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={cover}
-                          alt=""
-                          className="absolute inset-0 size-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex size-full items-center justify-center bg-gradient-to-br from-white/[0.05] to-transparent">
-                          <Dumbbell className="size-4 text-muted-foreground/30" aria-hidden />
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <p className="truncate text-[13px] font-semibold text-foreground/90">
-                          {tmpl.name}
-                        </p>
-                        <ChevronRight
-                          className="size-3.5 shrink-0 text-muted-foreground/35"
-                          aria-hidden
-                        />
+                    {cover ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={cover}
+                        alt=""
+                        className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                      />
+                    ) : (
+                      <div className="flex size-full items-center justify-center bg-gradient-to-br from-white/[0.06] via-transparent to-[#c4d632]/[0.06]">
+                        <Dumbbell className="size-6 text-muted-foreground/30" aria-hidden />
                       </div>
+                    )}
+                    <div
+                      className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-background/90 via-background/40 to-transparent"
+                      aria-hidden
+                    />
+                    <div className="absolute inset-x-0 bottom-0 p-2">
+                      <p className="truncate text-[12px] font-semibold leading-tight text-foreground/95">
+                        {tmpl.name}
+                      </p>
                       <p
-                        className="mt-0.5 line-clamp-1 type-hud-caption normal-case tracking-normal text-muted-foreground/55"
+                        className="mt-0.5 line-clamp-1 type-hud-micro normal-case tracking-normal text-muted-foreground/65"
                         title={exs.map((e) => e.name).join(", ")}
                       >
                         {preview}
                       </p>
-                      {tags.length > 0 ? (
-                        <p className="mt-0.5 truncate type-hud-micro normal-case tracking-normal text-muted-foreground/40">
-                          {tags.slice(0, 3).join(" · ")}
-                        </p>
-                      ) : null}
                     </div>
                   </button>
-                  <div className="flex shrink-0 items-center gap-1.5 self-center">
+                  <div className="flex items-center gap-1 border-t border-white/[0.06] p-1.5">
                     <Link
                       href={`/workouts?editRoutine=${encodeURIComponent(tmpl.id)}`}
-                      className="inline-flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-muted-foreground/70 transition-colors hover:border-[#c4d632]/30 hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30"
+                      className="inline-flex size-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-muted-foreground/70 transition-colors hover:border-[#c4d632]/30 hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30"
                       aria-label={`Edit ${tmpl.name}`}
                     >
                       <Pencil className="size-3.5" aria-hidden />
@@ -1485,12 +1774,17 @@ export function HubWorkoutsExpand({
                       type="button"
                       disabled={startingId != null}
                       onClick={() => goStartRoutine(tmpl.id)}
-                      className="inline-flex h-9 items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
+                      className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2 type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
                     >
                       <Play className="size-3 shrink-0" aria-hidden />
                       {busy ? "…" : "Start"}
                     </button>
                   </div>
+                  {tags.length > 0 ? (
+                    <p className="truncate border-t border-white/[0.04] px-2 py-1 type-hud-micro normal-case tracking-normal text-muted-foreground/40">
+                      {tags.slice(0, 2).join(" · ")}
+                    </p>
+                  ) : null}
                 </div>
               )
             })}
@@ -1519,14 +1813,6 @@ export function HubWorkoutsExpand({
           exercises manually.
         </p>
       </div>
-
-      <Link
-        href="/workouts"
-        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/30 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 sm:w-auto sm:px-4"
-      >
-        <Dumbbell className="h-3.5 w-3.5" aria-hidden />
-        Open full workouts
-      </Link>
 
       <Dialog open={previewTmpl != null} onOpenChange={(open) => !open && setPreviewId(null)}>
         <DialogContent
