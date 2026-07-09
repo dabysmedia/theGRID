@@ -8,6 +8,7 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { DailyWeighIn } from "@/components/DailyWeighIn"
+import { ReadinessHeartTile } from "@/components/hub/ReadinessHeartTile"
 import { useActiveDate } from "@/context/DateContext"
 import { useQuickLog } from "@/context/QuickLogContext"
 import { cn, glassPanelClass, parseLocalDate } from "@/lib/utils"
@@ -42,6 +43,13 @@ interface DashboardData {
   sleep: CategorySummary
   alcohol: CategorySummary
   bowel: CategorySummary
+  readiness?: {
+    todayValue: number | null
+    weekAvg: number | null
+    hrvMs: number | null
+    restingHeartRate: number | null
+    last7: number[]
+  }
   weightTrend: {
     baselineTrend: "losing" | "maintaining" | "gaining"
     vsBaselineLb: number
@@ -213,66 +221,7 @@ function weekAvgFromLoggedDays(last7: number[]): number {
   return logged.reduce((s, v) => s + v, 0) / logged.length
 }
 
-/** 0–1, caps over-performance at 100% for scoring */
-function clamp01(n: number): number {
-  if (!Number.isFinite(n) || n < 0) return 0
-  return Math.min(n, 1)
-}
-
 type OverviewView = "today" | "week"
-
-/**
- * Daily score 0–100: same weighting as weekly score but uses the hub day’s logged values.
- */
-function computeDailyScore(d: DashboardData, skipCalories: boolean): number {
-  const calGoal = d.calories.goal ?? 2000
-  const stepsGoal = d.steps.goal ?? 10000
-
-  const calScore = calGoal > 0 ? clamp01(d.calories.todayValue / calGoal) : 0
-  const stepsScore = stepsGoal > 0 ? clamp01(d.steps.todayValue / stepsGoal) : 0
-
-  const runGoalDaily = d.running.goal ?? 3
-  const runScore = runGoalDaily > 0 ? clamp01(d.running.todayValue / runGoalDaily) : 0
-
-  const workoutGoalDaily = d.workouts.goal ?? 1
-  const workoutScore =
-    workoutGoalDaily > 0 ? clamp01(d.workouts.todayValue / workoutGoalDaily) : 0
-
-  const activityScore = (runScore + workoutScore) / 2
-  if (skipCalories) {
-    return Math.round(((stepsScore + activityScore) / 2) * 100)
-  }
-  return Math.round(((calScore + stepsScore + activityScore) / 3) * 100)
-}
-
-/**
- * Weekly score 0–100: equal weight on calories avg vs goal, steps avg vs goal, and avg of
- * running + workout vs goals. When `skipCalories`, calories are omitted (vacation on hub day).
- */
-function computeWeeklyScore(d: DashboardData, skipCalories: boolean): number {
-  const calGoal = d.calories.goal ?? 2000
-  const stepsGoal = d.steps.goal ?? 10000
-  const calAvg = weekAvgFromLoggedDays(d.calories.last7)
-  const stepsAvg = weekAvgFromLoggedDays(d.steps.last7)
-
-  const calScore = calGoal > 0 ? clamp01(calAvg / calGoal) : 0
-  const stepsScore = stepsGoal > 0 ? clamp01(stepsAvg / stepsGoal) : 0
-
-  const runGoalDaily = d.running.goal ?? 3
-  const runAvg = weekAvgFromLoggedDays(d.running.last7)
-  const runScore = runGoalDaily > 0 ? clamp01(runAvg / runGoalDaily) : 0
-
-  const workoutGoalDaily = d.workouts.goal ?? 1
-  const workoutAvg = weekAvgFromLoggedDays(d.workouts.last7)
-  const workoutScore =
-    workoutGoalDaily > 0 ? clamp01(workoutAvg / workoutGoalDaily) : 0
-
-  const activityScore = (runScore + workoutScore) / 2
-  if (skipCalories) {
-    return Math.round(((stepsScore + activityScore) / 2) * 100)
-  }
-  return Math.round(((calScore + stepsScore + activityScore) / 3) * 100)
-}
 
 export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: WeeklyHeroProps) {
   const { activeDate, isToday } = useActiveDate()
@@ -309,9 +258,11 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
   const calValue = isWeekView ? calAvg : data.calories.todayValue
   const stepsValue = isWeekView ? stepsAvg : data.steps.todayValue
   const sleepValue = isWeekView ? sleepAvg : data.sleep.todayValue
-  const score = isWeekView
-    ? computeWeeklyScore(data, vacationBlocksCalories)
-    : computeDailyScore(data, vacationBlocksCalories)
+  const readinessValue = isWeekView
+    ? (data.readiness?.weekAvg ?? null)
+    : (data.readiness?.todayValue ?? null)
+  const hrvMs = data.readiness?.hrvMs ?? null
+  const restingHeartRate = data.readiness?.restingHeartRate ?? null
 
   const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
   const dateRange = `${monthNames[weekStart.getMonth()]} ${weekStart.getDate()} – ${monthNames[weekEnd.getMonth()]} ${weekEnd.getDate()}`
@@ -417,27 +368,14 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         />
       </div>
 
-      {/* Score */}
-      <div className="mb-5">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="type-hud-label-soft">{isWeekView ? "Weekly score" : "Daily score"}</span>
-          <span
-            key={`${viewMode}-score`}
-            className="type-hud-stat-xs text-primary tracking-wider motion-safe:animate-fade-up motion-reduce:animate-none"
-          >
-            {score}%
-          </span>
-        </div>
-        <div className="h-1 w-full bg-muted/20 overflow-hidden">
-          <div
-            className="h-full bg-primary transition-all duration-700 ease-out"
-            style={{
-              width: `${score}%`,
-              boxShadow: '0 0 8px oklch(0.82 0.18 110 / 25%)',
-            }}
-          />
-        </div>
-      </div>
+      <ReadinessHeartTile
+        key={`${viewMode}-readiness`}
+        readiness={readinessValue}
+        hrvMs={hrvMs}
+        restingHeartRate={restingHeartRate}
+        isWeekView={isWeekView}
+        className="motion-safe:animate-fade-up motion-reduce:animate-none"
+      />
 
       {/* Weekly activity bars */}
       <div className="animate-fade-up stagger-3">

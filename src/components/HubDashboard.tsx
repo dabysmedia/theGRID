@@ -45,6 +45,13 @@ interface DashboardData {
   bowel: CategorySummary
   recovery: CategorySummary
   vitals: CategorySummary
+  readiness?: {
+    todayValue: number | null
+    weekAvg: number | null
+    hrvMs: number | null
+    restingHeartRate: number | null
+    last7: number[]
+  }
   weightTrend: {
     baselineTrend: "losing" | "maintaining" | "gaining"
     vsBaselineLb: number
@@ -64,6 +71,13 @@ const defaultData: DashboardData = {
   bowel: { todayValue: 0, goal: null, unit: "", last7: emptyLast7() },
   recovery: { todayValue: 0, goal: 7, unit: "/10", last7: emptyLast7() },
   vitals: { todayValue: 0, goal: null, unit: "ms", last7: emptyLast7() },
+  readiness: {
+    todayValue: null,
+    weekAvg: null,
+    hrvMs: null,
+    restingHeartRate: null,
+    last7: emptyLast7(),
+  },
   weightTrend: null,
 }
 
