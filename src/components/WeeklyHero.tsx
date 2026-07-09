@@ -689,26 +689,26 @@ export function WeeklyHero({
                   onClick={() => toggleExpand("peptides")}
                   aria-label="Expand peptides"
                   aria-expanded={false}
-                  className="group flex min-w-0 flex-1 items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 lg:px-5"
+                  className="group flex min-w-0 flex-1 items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 lg:px-5"
                 >
                   <PeptideVialGraphic
                     color="#94a3b8"
                     doseMg={peptideSummary?.lastDoseMg ?? null}
-                    size="sm"
+                    size="md"
                     className="shrink-0 opacity-90"
                   />
                   <div className="min-w-0 flex-1">
                     <p className="type-hud-micro text-muted-foreground/70">Protocol</p>
                     <p
                       className={cn(
-                        "truncate text-[12px] font-semibold tracking-wide text-foreground/90",
+                        "truncate text-[13px] font-semibold tracking-wide text-foreground/90",
                         peptideNext?.overdue && "text-negative",
                         peptideNext?.dueToday && "text-primary",
                       )}
                     >
                       {peptideCue}
                     </p>
-                    <p className="mt-0.5 truncate text-[10px] tabular-nums text-muted-foreground/55">
+                    <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground/55">
                       {peptideSummary?.lastDoseMg != null
                         ? `Last ${peptideSummary.lastDoseMg} mg`
                         : "No dose logged"}
@@ -717,7 +717,7 @@ export function WeeklyHero({
                 </button>
 
                 <div
-                  className="my-2 w-px shrink-0 bg-gradient-to-b from-transparent via-white/12 to-transparent"
+                  className="my-3 w-px shrink-0 bg-gradient-to-b from-transparent via-white/12 to-transparent"
                   aria-hidden
                 />
 
@@ -726,20 +726,23 @@ export function WeeklyHero({
                   onClick={() => toggleExpand("workouts")}
                   aria-label="Expand workouts"
                   aria-expanded={false}
-                  className="group flex min-w-0 flex-1 items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 lg:px-5"
+                  className="group flex min-w-0 flex-1 items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 lg:px-5"
                 >
-                  <div className="shrink-0 scale-[0.85]">
-                    <WeekWorkoutGoalRing count={weekWo} size="sm" color="#c4d632" />
-                  </div>
+                  <WeekWorkoutGoalRing
+                    count={weekWo}
+                    size="md"
+                    color="#c4d632"
+                    className="shrink-0"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="type-hud-micro text-muted-foreground/70">Training</p>
                     <p
-                      className="truncate text-[12px] font-semibold tracking-wide text-foreground/90"
+                      className="truncate text-[13px] font-semibold tracking-wide text-foreground/90"
                       style={woMet ? { color: "#c4d632" } : undefined}
                     >
                       {workoutCue}
                     </p>
-                    <p className="mt-0.5 truncate text-[10px] tabular-nums text-muted-foreground/55">
+                    <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground/55">
                       {workoutSummary?.recoveryScore != null
                         ? `Recovery ${workoutSummary.recoveryScore}/10`
                         : weekWo === 0

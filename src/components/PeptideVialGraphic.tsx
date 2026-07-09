@@ -24,11 +24,11 @@ export function PeptideVialGraphic({
     size === "lg"
       ? "h-[8.25rem] w-full max-w-[9.5rem] sm:h-[8.75rem] sm:max-w-[10rem]"
       : size === "md"
-        ? "h-[4.5rem] w-[4.5rem]"
+        ? "h-[5.5rem] w-[5.5rem] sm:h-[6rem] sm:w-[6rem]"
         : "h-12 w-12"
 
   const imageScale =
-    size === "lg" ? "scale-[1.28]" : size === "md" ? "scale-[1.18]" : "scale-[1.12]"
+    size === "lg" ? "scale-[1.28]" : size === "md" ? "scale-[1.24]" : "scale-[1.12]"
 
   return (
     <div
@@ -83,7 +83,7 @@ export function PeptideVialGraphic({
             size === "lg"
               ? "text-[1.35rem] sm:text-[1.45rem]"
               : size === "md"
-                ? "text-base"
+                ? "text-lg sm:text-xl"
                 : "text-sm"
           )}
           style={{ color }}
