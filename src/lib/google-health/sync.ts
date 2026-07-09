@@ -7,18 +7,30 @@ import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 import { GOOGLE_HEALTH_SOURCE } from "@/lib/google-health/config"
 import {
   addDaysYmd,
+  fetchDailyHeartRateVariability,
+  fetchDailyHeartRateZones,
+  fetchDailyRestingHeartRate,
   fetchDailySteps,
   fetchDailyWeight,
+  fetchHeartRateDailyRollup,
+  fetchHeartRateSamplesBucketed,
   fetchSleepSessions,
+  fetchTimeInHeartRateZoneDailyRollup,
+  type HeartRateZoneMinutes,
+  type HeartRateZoneThreshold,
 } from "@/lib/google-health/client"
+import { deriveSleepScore, computeSleepEfficiency } from "@/lib/sleep-score"
 import { subDays } from "date-fns"
 
 const GRAMS_PER_LB = 453.59237
+/** How many trailing days get ~5-minute heart-rate sample buckets synced (keeps row counts sane). */
+const HR_SAMPLE_SYNC_DAYS = 2
 
 export type SyncMetrics = {
   steps?: boolean
   sleep?: boolean
   weight?: boolean
+  vitals?: boolean
 }
 
 export type SyncResult = {
@@ -26,6 +38,7 @@ export type SyncResult = {
   sleepUpserted: number
   weightUpserted: number
   weightSkippedVacation: number
+  vitalsUpserted: number
   rangeStart: string
   rangeEnd: string
 }
@@ -70,16 +83,48 @@ export async function syncGoogleHealthForUser(
     steps: opts?.metrics?.steps ?? true,
     sleep: opts?.metrics?.sleep ?? true,
     weight: opts?.metrics?.weight ?? true,
+    vitals: opts?.metrics?.vitals ?? true,
   }
   const endYmd = formatDate(new Date())
   const startYmd = formatDate(subDays(new Date(), days - 1))
   const endExclusive = addDaysYmd(endYmd, 1)
+  const hrSampleStartYmd = formatDate(subDays(new Date(), HR_SAMPLE_SYNC_DAYS - 1))
 
-  const [steps, sleep, weights] = await Promise.all([
-    metrics.steps ? fetchDailySteps(userId, startYmd, endExclusive) : Promise.resolve([]),
-    metrics.sleep ? fetchSleepSessions(userId, startYmd) : Promise.resolve([]),
-    metrics.weight ? fetchDailyWeight(userId, startYmd, endExclusive) : Promise.resolve([]),
-  ])
+  const [steps, sleep, weights, restingHr, hrv, hrZoneThresholds, hrRollup, timeInZone] =
+    await Promise.all([
+      metrics.steps ? fetchDailySteps(userId, startYmd, endExclusive) : Promise.resolve([]),
+      metrics.sleep ? fetchSleepSessions(userId, startYmd) : Promise.resolve([]),
+      metrics.weight ? fetchDailyWeight(userId, startYmd, endExclusive) : Promise.resolve([]),
+      metrics.vitals
+        ? fetchDailyRestingHeartRate(userId, startYmd, endExclusive)
+        : Promise.resolve([]),
+      metrics.vitals
+        ? fetchDailyHeartRateVariability(userId, startYmd, endExclusive)
+        : Promise.resolve([]),
+      metrics.vitals
+        ? fetchDailyHeartRateZones(userId, startYmd, endExclusive)
+        : Promise.resolve([]),
+      metrics.vitals
+        ? fetchHeartRateDailyRollup(userId, startYmd, endExclusive)
+        : Promise.resolve([]),
+      metrics.vitals
+        ? fetchTimeInHeartRateZoneDailyRollup(userId, startYmd, endExclusive)
+        : Promise.resolve([]),
+    ])
+
+  const hrSampleDays: Array<{ ymd: string; samples: Array<{ time: string; bpm: number }> }> = []
+  if (metrics.vitals) {
+    let cursor = hrSampleStartYmd
+    while (cursor <= endYmd) {
+      try {
+        const samples = await fetchHeartRateSamplesBucketed(userId, cursor)
+        if (samples.length > 0) hrSampleDays.push({ ymd: cursor, samples })
+      } catch {
+        // Some accounts/devices don't have intraday HR — skip that day rather than fail the sync.
+      }
+      cursor = addDaysYmd(cursor, 1)
+    }
+  }
 
   let stepsUpserted = 0
   for (const row of steps) {
@@ -130,11 +175,35 @@ export async function syncGoogleHealthForUser(
     const existing = await prisma.sleepEntry.findFirst({
       where: { userId, externalId },
     })
+
+    const minutesInBed =
+      session.minutesInSleepPeriod ??
+      Math.round((session.wakeTime.getTime() - session.bedtime.getTime()) / 60000)
+    const minutesAsleep =
+      session.minutesAsleep ??
+      (session.remMinutes ?? 0) + (session.lightMinutes ?? 0) + (session.deepMinutes ?? 0)
+    const efficiency =
+      minutesAsleep > 0 ? computeSleepEfficiency(minutesAsleep, minutesInBed) : null
+    const score = deriveSleepScore({
+      efficiency,
+      remMinutes: session.remMinutes,
+      lightMinutes: session.lightMinutes,
+      deepMinutes: session.deepMinutes,
+      awakeMinutes: session.awakeMinutes,
+    })
+
     const data = {
       date,
       bedtime: session.bedtime,
       wakeTime: session.wakeTime,
-      quality: 3,
+      quality: score != null ? Math.max(1, Math.min(5, Math.round(score / 20))) : 3,
+      score,
+      remMinutes: session.remMinutes ?? null,
+      lightMinutes: session.lightMinutes ?? null,
+      deepMinutes: session.deepMinutes ?? null,
+      awakeMinutes: session.awakeMinutes ?? null,
+      efficiency,
+      stagesJson: JSON.stringify(session.stages ?? []),
       notes: "Synced from Google Health / Fitbit",
       source: GOOGLE_HEALTH_SOURCE,
       externalId,
@@ -206,6 +275,92 @@ export async function syncGoogleHealthForUser(
     weightUpserted++
   }
 
+  let vitalsUpserted = 0
+  if (metrics.vitals) {
+    const byDate = new Map<
+      string,
+      {
+        restingHeartRate?: number
+        hrvMs?: number
+        hrAvg?: number
+        hrMin?: number
+        hrMax?: number
+        zones?: HeartRateZoneMinutes[]
+        thresholds?: HeartRateZoneThreshold[]
+      }
+    >()
+    const ensure = (date: string) => {
+      let row = byDate.get(date)
+      if (!row) {
+        row = {}
+        byDate.set(date, row)
+      }
+      return row
+    }
+    for (const r of restingHr) ensure(r.date).restingHeartRate = r.bpm
+    for (const r of hrv) ensure(r.date).hrvMs = r.ms
+    for (const r of hrZoneThresholds) ensure(r.date).thresholds = r.thresholds
+    for (const r of hrRollup) {
+      const row = ensure(r.date)
+      row.hrAvg = r.avgBpm ?? undefined
+      row.hrMin = r.minBpm ?? undefined
+      row.hrMax = r.maxBpm ?? undefined
+    }
+    for (const r of timeInZone) ensure(r.date).zones = r.zones
+
+    for (const [dateYmd, row] of byDate) {
+      const hasAnyData =
+        row.restingHeartRate != null ||
+        row.hrvMs != null ||
+        row.hrAvg != null ||
+        (row.zones && row.zones.length > 0) ||
+        (row.thresholds && row.thresholds.length > 0)
+      if (!hasAnyData) continue
+
+      const externalId = `${GOOGLE_HEALTH_SOURCE}:vitals:${dateYmd}`
+      const date = parseYyyyMmDdToStoredDate(dateYmd)
+      const data = {
+        date,
+        restingHeartRate: row.restingHeartRate ?? null,
+        hrvMs: row.hrvMs ?? null,
+        hrAvg: row.hrAvg ?? null,
+        hrMin: row.hrMin ?? null,
+        hrMax: row.hrMax ?? null,
+        zonesJson: JSON.stringify(row.zones ?? []),
+        thresholdsJson: JSON.stringify(row.thresholds ?? []),
+        source: GOOGLE_HEALTH_SOURCE,
+        externalId,
+      }
+      const existing = await prisma.vitalDailyEntry.findFirst({ where: { userId, externalId } })
+      if (existing) {
+        await prisma.vitalDailyEntry.update({ where: { id: existing.id }, data })
+      } else {
+        await prisma.vitalDailyEntry.create({ data: { ...data, userId } })
+      }
+      vitalsUpserted++
+    }
+
+    for (const day of hrSampleDays) {
+      const date = parseYyyyMmDdToStoredDate(day.ymd)
+      for (const sample of day.samples) {
+        const externalId = `${GOOGLE_HEALTH_SOURCE}:hr-sample:${sample.time}`
+        const data = {
+          date,
+          time: new Date(sample.time),
+          bpm: sample.bpm,
+          source: GOOGLE_HEALTH_SOURCE,
+          externalId,
+        }
+        const existing = await prisma.heartRateSample.findFirst({ where: { userId, externalId } })
+        if (existing) {
+          await prisma.heartRateSample.update({ where: { id: existing.id }, data })
+        } else {
+          await prisma.heartRateSample.create({ data: { ...data, userId } })
+        }
+      }
+    }
+  }
+
   await prisma.googleHealthConnection.update({
     where: { userId },
     data: {
@@ -219,6 +374,7 @@ export async function syncGoogleHealthForUser(
     sleepUpserted,
     weightUpserted,
     weightSkippedVacation,
+    vitalsUpserted,
     rangeStart: startYmd,
     rangeEnd: endYmd,
   }

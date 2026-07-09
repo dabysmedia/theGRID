@@ -167,6 +167,7 @@ export async function GET(req: NextRequest) {
       alcoholEntries,
       bowelEntries,
       recoveryEntries,
+      vitalEntries,
       goals,
       bodyWeightGoal,
     ] = await Promise.all([
@@ -179,6 +180,7 @@ export async function GET(req: NextRequest) {
       prisma.alcoholEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.bowelEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.recoveryDailyEntry.findMany({ where: { date: dateInRange, userId } }),
+      prisma.vitalDailyEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.goal.findMany({ where: { active: true, userId } }),
       prisma.longGoal.findFirst({
         where: { category: "bodyweight", userId },
@@ -257,6 +259,11 @@ export async function GET(req: NextRequest) {
       if (!items.length) return 0
       const e = items[0]
       return recoveryCompositeFromEntry(e)
+    })
+    const vitalsLast7 = dailyTotals(vitalEntries, (items) => {
+      const withHrv = items.filter((e) => e.hrvMs != null)
+      if (!withHrv.length) return 0
+      return withHrv.reduce((s, e) => s + (e.hrvMs ?? 0), 0) / withHrv.length
     })
 
     const calG = goalByCategory.get("calories")
@@ -344,6 +351,13 @@ export async function GET(req: NextRequest) {
         direction: recoveryG?.direction ?? "up",
         unit: "/10",
         last7: recoveryLast7.map((v) => Math.round(v * 10) / 10),
+      },
+      vitals: {
+        todayValue: Math.round(vitalsLast7[6] * 10) / 10,
+        goal: null,
+        direction: "up",
+        unit: "ms",
+        last7: vitalsLast7.map((v) => Math.round(v * 10) / 10),
       },
       weightTrend,
     }

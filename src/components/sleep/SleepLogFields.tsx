@@ -1,43 +1,68 @@
 "use client"
 
-import { Star } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { displaySleepScore, sleepScoreBand, SLEEP_SCORE_BAND_LABEL } from "@/lib/sleep-score"
 
 const labelClass = "type-hud-label-soft"
 
-export function SleepQualityPicker({
+const SCORE_BAND_COLOR: Record<string, string> = {
+  excellent: "#22c55e",
+  good: "#6366f1",
+  fair: "#f59e0b",
+  poor: "#ef4444",
+}
+
+/** Optional 0–100 sleep score input. Leave blank to let the server derive a score from duration. */
+export function SleepScoreInput({
   value,
   onChange,
 }: {
-  value: number
-  onChange: (value: number) => void
+  value: number | null
+  onChange: (value: number | null) => void
 }) {
+  const band = sleepScoreBand(value)
+  const color = band ? SCORE_BAND_COLOR[band] : "#6366f1"
+
   return (
-    <div className="flex gap-2">
-      {[1, 2, 3, 4, 5].map((q) => (
+    <div className="space-y-2">
+      <div className="flex items-center gap-3">
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={value ?? 0}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="h-2 flex-1 cursor-pointer touch-manipulation appearance-none rounded-full bg-muted/30 accent-current"
+          style={{ color }}
+          aria-label="Sleep score"
+        />
+        <div className="flex min-w-[3.5rem] items-baseline justify-end gap-0.5">
+          <span className="type-hud-stat tabular-nums" style={{ color }}>
+            {displaySleepScore(value)}
+          </span>
+          {value != null && <span className="type-hud-caption">/100</span>}
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
         <button
-          key={q}
           type="button"
-          onClick={() => onChange(q)}
-          aria-label={`Quality ${q} of 5`}
-          aria-pressed={value === q}
+          onClick={() => onChange(null)}
           className={cn(
-            "flex h-11 flex-1 items-center justify-center rounded-xl border transition-colors touch-manipulation active:scale-[0.97]",
-            value >= q
-              ? "border-amber-400/45 bg-amber-400/10"
-              : "border-border/25 bg-background/30 hover:border-border/40",
+            "type-hud-micro normal-case transition-colors",
+            value == null ? "text-primary" : "text-muted-foreground hover:text-foreground"
           )}
         >
-          <Star
-            className={cn(
-              "h-5 w-5",
-              value >= q ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30",
-            )}
-          />
+          {value == null ? "Auto-derive from duration" : "Clear (auto-derive)"}
         </button>
-      ))}
+        {band && (
+          <span className="type-hud-caption normal-case" style={{ color }}>
+            {SLEEP_SCORE_BAND_LABEL[band]}
+          </span>
+        )}
+      </div>
     </div>
   )
 }
@@ -45,11 +70,11 @@ export function SleepQualityPicker({
 export type SleepLogFieldsProps = {
   bedtime: string
   wakeTime: string
-  quality: number
+  score: number | null
   notes: string
   onBedtimeChange: (value: string) => void
   onWakeTimeChange: (value: string) => void
-  onQualityChange: (value: number) => void
+  onScoreChange: (value: number | null) => void
   onNotesChange: (value: string) => void
   idPrefix?: string
 }
@@ -57,11 +82,11 @@ export type SleepLogFieldsProps = {
 export function SleepLogFields({
   bedtime,
   wakeTime,
-  quality,
+  score,
   notes,
   onBedtimeChange,
   onWakeTimeChange,
-  onQualityChange,
+  onScoreChange,
   onNotesChange,
   idPrefix = "sleep",
 }: SleepLogFieldsProps) {
@@ -95,8 +120,8 @@ export function SleepLogFields({
       </div>
 
       <div className="space-y-2">
-        <Label className={labelClass}>Quality · {quality}/5</Label>
-        <SleepQualityPicker value={quality} onChange={onQualityChange} />
+        <Label className={labelClass}>Sleep score</Label>
+        <SleepScoreInput value={score} onChange={onScoreChange} />
       </div>
 
       <div className="space-y-1.5">

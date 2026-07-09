@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { parseYyyyMmDdToStoredDate, utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
+import {
+  computeSleepEfficiency,
+  deriveSleepScore,
+  qualityToScore,
+  scoreToLegacyQuality,
+} from "@/lib/sleep-score"
+import { sleepDurationHours } from "@/lib/sleepDuration"
 
 export async function GET(req: NextRequest) {
   try {
@@ -29,12 +36,37 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
     const body = await req.json()
+
+    const bedtime = new Date(body.bedtime)
+    const wakeTime = new Date(body.wakeTime)
+
+    let score: number | null =
+      body.score != null && Number.isFinite(Number(body.score))
+        ? Math.max(0, Math.min(100, Math.round(Number(body.score))))
+        : null
+    let quality: number =
+      body.quality != null && Number.isFinite(Number(body.quality))
+        ? Math.max(1, Math.min(5, Math.round(Number(body.quality))))
+        : 3
+
+    if (score != null) {
+      quality = scoreToLegacyQuality(score)
+    } else if (body.quality != null) {
+      score = qualityToScore(quality)
+    } else {
+      // Manual log with no explicit score/quality: derive from duration-based efficiency alone.
+      const minutes = sleepDurationHours(bedtime, wakeTime) * 60
+      const efficiency = computeSleepEfficiency(minutes, minutes)
+      score = deriveSleepScore({ efficiency }) ?? qualityToScore(quality)
+    }
+
     const entry = await prisma.sleepEntry.create({
       data: {
         date: parseYyyyMmDdToStoredDate(String(body.date)),
-        bedtime: new Date(body.bedtime),
-        wakeTime: new Date(body.wakeTime),
-        quality: parseInt(body.quality),
+        bedtime,
+        wakeTime,
+        quality,
+        score,
         notes: body.notes || null,
         userId,
       },

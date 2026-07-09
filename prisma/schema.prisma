@@ -46,6 +46,8 @@ model User {
   notificationLogs        NotificationLog[]
   fastingProfile          FastingProfile?
   googleHealthConnection  GoogleHealthConnection?
+  vitalDailyEntries       VitalDailyEntry[]
+  heartRateSamples        HeartRateSample[]
 }
 
 model CalorieEntry {
@@ -200,7 +202,18 @@ model SleepEntry {
   date       DateTime
   bedtime    DateTime
   wakeTime   DateTime
-  quality    Int
+  /// Legacy 1–5 star rating. Kept for old rows; new rows derive it from `score`.
+  quality    Int      @default(3)
+  /// Derived 0–100 sleep score (Google Health has no native score — see src/lib/sleep-score.ts).
+  score      Int?
+  remMinutes    Int?
+  lightMinutes  Int?
+  deepMinutes   Int?
+  awakeMinutes  Int?
+  /// Time asleep ÷ time in bed × 100.
+  efficiency Float?
+  /// JSON array of { type: "AWAKE"|"LIGHT"|"DEEP"|"REM", startTime, endTime } stage segments.
+  stagesJson String   @default("[]")
   notes      String?
   source     String?
   externalId String?
@@ -311,6 +324,53 @@ model GoogleHealthConnection {
   lastSyncError  String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+/// One row per calendar day per user: heart-rate & recovery vitals synced from Google Health.
+model VitalDailyEntry {
+  id                String   @id @default(cuid())
+  date              DateTime
+  /// Resting heart rate for the day (bpm), from daily-resting-heart-rate.
+  restingHeartRate  Int?
+  /// Heart-rate variability (ms), from daily-heart-rate-variability.
+  hrvMs             Float?
+  /// All-day heart rate rollup (bpm), from heart-rate dailyRollUp.
+  hrAvg             Int?
+  hrMin             Int?
+  hrMax             Int?
+  /// JSON array of { zone, minutes } from time-in-heart-rate-zone dailyRollUp.
+  zonesJson         String   @default("[]")
+  /// JSON array of { zone, minBpm, maxBpm } thresholds from daily-heart-rate-zones.
+  thresholdsJson    String   @default("[]")
+  source            String?
+  externalId        String?
+  userId            String?
+  user              User?    @relation(fields: [userId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, externalId])
+  @@index([date])
+  @@index([userId])
+}
+
+/// Heart-rate sample bucketed to ~5 minute resolution, backing the all-day HR chart.
+model HeartRateSample {
+  id         String   @id @default(cuid())
+  /// Calendar day this sample belongs to (UTC-noon stored, matches other daily rows).
+  date       DateTime
+  /// Bucket start timestamp (physical time).
+  time       DateTime
+  bpm        Int
+  source     String?
+  externalId String?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, externalId])
+  @@index([userId, time])
+  @@index([date])
 }
 
 model Habit {
