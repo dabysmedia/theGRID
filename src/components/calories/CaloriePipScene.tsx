@@ -10,9 +10,9 @@ const ROWS = 10
 export const THREE_PIP_COUNT = 200
 
 const CELL = 1
-const GAP = 0.42
+const GAP = 0.38
 const STEP = CELL + GAP
-const CUBE = 0.78
+const CUBE = 0.86
 
 type Props = {
   consumed: number
@@ -41,7 +41,8 @@ function hexToColor(hex: string): THREE.Color {
 
 /**
  * WebGL isometric calorie tank — 20×10 instanced cubes.
- * Mobile-tuned: low DPR, MeshLambert, pause when offscreen/hidden, stop RAF when settled.
+ * Rich Standard materials + floor grid; zoomed so the tank fills the panel.
+ * Still pauses RAF when settled / offscreen for mobile.
  */
 export function CaloriePipScene({ consumed, target, accent, className }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -58,19 +59,22 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     const reducedInit = prefersReducedMotion()
 
     const scene = new THREE.Scene()
+    scene.fog = new THREE.FogExp2(0x05070c, 0.028)
+
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 80)
-    camera.position.set(14, 12, 14)
-    camera.lookAt(0, 0.2, 0)
+    // Closer isometric vantage — fills the frame
+    camera.position.set(11.5, 10.2, 11.5)
+    camera.lookAt(0, 0.35, 0)
 
     const renderer = new THREE.WebGLRenderer({
-      antialias: !mobile,
+      antialias: true,
       alpha: true,
       powerPreference: mobile ? "low-power" : "high-performance",
       stencil: false,
       depth: true,
     })
     renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 1.75),
+      Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2),
     )
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.setClearColor(0x000000, 0)
@@ -80,33 +84,51 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     renderer.domElement.style.touchAction = "none"
     host.appendChild(renderer.domElement)
 
-    const ambient = new THREE.AmbientLight(0xffffff, mobile ? 0.85 : 0.6)
+    const ambient = new THREE.AmbientLight(0xffffff, 0.55)
     scene.add(ambient)
-    const key = new THREE.DirectionalLight(0xffffff, mobile ? 0.9 : 1.1)
+    const key = new THREE.DirectionalLight(0xffffff, 1.2)
     key.position.set(8, 14, 6)
     scene.add(key)
-    if (!mobile) {
-      const fill = new THREE.DirectionalLight(0x88aaff, 0.3)
-      fill.position.set(-6, 4, -4)
-      scene.add(fill)
-    }
+    const fill = new THREE.DirectionalLight(0x88aaff, 0.38)
+    fill.position.set(-6, 4, -4)
+    scene.add(fill)
+    const rim = new THREE.DirectionalLight(0xffffff, 0.28)
+    rim.position.set(-2, 6, 10)
+    scene.add(rim)
 
     const floorGeo = new THREE.PlaneGeometry(
-      COLS * STEP + GAP * 2,
-      ROWS * STEP + GAP * 2,
+      COLS * STEP + GAP * 2.4,
+      ROWS * STEP + GAP * 2.4,
     )
-    const floorMat = new THREE.MeshBasicMaterial({
+    const floorMat = new THREE.MeshStandardMaterial({
       color: 0x12161f,
+      metalness: 0.4,
+      roughness: 0.82,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.62,
     })
     const floor = new THREE.Mesh(floorGeo, floorMat)
     floor.rotation.x = -Math.PI / 2
     floor.position.y = -CUBE * 0.52
 
+    const grid = new THREE.GridHelper(
+      Math.max(COLS, ROWS) * STEP,
+      Math.max(COLS, ROWS),
+      0x3a4558,
+      0x222833,
+    )
+    grid.position.y = -CUBE * 0.5 + 0.01
+    const gridMats = Array.isArray(grid.material) ? grid.material : [grid.material]
+    for (const m of gridMats) {
+      m.transparent = true
+      m.opacity = 0.4
+    }
+
     const geometry = new THREE.BoxGeometry(CUBE, CUBE, CUBE)
-    const material = new THREE.MeshLambertMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
+      metalness: 0.32,
+      roughness: 0.34,
       emissive: 0x000000,
       emissiveIntensity: 0,
     })
@@ -149,7 +171,7 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     mesh.instanceColor!.needsUpdate = true
 
     const group = new THREE.Group()
-    group.add(floor, mesh)
+    group.add(floor, grid, mesh)
     scene.add(group)
 
     let raf = 0
@@ -168,7 +190,8 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       const h = el.clientHeight || 1
       renderer.setSize(w, h, false)
       const aspect = w / h
-      const frustum = 11.2
+      // Tight frustum = zoomed in so the tank dominates the canvas
+      const frustum = mobile ? 8.2 : 7.6
       if (aspect >= 1) {
         camera.left = -frustum * aspect
         camera.right = frustum * aspect
@@ -213,7 +236,7 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       }
       mesh.instanceColor!.needsUpdate = true
       material.emissive.copy(litColor)
-      material.emissiveIntensity = mobile ? 0.12 : 0.2
+      material.emissiveIntensity = mobile ? 0.18 : 0.28
       dirty = true
       return true
     }
@@ -266,10 +289,11 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       }
       mesh.instanceMatrix.needsUpdate = true
 
-      if (!mobile && !reducedMotion && maxDelta > 0.002) {
-        group.rotation.y = Math.sin((now / 1000) * 0.32) * 0.03
+      // Soft idle sway while settling (desktop); brief settle sway on mobile too
+      if (!reducedMotion && (maxDelta > 0.002 || waveElapsed < 1.8)) {
+        group.rotation.y = Math.sin((now / 1000) * 0.32) * (mobile ? 0.025 : 0.04)
         dirty = true
-      } else if (group.rotation.y !== 0 && (mobile || reducedMotion || reducedInit)) {
+      } else if (group.rotation.y !== 0 && (reducedMotion || reducedInit)) {
         group.rotation.y = 0
       }
 
@@ -279,7 +303,7 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       }
 
       // Sleep the loop once settled — critical for mobile scroll/battery
-      if (maxDelta > 0.0015) {
+      if (maxDelta > 0.0015 || (!reducedMotion && waveElapsed < 1.8)) {
         raf = requestAnimationFrame(tick)
       } else {
         running = false
@@ -337,6 +361,7 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       material.dispose()
       floorGeo.dispose()
       floorMat.dispose()
+      for (const m of gridMats) m.dispose()
       renderer.dispose()
       if (renderer.domElement.parentElement === host) {
         host.removeChild(renderer.domElement)

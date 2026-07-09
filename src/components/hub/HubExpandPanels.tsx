@@ -96,7 +96,7 @@ export function HubCaloriesExpand({
   const pct = target > 0 ? Math.round((consumed / target) * 100) : 0
 
   return (
-    <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
+    <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-3 px-0.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="type-hud-subsection">Calories</p>
@@ -115,7 +115,7 @@ export function HubCaloriesExpand({
         </p>
       ) : (
         <>
-          <div className="relative w-full">
+          <div className="relative -mx-1 w-[calc(100%+0.5rem)] sm:-mx-2 sm:w-[calc(100%+1rem)]">
             <CaloriePipTracker
               consumed={consumed}
               target={target}
