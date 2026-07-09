@@ -18,7 +18,6 @@ export function MeshHeartSvg({ accent = "#f43f5e", className }: Props) {
   const uid = useId().replace(/:/g, "")
   const clipId = `mesh-heart-clip-${uid}`
   const fillId = `mesh-heart-fill-${uid}`
-  const glowId = `mesh-heart-glow-${uid}`
   const nodeGlowId = `mesh-heart-node-${uid}`
 
   const heartPath =
@@ -60,13 +59,6 @@ export function MeshHeartSvg({ accent = "#f43f5e", className }: Props) {
           <stop offset="55%" stopColor={accent} stopOpacity="0.02" />
           <stop offset="100%" stopColor="#64748b" stopOpacity="0.05" />
         </linearGradient>
-        <filter id={glowId} x="-25%" y="-25%" width="150%" height="150%">
-          <feGaussianBlur stdDeviation="0.85" result="b" />
-          <feMerge>
-            <feMergeNode in="b" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
         <filter id={nodeGlowId} x="-80%" y="-80%" width="260%" height="260%">
           <feGaussianBlur stdDeviation="1.05" result="b" />
           <feMerge>
@@ -103,22 +95,6 @@ export function MeshHeartSvg({ accent = "#f43f5e", className }: Props) {
           />
         ))}
       </g>
-
-      <path
-        d={heartPath}
-        stroke={accent}
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-        filter={`url(#${glowId})`}
-        opacity="0.72"
-      />
-      <path
-        d={heartPath}
-        stroke="#ffffff"
-        strokeWidth="0.35"
-        strokeOpacity="0.25"
-        strokeLinejoin="round"
-      />
     </svg>
   )
 }

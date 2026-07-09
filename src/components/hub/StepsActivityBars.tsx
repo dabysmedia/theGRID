@@ -104,7 +104,7 @@ export function StepsActivityBars({
       >
         <div className="flex items-center gap-2.5 px-4 py-2 lg:px-5">
           <div
-            className="relative flex h-12 w-12 shrink-0 items-center justify-center"
+            className="relative flex h-16 w-16 shrink-0 items-center justify-center"
             style={{
               transform: "rotateX(8deg) rotateY(-12deg)",
               transformStyle: "preserve-3d",
@@ -118,13 +118,13 @@ export function StepsActivityBars({
               <span
                 className="font-semibold tabular-nums leading-none tracking-tight text-foreground"
                 style={{
-                  fontSize: hrvLabel.length > 2 ? "0.95rem" : "1.1rem",
+                  fontSize: hrvLabel.length > 2 ? "1.05rem" : "1.25rem",
                   textShadow: `0 0 12px ${accent}66`,
                 }}
               >
                 {hrvLabel}
               </span>
-              <span className="mt-px text-[8px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/65">
+              <span className="mt-px text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/65">
                 ms
               </span>
             </div>
@@ -144,22 +144,20 @@ export function StepsActivityBars({
                     </span>
                   ) : null}
                 </p>
-                <p className="mt-0.5 truncate text-[12px] font-medium tabular-nums text-foreground/80">
-                  {hrvMs != null ? (
-                    <>
-                      <span className="text-foreground">{Math.round(hrvMs)}</span>
-                      <span className="text-muted-foreground/70"> ms HRV</span>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground/55">Sync Fitbit for HRV</span>
-                  )}
-                  {restingHeartRate != null && Number.isFinite(restingHeartRate) ? (
-                    <span className="text-muted-foreground/55">
-                      {" "}
-                      · RHR {Math.round(restingHeartRate)}
-                    </span>
-                  ) : null}
-                </p>
+                {(hrvMs == null ||
+                  (restingHeartRate != null && Number.isFinite(restingHeartRate))) && (
+                  <p className="mt-0.5 truncate text-[12px] font-medium tabular-nums text-foreground/80">
+                    {hrvMs == null ? (
+                      <span className="text-muted-foreground/55">Sync Fitbit for HRV</span>
+                    ) : null}
+                    {restingHeartRate != null && Number.isFinite(restingHeartRate) ? (
+                      <span className="text-muted-foreground/55">
+                        {hrvMs == null ? " · " : null}
+                        RHR {Math.round(restingHeartRate)}
+                      </span>
+                    ) : null}
+                  </p>
+                )}
               </div>
               <p
                 className="shrink-0 text-xl font-semibold tabular-nums leading-none tracking-tight sm:text-2xl"
