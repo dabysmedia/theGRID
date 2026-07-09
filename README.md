@@ -58,6 +58,57 @@ This app uses **SQLite on a persistent volume**, not Railway’s Postgres plugin
 
 The app uses `output: "standalone"` in Next.js config for Docker/Railway.
 
+## Google Health / Fitbit sync
+
+Connect Fitbit (via Google Health API) from **Settings → Google Health / Fitbit**. Syncs steps, sleep, and weight into theGRID.
+
+### Authorized redirect URI (Google Cloud Console)
+
+Add this exact URI on your OAuth 2.0 Web client:
+
+```
+https://itslos.com/api/google-health/callback
+```
+
+For local dev, also add:
+
+```
+http://localhost:3000/api/google-health/callback
+```
+
+### Environment variables
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `GOOGLE_CLIENT_ID` | Yes | OAuth Web client ID |
+| `GOOGLE_CLIENT_SECRET` | Yes | OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | Recommended in prod | `https://itslos.com/api/google-health/callback` (must match Console exactly) |
+| `GOOGLE_OAUTH_STATE_SECRET` | Optional | HMAC secret for OAuth `state`; defaults to client secret |
+
+### Google Cloud checklist
+
+1. Enable **Google Health API**
+2. OAuth consent screen (External) + add yourself as a **test user** while in Testing
+3. Data Access scopes:
+   - `.../auth/googlehealth.activity_and_fitness.readonly`
+   - `.../auth/googlehealth.sleep.readonly`
+   - `.../auth/googlehealth.health_metrics_and_measurements.readonly`
+4. Create **OAuth client → Web application** with the redirect URI above
+
+### Automatic sync (steps + sleep)
+
+Once a profile is connected, theGRID pulls steps and sleep in the background:
+
+1. **Bundled with notification cron** — `GET/POST /api/notifications/run` (already used every ~5 min) also syncs Google Health for connected users (last 3 days, steps + sleep).
+2. **Dedicated endpoint** — `GET/POST /api/google-health/cron?secret=CRON_SECRET` (optional `days=3`, `weight=1`).
+3. **GitHub Actions** — `.github/workflows/google-health-sync.yml` runs every 15 minutes. Set repo secrets `APP_URL=https://itslos.com` and `CRON_SECRET` (same as Railway).
+
+Also set on Railway:
+
+| Variable | Notes |
+|----------|--------|
+| `CRON_SECRET` | Shared secret for cron endpoints (required for auto sync) |
+
 ## Project Structure
 
 ```
