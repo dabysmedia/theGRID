@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react"
 import { format, subDays } from "date-fns"
-import { ChevronDown, Moon, Plus, Star, Trash2, TrendingUp } from "lucide-react"
+import { ChevronDown, Moon, Plus, Trash2, TrendingUp } from "lucide-react"
 import { apiFetch } from "@/lib/api-fetch"
 import {
   ResponsiveContainer,
@@ -39,6 +39,7 @@ import {
 } from "@/lib/hub-tile-prefs"
 import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { sleepDurationHours } from "@/lib/sleepDuration"
+import { displaySleepScore, qualityToScore, sleepScoreBand, SLEEP_SCORE_BAND_LABEL } from "@/lib/sleep-score"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
@@ -54,10 +55,52 @@ interface SleepEntry {
   bedtime: string
   wakeTime: string
   quality: number
+  score: number | null
+  remMinutes: number | null
+  lightMinutes: number | null
+  deepMinutes: number | null
+  awakeMinutes: number | null
+  efficiency: number | null
+  stagesJson: string | null
   notes: string | null
 }
 
+type StageSegment = { type: string; startTime: string; endTime: string }
+
 const SLEEP_COLOR = "#6366f1"
+
+const SCORE_BAND_COLOR: Record<string, string> = {
+  excellent: "#22c55e",
+  good: "#6366f1",
+  fair: "#f59e0b",
+  poor: "#ef4444",
+}
+
+const STAGE_STYLE: Record<string, { label: string; color: string }> = {
+  AWAKE: { label: "Awake", color: "#f59e0b" },
+  LIGHT: { label: "Light", color: "#818cf8" },
+  DEEP: { label: "Deep", color: "#4338ca" },
+  REM: { label: "REM", color: "#2dd4bf" },
+}
+
+function entryScore(entry: Pick<SleepEntry, "score" | "quality">): number | null {
+  return entry.score ?? (entry.quality != null ? qualityToScore(entry.quality) : null)
+}
+
+function scoreColor(score: number | null): string {
+  const band = sleepScoreBand(score)
+  return band ? SCORE_BAND_COLOR[band] : SLEEP_COLOR
+}
+
+function parseStages(json: string | null): StageSegment[] {
+  if (!json) return []
+  try {
+    const parsed = JSON.parse(json)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
 
 function calcDuration(bed: string, wake: string): string {
   return `${sleepDurationHours(bed, wake)}h`
@@ -77,19 +120,96 @@ function dateGroupLabel(dateKey: string, todayStr: string, yesterdayStr: string)
   return format(parseLocalDate(dateKey), "EEE, MMM d")
 }
 
-function QualityStars({ value, size = "sm" }: { value: number; size?: "sm" | "md" }) {
+function ScoreBadge({ score, size = "sm" }: { score: number | null; size?: "sm" | "md" }) {
+  const color = scoreColor(score)
   return (
-    <span className="inline-flex items-center gap-0.5" aria-label={`Quality ${value} of 5`}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <Star
-          key={i}
-          className={cn(
-            size === "md" ? "h-3.5 w-3.5" : "h-3 w-3",
-            i < value ? "fill-amber-400 text-amber-400" : "fill-transparent text-muted-foreground/30"
-          )}
-        />
-      ))}
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full font-semibold tabular-nums",
+        size === "md" ? "px-2.5 py-1 text-sm" : "px-2 py-0.5 text-xs"
+      )}
+      style={{ backgroundColor: `${color}18`, color }}
+    >
+      {displaySleepScore(score)}
+      <span className="opacity-60">/100</span>
     </span>
+  )
+}
+
+/** Horizontal stage timeline for one night — proportional segments in chronological order. */
+function StageTimeline({ stages }: { stages: StageSegment[] }) {
+  if (stages.length === 0) return null
+  const start = new Date(stages[0].startTime).getTime()
+  const end = new Date(stages[stages.length - 1].endTime).getTime()
+  const total = end - start
+  if (!Number.isFinite(total) || total <= 0) return null
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted/20">
+        {stages.map((s, i) => {
+          const segStart = new Date(s.startTime).getTime()
+          const segEnd = new Date(s.endTime).getTime()
+          const width = Math.max(((segEnd - segStart) / total) * 100, 0.4)
+          const style = STAGE_STYLE[s.type.toUpperCase()] ?? { label: s.type, color: "#94a3b8" }
+          return (
+            <div
+              key={i}
+              className="h-full first:rounded-l-full last:rounded-r-full"
+              style={{ width: `${width}%`, backgroundColor: style.color }}
+              title={`${style.label} · ${format(new Date(s.startTime), "h:mm a")}`}
+            />
+          )
+        })}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {Object.entries(STAGE_STYLE).map(([key, style]) => (
+          <span key={key} className="flex items-center gap-1 type-hud-micro normal-case text-muted-foreground/75">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: style.color }} />
+            {style.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** REM / light / deep / awake minute bars for one night. */
+function StageMinuteBars({ entry }: { entry: SleepEntry }) {
+  const rows: Array<{ key: string; minutes: number }> = [
+    { key: "REM", minutes: entry.remMinutes ?? 0 },
+    { key: "LIGHT", minutes: entry.lightMinutes ?? 0 },
+    { key: "DEEP", minutes: entry.deepMinutes ?? 0 },
+    { key: "AWAKE", minutes: entry.awakeMinutes ?? 0 },
+  ]
+  const total = rows.reduce((s, r) => s + r.minutes, 0)
+  if (total <= 0) return null
+
+  return (
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      {rows.map((r) => {
+        const style = STAGE_STYLE[r.key]
+        const hours = Math.round((r.minutes / 60) * 10) / 10
+        const pct = total > 0 ? (r.minutes / total) * 100 : 0
+        return (
+          <div key={r.key} className="glass-subtle min-w-0 rounded-xl p-2.5">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: style.color }} />
+              <span className="type-hud-caption-tight truncate">{style.label}</span>
+            </div>
+            <p className="type-hud-stat-sm mt-1 tabular-nums" style={{ color: style.color }}>
+              {hours}h
+            </p>
+            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted/25">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${Math.max(pct, 3)}%`, backgroundColor: style.color }}
+              />
+            </div>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -110,7 +230,7 @@ function SleepHistoryEntryRow({
           <span className="type-hud-stat tabular-nums" style={{ color: SLEEP_COLOR }}>
             {hours}h
           </span>
-          <QualityStars value={entry.quality} />
+          <ScoreBadge score={entryScore(entry)} />
         </div>
         {entry.notes && (
           <p className="type-hud-caption mt-1.5 normal-case line-clamp-2 text-muted-foreground/75">
@@ -132,11 +252,11 @@ function SleepHistoryEntryRow({
 
 function summarizeNight(items: SleepEntry[]) {
   const hours = items.reduce((s, e) => s + sleepDurationHours(e.bedtime, e.wakeTime), 0)
-  const quality =
-    items.length > 0 ? items.reduce((s, e) => s + e.quality, 0) / items.length : 0
+  const scores = items.map(entryScore).filter((s): s is number => s != null)
+  const score = scores.length > 0 ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length) : null
   return {
     hours: Math.round(hours * 10) / 10,
-    quality: Math.round(quality * 10) / 10,
+    score,
     count: items.length,
   }
 }
@@ -158,6 +278,8 @@ function SleepTodayLog({
   const label = dateGroupLabel(dateKey, today, yesterday)
   const subDate =
     dateKey === today || dateKey === yesterday ? format(parseLocalDate(dateKey), "EEE, MMM d") : null
+  const latest = items[0]
+  const stages = latest ? parseStages(latest.stagesJson) : []
 
   return (
     <div
@@ -179,10 +301,18 @@ function SleepTodayLog({
             {summary.hours}h
           </p>
           <div className="mt-1 flex justify-end">
-            <QualityStars value={Math.round(summary.quality)} size="md" />
+            <ScoreBadge score={summary.score} size="md" />
           </div>
         </div>
       </div>
+
+      {stages.length > 0 && (
+        <div className="mt-4 border-t border-border/20 pt-3">
+          <StageTimeline stages={stages} />
+        </div>
+      )}
+
+      {latest && <StageMinuteBars entry={latest} />}
 
       <div className="glass-subtle mt-4 overflow-hidden rounded-xl">
         <ul className="divide-y divide-border/15">
@@ -242,7 +372,7 @@ function SleepHistoryDayAccordion({
                 {summary.hours}h
               </p>
               <div className="mt-1 flex justify-end">
-                <QualityStars value={Math.round(summary.quality)} />
+                <ScoreBadge score={summary.score} />
               </div>
             </div>
             <span
@@ -335,29 +465,31 @@ export default function SleepPage() {
   const stats = useMemo(() => {
     const last = entries[0]
     const lastNight = last ? calcDuration(last.bedtime, last.wakeTime) : "—"
+    const lastScore = last ? entryScore(last) : null
 
-    const byNight = new Map<string, { hrs: number[]; qual: number[] }>()
+    const byNight = new Map<string, { hrs: number[]; scores: number[] }>()
     for (const e of last7DaysEntries) {
       const k = entryDateKey(e)
-      if (!byNight.has(k)) byNight.set(k, { hrs: [], qual: [] })
+      if (!byNight.has(k)) byNight.set(k, { hrs: [], scores: [] })
       const g = byNight.get(k)!
       g.hrs.push(sleepDurationHours(e.bedtime, e.wakeTime))
-      g.qual.push(e.quality)
+      const s = entryScore(e)
+      if (s != null) g.scores.push(s)
     }
     const nightHrAvgs = [...byNight.values()].map(
       ({ hrs }) => hrs.reduce((s, v) => s + v, 0) / hrs.length
     )
-    const nightQAvgs = [...byNight.values()].map(
-      ({ qual }) => qual.reduce((s, v) => s + v, 0) / qual.length
-    )
+    const nightScoreAvgs = [...byNight.values()]
+      .map(({ scores }) => (scores.length > 0 ? scores.reduce((s, v) => s + v, 0) / scores.length : null))
+      .filter((v): v is number => v != null)
 
     const avg7h =
       nightHrAvgs.length > 0
         ? (nightHrAvgs.reduce((s, v) => s + v, 0) / nightHrAvgs.length).toFixed(1)
         : null
-    const avgQ =
-      nightQAvgs.length > 0
-        ? (nightQAvgs.reduce((s, v) => s + v, 0) / nightQAvgs.length).toFixed(1)
+    const avgScore =
+      nightScoreAvgs.length > 0
+        ? Math.round(nightScoreAvgs.reduce((s, v) => s + v, 0) / nightScoreAvgs.length)
         : null
     let best = "—"
     if (entries.length > 0) {
@@ -367,7 +499,7 @@ export default function SleepPage() {
       best = calcDuration(bestEntry.bedtime, bestEntry.wakeTime)
     }
     const consistency = Math.round((byNight.size / 7) * 100)
-    return { lastNight, avg7h, avgQ, best, consistency }
+    return { lastNight, lastScore, avg7h, avgScore, best, consistency }
   }, [entries, last7DaysEntries])
 
   const todayHours = useMemo(() => {
@@ -394,7 +526,7 @@ export default function SleepPage() {
     return chartEntries.map((e) => ({
       label: format(new Date(e.date), "MMM d"),
       hours: sleepDurationHours(e.bedtime, e.wakeTime),
-      quality: e.quality,
+      score: entryScore(e),
     }))
   }, [chartEntries])
 
@@ -427,6 +559,8 @@ export default function SleepPage() {
 
   const targetBedtime = computeTargetBedtime(desiredWakeTime, sleepGoalHours)
   const hasChartData = chartData.length >= 2
+  const lastEntry = entries[0] ?? null
+  const lastStages = lastEntry ? parseStages(lastEntry.stagesJson) : []
 
   return (
     <div className="space-y-6">
@@ -437,9 +571,10 @@ export default function SleepPage() {
         icon={Moon}
         eyebrow={`Last night · ${formatDisplayDate(parseLocalDate(activeDate))}`}
         value={stats.lastNight}
+        valueAdornment={stats.lastScore != null ? <ScoreBadge score={stats.lastScore} /> : undefined}
         metrics={[
           { label: "7-day avg", value: stats.avg7h !== null ? `${stats.avg7h}h` : "—" },
-          { label: "Avg quality", value: stats.avgQ !== null ? `${stats.avgQ}/5` : "—" },
+          { label: "Avg score", value: stats.avgScore != null ? `${stats.avgScore}` : "—" },
           { label: "Best night", value: stats.best },
           { label: "Consistency", value: `${stats.consistency}%`, sub: "last 7 days" },
         ]}
@@ -467,7 +602,17 @@ export default function SleepPage() {
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="type-hud-value-xl tabular-nums">{stats.lastNight}</span>
               {stats.lastNight !== "—" && <span className="type-hud-unit">logged</span>}
+              {stats.lastScore != null && <ScoreBadge score={stats.lastScore} size="md" />}
             </div>
+            {stats.lastScore != null && (
+              <p className="type-hud-caption mt-1.5 normal-case">
+                {(() => {
+                  const band = sleepScoreBand(stats.lastScore)
+                  return band ? SLEEP_SCORE_BAND_LABEL[band] : null
+                })()}
+                {lastEntry?.efficiency != null ? ` · ${Math.round(lastEntry.efficiency)}% efficiency` : ""}
+              </p>
+            )}
             <p className="type-hud-caption mt-1.5 normal-case">
               Hub target bedtime{" "}
               <span className="font-semibold tabular-nums text-foreground/90">{targetBedtime}</span>
@@ -475,6 +620,15 @@ export default function SleepPage() {
               {sleepGoalHours}h goal
             </p>
           </div>
+
+          {lastStages.length > 0 && (
+            <div className="border-t border-border/20 pt-3">
+              <p className="type-hud-label-soft mb-2">Sleep stages</p>
+              <StageTimeline stages={lastStages} />
+            </div>
+          )}
+
+          {lastEntry && <StageMinuteBars entry={lastEntry} />}
 
           <Button
             type="button"
@@ -522,7 +676,7 @@ export default function SleepPage() {
           >
             <p className="type-hud-stat-sm text-muted-foreground/80">No sleep logged yet</p>
             <p className="type-hud-caption mx-auto mt-2 max-w-sm normal-case">
-              Tap Log sleep to record bedtime, wake time, and quality.
+              Tap Log sleep to record bedtime, wake time, and a sleep score.
             </p>
           </div>
         ) : (
@@ -558,7 +712,7 @@ export default function SleepPage() {
             <p className="type-hud-caption mt-0.5 normal-case tabular-nums">
               {hasChartData
                 ? `${chartData.length} nights · ${chartRange === "all" ? "all time" : chartRange}`
-                : "Expand to view duration and quality charts"}
+                : "Expand to view duration and score charts"}
             </p>
           </div>
           <ChevronDown className="sleep-trend-chevron h-4 w-4 shrink-0 text-muted-foreground/45 transition-transform duration-200" />
@@ -635,7 +789,7 @@ export default function SleepPage() {
               </div>
 
               <div className="glass-subtle min-w-0 rounded-xl p-3">
-                <h3 className="type-hud-label-soft mb-2">Quality</h3>
+                <h3 className="type-hud-label-soft mb-2">Sleep score</h3>
                 <div className="h-40 min-w-0 lg:h-44">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
@@ -651,7 +805,7 @@ export default function SleepPage() {
                         axisLine={false}
                         tickLine={false}
                         width={26}
-                        domain={[1, 5]}
+                        domain={[0, 100]}
                         allowDecimals={false}
                       />
                       <Tooltip
@@ -662,15 +816,16 @@ export default function SleepPage() {
                           fontSize: "12px",
                           backdropFilter: "blur(8px)",
                         }}
-                        formatter={(value) => [`${value}/5`, "Quality"]}
+                        formatter={(value) => [`${value}/100`, "Score"]}
                       />
                       <Line
                         type="monotone"
-                        dataKey="quality"
+                        dataKey="score"
                         stroke="oklch(0.82 0.18 110)"
                         strokeWidth={2}
                         dot={{ r: 2.5 }}
                         activeDot={{ r: 4 }}
+                        connectNulls
                       />
                     </LineChart>
                   </ResponsiveContainer>

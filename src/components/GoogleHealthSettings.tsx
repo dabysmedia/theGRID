@@ -96,6 +96,7 @@ export function GoogleHealthSettings() {
         stepsUpserted?: number
         sleepUpserted?: number
         weightUpserted?: number
+        vitalsUpserted?: number
       }
       if (!res.ok) {
         setMessage({ kind: "err", text: data.error || "Sync failed." })
@@ -104,7 +105,7 @@ export function GoogleHealthSettings() {
       }
       setMessage({
         kind: "ok",
-        text: `Synced ${data.stepsUpserted ?? 0} step days, ${data.sleepUpserted ?? 0} sleep sessions, ${data.weightUpserted ?? 0} weigh-ins.`,
+        text: `Synced ${data.stepsUpserted ?? 0} step days, ${data.sleepUpserted ?? 0} sleep sessions, ${data.weightUpserted ?? 0} weigh-ins, ${data.vitalsUpserted ?? 0} vitals days.`,
       })
       await load()
     } finally {
@@ -148,8 +149,9 @@ export function GoogleHealthSettings() {
             Google Health / Fitbit
           </h3>
           <p className="text-[11px] leading-relaxed text-muted-foreground/80">
-            Import steps, sleep, and weight from your Fitbit account via Google Health.
-            After connecting, steps and sleep refresh automatically every few minutes.
+            Import steps, sleep, weight, and heart-rate vitals from your Fitbit account via
+            Google Health. After connecting, steps, sleep, and vitals refresh automatically
+            every few minutes.
           </p>
         </div>
       </div>

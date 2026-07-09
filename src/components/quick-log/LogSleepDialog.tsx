@@ -11,6 +11,7 @@ import { useActiveDate } from "@/context/DateContext"
 import { formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { sleepDurationHours } from "@/lib/sleepDuration"
+import { displaySleepScore } from "@/lib/sleep-score"
 
 const SLEEP_COLOR = "#6366f1"
 
@@ -24,7 +25,7 @@ export function LogSleepDialog({ open, onOpenChange, onSaved }: LogSleepDialogPr
   const { activeDate } = useActiveDate()
   const [bedtime, setBedtime] = useState("22:30")
   const [wakeTime, setWakeTime] = useState("06:30")
-  const [quality, setQuality] = useState(3)
+  const [score, setScore] = useState<number | null>(null)
   const [notes, setNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -32,7 +33,7 @@ export function LogSleepDialog({ open, onOpenChange, onSaved }: LogSleepDialogPr
     if (!open) {
       setBedtime("22:30")
       setWakeTime("06:30")
-      setQuality(3)
+      setScore(null)
       setNotes("")
       setSubmitting(false)
     }
@@ -54,7 +55,7 @@ export function LogSleepDialog({ open, onOpenChange, onSaved }: LogSleepDialogPr
           date: activeDate,
           bedtime: bedDatetime.toISOString(),
           wakeTime: wakeDatetime.toISOString(),
-          quality,
+          score,
           notes: notes || null,
         }),
       })
@@ -84,7 +85,9 @@ export function LogSleepDialog({ open, onOpenChange, onSaved }: LogSleepDialogPr
       accentColor={SLEEP_COLOR}
       footer={
         <CategoryLogSubmitButton form="log-sleep-form" disabled={submitting}>
-          {submitting ? "Saving…" : `Log ${previewDuration}h sleep`}
+          {submitting
+            ? "Saving…"
+            : `Log ${previewDuration}h sleep${score != null ? ` · Score ${displaySleepScore(score)}` : ""}`}
         </CategoryLogSubmitButton>
       }
     >
@@ -108,11 +111,11 @@ export function LogSleepDialog({ open, onOpenChange, onSaved }: LogSleepDialogPr
         <SleepLogFields
           bedtime={bedtime}
           wakeTime={wakeTime}
-          quality={quality}
+          score={score}
           notes={notes}
           onBedtimeChange={setBedtime}
           onWakeTimeChange={setWakeTime}
-          onQualityChange={setQuality}
+          onScoreChange={setScore}
           onNotesChange={setNotes}
           idPrefix="quick-log-sleep"
         />

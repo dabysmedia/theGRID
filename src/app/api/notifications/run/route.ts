@@ -8,7 +8,7 @@ import { syncGoogleHealthForAllUsers } from "@/lib/google-health/sync"
  * Vercel cron, EasyCron, …). Protected by a shared `CRON_SECRET` (Bearer header
  * or `?secret=` for cron services that can't set headers).
  *
- * Also pulls Google Health steps/sleep for connected users (lightweight lookback)
+ * Also pulls Google Health steps/sleep/vitals for connected users (lightweight lookback)
  * so Fitbit data stays fresh without a separate cron.
  */
 async function authorize(req: NextRequest): Promise<boolean> {
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       try {
         googleHealth = await syncGoogleHealthForAllUsers({
           days: 3,
-          metrics: { steps: true, sleep: true, weight: false },
+          metrics: { steps: true, sleep: true, weight: false, vitals: true },
         })
       } catch (e) {
         console.error("[google-health via notif cron]", e)

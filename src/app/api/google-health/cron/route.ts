@@ -42,6 +42,7 @@ async function run(req: NextRequest) {
         steps: true,
         sleep: true,
         weight: includeWeight,
+        vitals: true,
       },
     })
     return NextResponse.json({ success: true, ...result })
