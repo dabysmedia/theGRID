@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { Beer, Calendar, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Beer, Calendar, ChevronDown, Plus, Trash2 } from "lucide-react"
 import { format, subDays } from "date-fns"
 import {
   ResponsiveContainer,
@@ -17,9 +17,17 @@ import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { useActiveDate } from "@/context/DateContext"
 import { apiFetch } from "@/lib/api-fetch"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { averageOnLoggedDays, formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import { LogAlcoholDialog } from "@/components/quick-log/LogAlcoholDialog"
+import {
+  averageOnLoggedDays,
+  cn,
+  formatDate,
+  formatDisplayDate,
+  glassPanelAccentClass,
+  glassPanelAccentStyle,
+  glassPanelClass,
+  parseLocalDate,
+} from "@/lib/utils"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
@@ -36,8 +44,6 @@ interface AlcoholEntry {
   quantity: number
   units: number
 }
-
-const drinkTypes = ["beer", "wine", "spirits", "cocktail", "other"]
 
 const AMBER = "#f59e0b"
 
@@ -99,9 +105,7 @@ function AlcoholHistoryDayGroup({
 export default function AlcoholPage() {
   const { activeDate } = useActiveDate()
   const [entries, setEntries] = useState<AlcoholEntry[]>([])
-  const [drinkType, setDrinkType] = useState("beer")
-  const [quantity, setQuantity] = useState("1")
-  const [units, setUnits] = useState("1")
+  const [logOpen, setLogOpen] = useState(false)
 
   const today = activeDate
   const weekDateKeys = useMemo(
@@ -109,7 +113,7 @@ export default function AlcoholPage() {
     [activeDate]
   )
 
-  useEffect(() => {
+  const refreshEntries = useCallback(() => {
     apiFetch("/api/alcohol")
       .then(async (r) => {
         const data = await r.json()
@@ -117,6 +121,10 @@ export default function AlcoholPage() {
       })
       .catch(() => setEntries([]))
   }, [])
+
+  useEffect(() => {
+    refreshEntries()
+  }, [refreshEntries])
 
   const unitsByDay = useMemo(() => {
     const map = new Map<string, number>()
@@ -160,6 +168,8 @@ export default function AlcoholPage() {
     [weekDateKeys, unitsByDay]
   )
 
+  const hasChartData = chartData.some((d) => d.units > 0)
+
   const entriesByDate = useMemo(() => {
     const groups = new Map<string, AlcoholEntry[]>()
     for (const e of entries) {
@@ -179,24 +189,6 @@ export default function AlcoholPage() {
     () => partitionHistoryDayGroups(entriesByDate, (g) => g.dateKey, today),
     [entriesByDate, today]
   )
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!quantity || !units) return
-
-    const res = await apiFetch("/api/alcohol", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: today, drinkType, quantity, units }),
-    })
-
-    if (res.ok) {
-      const entry = await res.json()
-      setEntries([entry, ...entries])
-      setQuantity("1")
-      setUnits("1")
-    }
-  }
 
   async function handleDelete(id: string) {
     const res = await apiFetch(`/api/alcohol?id=${id}`, { method: "DELETE" })
@@ -224,144 +216,152 @@ export default function AlcoholPage() {
         category="alcohol"
         values={{ daily: todayUnits, weekly: weekTotal }}
         presets={alcoholGoalPresets}
-        color="#f59e0b"
+        color={AMBER}
       />
 
-      <div className="glass-panel p-4 lg:p-5 animate-fade-up stagger-1">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
-          Last 7 days
-        </p>
-        <div className="h-40 lg:h-48 w-full min-w-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted/25" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                width={32}
-                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                axisLine={false}
-                tickLine={false}
-                allowDecimals
-              />
-              <Tooltip
-                contentStyle={{
-                  background: "oklch(0.19 0.012 250 / 98%)",
-                  border: "1px solid oklch(1 0 0 / 8%)",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                  backdropFilter: "blur(8px)",
-                }}
-                formatter={(value) => [`${Number(value ?? 0)} units`, "Units"]}
-                labelFormatter={(_, payload) => {
-                  const p = payload?.[0]?.payload as { dateKey?: string } | undefined
-                  return p?.dateKey ? format(parseLocalDate(p.dateKey), "EEE, MMM d") : ""
-                }}
-              />
-              <Bar dataKey="units" fill={AMBER} radius={[4, 4, 0, 0]} maxBarSize={40} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
-        <div className="glass-panel p-5">
-          <div className="text-center lg:text-left mb-5">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today&apos;s Units</p>
-            <p className="text-4xl font-bold tabular-nums tracking-tight">{todayUnits}</p>
-            <p className="text-sm text-muted-foreground">standard units</p>
+      <div
+        className={cn(glassPanelClass, glassPanelAccentClass, "animate-fade-up stagger-1 p-4 lg:p-5")}
+        style={glassPanelAccentStyle(AMBER)}
+      >
+        <div
+          className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"
+          style={{ backgroundColor: AMBER }}
+          aria-hidden
+        />
+        <div className="relative space-y-4">
+          <div className="min-w-0">
+            <p className="type-hud-label-soft mb-1">Today</p>
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="type-hud-value-xl tabular-nums">{todayUnits}</span>
+              <span className="type-hud-unit">units</span>
+            </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex gap-2 flex-wrap">
-              {drinkTypes.map((d) => (
-                <Button
-                  key={d}
-                  type="button"
-                  variant={drinkType === d ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDrinkType(d)}
-                  className="capitalize"
-                >
-                  {d}
-                </Button>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="quantity" className="text-xs uppercase tracking-wider text-muted-foreground">Quantity</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  step="0.5"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="units" className="text-xs uppercase tracking-wider text-muted-foreground">Std Units</Label>
-                <Input
-                  id="units"
-                  type="number"
-                  step="0.5"
-                  value={units}
-                  onChange={(e) => setUnits(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-
-            <Button type="submit" variant="glass" className="w-full press-scale" size="lg">
-              Log Drink
-            </Button>
-          </form>
-        </div>
-
-        <div className="space-y-4">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">History</h2>
-          {entries.length === 0 && (
-            <div className="glass-subtle rounded-2xl p-6 text-center">
-              <p className="text-sm text-muted-foreground">No entries yet</p>
-            </div>
-          )}
-          {historyDisplay.todayGroups.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
-                Today
-              </p>
-              {historyDisplay.todayGroups.map(({ dateKey, items }) => (
-                <AlcoholHistoryDayGroup
-                  key={dateKey}
-                  dateKey={dateKey}
-                  items={items}
-                  showDayHeader={false}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </div>
-          )}
-          {historyDisplay.earlierGroups.length > 0 && (
-            <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
-              {historyDisplay.earlierGroups.map(({ dateKey, items }) => (
-                <AlcoholHistoryDayGroup
-                  key={dateKey}
-                  dateKey={dateKey}
-                  items={items}
-                  showDayHeader
-                  onDelete={handleDelete}
-                />
-              ))}
-            </HistoryEarlierSection>
-          )}
-          <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
+          <Button
+            type="button"
+            variant="glass"
+            size="lg"
+            className="h-12 w-full gap-2 touch-manipulation"
+            onClick={() => setLogOpen(true)}
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            Log drink
+          </Button>
         </div>
       </div>
+
+      <details
+        className={cn(
+          glassPanelClass,
+          glassPanelAccentClass,
+          "animate-fade-up stagger-2 overflow-hidden [&[open]_summary_.alcohol-trend-chevron]:rotate-180",
+        )}
+        style={glassPanelAccentStyle(AMBER)}
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-glass-highlight/10 lg:px-5 [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0">
+            <p className="type-hud-label-soft">Last 7 days</p>
+            <p className="type-hud-caption mt-0.5 normal-case tabular-nums">
+              {hasChartData
+                ? `${weekTotal} units · ${dryDays} dry days`
+                : "Expand to view your week"}
+            </p>
+          </div>
+          <ChevronDown className="alcohol-trend-chevron h-4 w-4 shrink-0 text-muted-foreground/45 transition-transform duration-200" />
+        </summary>
+        <div className="border-t border-border/20 px-4 pb-4 pt-3 lg:px-5 lg:pb-5">
+          <div className="h-40 lg:h-48 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted/25" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  width={32}
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "oklch(0.19 0.012 250 / 98%)",
+                    border: "1px solid oklch(1 0 0 / 8%)",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    backdropFilter: "blur(8px)",
+                  }}
+                  formatter={(value) => [`${Number(value ?? 0)} units`, "Units"]}
+                  labelFormatter={(_, payload) => {
+                    const p = payload?.[0]?.payload as { dateKey?: string } | undefined
+                    return p?.dateKey ? format(parseLocalDate(p.dateKey), "EEE, MMM d") : ""
+                  }}
+                />
+                <Bar dataKey="units" fill={AMBER} radius={[4, 4, 0, 0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </details>
+
+      <div className="animate-fade-up stagger-3 space-y-3">
+        <div className="px-0.5">
+          <h2 className="type-hud-title">History</h2>
+          <p className="type-hud-caption mt-1 normal-case">
+            {entries.length === 0 ? "Nothing logged yet" : `${entries.length} entries`}
+          </p>
+        </div>
+        {entries.length === 0 && (
+          <div className={cn(glassPanelClass, "p-8 text-center")}>
+            <p className="type-hud-caption normal-case text-muted-foreground">
+              Tap Log drink to add your first entry.
+            </p>
+          </div>
+        )}
+        {historyDisplay.todayGroups.length > 0 && (
+          <div className="space-y-2">
+            {historyDisplay.todayGroups.map(({ dateKey, items }) => (
+              <AlcoholHistoryDayGroup
+                key={dateKey}
+                dateKey={dateKey}
+                items={items}
+                showDayHeader={false}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        )}
+        {historyDisplay.earlierGroups.length > 0 && (
+          <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+            {historyDisplay.earlierGroups.map(({ dateKey, items }) => (
+              <AlcoholHistoryDayGroup
+                key={dateKey}
+                dateKey={dateKey}
+                items={items}
+                showDayHeader
+                onDelete={handleDelete}
+              />
+            ))}
+          </HistoryEarlierSection>
+        )}
+        <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
+      </div>
+
+      <LogAlcoholDialog
+        open={logOpen}
+        onOpenChange={setLogOpen}
+        onSaved={(entry) => {
+          if (entry && typeof entry === "object" && "id" in entry) {
+            setEntries((prev) => [entry as AlcoholEntry, ...prev])
+          } else {
+            refreshEntries()
+          }
+        }}
+      />
     </div>
   )
 }

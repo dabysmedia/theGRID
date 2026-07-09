@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { format, subDays } from "date-fns"
-import { Calendar, Trash2 } from "lucide-react"
+import { Calendar, ChevronDown, Plus, Trash2 } from "lucide-react"
 import { BowelToiletIcon } from "@/components/BowelToiletIcon"
 import {
   Bar,
@@ -18,12 +18,22 @@ import { apiFetch } from "@/lib/api-fetch"
 import { PageHeader } from "@/components/PageHeader"
 import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { formatDate, formatDisplayDate, last7Days, parseLocalDate } from "@/lib/utils"
+import { LogBowelDialog } from "@/components/quick-log/LogBowelDialog"
+import {
+  cn,
+  formatDate,
+  formatDisplayDate,
+  glassPanelAccentClass,
+  glassPanelAccentStyle,
+  glassPanelClass,
+  last7Days,
+  parseLocalDate,
+} from "@/lib/utils"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
+
+const BOWEL_COLOR = "#92400e"
 
 const bowelGoalPresets: GoalPreset[] = [
   { type: "daily", label: "Daily Regularity", unit: "entries", placeholder: "2" },
@@ -129,14 +139,13 @@ function BowelHistoryDayGroup({
 
 export default function BowelPage() {
   const [entries, setEntries] = useState<BowelEntry[]>([])
-  const [bristolScale, setBristolScale] = useState(4)
-  const [notes, setNotes] = useState("")
+  const [logOpen, setLogOpen] = useState(false)
 
   const { activeDate } = useActiveDate()
   const today = activeDate
   const yesterday = formatDate(subDays(parseLocalDate(activeDate), 1))
 
-  useEffect(() => {
+  const refreshEntries = useCallback(() => {
     apiFetch("/api/bowel")
       .then(async (r) => {
         const data = await r.json()
@@ -144,6 +153,10 @@ export default function BowelPage() {
       })
       .catch(() => setEntries([]))
   }, [])
+
+  useEffect(() => {
+    refreshEntries()
+  }, [refreshEntries])
 
   const { chartData, weekCount, avgTypeStr, mostCommonStr } = useMemo(() => {
     const weekKeys = new Set(last7Days().map((d) => formatDate(d)))
@@ -208,27 +221,6 @@ export default function BowelPage() {
     [historyGroups, today]
   )
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-
-    const res = await apiFetch("/api/bowel", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        date: today,
-        time: new Date().toISOString(),
-        bristolScale,
-        notes: notes || null,
-      }),
-    })
-
-    if (res.ok) {
-      const entry = await res.json()
-      setEntries([entry, ...entries])
-      setNotes("")
-    }
-  }
-
   async function handleDelete(id: string) {
     const res = await apiFetch(`/api/bowel?id=${id}`, { method: "DELETE" })
     if (res.ok) setEntries(entries.filter((e) => e.id !== id))
@@ -241,7 +233,7 @@ export default function BowelPage() {
       <PageHeader title="Bowel" />
 
       <PageHeroStrip
-        color="#92400e"
+        color={BOWEL_COLOR}
         iconSlot={<BowelToiletIcon value={todayCount} size="sm" />}
         eyebrow={`Today · ${formatDisplayDate(parseLocalDate(activeDate))}`}
         value={String(todayCount)}
@@ -257,156 +249,161 @@ export default function BowelPage() {
         category="bowel"
         values={{ daily: todayCount }}
         presets={bowelGoalPresets}
-        color="#92400e"
+        color={BOWEL_COLOR}
       />
 
-      <div className="glass-panel p-5 animate-fade-up stagger-2">
-          <div className="flex flex-col items-center text-center lg:flex-row lg:items-center lg:gap-5 lg:text-left mb-5">
-            <BowelToiletIcon value={todayCount} size="md" className="mb-2 lg:mb-0" />
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today</p>
-              <p className="text-4xl font-bold tabular-nums tracking-tight">{todayCount}</p>
-              <p className="text-sm text-muted-foreground">entries</p>
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                {bristolScale === 0
-                  ? "No bowel movement"
-                  : `Bristol scale (${bristolScale}/7 — ${bristolLabels[bristolScale]})`}
-              </Label>
-              <Button
-                type="button"
-                variant={bristolScale === 0 ? "default" : "outline"}
-                size="sm"
-                className="h-10 w-full touch-manipulation"
-                onClick={() => setBristolScale(0)}
-              >
-                No poop
-              </Button>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
-                Log when you had no movement this day (still counts as a check-in).
-              </p>
-              <div className="mt-2 grid grid-cols-7 gap-1.5">
-                {[1, 2, 3, 4, 5, 6, 7].map((s) => (
-                  <Button
-                    key={s}
-                    type="button"
-                    variant={bristolScale === s ? "default" : "outline"}
-                    onClick={() => setBristolScale(s)}
-                    className="h-11 min-w-0 touch-manipulation px-0"
-                  >
-                    {s}
-                  </Button>
-                ))}
+      <div
+        className={cn(glassPanelClass, glassPanelAccentClass, "animate-fade-up stagger-1 p-4 lg:p-5")}
+        style={glassPanelAccentStyle(BOWEL_COLOR)}
+      >
+        <div
+          className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"
+          style={{ backgroundColor: BOWEL_COLOR }}
+          aria-hidden
+        />
+        <div className="relative space-y-4">
+          <div className="flex flex-col items-center text-center sm:flex-row sm:items-center sm:gap-4 sm:text-left">
+            <BowelToiletIcon value={todayCount} size="md" className="mb-2 sm:mb-0" />
+            <div className="min-w-0">
+              <p className="type-hud-label-soft mb-1">Today</p>
+              <div className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-0.5 sm:justify-start">
+                <span className="type-hud-value-xl tabular-nums">{todayCount}</span>
+                <span className="type-hud-unit">entries</span>
               </div>
             </div>
+          </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="notes" className="text-xs uppercase tracking-wider text-muted-foreground">
-                Notes
-              </Label>
-              <Input
-                id="notes"
-                placeholder="Optional notes..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </div>
-
-            <Button type="submit" variant="glass" className="w-full press-scale" size="lg">
-              Log Entry
-            </Button>
-          </form>
+          <Button
+            type="button"
+            variant="glass"
+            size="lg"
+            className="h-12 w-full gap-2 touch-manipulation"
+            onClick={() => setLogOpen(true)}
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            Log entry
+          </Button>
+        </div>
       </div>
 
-      <div className="glass-panel animate-fade-up stagger-2 p-4 lg:p-5">
-        <p className="mb-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          7-day entries
-        </p>
-        {hasChartData ? (
-          <div className="h-40 w-full lg:h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted/25" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  width={32}
-                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                  axisLine={false}
-                  tickLine={false}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "oklch(0.19 0.012 250 / 98%)",
-                    border: "1px solid oklch(1 0 0 / 8%)",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    backdropFilter: "blur(8px)",
-                  }}
-                  formatter={(value) => [`${Number(value ?? 0)}`, "Entries"]}
-                />
-                <Bar dataKey="count" fill="#92400e" radius={[4, 4, 0, 0]} maxBarSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
+      <details
+        className={cn(
+          glassPanelClass,
+          glassPanelAccentClass,
+          "animate-fade-up stagger-2 overflow-hidden [&[open]_summary_.bowel-trend-chevron]:rotate-180",
+        )}
+        style={glassPanelAccentStyle(BOWEL_COLOR)}
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-glass-highlight/10 lg:px-5 [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0">
+            <p className="type-hud-label-soft">7-day entries</p>
+            <p className="type-hud-caption mt-0.5 normal-case tabular-nums">
+              {hasChartData
+                ? `${weekCount} this week`
+                : "Expand to view your week"}
+            </p>
           </div>
-        ) : (
-          <div className="flex h-40 items-center justify-center lg:h-48">
-            <p className="px-4 text-center text-sm text-muted-foreground">Log entries to see trends</p>
+          <ChevronDown className="bowel-trend-chevron h-4 w-4 shrink-0 text-muted-foreground/45 transition-transform duration-200" />
+        </summary>
+        <div className="border-t border-border/20 px-4 pb-4 pt-3 lg:px-5 lg:pb-5">
+          {hasChartData ? (
+            <div className="h-40 w-full lg:h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted/25" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    width={32}
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "oklch(0.19 0.012 250 / 98%)",
+                      border: "1px solid oklch(1 0 0 / 8%)",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      backdropFilter: "blur(8px)",
+                    }}
+                    formatter={(value) => [`${Number(value ?? 0)}`, "Entries"]}
+                  />
+                  <Bar dataKey="count" fill={BOWEL_COLOR} radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex h-40 items-center justify-center lg:h-48">
+              <p className="px-4 text-center text-sm text-muted-foreground">Log entries to see trends</p>
+            </div>
+          )}
+        </div>
+      </details>
+
+      <div className="animate-fade-up stagger-3 space-y-3">
+        <div className="px-0.5">
+          <h2 className="type-hud-title">History</h2>
+          <p className="type-hud-caption mt-1 normal-case">
+            {entries.length === 0 ? "Nothing logged yet" : `${entries.length} entries`}
+          </p>
+        </div>
+        {entries.length === 0 && (
+          <div className={cn(glassPanelClass, "p-8 text-center")}>
+            <p className="type-hud-caption normal-case text-muted-foreground">
+              Tap Log entry to add your first check-in.
+            </p>
           </div>
         )}
+        {historyDisplay.todayGroups.length > 0 && (
+          <div className="space-y-2">
+            {historyDisplay.todayGroups.map(({ dateKey, items }) => (
+              <BowelHistoryDayGroup
+                key={dateKey}
+                dateKey={dateKey}
+                items={items}
+                today={today}
+                yesterday={yesterday}
+                showCalendarHeader={false}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        )}
+        {historyDisplay.earlierGroups.length > 0 && (
+          <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+            {historyDisplay.earlierGroups.map(({ dateKey, items }) => (
+              <BowelHistoryDayGroup
+                key={dateKey}
+                dateKey={dateKey}
+                items={items}
+                today={today}
+                yesterday={yesterday}
+                showCalendarHeader
+                onDelete={handleDelete}
+              />
+            ))}
+          </HistoryEarlierSection>
+        )}
+        <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
       </div>
 
-      <div className="animate-fade-up stagger-2 space-y-3">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">History</h2>
-          {entries.length === 0 && (
-            <div className="glass-subtle rounded-2xl p-6 text-center">
-              <p className="text-sm text-muted-foreground">No entries yet</p>
-            </div>
-          )}
-          {historyDisplay.todayGroups.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
-                Today
-              </p>
-              {historyDisplay.todayGroups.map(({ dateKey, items }) => (
-                <BowelHistoryDayGroup
-                  key={dateKey}
-                  dateKey={dateKey}
-                  items={items}
-                  today={today}
-                  yesterday={yesterday}
-                  showCalendarHeader={false}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </div>
-          )}
-          {historyDisplay.earlierGroups.length > 0 && (
-            <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
-              {historyDisplay.earlierGroups.map(({ dateKey, items }) => (
-                <BowelHistoryDayGroup
-                  key={dateKey}
-                  dateKey={dateKey}
-                  items={items}
-                  today={today}
-                  yesterday={yesterday}
-                  showCalendarHeader
-                  onDelete={handleDelete}
-                />
-              ))}
-            </HistoryEarlierSection>
-          )}
-          <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
-      </div>
+      <LogBowelDialog
+        open={logOpen}
+        onOpenChange={setLogOpen}
+        onSaved={(entry) => {
+          if (entry && typeof entry === "object" && "id" in entry) {
+            setEntries((prev) => [entry as BowelEntry, ...prev])
+          } else {
+            refreshEntries()
+          }
+        }}
+      />
     </div>
   )
 }

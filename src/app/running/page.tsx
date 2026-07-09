@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { format, isToday, isYesterday } from "date-fns"
-import { Calendar, PersonStanding, Trash2, TreePine, Zap } from "lucide-react"
+import { Calendar, ChevronDown, PersonStanding, Plus, Trash2 } from "lucide-react"
 import { apiFetch } from "@/lib/api-fetch"
 import {
   ResponsiveContainer,
@@ -20,12 +20,21 @@ import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { useActiveDate } from "@/context/DateContext"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { formatDisplayDate, parseLocalDate } from "@/lib/utils"
-import { kmToMiles, milesToKm } from "@/lib/units"
+import { LogRunningDialog } from "@/components/quick-log/LogRunningDialog"
+import {
+  cn,
+  formatDisplayDate,
+  glassPanelAccentClass,
+  glassPanelAccentStyle,
+  glassPanelClass,
+  parseLocalDate,
+} from "@/lib/utils"
+import { kmToMiles } from "@/lib/units"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
+
+const RUN_COLOR = "#3b82f6"
 
 const runGoalPresets: GoalPreset[] = [
   { type: "weekly", label: "Weekly Distance", unit: "mi", placeholder: "15" },
@@ -136,12 +145,7 @@ function RunningHistoryDayGroup({
 export default function RunningPage() {
   const { activeDate } = useActiveDate()
   const [entries, setEntries] = useState<RunEntry[]>([])
-  const [distance, setDistance] = useState("")
-  const [duration, setDuration] = useState("")
-  const [environment, setEnvironment] = useState<"outdoor" | "treadmill">("outdoor")
-  const [notes, setNotes] = useState("")
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  const submitLockRef = useRef(false)
+  const [logOpen, setLogOpen] = useState(false)
 
   const today = activeDate
 
@@ -150,6 +154,11 @@ export default function RunningPage() {
       .filter((e) => e.date.split("T")[0] === today)
       .reduce((s, e) => s + kmToMiles(e.distance), 0)
   }, [entries, today])
+
+  const todayRuns = useMemo(
+    () => entries.filter((e) => e.date.split("T")[0] === today),
+    [entries, today],
+  )
 
   const goalValues = useMemo(() => {
     const now = new Date()
@@ -162,7 +171,6 @@ export default function RunningPage() {
       .filter((e) => e.date.split("T")[0] >= weekKey)
       .reduce((s, e) => s + kmToMiles(e.distance), 0)
 
-    const todayRuns = entries.filter((e) => e.date.split("T")[0] === today)
     const bestTodayRun = todayRuns.length > 0
       ? Math.max(...todayRuns.map((e) => kmToMiles(e.distance)))
       : 0
@@ -177,10 +185,7 @@ export default function RunningPage() {
       per_session: Math.round(bestTodayRun * 10) / 10,
       pace: Math.round(bestPace * 100) / 100,
     }
-  }, [entries, today])
-
-  const nativeInputClass =
-    "h-10 w-full min-w-0 rounded-[3px] border border-glass-border bg-glass-highlight/30 px-3 py-2 text-base font-sans tabular-nums tracking-normal backdrop-blur-sm transition-all outline-none placeholder:text-muted-foreground/60 focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:bg-glass-highlight/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+  }, [entries, todayRuns])
 
   const stats = useMemo(() => {
     const totalKm = entries.reduce((s, e) => s + e.distance, 0)
@@ -242,7 +247,7 @@ export default function RunningPage() {
     [groupedByDate, today]
   )
 
-  useEffect(() => {
+  const refreshEntries = useCallback(() => {
     apiFetch("/api/running")
       .then(async (r) => {
         const data = await r.json()
@@ -251,94 +256,29 @@ export default function RunningPage() {
       .catch(() => setEntries([]))
   }, [])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (submitLockRef.current) return
-    submitLockRef.current = true
-    setSubmitError(null)
-
-    if (!distance.trim() || !duration.trim()) {
-      setSubmitError("Enter distance and duration.")
-      submitLockRef.current = false
-      return
-    }
-
-    const mi = parseFloat(distance)
-    if (!Number.isFinite(mi) || mi <= 0) {
-      setSubmitError("Enter a valid distance in miles.")
-      submitLockRef.current = false
-      return
-    }
-
-    const durationMin = Number.parseInt(String(duration).trim(), 10)
-    if (!Number.isFinite(durationMin) || durationMin <= 0) {
-      setSubmitError("Enter duration in whole minutes.")
-      submitLockRef.current = false
-      return
-    }
-
-    try {
-      const payload = {
-        date: today,
-        distance: milesToKm(mi),
-        duration: durationMin,
-        environment,
-        notes: notes.trim() ? notes.trim() : null,
-      }
-      const res = await apiFetch("/api/running", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      if (res.ok) {
-        const entry = await res.json()
-        setEntries([entry, ...entries])
-        setDistance("")
-        setDuration("")
-        setNotes("")
-        submitLockRef.current = false
-        return
-      }
-
-      let message = "Could not save run."
-      try {
-        const data = await res.json()
-        if (data && typeof data.error === "string") message = data.error
-      } catch {
-        /* ignore */
-      }
-      setSubmitError(message)
-    } catch {
-      setSubmitError("Network error. Try again.")
-    } finally {
-      submitLockRef.current = false
-    }
-  }
+  useEffect(() => {
+    refreshEntries()
+  }, [refreshEntries])
 
   async function handleDelete(id: string) {
     const res = await apiFetch(`/api/running?id=${id}`, { method: "DELETE" })
     if (res.ok) setEntries(entries.filter((e) => e.id !== id))
   }
 
-  const livePace = useMemo(() => {
-    const mi = parseFloat(distance)
-    const t = parseFloat(duration)
-    if (!mi || !t || mi <= 0 || t <= 0) return null
-    return formatPaceMiles(milesToKm(mi), t)
-  }, [distance, duration])
-
   const avgPaceDisplay =
     stats.count > 0 && stats.totalKm > 0 && stats.totalDuration > 0
       ? formatPaceMiles(stats.totalKm, stats.totalDuration)
       : "—"
+
+  const hasDistanceChart = chartData.length >= 2
+  const hasPaceChart = paceChartData.filter((d) => d.paceMin != null).length >= 2
 
   return (
     <div className="space-y-6">
       <PageHeader title="Running" />
 
       <PageHeroStrip
-        color="#3b82f6"
+        color={RUN_COLOR}
         icon={PersonStanding}
         eyebrow={`Today · ${formatDisplayDate(parseLocalDate(activeDate))}`}
         value={todayMiles > 0 ? todayMiles.toFixed(1) : "—"}
@@ -363,290 +303,264 @@ export default function RunningPage() {
         category="running"
         values={goalValues}
         presets={runGoalPresets}
-        color="#3b82f6"
+        color={RUN_COLOR}
       />
 
-      <div className="glass-panel p-5 animate-fade-up stagger-2">
-          <form noValidate onSubmit={handleSubmit} className="space-y-4">
-            {/* Environment toggle */}
-            <div className="flex rounded-[3px] border border-glass-border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setEnvironment("outdoor")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-medium uppercase tracking-[0.12em] transition-colors ${
-                  environment === "outdoor"
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground/50 hover:text-muted-foreground hover:bg-glass-highlight/20"
-                }`}
-              >
-                <TreePine className="h-3.5 w-3.5" />
-                Outdoor
-              </button>
-              <button
-                type="button"
-                onClick={() => setEnvironment("treadmill")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-medium uppercase tracking-[0.12em] border-l border-glass-border transition-colors ${
-                  environment === "treadmill"
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground/50 hover:text-muted-foreground hover:bg-glass-highlight/20"
-                }`}
-              >
-                <Zap className="h-3.5 w-3.5" />
-                Treadmill
-              </button>
+      <div
+        className={cn(glassPanelClass, glassPanelAccentClass, "animate-fade-up stagger-1 p-4 lg:p-5")}
+        style={glassPanelAccentStyle(RUN_COLOR)}
+      >
+        <div
+          className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"
+          style={{ backgroundColor: RUN_COLOR }}
+          aria-hidden
+        />
+        <div className="relative space-y-4">
+          <div className="min-w-0">
+            <p className="type-hud-label-soft mb-1">Today</p>
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="type-hud-value-xl tabular-nums">
+                {todayMiles > 0 ? todayMiles.toFixed(1) : "—"}
+              </span>
+              <span className="type-hud-unit">mi</span>
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="distance" className="text-xs uppercase tracking-wider text-muted-foreground">Distance (mi) *</Label>
-                <input
-                  id="distance"
-                  name="distance"
-                  type="number"
-                  inputMode="decimal"
-                  step="0.1"
-                  min="0"
-                  placeholder="3.1"
-                  autoComplete="off"
-                  value={distance}
-                  onChange={(e) => setDistance(e.target.value)}
-                  className={nativeInputClass}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="duration" className="text-xs uppercase tracking-wider text-muted-foreground">Duration (min) *</Label>
-                <input
-                  id="duration"
-                  name="duration"
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  step="1"
-                  placeholder="30"
-                  autoComplete="off"
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  className={nativeInputClass}
-                />
-              </div>
-            </div>
-
-            {livePace && (
-              <div className="glass-subtle rounded-[3px] px-4 py-3 flex items-center justify-between animate-in fade-in duration-200">
-                <span className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
-                  Pace
-                </span>
-                <span className="text-lg font-bold tabular-nums tracking-tight text-primary">
-                  {livePace}
-                </span>
-              </div>
+            {todayRuns.length > 0 && (
+              <p className="type-hud-caption mt-1.5 normal-case">
+                {todayRuns.length} run{todayRuns.length === 1 ? "" : "s"} logged
+              </p>
             )}
+          </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="notes" className="text-xs uppercase tracking-wider text-muted-foreground">Notes</Label>
-              <input
-                id="notes"
-                name="notes"
-                type="text"
-                placeholder="How did it feel?"
-                autoComplete="off"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className={nativeInputClass}
+          <Button
+            type="button"
+            variant="glass"
+            size="lg"
+            className="h-12 w-full gap-2 touch-manipulation"
+            onClick={() => setLogOpen(true)}
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            Log run
+          </Button>
+        </div>
+      </div>
+
+      <details
+        className={cn(
+          glassPanelClass,
+          glassPanelAccentClass,
+          "animate-fade-up stagger-2 overflow-hidden [&[open]_summary_.run-trend-chevron]:rotate-180",
+        )}
+        style={glassPanelAccentStyle(RUN_COLOR)}
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-glass-highlight/10 lg:px-5 [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0">
+            <p className="type-hud-label-soft">Distance & pace trends</p>
+            <p className="type-hud-caption mt-0.5 normal-case tabular-nums">
+              {hasDistanceChart || hasPaceChart
+                ? `${stats.count} run${stats.count === 1 ? "" : "s"} · ${stats.totalMi.toFixed(1)} mi total`
+                : "Expand to view trends"}
+            </p>
+          </div>
+          <ChevronDown className="run-trend-chevron h-4 w-4 shrink-0 text-muted-foreground/45 transition-transform duration-200" />
+        </summary>
+        <div className="border-t border-border/20 px-4 pb-4 pt-3 lg:px-5 lg:pb-5">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="min-h-[12rem] min-w-0">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider">
+                Distance trend
+              </h2>
+              {hasDistanceChart ? (
+                <div className="h-40 min-h-[10rem] w-full min-w-0 lg:h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={chartData}
+                      margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="runningDistGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={RUN_COLOR} stopOpacity={0.28} />
+                          <stop offset="100%" stopColor={RUN_COLOR} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="oklch(1 0 0 / 5%)"
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                        axisLine={false}
+                        tickLine={false}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis
+                        domain={["dataMin - 0.5", "dataMax + 0.5"]}
+                        tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "oklch(0.19 0.012 250 / 98%)",
+                          border: "1px solid oklch(1 0 0 / 8%)",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                          backdropFilter: "blur(8px)",
+                        }}
+                        labelStyle={{ color: "oklch(0.60 0.01 250)" }}
+                        formatter={(val) => [`${Number(val).toFixed(1)} mi`, "Distance"]}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="distance"
+                        stroke={RUN_COLOR}
+                        strokeWidth={2}
+                        fill="url(#runningDistGrad)"
+                        dot={{ r: 3, fill: RUN_COLOR, strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: RUN_COLOR, strokeWidth: 2, stroke: "#fff" }}
+                        isAnimationActive={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="flex h-40 min-h-[10rem] items-center justify-center lg:h-48">
+                  <p className="text-sm text-muted-foreground">
+                    Log at least 2 runs to see distance over time
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="min-h-[12rem] min-w-0">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider">
+                Pace trend
+              </h2>
+              {hasPaceChart ? (
+                <div className="h-40 min-h-[10rem] w-full min-w-0 lg:h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={paceChartData}
+                      margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="oklch(1 0 0 / 5%)"
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                        axisLine={false}
+                        tickLine={false}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis
+                        domain={["auto", "auto"]}
+                        tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) => `${Number(v).toFixed(1)}`}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "oklch(0.19 0.012 250 / 98%)",
+                          border: "1px solid oklch(1 0 0 / 8%)",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                          backdropFilter: "blur(8px)",
+                        }}
+                        labelStyle={{ color: "oklch(0.60 0.01 250)" }}
+                        formatter={(val) => {
+                          if (val == null || Number.isNaN(Number(val))) return ["—", "Pace"]
+                          return [
+                            `${formatPaceMinutes(Number(val))} /mi`,
+                            "Pace",
+                          ]
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="paceMin"
+                        stroke="oklch(0.82 0.18 110)"
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: "oklch(0.82 0.18 110)", strokeWidth: 0 }}
+                        activeDot={{ r: 5 }}
+                        connectNulls
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="flex h-40 min-h-[10rem] items-center justify-center lg:h-48">
+                  <p className="text-sm text-muted-foreground">
+                    Log at least 2 runs with distance and duration to see pace over time
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <div className="animate-fade-up stagger-3 space-y-3">
+        <div className="px-0.5">
+          <h2 className="type-hud-title">History</h2>
+          <p className="type-hud-caption mt-1 normal-case">
+            {entries.length === 0 ? "Nothing logged yet" : `${entries.length} entries`}
+          </p>
+        </div>
+        {entries.length === 0 && (
+          <div className={cn(glassPanelClass, "p-8 text-center")}>
+            <p className="type-hud-caption normal-case text-muted-foreground">
+              Tap Log run to add your first entry.
+            </p>
+          </div>
+        )}
+        {historyDisplay.todayGroups.length > 0 && (
+          <div className="space-y-2">
+            {historyDisplay.todayGroups.map(([dateKey, dayEntries]) => (
+              <RunningHistoryDayGroup
+                key={dateKey}
+                dateKey={dateKey}
+                dayEntries={dayEntries}
+                showDayHeader={false}
+                formatHeader={formatGroupHeader}
+                onDelete={handleDelete}
               />
-            </div>
-
-            {submitError && (
-              <p className="text-xs text-destructive" role="alert">
-                {submitError}
-              </p>
-            )}
-
-            <Button type="submit" variant="glass" size="lg" className="w-full press-scale">
-              Log Run
-            </Button>
-          </form>
+            ))}
+          </div>
+        )}
+        {historyDisplay.earlierGroups.length > 0 && (
+          <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+            {historyDisplay.earlierGroups.map(([dateKey, dayEntries]) => (
+              <RunningHistoryDayGroup
+                key={dateKey}
+                dateKey={dateKey}
+                dayEntries={dayEntries}
+                showDayHeader
+                formatHeader={formatGroupHeader}
+                onDelete={handleDelete}
+              />
+            ))}
+          </HistoryEarlierSection>
+        )}
+        <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 animate-fade-up stagger-1 lg:grid-cols-2">
-        <div className="glass-panel min-h-[12rem] min-w-0 p-4 lg:p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider">
-            Distance trend
-          </h2>
-          {chartData.length >= 2 ? (
-            <div className="h-40 min-h-[10rem] w-full min-w-0 lg:h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={chartData}
-                  margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="runningDistGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.28} />
-                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="oklch(1 0 0 / 5%)"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                    axisLine={false}
-                    tickLine={false}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis
-                    domain={["dataMin - 0.5", "dataMax + 0.5"]}
-                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "oklch(0.19 0.012 250 / 98%)",
-                      border: "1px solid oklch(1 0 0 / 8%)",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                      backdropFilter: "blur(8px)",
-                    }}
-                    labelStyle={{ color: "oklch(0.60 0.01 250)" }}
-                    formatter={(val) => [`${Number(val).toFixed(1)} mi`, "Distance"]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="distance"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    fill="url(#runningDistGrad)"
-                    dot={{ r: 3, fill: "#3b82f6", strokeWidth: 0 }}
-                    activeDot={{ r: 5, fill: "#3b82f6", strokeWidth: 2, stroke: "#fff" }}
-                    isAnimationActive={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="flex h-40 min-h-[10rem] items-center justify-center lg:h-48">
-              <p className="text-sm text-muted-foreground">
-                Log at least 2 runs to see distance over time
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="glass-panel min-h-[12rem] min-w-0 p-4 lg:p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider">
-            Pace trend
-          </h2>
-          {paceChartData.filter((d) => d.paceMin != null).length >= 2 ? (
-            <div className="h-40 min-h-[10rem] w-full min-w-0 lg:h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={paceChartData}
-                  margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="oklch(1 0 0 / 5%)"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                    axisLine={false}
-                    tickLine={false}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis
-                    domain={["auto", "auto"]}
-                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v) => `${Number(v).toFixed(1)}`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "oklch(0.19 0.012 250 / 98%)",
-                      border: "1px solid oklch(1 0 0 / 8%)",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                      backdropFilter: "blur(8px)",
-                    }}
-                    labelStyle={{ color: "oklch(0.60 0.01 250)" }}
-                    formatter={(val) => {
-                      if (val == null || Number.isNaN(Number(val))) return ["—", "Pace"]
-                      return [
-                        `${formatPaceMinutes(Number(val))} /mi`,
-                        "Pace",
-                      ]
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="paceMin"
-                    stroke="oklch(0.82 0.18 110)"
-                    strokeWidth={2}
-                    dot={{ r: 3, fill: "oklch(0.82 0.18 110)", strokeWidth: 0 }}
-                    activeDot={{ r: 5 }}
-                    connectNulls
-                    isAnimationActive={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="flex h-40 min-h-[10rem] items-center justify-center lg:h-48">
-              <p className="text-sm text-muted-foreground">
-                Log at least 2 runs with distance and duration to see pace over time
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="animate-fade-up stagger-2 space-y-3">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">History</h2>
-          {entries.length === 0 && (
-            <div className="glass-subtle rounded-2xl p-6 text-center">
-              <p className="text-sm text-muted-foreground">No runs yet</p>
-            </div>
-          )}
-          {historyDisplay.todayGroups.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
-                Today
-              </p>
-              {historyDisplay.todayGroups.map(([dateKey, dayEntries]) => (
-                <RunningHistoryDayGroup
-                  key={dateKey}
-                  dateKey={dateKey}
-                  dayEntries={dayEntries}
-                  showDayHeader={false}
-                  formatHeader={formatGroupHeader}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </div>
-          )}
-          {historyDisplay.earlierGroups.length > 0 && (
-            <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
-              {historyDisplay.earlierGroups.map(([dateKey, dayEntries]) => (
-                <RunningHistoryDayGroup
-                  key={dateKey}
-                  dateKey={dateKey}
-                  dayEntries={dayEntries}
-                  showDayHeader
-                  formatHeader={formatGroupHeader}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </HistoryEarlierSection>
-          )}
-          <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
-      </div>
+      <LogRunningDialog
+        open={logOpen}
+        onOpenChange={setLogOpen}
+        onSaved={(entry) => {
+          if (entry && typeof entry === "object" && "id" in entry) {
+            setEntries((prev) => [entry as RunEntry, ...prev])
+          } else {
+            refreshEntries()
+          }
+        }}
+      />
     </div>
   )
 }
