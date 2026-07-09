@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { DailyWeighIn } from "@/components/DailyWeighIn"
 import { ReadinessHeartTile } from "@/components/hub/ReadinessHeartTile"
+import { StepsActivityBars } from "@/components/hub/StepsActivityBars"
 import { useActiveDate } from "@/context/DateContext"
 import { useQuickLog } from "@/context/QuickLogContext"
 import { cn, glassPanelClass, parseLocalDate } from "@/lib/utils"
@@ -271,7 +272,6 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
     : `${monthNames[refDate.getMonth()]} ${refDate.getDate()}`
 
   const dayLabels = lastNWeekdayLabels(refDate, data.steps.last7.length)
-  const stepsMax = Math.max(...data.steps.last7, 1)
 
   return (
     <div
@@ -377,35 +377,11 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         className="motion-safe:animate-fade-up motion-reduce:animate-none"
       />
 
-      {/* Weekly activity bars */}
-      <div className="animate-fade-up stagger-3">
-        <p className="type-hud-subsection mb-2">Steps Activity</p>
-        <div className="flex items-end justify-between gap-1.5 h-10">
-          {data.steps.last7.map((val, i) => {
-            const pct = stepsMax > 0 ? (val / stepsMax) * 100 : 0
-            const isTodayBar = i === data.steps.last7.length - 1
-            return (
-              <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                <div className="w-full relative" style={{ height: "32px" }}>
-                  <div
-                    className="absolute bottom-0 w-full animate-bar-grow"
-                    style={{
-                      height: `${Math.max(pct, 4)}%`,
-                      backgroundColor: isTodayBar ? "#22c55e" : "#22c55e50",
-                      boxShadow: isTodayBar ? '0 0 6px #22c55e40' : 'none',
-                      borderRadius: '1px',
-                      animationDelay: `${300 + i * 60}ms`,
-                    }}
-                  />
-                </div>
-                <span className={`text-[10px] tracking-wider ${isTodayBar ? "text-foreground font-semibold" : "text-muted-foreground/50"}`}>
-                  {dayLabels[i]}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      <StepsActivityBars
+        values={data.steps.last7}
+        labels={dayLabels}
+        className="animate-fade-up stagger-3"
+      />
       </div>
 
       {showWeighInPrompt && (
