@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Calendar, Footprints, Trash2 } from "lucide-react"
+import { Calendar, Footprints, Plus, Trash2, ChevronDown } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -16,10 +16,18 @@ import { PageHeader } from "@/components/PageHeader"
 import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { apiFetch } from "@/lib/api-fetch"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { LogStepsDialog } from "@/components/quick-log/LogStepsDialog"
 import { useActiveDate } from "@/context/DateContext"
-import { averageOnLoggedDays, formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import {
+  averageOnLoggedDays,
+  cn,
+  formatDate,
+  formatDisplayDate,
+  glassPanelAccentClass,
+  glassPanelAccentStyle,
+  glassPanelClass,
+  parseLocalDate,
+} from "@/lib/utils"
 import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { kmToMiles, runKmToStepsFromRun, STEPS_PER_MILE_FROM_RUN } from "@/lib/units"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
@@ -58,10 +66,7 @@ function groupHeaderLabel(dayKey: string): string {
 
 /** Common rule-of-thumb: ~2,000 steps ≈ 1 mile walked */
 const STEPS_PER_MILE = 2000
-
-function milesToSteps(miles: number): number {
-  return Math.round(miles * STEPS_PER_MILE)
-}
+const STEPS_COLOR = "#22c55e"
 
 type HistoryRow =
   | { kind: "logged"; entry: StepEntry }
@@ -174,8 +179,7 @@ export default function StepsPage() {
   const { activeDate } = useActiveDate()
   const [entries, setEntries] = useState<StepEntry[]>([])
   const [runEntries, setRunEntries] = useState<RunEntry[]>([])
-  const [count, setCount] = useState("")
-  const [inputMode, setInputMode] = useState<"steps" | "miles">("steps")
+  const [logOpen, setLogOpen] = useState(false)
   const [dailyStepTarget, setDailyStepTarget] = useState<number | null>(null)
 
   const today = activeDate
@@ -195,7 +199,7 @@ export default function StepsPage() {
     }
   }, [])
 
-  useEffect(() => {
+  const refreshEntries = useCallback(() => {
     Promise.all([
       apiFetch("/api/steps").then(async (r) => {
         const data = await r.json()
@@ -215,6 +219,10 @@ export default function StepsPage() {
         setRunEntries([])
       })
   }, [])
+
+  useEffect(() => {
+    refreshEntries()
+  }, [refreshEntries])
 
   useEffect(() => {
     void fetchDailyStepGoal()
@@ -252,7 +260,7 @@ export default function StepsPage() {
 
   const weekDayKeys = useMemo(
     () => Array.from({ length: 7 }, (_, i) => formatDate(subDays(parseLocalDate(activeDate), 6 - i))),
-    [activeDate]
+    [activeDate],
   )
 
   const stats = useMemo(() => {
@@ -292,7 +300,7 @@ export default function StepsPage() {
           steps: byDay.get(k) ?? 0,
         }
       }),
-    [byDay, weekDayKeys]
+    [byDay, weekDayKeys],
   )
 
   const historyGroups = useMemo(() => {
@@ -316,7 +324,7 @@ export default function StepsPage() {
           new Date(
             row.kind === "logged"
               ? row.entry.createdAt ?? row.entry.date
-              : row.run.createdAt ?? row.run.date
+              : row.run.createdAt ?? row.run.date,
           ).getTime()
         return timeOf(b) - timeOf(a)
       }),
@@ -325,7 +333,7 @@ export default function StepsPage() {
 
   const historyDisplay = useMemo(
     () => partitionHistoryDayGroups(historyGroups, (g) => g.dayKey, today),
-    [historyGroups, today]
+    [historyGroups, today],
   )
 
   const milesRemainingToDailyGoal = useMemo(() => {
@@ -335,62 +343,6 @@ export default function StepsPage() {
     const miles = remainingSteps / STEPS_PER_MILE
     return { remainingSteps, miles }
   }, [dailyStepTarget, byDay, today])
-
-  function switchInputMode(next: "steps" | "miles") {
-    if (next === inputMode) return
-    const trimmed = count.trim()
-    if (trimmed !== "") {
-      const n = parseFloat(trimmed)
-      if (!Number.isNaN(n) && n > 0) {
-        if (next === "miles" && inputMode === "steps") {
-          setCount(String(Math.round((n / STEPS_PER_MILE) * 100) / 100))
-        } else if (next === "steps" && inputMode === "miles") {
-          setCount(String(milesToSteps(n)))
-        }
-      }
-    }
-    setInputMode(next)
-  }
-
-  function addQuickSteps() {
-    if (inputMode === "steps") {
-      const n = parseInt(count, 10)
-      const base = Number.isNaN(n) ? 0 : n
-      setCount(String(base + 2000))
-    } else {
-      const n = parseFloat(count)
-      const base = Number.isNaN(n) ? 0 : n
-      setCount(String(Math.round((base + 1) * 100) / 100))
-    }
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!count) return
-
-    const raw = parseFloat(count)
-    if (Number.isNaN(raw) || raw <= 0) return
-
-    const stepsToLog =
-      inputMode === "miles" ? milesToSteps(raw) : Math.round(raw)
-
-    const res = await apiFetch("/api/steps", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: today, count: stepsToLog }),
-    })
-
-    if (res.ok) {
-      const entry = await res.json()
-      setEntries([entry, ...entries])
-      setCount("")
-    }
-  }
-
-  const milesPreview =
-    inputMode === "miles" && count.trim() !== ""
-      ? milesToSteps(parseFloat(count) || 0)
-      : null
 
   async function handleDelete(id: string) {
     const res = await apiFetch(`/api/steps?id=${id}`, { method: "DELETE" })
@@ -403,13 +355,14 @@ export default function StepsPage() {
   }
 
   const todayTotal = stats.todayTotal
+  const hasChartData = chartData.some((d) => d.steps > 0)
 
   return (
     <div className="space-y-6">
       <PageHeader title="Steps" />
 
       <PageHeroStrip
-        color="#22c55e"
+        color={STEPS_COLOR}
         icon={Footprints}
         eyebrow={`Today · ${formatDisplayDate(parseLocalDate(activeDate))}`}
         value={stats.todayTotal.toLocaleString()}
@@ -429,20 +382,29 @@ export default function StepsPage() {
         category="steps"
         values={{ daily: stats.todayTotal, weekly: stats.weekTotal }}
         presets={stepsGoalPresets}
-        color="#22c55e"
+        color={STEPS_COLOR}
       />
 
-      <div className="glass-panel p-5 animate-fade-up stagger-2">
-          <div className="text-center lg:text-left mb-5">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Today&apos;s Total</p>
-            <p className="text-4xl font-bold tabular-nums tracking-tight">{todayTotal.toLocaleString()}</p>
-            <p className="text-sm text-muted-foreground">steps</p>
+      <div
+        className={cn(glassPanelClass, glassPanelAccentClass, "animate-fade-up stagger-1 p-4 lg:p-5")}
+        style={glassPanelAccentStyle(STEPS_COLOR)}
+      >
+        <div
+          className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"
+          style={{ backgroundColor: STEPS_COLOR }}
+          aria-hidden
+        />
+        <div className="relative space-y-4">
+          <div className="min-w-0">
+            <p className="type-hud-label-soft mb-1">Today</p>
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="type-hud-value-xl tabular-nums">{todayTotal.toLocaleString()}</span>
+              <span className="type-hud-unit">steps</span>
+            </div>
             {milesRemainingToDailyGoal != null && (
-              <p className="text-[11px] text-muted-foreground/90 mt-1.5">
+              <p className="type-hud-caption mt-1.5 normal-case">
                 {milesRemainingToDailyGoal.remainingSteps === 0 ? (
-                  <span className="font-medium text-emerald-600/90 dark:text-emerald-400/90">
-                    Daily goal reached
-                  </span>
+                  <span className="font-medium text-emerald-500/90">Daily goal reached</span>
                 ) : (
                   <>
                     <span className="font-semibold tabular-nums text-foreground/90">
@@ -457,180 +419,150 @@ export default function StepsPage() {
               </p>
             )}
             {stepsFromRunsToday > 0 && (
-              <p className="text-[11px] text-muted-foreground/80 mt-1.5">
-                Includes {stepsFromRunsToday.toLocaleString()} steps from runs (
-                {STEPS_PER_MILE_FROM_RUN.toLocaleString()} / mi)
+              <p className="type-hud-caption mt-1 normal-case text-muted-foreground/75">
+                Includes {stepsFromRunsToday.toLocaleString()} steps from runs
               </p>
             )}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                Entry type
-              </Label>
-              <div className="flex rounded-xl border border-glass-border bg-glass-highlight/20 p-0.5">
-                <button
-                  type="button"
-                  onClick={() => switchInputMode("steps")}
-                  className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
-                    inputMode === "steps"
-                      ? "bg-background/80 text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Steps
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchInputMode("miles")}
-                  className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
-                    inputMode === "miles"
-                      ? "bg-background/80 text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Miles
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="count" className="text-xs uppercase tracking-wider text-muted-foreground">
-                {inputMode === "steps" ? "Step count *" : "Distance (miles) *"}
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="count"
-                  type="number"
-                  step={inputMode === "miles" ? "0.01" : "1"}
-                  min="0"
-                  placeholder={inputMode === "steps" ? "5000" : "2.5"}
-                  value={count}
-                  onChange={(e) => setCount(e.target.value)}
-                  className="flex-1"
-                  required
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="shrink-0 px-3"
-                  onClick={addQuickSteps}
-                  title={
-                    inputMode === "steps"
-                      ? "Add 2,000 steps"
-                      : "Add 1 mile (~2,000 steps)"
-                  }
-                >
-                  {inputMode === "steps" ? "+2k" : "+1 mi"}
-                </Button>
-              </div>
-              {inputMode === "miles" && milesPreview != null && milesPreview > 0 && (
-                <p className="text-[11px] text-muted-foreground">
-                  ≈ {milesPreview.toLocaleString()} steps ({STEPS_PER_MILE.toLocaleString()} steps/mi)
-                </p>
-              )}
-            </div>
-            <Button type="submit" variant="glass" className="w-full press-scale" size="lg">
-              Log Steps
-            </Button>
-          </form>
-        </div>
-
-      <div className="glass-panel p-4 lg:p-5 animate-fade-up stagger-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-          7-Day Trend
-        </h2>
-        <div className="h-40 lg:h-48 w-full">
-          {chartData.some((d) => d.steps > 0) ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="stepsBarGrad" x1="0" y1="1" x2="0" y2="0">
-                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#22c55e" stopOpacity={1} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="oklch(1 0 0 / 5%)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={36}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "oklch(0.19 0.012 250 / 98%)",
-                    border: "1px solid oklch(1 0 0 / 8%)",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    backdropFilter: "blur(8px)",
-                  }}
-                  labelStyle={{ color: "oklch(0.60 0.01 250)" }}
-                  formatter={(val) => [
-                    `${Number(val ?? 0).toLocaleString()} steps`,
-                    "Total",
-                  ]}
-                />
-                <Bar dataKey="steps" fill="url(#stepsBarGrad)" radius={[6, 6, 0, 0]} maxBarSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-              Log steps to see your week
-            </div>
-          )}
+          <Button
+            type="button"
+            variant="glass"
+            size="lg"
+            className="h-12 w-full gap-2 touch-manipulation"
+            onClick={() => setLogOpen(true)}
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            Log steps
+          </Button>
         </div>
       </div>
 
-        <div className="space-y-3 animate-fade-up stagger-2">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">History</h2>
-          {entries.length === 0 && runEntries.length === 0 && (
-            <div className="glass-subtle rounded-2xl p-6 text-center">
-              <p className="text-sm text-muted-foreground">No entries yet</p>
-            </div>
-          )}
-          {historyDisplay.todayGroups.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
-                Today
-              </p>
-              {historyDisplay.todayGroups.map((group) => (
-                <StepHistoryDayBlock
-                  key={group.dayKey}
-                  group={group}
-                  showDayHeader={false}
-                  onDeleteStep={handleDelete}
-                  onDeleteRun={handleDeleteRun}
-                />
-              ))}
-            </div>
-          )}
-          {historyDisplay.earlierGroups.length > 0 && (
-            <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
-              {historyDisplay.earlierGroups.map((group) => (
-                <StepHistoryDayBlock
-                  key={group.dayKey}
-                  group={group}
-                  showDayHeader
-                  onDeleteStep={handleDelete}
-                  onDeleteRun={handleDeleteRun}
-                />
-              ))}
-            </HistoryEarlierSection>
-          )}
-          <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
+      <details
+        className={cn(
+          glassPanelClass,
+          glassPanelAccentClass,
+          "animate-fade-up stagger-2 overflow-hidden [&[open]_summary_.steps-trend-chevron]:rotate-180",
+        )}
+        style={glassPanelAccentStyle(STEPS_COLOR)}
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-glass-highlight/10 lg:px-5 [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0">
+            <p className="type-hud-label-soft">7-day trend</p>
+            <p className="type-hud-caption mt-0.5 normal-case tabular-nums">
+              {hasChartData
+                ? `${Math.round(stats.avg7).toLocaleString()} avg · ${stats.weekTotal.toLocaleString()} total`
+                : "Expand to view your week"}
+            </p>
+          </div>
+          <ChevronDown className="steps-trend-chevron h-4 w-4 shrink-0 text-muted-foreground/45 transition-transform duration-200" />
+        </summary>
+        <div className="border-t border-border/20 px-4 pb-4 pt-3 lg:px-5 lg:pb-5">
+          <div className="h-44 w-full">
+            {hasChartData ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="stepsBarGrad" x1="0" y1="1" x2="0" y2="0">
+                      <stop offset="0%" stopColor={STEPS_COLOR} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={STEPS_COLOR} stopOpacity={1} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 5%)" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={36}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "oklch(0.19 0.012 250 / 98%)",
+                      border: "1px solid oklch(1 0 0 / 8%)",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      backdropFilter: "blur(8px)",
+                    }}
+                    labelStyle={{ color: "oklch(0.60 0.01 250)" }}
+                    formatter={(val) => [
+                      `${Number(val ?? 0).toLocaleString()} steps`,
+                      "Total",
+                    ]}
+                  />
+                  <Bar dataKey="steps" fill="url(#stepsBarGrad)" radius={[6, 6, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Log steps to see your week
+              </div>
+            )}
+          </div>
         </div>
+      </details>
+
+      <div className="animate-fade-up stagger-3 space-y-3">
+        <div className="px-0.5">
+          <h2 className="type-hud-title">History</h2>
+          <p className="type-hud-caption mt-1 normal-case">
+            {entries.length === 0 && runEntries.length === 0
+              ? "Nothing logged yet"
+              : `${entries.length + runEntries.length} entries`}
+          </p>
+        </div>
+        {entries.length === 0 && runEntries.length === 0 && (
+          <div className={cn(glassPanelClass, "p-8 text-center")}>
+            <p className="type-hud-caption normal-case text-muted-foreground">
+              Tap Log steps to add your first entry.
+            </p>
+          </div>
+        )}
+        {historyDisplay.todayGroups.length > 0 && (
+          <div className="space-y-2">
+            {historyDisplay.todayGroups.map((group) => (
+              <StepHistoryDayBlock
+                key={group.dayKey}
+                group={group}
+                showDayHeader={false}
+                onDeleteStep={handleDelete}
+                onDeleteRun={handleDeleteRun}
+              />
+            ))}
+          </div>
+        )}
+        {historyDisplay.earlierGroups.length > 0 && (
+          <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+            {historyDisplay.earlierGroups.map((group) => (
+              <StepHistoryDayBlock
+                key={group.dayKey}
+                group={group}
+                showDayHeader
+                onDeleteStep={handleDelete}
+                onDeleteRun={handleDeleteRun}
+              />
+            ))}
+          </HistoryEarlierSection>
+        )}
+        <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
+      </div>
+
+      <LogStepsDialog
+        open={logOpen}
+        onOpenChange={setLogOpen}
+        onSaved={(entry) => {
+          if (entry && typeof entry === "object" && "id" in entry) {
+            setEntries((prev) => [entry as StepEntry, ...prev])
+          } else {
+            refreshEntries()
+          }
+        }}
+      />
     </div>
   )
 }

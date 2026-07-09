@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
-const labelClass = "text-xs uppercase tracking-wider text-muted-foreground"
+const labelClass = "type-hud-label-soft"
 
 export function SleepQualityPicker({
   value,
@@ -15,7 +15,7 @@ export function SleepQualityPicker({
   onChange: (value: number) => void
 }) {
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex gap-2">
       {[1, 2, 3, 4, 5].map((q) => (
         <button
           key={q}
@@ -24,16 +24,16 @@ export function SleepQualityPicker({
           aria-label={`Quality ${q} of 5`}
           aria-pressed={value === q}
           className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-lg border transition-colors",
+            "flex h-11 flex-1 items-center justify-center rounded-xl border transition-colors touch-manipulation active:scale-[0.97]",
             value >= q
               ? "border-amber-400/45 bg-amber-400/10"
-              : "border-border/25 bg-background/30 hover:border-border/40"
+              : "border-border/25 bg-background/30 hover:border-border/40",
           )}
         >
           <Star
             className={cn(
-              "h-3.5 w-3.5",
-              value >= q ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"
+              "h-5 w-5",
+              value >= q ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30",
             )}
           />
         </button>
@@ -77,7 +77,7 @@ export function SleepLogFields({
             type="time"
             value={bedtime}
             onChange={(e) => onBedtimeChange(e.target.value)}
-            className="tabular-nums"
+            className="h-12 text-base tabular-nums tracking-wide"
           />
         </div>
         <div className="space-y-1.5">
@@ -89,12 +89,12 @@ export function SleepLogFields({
             type="time"
             value={wakeTime}
             onChange={(e) => onWakeTimeChange(e.target.value)}
-            className="tabular-nums"
+            className="h-12 text-base tabular-nums tracking-wide"
           />
         </div>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label className={labelClass}>Quality · {quality}/5</Label>
         <SleepQualityPicker value={quality} onChange={onQualityChange} />
       </div>
@@ -108,6 +108,7 @@ export function SleepLogFields({
           placeholder="Optional"
           value={notes}
           onChange={(e) => onNotesChange(e.target.value)}
+          className="h-11"
         />
       </div>
     </div>
