@@ -82,7 +82,8 @@ http://localhost:3000/api/google-health/callback
 |----------|----------|--------|
 | `GOOGLE_CLIENT_ID` | Yes | OAuth Web client ID |
 | `GOOGLE_CLIENT_SECRET` | Yes | OAuth client secret |
-| `GOOGLE_REDIRECT_URI` | Recommended in prod | `https://itslos.com/api/google-health/callback` (must match Console exactly) |
+| `GOOGLE_REDIRECT_URI` | Required in prod | `https://itslos.com/api/google-health/callback` (must match Console exactly; also used as the public origin for post-auth redirects) |
+| `APP_URL` | Optional fallback | `https://itslos.com` if redirect URI is unset |
 | `GOOGLE_OAUTH_STATE_SECRET` | Optional | HMAC secret for OAuth `state`; defaults to client secret |
 
 ### Google Cloud checklist
