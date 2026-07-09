@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { MeshHeartSvg } from "@/components/hub/MeshHeartSvg"
 import { cn } from "@/lib/utils"
 import {
@@ -31,6 +30,11 @@ type Props = {
   isWeekView?: boolean
   /** Hub expand: taller bars + today/goal/week summary strip. */
   expanded?: boolean
+  /** When set, readiness/HRV row toggles vitals expand instead of navigating away. */
+  onReadinessClick?: () => void
+  readinessSelected?: boolean
+  /** Hide the steps chart (keep readiness) — used when vitals panel is open. */
+  hideSteps?: boolean
   className?: string
 }
 
@@ -49,6 +53,9 @@ export function StepsActivityBars({
   restingHeartRate = null,
   isWeekView = false,
   expanded = false,
+  onReadinessClick,
+  readinessSelected = false,
+  hideSteps = false,
   className,
 }: Props) {
   const goalValue =
@@ -106,9 +113,16 @@ export function StepsActivityBars({
       />
 
       {/* Readiness — text inset; gradient full-bleed to card edges */}
-      <Link
-        href="/vitals"
-        className="relative z-10 block transition-colors hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
+      <button
+        type="button"
+        onClick={onReadinessClick}
+        aria-label={readinessSelected ? "Collapse vitals" : "Expand vitals"}
+        aria-expanded={readinessSelected}
+        className={cn(
+          "relative z-10 block w-full text-left transition-colors hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25",
+          readinessSelected && "bg-muted/10",
+          !onReadinessClick && "pointer-events-none",
+        )}
       >
         <div className="flex items-center gap-2.5 px-4 py-2 lg:px-5">
           {/* Outer keeps isometric tilt; inner pulse won't clobber rotateX/Y */}
@@ -241,15 +255,18 @@ export function StepsActivityBars({
             </>
           ) : null}
         </div>
-      </Link>
+      </button>
 
       {/* Soft seam only — no opaque cut between readiness and steps */}
-      <div
-        className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/5 to-transparent"
-        aria-hidden
-      />
+      {!hideSteps ? (
+        <div
+          className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/5 to-transparent"
+          aria-hidden
+        />
+      ) : null}
 
       {/* Steps bars — re-inset to match card content padding */}
+      {!hideSteps ? (
       <div className="relative z-10 px-4 pb-1 pt-2.5 lg:px-5">
         <div className="mb-2 flex items-end justify-between gap-2">
           <p className="type-hud-subsection">Steps Activity</p>
@@ -424,6 +441,7 @@ export function StepsActivityBars({
           </div>
         </div>
       </div>
+      ) : null}
     </div>
   )
 }

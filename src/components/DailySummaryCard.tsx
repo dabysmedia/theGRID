@@ -21,6 +21,9 @@ interface DailySummaryCardProps {
   /** When set, card is not a link and calorie-style UI is muted (e.g. vacation mode). */
   disabled?: boolean
   disabledHint?: string
+  /** Prefer expand-in-place over navigation when provided. */
+  onActivate?: () => void
+  selected?: boolean
 }
 
 export function DailySummaryCard({
@@ -35,6 +38,8 @@ export function DailySummaryCard({
   color = "oklch(0.82 0.18 110)",
   disabled = false,
   disabledHint,
+  onActivate,
+  selected = false,
 }: DailySummaryCardProps) {
   const numericValue = typeof value === "string" ? parseFloat(value) || 0 : value
   const numericGoal = goal
@@ -57,7 +62,8 @@ export function DailySummaryCard({
           "flex h-full min-h-0 w-full flex-col p-3 sm:p-4 relative transition-[background-color,box-shadow] duration-200",
           disabled
             ? "cursor-not-allowed opacity-[0.48] saturate-[0.35]"
-            : "press-scale hover:bg-glass-highlight/40 hover:shadow-lg hover:shadow-black/10 cursor-pointer"
+            : "press-scale hover:bg-glass-highlight/40 hover:shadow-lg hover:shadow-black/10 cursor-pointer",
+          selected && !disabled && "bg-glass-highlight/35 ring-1 ring-white/15",
         )}
       >
         <div
@@ -142,6 +148,20 @@ export function DailySummaryCard({
       <div className="flex h-full min-h-0 touch-manipulation" aria-label={`${title} (paused)`}>
         {inner}
       </div>
+    )
+  }
+
+  if (onActivate) {
+    return (
+      <button
+        type="button"
+        onClick={onActivate}
+        aria-label={selected ? `Collapse ${title}` : `Expand ${title}`}
+        aria-expanded={selected}
+        className="group flex h-full min-h-0 w-full touch-manipulation text-left"
+      >
+        {inner}
+      </button>
     )
   }
 
