@@ -786,6 +786,32 @@ export function HubVitalsExpand({
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading")
+  const [completedSessions, setCompletedSessions] = useState<WorkoutSessionLike[]>([])
+
+  const { weekStart, weekEnd } = useMemo(() => {
+    const ref = parseLocalDate(activeDate)
+    const start = startOfWeek(ref, { weekStartsOn: 1 })
+    return {
+      weekStart: formatDate(start),
+      weekEnd: formatDate(addDays(start, 6)),
+    }
+  }, [activeDate])
+
+  const muscleStats = useMemo(
+    () => aggregateMuscleStats(completedSessions, weekStart, weekEnd),
+    [completedSessions, weekStart, weekEnd],
+  )
+
+  const segmentScores = useMemo(() => {
+    const scores = muscleStatsToSegmentScores(muscleStats)
+    return Object.keys(scores).length > 0 ? scores : null
+  }, [muscleStats])
+
+  const topMuscles = useMemo(
+    () => muscleStats.filter((m) => m.sets > 0).slice(0, 6),
+    [muscleStats],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -812,6 +838,28 @@ export function HubVitalsExpand({
       cancelled = true
     }
   }, [activeDate, reloadKey])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadStatus("loading")
+    void apiFetch(`/api/workout-sessions?status=completed&_=${Date.now()}`, {
+      cache: "no-store",
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
+      .then((rows: unknown) => {
+        if (cancelled) return
+        setCompletedSessions(Array.isArray(rows) ? (rows as WorkoutSessionLike[]) : [])
+        setLoadStatus("ready")
+      })
+      .catch(() => {
+        if (cancelled) return
+        setCompletedSessions([])
+        setLoadStatus("error")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeDate])
 
   async function syncNow() {
     setSyncing(true)
@@ -952,6 +1000,69 @@ export function HubVitalsExpand({
           </div>
         ))}
       </div>
+
+      <div
+        className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/8 to-transparent"
+        aria-hidden
+      />
+
+      <div className="space-y-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="type-hud-caption">Load · this week</p>
+          {loadStatus === "ready" ? (
+            <span className="type-hud-micro tabular-nums text-muted-foreground/50">
+              {weekStart.slice(5).replace("-", "/")} – {weekEnd.slice(5).replace("-", "/")}
+            </span>
+          ) : null}
+        </div>
+        {loadStatus === "loading" ? (
+          <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+            Loading load map…
+          </p>
+        ) : null}
+        {loadStatus === "error" ? (
+          <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+            Couldn&apos;t load muscle map.
+          </p>
+        ) : null}
+        {loadStatus === "ready" ? (
+          <>
+            <WorkoutMuscleMap
+              segmentScores={segmentScores}
+              className="[&_.anatomy-figure-chassis]:border-white/[0.06] [&_.anatomy-figure-chassis]:bg-white/[0.02]"
+            />
+            {topMuscles.length > 0 ? (
+              <div className="space-y-1.5 pt-1">
+                <p className="type-hud-micro text-muted-foreground/50">Top load</p>
+                <ul className="space-y-1">
+                  {topMuscles.map((row) => (
+                    <li
+                      key={row.muscle}
+                      className="flex items-baseline justify-between gap-2 type-hud-caption normal-case tracking-normal"
+                    >
+                      <span className="min-w-0 truncate text-foreground/85">{row.muscle}</span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground/60">
+                        {Number.isInteger(row.sets) ? row.sets : row.sets.toFixed(1)} sets
+                        {" · "}
+                        {formatVolumeLb(row.volumeLb)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+                No completed work this week yet — finish a session to light up the map.
+              </p>
+            )}
+          </>
+        ) : null}
+      </div>
+
+      <div
+        className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/8 to-transparent"
+        aria-hidden
+      />
 
       {status === "loading" ? (
         <p className="type-hud-caption text-muted-foreground/55">Loading vitals…</p>
@@ -1392,39 +1503,12 @@ export function HubWorkoutsExpand({
   onDismiss: () => void
 }) {
   const router = useRouter()
-  const { activeDate } = useActiveDate()
   const [templates, setTemplates] = useState<HubRoutineTemplate[]>([])
   const [templatesStatus, setTemplatesStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   )
-  const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading")
-  const [completedSessions, setCompletedSessions] = useState<WorkoutSessionLike[]>([])
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [startingId, setStartingId] = useState<string | null>(null)
-
-  const { weekStart, weekEnd } = useMemo(() => {
-    const ref = parseLocalDate(activeDate)
-    const start = startOfWeek(ref, { weekStartsOn: 1 })
-    return {
-      weekStart: formatDate(start),
-      weekEnd: formatDate(addDays(start, 6)),
-    }
-  }, [activeDate])
-
-  const muscleStats = useMemo(
-    () => aggregateMuscleStats(completedSessions, weekStart, weekEnd),
-    [completedSessions, weekStart, weekEnd],
-  )
-
-  const segmentScores = useMemo(() => {
-    const scores = muscleStatsToSegmentScores(muscleStats)
-    return Object.keys(scores).length > 0 ? scores : null
-  }, [muscleStats])
-
-  const topMuscles = useMemo(
-    () => muscleStats.filter((m) => m.sets > 0).slice(0, 6),
-    [muscleStats],
-  )
 
   useEffect(() => {
     let cancelled = false
@@ -1441,28 +1525,6 @@ export function HubWorkoutsExpand({
         if (cancelled) return
         setTemplates([])
         setTemplatesStatus("error")
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    setLoadStatus("loading")
-    void apiFetch(`/api/workout-sessions?status=completed&_=${Date.now()}`, {
-      cache: "no-store",
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
-      .then((rows: unknown) => {
-        if (cancelled) return
-        setCompletedSessions(Array.isArray(rows) ? (rows as WorkoutSessionLike[]) : [])
-        setLoadStatus("ready")
-      })
-      .catch(() => {
-        if (cancelled) return
-        setCompletedSessions([])
-        setLoadStatus("error")
       })
     return () => {
       cancelled = true
@@ -1556,59 +1618,6 @@ export function HubWorkoutsExpand({
             {!met && remaining > 0 ? ` · ${remaining} more to goal` : ""}
           </p>
         </div>
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="type-hud-caption">Load · this week</p>
-          {loadStatus === "ready" ? (
-            <span className="type-hud-micro tabular-nums text-muted-foreground/50">
-              {weekStart.slice(5).replace("-", "/")} – {weekEnd.slice(5).replace("-", "/")}
-            </span>
-          ) : null}
-        </div>
-        {loadStatus === "loading" ? (
-          <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-            Loading load map…
-          </p>
-        ) : null}
-        {loadStatus === "error" ? (
-          <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-            Couldn&apos;t load muscle map.
-          </p>
-        ) : null}
-        {loadStatus === "ready" ? (
-          <>
-            <WorkoutMuscleMap
-              segmentScores={segmentScores}
-              className="[&_.anatomy-figure-chassis]:border-white/[0.06] [&_.anatomy-figure-chassis]:bg-white/[0.02]"
-            />
-            {topMuscles.length > 0 ? (
-              <div className="space-y-1.5 pt-1">
-                <p className="type-hud-micro text-muted-foreground/50">Top load</p>
-                <ul className="space-y-1">
-                  {topMuscles.map((row) => (
-                    <li
-                      key={row.muscle}
-                      className="flex items-baseline justify-between gap-2 type-hud-caption normal-case tracking-normal"
-                    >
-                      <span className="min-w-0 truncate text-foreground/85">{row.muscle}</span>
-                      <span className="shrink-0 tabular-nums text-muted-foreground/60">
-                        {Number.isInteger(row.sets) ? row.sets : row.sets.toFixed(1)} sets
-                        {" · "}
-                        {formatVolumeLb(row.volumeLb)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-                No completed work this week yet — finish a session to light up the map.
-              </p>
-            )}
-          </>
-        ) : null}
       </div>
 
       <div
@@ -1716,7 +1725,7 @@ export function HubWorkoutsExpand({
         ) : null}
 
         {templates.length > 0 ? (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 sm:gap-3.5">
             {templates.map((tmpl) => {
               const exs = parseHubRoutineExercises(tmpl.exercises)
               const tags = parseHubRoutineTags(tmpl.tags)
@@ -1726,65 +1735,82 @@ export function HubWorkoutsExpand({
               return (
                 <div
                   key={tmpl.id}
-                  className="group flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.02]"
+                  data-routine-tile={tmpl.id}
+                  className="group flex h-full min-h-0 flex-col overflow-hidden rounded-2xl"
                 >
-                  <button
-                    type="button"
-                    onClick={() => setPreviewId(tmpl.id)}
-                    className="relative aspect-[4/3] w-full overflow-hidden bg-white/[0.03] text-left touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#c4d632]/30"
-                    aria-label={`Preview ${tmpl.name}`}
-                  >
-                    {cover ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={cover}
-                        alt=""
-                        className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                      />
-                    ) : (
-                      <div className="flex size-full items-center justify-center bg-gradient-to-br from-white/[0.06] via-transparent to-[#c4d632]/[0.06]">
-                        <Dumbbell className="size-6 text-muted-foreground/30" aria-hidden />
+                  <div className="relative aspect-square w-full shrink-0 border-b border-white/[0.08] bg-white/[0.03]">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewId(tmpl.id)}
+                      className="absolute inset-0 text-left touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#c4d632]/30"
+                      aria-label={`Preview ${tmpl.name}`}
+                    >
+                      {cover ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={cover}
+                          alt=""
+                          className="absolute inset-0 size-full object-cover pointer-events-none transition-transform duration-300 group-hover:scale-[1.03]"
+                        />
+                      ) : (
+                        <div className="flex size-full items-center justify-center bg-gradient-to-br from-white/[0.06] via-transparent to-[#c4d632]/[0.06] pointer-events-none">
+                          <Dumbbell
+                            className="size-[clamp(2rem,32%,2.75rem)] text-muted-foreground/20"
+                            aria-hidden
+                          />
+                        </div>
+                      )}
+                    </button>
+                    <div className="absolute left-1.5 top-1.5 z-20 sm:left-2 sm:top-2">
+                      <Link
+                        href={`/workouts?editRoutine=${encodeURIComponent(tmpl.id)}`}
+                        className="inline-flex rounded-lg border border-white/15 bg-background/55 p-1.5 text-muted-foreground/80 shadow-sm backdrop-blur-md transition-colors hover:border-[#c4d632]/35 hover:bg-background/75 hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 touch-manipulation"
+                        aria-label={`Edit ${tmpl.name}`}
+                      >
+                        <Pencil className="size-3.5" aria-hidden />
+                      </Link>
+                    </div>
+                  </div>
+                  <div className="flex min-h-[6.5rem] flex-1 flex-col gap-1.5 p-2.5 pt-2 sm:min-h-[7rem] sm:p-3">
+                    <div className="min-h-0 min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewId(tmpl.id)}
+                          className="line-clamp-2 min-w-0 flex-1 text-left text-sm font-semibold leading-snug text-foreground/95 touch-manipulation hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 sm:text-base"
+                        >
+                          {tmpl.name}
+                        </button>
+                        {tags.length > 0 ? (
+                          <div className="flex max-w-[38%] shrink-0 flex-wrap items-center justify-end gap-1 min-w-0 sm:max-w-[36%]">
+                            {tags.map((tg, ti) => (
+                              <span
+                                key={`${tg}-${ti}`}
+                                className="inline-flex min-w-0 max-w-[min(100%,3.75rem)] items-center truncate rounded-md border border-[#c4d632]/25 bg-[#c4d632]/12 px-1.5 py-0.5 text-left text-[8px] font-semibold leading-tight tracking-normal text-[#e8f07a] sm:max-w-[4.25rem] sm:px-2 sm:py-1 sm:text-[9px]"
+                              >
+                                {tg}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
-                    )}
-                    <div
-                      className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-background/90 via-background/40 to-transparent"
-                      aria-hidden
-                    />
-                    <div className="absolute inset-x-0 bottom-0 p-2">
-                      <p className="truncate text-[12px] font-semibold leading-tight text-foreground/95">
-                        {tmpl.name}
-                      </p>
                       <p
-                        className="mt-0.5 line-clamp-1 type-hud-micro normal-case tracking-normal text-muted-foreground/65"
+                        className="line-clamp-2 type-hud-micro normal-case tracking-normal leading-relaxed text-muted-foreground/55"
                         title={exs.map((e) => e.name).join(", ")}
                       >
                         {preview}
                       </p>
                     </div>
-                  </button>
-                  <div className="flex items-center gap-1 border-t border-white/[0.06] p-1.5">
-                    <Link
-                      href={`/workouts?editRoutine=${encodeURIComponent(tmpl.id)}`}
-                      className="inline-flex size-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-muted-foreground/70 transition-colors hover:border-[#c4d632]/30 hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30"
-                      aria-label={`Edit ${tmpl.name}`}
-                    >
-                      <Pencil className="size-3.5" aria-hidden />
-                    </Link>
                     <button
                       type="button"
                       disabled={startingId != null}
                       onClick={() => goStartRoutine(tmpl.id)}
-                      className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2 type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
+                      className="mt-auto inline-flex h-8 w-full shrink-0 items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2 type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation sm:h-9"
                     >
                       <Play className="size-3 shrink-0" aria-hidden />
                       {busy ? "…" : "Start"}
                     </button>
                   </div>
-                  {tags.length > 0 ? (
-                    <p className="truncate border-t border-white/[0.04] px-2 py-1 type-hud-micro normal-case tracking-normal text-muted-foreground/40">
-                      {tags.slice(0, 2).join(" · ")}
-                    </p>
-                  ) : null}
                 </div>
               )
             })}
