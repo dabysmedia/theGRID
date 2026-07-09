@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
 import {
   Weight,
@@ -12,6 +12,8 @@ import {
   ArrowUp,
   Minus,
   Calendar,
+  Plus,
+  ChevronDown,
 } from "lucide-react"
 import {
   ResponsiveContainer,
@@ -27,15 +29,23 @@ import { PageHeader } from "@/components/PageHeader"
 import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { apiFetch } from "@/lib/api-fetch"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { LogWeightDialog } from "@/components/quick-log/LogWeightDialog"
 import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
-import { cn, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import {
+  cn,
+  formatDisplayDate,
+  glassPanelAccentClass,
+  glassPanelAccentStyle,
+  glassPanelClass,
+  parseLocalDate,
+} from "@/lib/utils"
 import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
+
+const WEIGHT_COLOR = "#22c55e"
 
 const weightGoalPresets: GoalPreset[] = [
   { type: "target", label: "Target Weight", unit: "lbs", placeholder: "180", direction: "down" },
@@ -164,11 +174,8 @@ export default function WeightPage() {
   const { user } = useUser()
   const [data, setData] = useState<WeightData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [weight, setWeight] = useState("")
-  const [notes, setNotes] = useState("")
-  const [submitting, setSubmitting] = useState(false)
+  const [logOpen, setLogOpen] = useState(false)
   const [chartRange, setChartRange] = useState<"7d" | "30d" | "all">("30d")
-  const entriesRef = useRef<WeightEntry[]>([])
 
   const today = activeDate
 
@@ -182,17 +189,19 @@ export default function WeightPage() {
       ? format(parseLocalDate(user.vacationResumeDate), "MMM d, yyyy")
       : null
 
-  useEffect(() => {
-    apiFetch("/api/weight")
+  const refreshData = useCallback(() => {
+    return apiFetch("/api/weight")
       .then(async (r) => {
         if (r.ok) setData(await r.json())
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    refreshData().finally(() => setLoading(false))
+  }, [refreshData])
+
   const entries = useMemo(() => data?.entries ?? [], [data?.entries])
-  entriesRef.current = entries
 
   const entryForActiveDay = useMemo(
     () => entries.find((e) => e.date.split("T")[0] === today) ?? null,
@@ -215,49 +224,10 @@ export default function WeightPage() {
     [weightHistoryByDate, today]
   )
 
-  /** Keep form aligned with the row for the selected calendar day; avoid re-sync on every stats refetch. */
-  useEffect(() => {
-    if (loading) return
-    const te = entriesRef.current.find((e) => e.date.split("T")[0] === today) ?? null
-    if (te) {
-      setWeight(String(te.value))
-      setNotes(te.notes ?? "")
-    } else {
-      setWeight("")
-      setNotes("")
-    }
-  }, [loading, today, entryForActiveDay?.id])
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (vacationBlocksLog || !weight || submitting) return
-    setSubmitting(true)
-
-    try {
-      const res = await apiFetch("/api/weight", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: today, value: weight, notes: notes || null }),
-      })
-
-      if (res.ok) {
-        const refreshed = await apiFetch("/api/weight").then((r) => r.json())
-        setData(refreshed)
-      }
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   async function handleDelete(id: string) {
     const res = await apiFetch(`/api/weight?id=${id}`, { method: "DELETE" })
-    if (res.ok && data) {
-      setData({
-        ...data,
-        entries: data.entries.filter((e) => e.id !== id),
-      })
-      const refreshed = await apiFetch("/api/weight").then((r) => r.json())
-      setData(refreshed)
+    if (res.ok) {
+      await refreshData()
     }
   }
 
@@ -318,12 +288,14 @@ export default function WeightPage() {
     }),
   }))
 
+  const todayValue = entryForActiveDay?.value ?? null
+
   return (
     <div className="space-y-6">
       <PageHeader title="Weight" />
 
       <PageHeroStrip
-        color="#22c55e"
+        color={WEIGHT_COLOR}
         icon={Weight}
         eyebrow={`Current · ${formatDisplayDate(parseLocalDate(activeDate))}`}
         value={stats?.current != null ? `${stats.current}` : "—"}
@@ -369,239 +341,238 @@ export default function WeightPage() {
         color="#14b8a6"
       />
 
-      {/* Trend chart */}
-      <div className="glass-panel p-4 lg:p-5 animate-fade-up stagger-1">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-1.5">
-            {data?.direction === "down" ? (
-              <TrendingDown className="h-4 w-4 text-[#22c55e]" />
-            ) : (
-              <TrendingUp className="h-4 w-4 text-[#22c55e]" />
+      <div
+        className={cn(glassPanelClass, glassPanelAccentClass, "animate-fade-up stagger-1 p-4 lg:p-5")}
+        style={glassPanelAccentStyle(WEIGHT_COLOR)}
+      >
+        <div
+          className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"
+          style={{ backgroundColor: WEIGHT_COLOR }}
+          aria-hidden
+        />
+        <div className="relative space-y-4">
+          <div className="min-w-0">
+            <p className="type-hud-label-soft mb-1">Today</p>
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="type-hud-value-xl tabular-nums">
+                {todayValue != null ? todayValue : "—"}
+              </span>
+              <span className="type-hud-unit">{unit}</span>
+            </div>
+            {stats && stats.totalEntries > 0 && (
+              <p className="type-hud-caption mt-1.5 normal-case tabular-nums">
+                {stats.avg30 != null ? `30-day avg ${stats.avg30} ${unit}` : null}
+                {stats.avg30 != null && stats.totalEntries > 0 ? " · " : null}
+                {stats.totalEntries} entries
+              </p>
             )}
-            Trend
-          </h2>
-          <div className="flex gap-1">
-            {(["7d", "30d", "all"] as const).map((r) => (
-              <button
-                key={r}
-                onClick={() => setChartRange(r)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium uppercase tracking-wider transition-colors ${
-                  chartRange === r
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {r === "all" ? "All" : r}
-              </button>
-            ))}
           </div>
-        </div>
 
-        {chartData.length >= 2 ? (
-          <div className="h-48 lg:h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={chartData}
-                margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.25} />
-                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="oklch(1 0 0 / 5%)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  domain={["dataMin - 2", "dataMax + 2"]}
-                  tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                {data?.target != null && data.target > 0 && (
-                  <ReferenceLine
-                    y={data.target}
-                    stroke="#22c55e"
-                    strokeDasharray="6 4"
-                    strokeOpacity={0.4}
-                    label={{
-                      value: `Goal: ${data.target}`,
-                      position: "insideTopRight",
-                      fill: "#22c55e",
-                      fontSize: 10,
-                      opacity: 0.6,
-                    }}
-                  />
-                )}
-                <Tooltip
-                  contentStyle={{
-                    background: "oklch(0.19 0.012 250 / 98%)",
-                    border: "1px solid oklch(1 0 0 / 8%)",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    backdropFilter: "blur(8px)",
-                  }}
-                  labelStyle={{ color: "oklch(0.60 0.01 250)" }}
-                  formatter={(val) => [`${val} ${unit}`, "Weight"]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#22c55e"
-                  strokeWidth={2}
-                  fill="url(#weightGrad)"
-                  dot={{ r: 3, fill: "#22c55e", strokeWidth: 0 }}
-                  activeDot={{ r: 5, fill: "#22c55e", strokeWidth: 2, stroke: "#fff" }}
-                  isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <Button
+            type="button"
+            variant="glass"
+            size="lg"
+            className="h-12 w-full gap-2 touch-manipulation"
+            onClick={() => setLogOpen(true)}
+            disabled={vacationBlocksLog}
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            {entryForActiveDay ? "Edit weight" : "Log weight"}
+          </Button>
+        </div>
+      </div>
+
+      <details
+        className={cn(
+          glassPanelClass,
+          glassPanelAccentClass,
+          "animate-fade-up stagger-2 overflow-hidden [&[open]_summary_.weight-trend-chevron]:rotate-180",
+        )}
+        style={glassPanelAccentStyle(WEIGHT_COLOR)}
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-glass-highlight/10 lg:px-5 [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0 flex items-center gap-1.5">
+            {data?.direction === "down" ? (
+              <TrendingDown className="h-4 w-4 text-[#22c55e] shrink-0" />
+            ) : (
+              <TrendingUp className="h-4 w-4 text-[#22c55e] shrink-0" />
+            )}
+            <div className="min-w-0">
+              <p className="type-hud-label-soft">Trend</p>
+              <p className="type-hud-caption mt-0.5 normal-case tabular-nums">
+                {chartData.length >= 2
+                  ? `${chartData.length} points · ${chartRange === "all" ? "all time" : chartRange}`
+                  : "Expand to view trend"}
+              </p>
+            </div>
           </div>
-        ) : (
-          <div className="h-48 flex items-center justify-center">
-            <p className="text-sm text-muted-foreground">
-              Log at least 2 entries to see trends
+          <ChevronDown className="weight-trend-chevron h-4 w-4 shrink-0 text-muted-foreground/45 transition-transform duration-200" />
+        </summary>
+        <div className="border-t border-border/20 px-4 pb-4 pt-3 lg:px-5 lg:pb-5">
+          <div className="flex justify-end mb-3">
+            <div className="flex gap-1">
+              {(["7d", "30d", "all"] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setChartRange(r)
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium uppercase tracking-wider transition-colors ${
+                    chartRange === r
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {r === "all" ? "All" : r}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {chartData.length >= 2 ? (
+            <div className="h-48 lg:h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={chartData}
+                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={WEIGHT_COLOR} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={WEIGHT_COLOR} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="oklch(1 0 0 / 5%)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    domain={["dataMin - 2", "dataMax + 2"]}
+                    tick={{ fontSize: 10, fill: "oklch(0.55 0.01 250)" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  {data?.target != null && data.target > 0 && (
+                    <ReferenceLine
+                      y={data.target}
+                      stroke={WEIGHT_COLOR}
+                      strokeDasharray="6 4"
+                      strokeOpacity={0.4}
+                      label={{
+                        value: `Goal: ${data.target}`,
+                        position: "insideTopRight",
+                        fill: WEIGHT_COLOR,
+                        fontSize: 10,
+                        opacity: 0.6,
+                      }}
+                    />
+                  )}
+                  <Tooltip
+                    contentStyle={{
+                      background: "oklch(0.19 0.012 250 / 98%)",
+                      border: "1px solid oklch(1 0 0 / 8%)",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      backdropFilter: "blur(8px)",
+                    }}
+                    labelStyle={{ color: "oklch(0.60 0.01 250)" }}
+                    formatter={(val) => [`${val} ${unit}`, "Weight"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke={WEIGHT_COLOR}
+                    strokeWidth={2}
+                    fill="url(#weightGrad)"
+                    dot={{ r: 3, fill: WEIGHT_COLOR, strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: WEIGHT_COLOR, strokeWidth: 2, stroke: "#fff" }}
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-48 flex items-center justify-center">
+              <p className="text-sm text-muted-foreground">
+                Log at least 2 entries to see trends
+              </p>
+            </div>
+          )}
+        </div>
+      </details>
+
+      <div className="animate-fade-up stagger-3 space-y-3">
+        <div className="px-0.5">
+          <h2 className="type-hud-title">History</h2>
+          <p className="type-hud-caption mt-1 normal-case">
+            {entries.length === 0 ? "Nothing logged yet" : `${entries.length} entries`}
+          </p>
+        </div>
+        {entries.length === 0 && (
+          <div className={cn(glassPanelClass, "p-8 text-center")}>
+            <Weight className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+            <p className="type-hud-caption normal-case text-muted-foreground">
+              Tap Log weight to add your first weigh-in.
             </p>
           </div>
         )}
+        {historyDisplay.todayGroups.length > 0 && (
+          <div className="space-y-2">
+            {historyDisplay.todayGroups.map(({ dateKey, dayEntries }) => (
+              <WeightHistoryDayGroup
+                key={dateKey}
+                dateKey={dateKey}
+                dayEntries={dayEntries}
+                unit={unit}
+                allEntries={entries}
+                today={today}
+                showCalendarHeader={false}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        )}
+        {historyDisplay.earlierGroups.length > 0 && (
+          <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
+            {historyDisplay.earlierGroups.map(({ dateKey, dayEntries }) => (
+              <WeightHistoryDayGroup
+                key={dateKey}
+                dateKey={dateKey}
+                dayEntries={dayEntries}
+                unit={unit}
+                allEntries={entries}
+                today={today}
+                showCalendarHeader
+                onDelete={handleDelete}
+              />
+            ))}
+          </HistoryEarlierSection>
+        )}
+        <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
       </div>
 
-      {/* Form + History grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-up stagger-2">
-        {/* Log form */}
-        <div className="glass-panel p-5">
-          <h2 className="text-sm font-semibold uppercase tracking-wider mb-4">
-            {entryForActiveDay ? "Edit weight" : "Log weight"}
-          </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                Weight ({unit}) *
-              </Label>
-              <Input
-                type="number"
-                step="0.1"
-                placeholder={`e.g. 175.0`}
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                Notes
-              </Label>
-              <Input
-                placeholder="Morning, post-workout..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </div>
-            <Button
-              type="submit"
-              variant="glass"
-              className="w-full press-scale"
-              size="lg"
-              disabled={submitting}
-            >
-              {submitting
-                ? "Saving..."
-                : entryForActiveDay
-                  ? "Save changes"
-                  : "Log weight"}
-            </Button>
-          </form>
-
-          {/* Quick summary under form */}
-          {stats && stats.totalEntries > 0 && (
-            <div className="mt-5 pt-4 border-t border-glass-border">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-center">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    30-Day Avg
-                  </p>
-                  <p className="text-base font-bold tabular-nums">
-                    {stats.avg30 ?? "—"}{" "}
-                    <span className="text-[10px] font-normal text-muted-foreground">
-                      {unit}
-                    </span>
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Entries
-                  </p>
-                  <p className="text-base font-bold tabular-nums">
-                    {stats.totalEntries}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* History */}
-        <div className="space-y-3">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground px-1">
-            History
-          </h2>
-          {entries.length === 0 && (
-            <div className="glass-subtle rounded-2xl p-8 text-center">
-              <Weight className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">No entries yet</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">
-                Log your first weigh-in above
-              </p>
-            </div>
-          )}
-          {historyDisplay.todayGroups.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
-                Today
-              </p>
-              {historyDisplay.todayGroups.map(({ dateKey, dayEntries }) => (
-                <WeightHistoryDayGroup
-                  key={dateKey}
-                  dateKey={dateKey}
-                  dayEntries={dayEntries}
-                  unit={unit}
-                  allEntries={entries}
-                  today={today}
-                  showCalendarHeader={false}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </div>
-          )}
-          {historyDisplay.earlierGroups.length > 0 && (
-            <HistoryEarlierSection dayCount={historyDisplay.earlierGroups.length}>
-              {historyDisplay.earlierGroups.map(({ dateKey, dayEntries }) => (
-                <WeightHistoryDayGroup
-                  key={dateKey}
-                  dateKey={dateKey}
-                  dayEntries={dayEntries}
-                  unit={unit}
-                  allEntries={entries}
-                  today={today}
-                  showCalendarHeader
-                  onDelete={handleDelete}
-                />
-              ))}
-            </HistoryEarlierSection>
-          )}
-          <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
-        </div>
-      </div>
+      <LogWeightDialog
+        open={logOpen}
+        onOpenChange={setLogOpen}
+        onSaved={() => {
+          void refreshData()
+        }}
+        initialValue={entryForActiveDay ? String(entryForActiveDay.value) : ""}
+        initialNotes={entryForActiveDay?.notes ?? ""}
+        unit={unit}
+        editing={!!entryForActiveDay}
+        disabled={vacationBlocksLog}
+      />
     </div>
   )
 }
