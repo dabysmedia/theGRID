@@ -470,10 +470,10 @@ export function WeeklyHero({
         aria-hidden
       />
 
-      {/* Header — when expanded, full-width sticky back bar replaces overview chrome */}
+      {/* Header — when expanded, flush sticky back rail replaces overview chrome */}
       {expanded != null ? (
-        <div className="relative z-20 -mx-4 mb-4 sticky top-0 lg:-mx-5">
-          <div className="border-b border-white/[0.06] bg-[oklch(0.14_0.01_250_/0.92)] px-4 py-2 backdrop-blur-md lg:px-5">
+        <div className="relative z-20 -mx-4 mb-3 sticky top-0 lg:-mx-5">
+          <div className="border-b border-white/[0.06] bg-[oklch(0.12_0.008_250_/0.88)] px-4 backdrop-blur-md lg:px-5">
             <HubBackToOverview onBack={() => setExpanded(null)} />
           </div>
         </div>
