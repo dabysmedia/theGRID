@@ -271,9 +271,9 @@ export function StepsActivityBars({
       {/* Steps bars — re-inset to match card content padding */}
       {!hideSteps ? (
       <div className="relative z-10 px-4 pb-1 pt-2.5 lg:px-5">
-        <div className="mb-2 flex items-end justify-between gap-2">
-          <p className="type-hud-subsection">Steps Activity</p>
-          <p className="text-[10px] tabular-nums tracking-wide text-muted-foreground/55">
+        <div className="mb-2 flex items-end justify-between gap-1.5">
+          <p className="min-w-0 shrink type-hud-subsection">Steps Activity</p>
+          <p className="-mr-0.5 shrink-0 whitespace-nowrap text-[10px] tabular-nums tracking-normal text-muted-foreground/55">
             {todaySteps > 0
               ? `${Math.round(todaySteps).toLocaleString()} today`
               : "No steps yet"}
