@@ -287,7 +287,7 @@ interface WeeklyHeroProps {
   /** Controlled expansion from HubDashboard (fades SYSTEMS when set). */
   expanded?: HubExpandedPanel | null
   onExpandedChange?: (panel: HubExpandedPanel | null) => void
-  /** Peptides / workouts summary for default overview strip + expand panels. */
+  /** Peptides / workouts summary for the protocol/training instrument rail + expand panels. */
   peptideSummary?: {
     lastDoseMg: number | null
     lastInjectedAt: string | null
@@ -414,7 +414,7 @@ export function WeeklyHero({
   const showStepsBars =
     expanded == null || expanded === "steps" || expanded === "vitals"
   const showWeighIn = showWeighInPrompt && (expanded == null || expanded === "weight")
-  const showSystemsStrip =
+  const showProtocolRail =
     expanded == null || expanded === "peptides" || expanded === "workouts"
   const dimUnrelatedRings =
     expanded === "calories" || expanded === "steps" || expanded === "sleep"
@@ -653,6 +653,108 @@ export function WeeklyHero({
           </>
         ) : null}
 
+        {/* Protocol / training instrument rail — open HUD band above weigh-in coda */}
+        <FadeSection show={showProtocolRail}>
+          <div
+            className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
+            aria-hidden
+          />
+          {expanded === "peptides" ? (
+            <HubPeptidesExpand
+              lastDoseMg={peptideSummary?.lastDoseMg ?? null}
+              lastInjectedAt={peptideSummary?.lastInjectedAt ?? null}
+              nextInjection={peptideNext}
+              todayMg={peptideSummary?.todayMg ?? 0}
+              last7={peptideSummary?.last7 ?? data.peptides?.last7 ?? Array.from({ length: 7 }, () => 0)}
+              dayLabels={dayLabels}
+              onDismiss={() => setExpanded(null)}
+            />
+          ) : expanded === "workouts" ? (
+            <HubWorkoutsExpand
+              weekCount={weekWo}
+              todayCount={workoutSummary?.todayCount ?? data.workouts.todayValue}
+              last7={workoutSummary?.last7 ?? data.workouts.last7}
+              dayLabels={dayLabels}
+              recoveryScore={workoutSummary?.recoveryScore ?? null}
+              onDismiss={() => setExpanded(null)}
+            />
+          ) : (
+            <div
+              className="relative z-10 -mx-4 lg:-mx-5"
+              role="group"
+              aria-label="Protocol and training"
+            >
+              <div className="flex items-stretch">
+                <button
+                  type="button"
+                  onClick={() => toggleExpand("peptides")}
+                  aria-label="Expand peptides"
+                  aria-expanded={false}
+                  className="group flex min-w-0 flex-1 items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 lg:px-5"
+                >
+                  <PeptideVialGraphic
+                    color="#94a3b8"
+                    doseMg={peptideSummary?.lastDoseMg ?? null}
+                    size="sm"
+                    className="shrink-0 opacity-90"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="type-hud-micro text-muted-foreground/70">Protocol</p>
+                    <p
+                      className={cn(
+                        "truncate text-[12px] font-semibold tracking-wide text-foreground/90",
+                        peptideNext?.overdue && "text-negative",
+                        peptideNext?.dueToday && "text-primary",
+                      )}
+                    >
+                      {peptideCue}
+                    </p>
+                    <p className="mt-0.5 truncate text-[10px] tabular-nums text-muted-foreground/55">
+                      {peptideSummary?.lastDoseMg != null
+                        ? `Last ${peptideSummary.lastDoseMg} mg`
+                        : "No dose logged"}
+                    </p>
+                  </div>
+                </button>
+
+                <div
+                  className="my-2 w-px shrink-0 bg-gradient-to-b from-transparent via-white/12 to-transparent"
+                  aria-hidden
+                />
+
+                <button
+                  type="button"
+                  onClick={() => toggleExpand("workouts")}
+                  aria-label="Expand workouts"
+                  aria-expanded={false}
+                  className="group flex min-w-0 flex-1 items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 lg:px-5"
+                >
+                  <div className="shrink-0 scale-[0.85]">
+                    <WeekWorkoutGoalRing count={weekWo} size="sm" color="#c4d632" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="type-hud-micro text-muted-foreground/70">Training</p>
+                    <p
+                      className="truncate text-[12px] font-semibold tracking-wide text-foreground/90"
+                      style={woMet ? { color: "#c4d632" } : undefined}
+                    >
+                      {workoutCue}
+                    </p>
+                    <p className="mt-0.5 truncate text-[10px] tabular-nums text-muted-foreground/55">
+                      {workoutSummary?.recoveryScore != null
+                        ? `Recovery ${workoutSummary.recoveryScore}/10`
+                        : weekWo === 0
+                          ? "No sessions yet"
+                          : `${weekWo} logged`}
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+        </FadeSection>
+
+        {/* Weigh-in stays the coda — always last in the overview stack */}
         <FadeSection show={showWeighIn}>
           <div
             className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
@@ -681,94 +783,6 @@ export function WeeklyHero({
               <HubWeightExpand onDismiss={() => setExpanded(null)} />
             ) : null}
           </div>
-        </FadeSection>
-
-        <FadeSection show={showSystemsStrip}>
-          <div
-            className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
-            aria-hidden
-          />
-          {expanded === "peptides" ? (
-            <HubPeptidesExpand
-              lastDoseMg={peptideSummary?.lastDoseMg ?? null}
-              lastInjectedAt={peptideSummary?.lastInjectedAt ?? null}
-              nextInjection={peptideNext}
-              todayMg={peptideSummary?.todayMg ?? 0}
-              last7={peptideSummary?.last7 ?? data.peptides?.last7 ?? Array.from({ length: 7 }, () => 0)}
-              dayLabels={dayLabels}
-              onDismiss={() => setExpanded(null)}
-            />
-          ) : expanded === "workouts" ? (
-            <HubWorkoutsExpand
-              weekCount={weekWo}
-              todayCount={workoutSummary?.todayCount ?? data.workouts.todayValue}
-              last7={workoutSummary?.last7 ?? data.workouts.last7}
-              dayLabels={dayLabels}
-              recoveryScore={workoutSummary?.recoveryScore ?? null}
-              onDismiss={() => setExpanded(null)}
-            />
-          ) : (
-            <div className="relative z-10 grid grid-cols-2 gap-2 px-0.5 py-0.5">
-              <button
-                type="button"
-                onClick={() => toggleExpand("peptides")}
-                aria-label="Expand peptides"
-                aria-expanded={false}
-                className="group flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-2.5 py-2.5 text-left transition-colors hover:border-violet-400/25 hover:bg-violet-400/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30"
-              >
-                <PeptideVialGraphic
-                  color="#a855f7"
-                  doseMg={peptideSummary?.lastDoseMg ?? null}
-                  size="sm"
-                  className="shrink-0"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="type-hud-micro text-violet-200/70">Peptides</p>
-                  <p className="truncate text-[12px] font-semibold tracking-wide text-foreground/90">
-                    {peptideCue}
-                  </p>
-                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground/55">
-                    {peptideSummary?.lastDoseMg != null
-                      ? `Last ${peptideSummary.lastDoseMg} mg`
-                      : "No dose logged"}
-                  </p>
-                </div>
-                <ChevronRight
-                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-violet-300/70"
-                  aria-hidden
-                />
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleExpand("workouts")}
-                aria-label="Expand workouts"
-                aria-expanded={false}
-                className="group flex items-center gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-2.5 py-2.5 text-left transition-colors hover:border-[#c4d632]/30 hover:bg-[#c4d632]/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30"
-              >
-                <div className="shrink-0 scale-90">
-                  <WeekWorkoutGoalRing count={weekWo} size="sm" color="#c4d632" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="type-hud-micro text-[#c4d632]/80">Workouts</p>
-                  <p
-                    className="truncate text-[12px] font-semibold tracking-wide"
-                    style={woMet ? { color: "#c4d632" } : undefined}
-                  >
-                    {workoutCue}
-                  </p>
-                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground/55">
-                    {workoutSummary?.recoveryScore != null
-                      ? `Recovery ${workoutSummary.recoveryScore}/10`
-                      : "Tap for week detail"}
-                  </p>
-                </div>
-                <ChevronRight
-                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-[#c4d632]/70"
-                  aria-hidden
-                />
-              </button>
-            </div>
-          )}
         </FadeSection>
       </div>
     </div>
