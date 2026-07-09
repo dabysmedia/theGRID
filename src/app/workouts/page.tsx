@@ -54,6 +54,11 @@ import {
 import { MovementCompleteOverview } from "@/components/workouts/MovementCompleteOverview"
 import { ProgressionSummaryHero } from "@/components/workouts/ProgressionSummaryHero"
 import { summarizeWorkoutProgression } from "@/lib/workouts/progressive-overload"
+import {
+  getPreferredSubstitute,
+  getRecentSubstitutes,
+  rememberSubstitution,
+} from "@/lib/workouts/exercise-substitutions"
 
 /* ──────────────────────────────────────────────────────────
    Types
@@ -90,6 +95,10 @@ interface SessionExercise {
   primaryMuscles?: MuscleTag[]
   secondaryMuscles?: MuscleTag[]
   category?: string
+  /** Template slot this session exercise came from (for remembering swaps). */
+  templateExerciseId?: string
+  /** Original template exercise name before any in-session swap. */
+  originalName?: string
 }
 
 interface TemplateSetRow {
@@ -109,6 +118,10 @@ interface TemplateExercise {
   /** Legacy templates only — migrated to `setRows` on load */
   targetSets?: number
   targetReps?: string
+  /** Last preferred substitute for this slot (persisted on the template). */
+  preferredSubstituteName?: string
+  /** Recent substitutes for this slot (newest first). */
+  recentSubstitutes?: string[]
 }
 
 interface PickedExercise {
@@ -192,6 +205,14 @@ function parseTemplateTags(raw: string | string[] | null | undefined): string[] 
 
 function migrateTemplateExercise(raw: TemplateExercise): TemplateExercise {
   const ex = raw as TemplateExercise & { setRows?: TemplateSetRow[] }
+  const recent =
+    Array.isArray(ex.recentSubstitutes)
+      ? ex.recentSubstitutes.map((n) => String(n).trim()).filter(Boolean).slice(0, 6)
+      : []
+  const preferred =
+    typeof ex.preferredSubstituteName === "string" && ex.preferredSubstituteName.trim()
+      ? ex.preferredSubstituteName.trim()
+      : recent[0]
   const rows = ex.setRows
   if (Array.isArray(rows) && rows.length > 0) {
     return {
@@ -199,6 +220,8 @@ function migrateTemplateExercise(raw: TemplateExercise): TemplateExercise {
       name: ex.name,
       notes: ex.notes ?? "",
       primaryMuscles: ex.primaryMuscles,
+      preferredSubstituteName: preferred,
+      recentSubstitutes: recent,
       setRows: rows.map((r) => ({
         id: r.id || uid(),
         weight: r.weight != null && r.weight !== "" ? String(r.weight) : "",
@@ -210,12 +233,17 @@ function migrateTemplateExercise(raw: TemplateExercise): TemplateExercise {
     1,
     typeof ex.targetSets === "number" && Number.isFinite(ex.targetSets) ? ex.targetSets : 3,
   )
-  const reps = ex.targetReps != null && String(ex.targetReps).trim() ? String(ex.targetReps) : "10"
+  const reps =
+    ex.targetReps != null && String(ex.targetReps).trim()
+      ? String(ex.targetReps)
+      : "8-12"
   return {
     id: ex.id,
     name: ex.name,
     notes: ex.notes ?? "",
     primaryMuscles: ex.primaryMuscles,
+    preferredSubstituteName: preferred,
+    recentSubstitutes: recent,
     setRows: Array.from({ length: n }, () => ({
       id: uid(),
       reps,
@@ -230,6 +258,8 @@ function templateExerciseToPersist(ex: TemplateExercise): TemplateExercise {
     name: ex.name,
     notes: ex.notes ?? "",
     primaryMuscles: ex.primaryMuscles,
+    preferredSubstituteName: ex.preferredSubstituteName,
+    recentSubstitutes: ex.recentSubstitutes,
     setRows: ex.setRows.map((r) => ({
       id: r.id,
       weight: r.weight,
@@ -529,6 +559,7 @@ function ExercisePicker({
   title = "Add Exercise",
   description = "Search or filter by muscle group, then pick an exercise",
   initialMuscleGroup,
+  recentNames,
 }: {
   open: boolean
   onClose: () => void
@@ -539,6 +570,8 @@ function ExercisePicker({
   description?: string
   /** Swap flow: pre-select this muscle chip when it exists in the library list. */
   initialMuscleGroup?: string | null
+  /** Recent substitutes to pin at the top of the picker. */
+  recentNames?: string[]
 }) {
   const [exercises, setExercises] = useState<ApiExercise[]>(exerciseListCache ?? [])
   const [loading, setLoading] = useState(false)
@@ -606,15 +639,32 @@ function ExercisePicker({
     })
   }, [exercises, search, muscleFilter])
 
+  const recentPicks = useMemo(() => {
+    if (!recentNames?.length) return [] as ApiExercise[]
+    const byKey = new Map(exercises.map((ex) => [ex.name.toLowerCase(), ex]))
+    const out: ApiExercise[] = []
+    for (const name of recentNames) {
+      const hit = byKey.get(name.toLowerCase())
+      if (hit && !out.some((e) => e.name === hit.name)) out.push(hit)
+    }
+    return out
+  }, [exercises, recentNames])
+
+  const recentKeys = useMemo(
+    () => new Set(recentPicks.map((e) => e.name.toLowerCase())),
+    [recentPicks],
+  )
+
   const grouped = useMemo(() => {
     const map = new Map<string, ApiExercise[]>()
     for (const ex of results) {
+      if (recentKeys.has(ex.name.toLowerCase()) && !search.trim()) continue
       const muscle = ex.primaryMuscles[0]?.name ?? "Other"
       if (!map.has(muscle)) map.set(muscle, [])
       map.get(muscle)!.push(ex)
     }
     return map
-  }, [results])
+  }, [results, recentKeys, search])
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -694,6 +744,60 @@ function ExercisePicker({
             <p className="px-4 pt-2 pb-0 text-[10px] text-amber-400/70 text-center">
               Offline — using built-in list
             </p>
+          )}
+
+          {!loading && recentPicks.length > 0 && !search.trim() && (
+            <div>
+              <p className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-[0.15em] text-primary/70">
+                Recently substituted
+              </p>
+              {recentPicks.map((ex) => {
+                const swatch = muscleSwatchStyles(ex.primaryMuscles[0]?.color)
+                return (
+                  <button
+                    key={`recent-${ex.id}`}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelect({
+                        name: ex.name,
+                        primaryMuscles: ex.primaryMuscles.map((m) => ({
+                          name: m.name,
+                          color: m.color,
+                          code: m.code,
+                        })),
+                        secondaryMuscles: ex.secondaryMuscles.map((m) => ({
+                          name: m.name,
+                          color: m.color,
+                          code: m.code,
+                        })),
+                        category: ex.categories[0]?.name ?? "",
+                      })
+                      onClose()
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-primary/[0.08] active:bg-primary/10 touch-manipulation"
+                  >
+                    <div
+                      className="flex size-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold"
+                      style={{ backgroundColor: swatch.soft, color: swatch.dot }}
+                    >
+                      {(ex.primaryMuscles[0]?.code ?? "?").slice(0, 2)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">{ex.name}</p>
+                      <p className="truncate text-[11px] text-muted-foreground/55">
+                        {ex.primaryMuscles.map((m) => m.name).join(" · ") ||
+                          ex.categories[0]?.name ||
+                          ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-primary">
+                      Recent
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           )}
 
           {!loading && results.length === 0 && search.trim() && (
@@ -898,9 +1002,9 @@ function RoutineEditor({
         notes: "",
         primaryMuscles: picked.primaryMuscles,
         setRows: [
-          { id: uid(), reps: "10", weight: "" },
-          { id: uid(), reps: "10", weight: "" },
-          { id: uid(), reps: "10", weight: "" },
+          { id: uid(), reps: "8-12", weight: "" },
+          { id: uid(), reps: "8-12", weight: "" },
+          { id: uid(), reps: "8-12", weight: "" },
         ],
       },
     ])
@@ -1358,6 +1462,8 @@ function ActiveWorkout({
   onFinish,
   onDiscard,
   previousSessions,
+  templateId,
+  onRememberSubstitution,
 }: {
   session: WorkoutSession
   onUpdate: (
@@ -1368,6 +1474,12 @@ function ActiveWorkout({
   onFinish: () => void
   onDiscard: () => void
   previousSessions: WorkoutSession[]
+  templateId?: string | null
+  onRememberSubstitution?: (input: {
+    templateExerciseId?: string
+    fromName: string
+    toName: string
+  }) => void
 }) {
   const { activeDate } = useActiveDate()
   const { setFullscreen } = useFullscreenOverlay()
@@ -1378,6 +1490,7 @@ function ActiveWorkout({
   const [confirmEndAction, setConfirmEndAction] = useState<
     null | "discard" | "finish"
   >(null)
+  const [endMenuOpen, setEndMenuOpen] = useState(false)
   const [restConfig, setRestConfig] =
     useState<WorkoutRestConfig>(DEFAULT_WORKOUT_REST)
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null)
@@ -1596,6 +1709,8 @@ function ActiveWorkout({
 
   function swapExercise(exId: string, picked: PickedExercise) {
     const list = exercisesRef.current
+    const current = list.find((ex) => ex.id === exId)
+    const fromName = current?.originalName || current?.name || ""
     const newExId = uid()
     const updated = list.map((ex) => {
       if (ex.id !== exId) return ex
@@ -1616,6 +1731,8 @@ function ActiveWorkout({
         secondaryMuscles: picked.secondaryMuscles,
         category: picked.category,
         sets,
+        templateExerciseId: ex.templateExerciseId,
+        originalName: ex.originalName || ex.name,
       }
     })
     setCollapsedExerciseIds((p) => {
@@ -1623,6 +1740,20 @@ function ActiveWorkout({
       next.delete(exId)
       return next
     })
+    setDisplayedExerciseId(newExId)
+    if (fromName && picked.name && fromName.toLowerCase() !== picked.name.toLowerCase()) {
+      rememberSubstitution({
+        fromName,
+        toName: picked.name,
+        templateId,
+        templateExerciseId: current?.templateExerciseId,
+      })
+      onRememberSubstitution?.({
+        templateExerciseId: current?.templateExerciseId,
+        fromName,
+        toName: picked.name,
+      })
+    }
     onUpdate(updated)
   }
 
@@ -2231,7 +2362,11 @@ function ActiveWorkout({
             ) : displayedExercise ? (
               (() => {
                 const ex = displayedExercise
-                const prev = previousByExercise.get(ex.name.toLowerCase())
+                const prev =
+                  previousByExercise.get(ex.name.toLowerCase()) ||
+                  (ex.originalName
+                    ? previousByExercise.get(ex.originalName.toLowerCase())
+                    : undefined)
                 const exComplete = isExerciseComplete(ex)
                 const hasPendingEffort = ex.sets.some(
                   (s) =>
@@ -2571,51 +2706,114 @@ function ActiveWorkout({
                   All movements complete
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground/65">
-                  Finish the workout when you are ready.
+                  Nice work — wrap it up when you&apos;re ready.
                 </p>
+                <Button
+                  type="button"
+                  variant="glass"
+                  size="lg"
+                  className="mt-6 h-12 min-h-12 gap-2 rounded-xl px-6 text-sm font-semibold press-scale touch-manipulation"
+                  onClick={() => setConfirmEndAction("finish")}
+                >
+                  <Check className="size-4 shrink-0" />
+                  Finish workout
+                </Button>
               </div>
             ) : null}
 
-            <div className="shrink-0 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  swapTargetRef.current = null
-                  setSwapExerciseId(null)
-                  setShowPicker(true)
-                }}
-                className="glass-subtle flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/25 py-2.5 text-sm font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 active:scale-[0.99] touch-manipulation"
-              >
-                <Plus className="size-4" />
-                Add exercise
-              </button>
-            </div>
+            {!queue.allSetsComplete ? (
+              <div className="shrink-0 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    swapTargetRef.current = null
+                    setSwapExerciseId(null)
+                    setShowPicker(true)
+                  }}
+                  className="glass-subtle flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/25 py-2.5 text-sm font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 active:scale-[0.99] touch-manipulation"
+                >
+                  <Plus className="size-4" />
+                  Add exercise
+                </button>
+              </div>
+            ) : null}
           </div>
 
-          {/* Footer */}
+          {/* Footer — keep chrome light; Finish only when done or via overflow menu */}
           <div className="glass-subtle shrink-0 border-t border-glass-border/25 px-3 py-2.5 pb-[max(0.75rem,calc(0.5rem+env(safe-area-inset-bottom)))] sm:px-4">
-            <div className="flex items-stretch gap-2.5">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-lg"
-                className="size-12 min-h-12 min-w-12 shrink-0 touch-manipulation rounded-xl border-red-500/30 text-red-400 hover:bg-red-500/10 active:scale-[0.97]"
-                aria-label="Discard workout"
-                onClick={() => setConfirmEndAction("discard")}
-              >
-                <X className="size-5" aria-hidden />
-              </Button>
-              <Button
-                type="button"
-                variant="glass"
-                size="lg"
-                className="h-12 min-h-12 min-w-0 flex-1 gap-2 rounded-xl text-sm font-semibold press-scale touch-manipulation"
-                onClick={() => setConfirmEndAction("finish")}
-              >
-                <Check className="size-4 shrink-0" />
-                Finish workout
-              </Button>
-            </div>
+            {queue.allSetsComplete ? (
+              <div className="flex items-stretch gap-2.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-lg"
+                  className="size-12 min-h-12 min-w-12 shrink-0 touch-manipulation rounded-xl border-red-500/30 text-red-400 hover:bg-red-500/10 active:scale-[0.97]"
+                  aria-label="Discard workout"
+                  onClick={() => setConfirmEndAction("discard")}
+                >
+                  <X className="size-5" aria-hidden />
+                </Button>
+                <Button
+                  type="button"
+                  variant="glass"
+                  size="lg"
+                  className="h-12 min-h-12 min-w-0 flex-1 gap-2 rounded-xl text-sm font-semibold press-scale touch-manipulation"
+                  onClick={() => setConfirmEndAction("finish")}
+                >
+                  <Check className="size-4 shrink-0" />
+                  Finish workout
+                  {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
+                </Button>
+              </div>
+            ) : (
+              <div className="relative flex items-center justify-between gap-2">
+                <p className="min-w-0 truncate text-[11px] text-muted-foreground/60">
+                  {queue.current
+                    ? `${queue.completedSets}/${queue.totalSets} sets`
+                    : "Logging…"}
+                  {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
+                </p>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 min-h-10 gap-1.5 rounded-xl px-3 text-xs font-semibold touch-manipulation"
+                    aria-expanded={endMenuOpen}
+                    onClick={() => setEndMenuOpen((o) => !o)}
+                  >
+                    <MoreHorizontal className="size-4" />
+                    More
+                  </Button>
+                </div>
+                {endMenuOpen ? (
+                  <div className="absolute bottom-[calc(100%+0.5rem)] right-0 z-30 min-w-[11rem] overflow-hidden rounded-xl border border-border/30 bg-popover p-1 shadow-xl animate-in fade-in slide-in-from-bottom-1 duration-150">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-glass-highlight/20 touch-manipulation"
+                      onClick={() => {
+                        setEndMenuOpen(false)
+                        setConfirmEndAction("finish")
+                      }}
+                    >
+                      <Check className="size-4 text-primary" />
+                      Finish early
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 touch-manipulation"
+                      onClick={() => {
+                        setEndMenuOpen(false)
+                        setConfirmEndAction("discard")
+                      }}
+                    >
+                      <X className="size-4" />
+                      Discard workout
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
           </div>
         </div>
@@ -2701,6 +2899,7 @@ function ActiveWorkout({
         onClose={() => {
           setShowPicker(false)
           setSwapExerciseId(null)
+          setEndMenuOpen(false)
           /* Let a library row’s onSelect run in the same gesture before clearing swap target. */
           queueMicrotask(() => {
             swapTargetRef.current = null
@@ -2717,6 +2916,20 @@ function ActiveWorkout({
             ? exercises.find((ex) => ex.id === swapExerciseId)?.primaryMuscles?.[0]
                 ?.name ?? null
             : null
+        }
+        recentNames={
+          swapExerciseId
+            ? (() => {
+                const ex = exercises.find((e) => e.id === swapExerciseId)
+                if (!ex) return []
+                const fromName = ex.originalName || ex.name
+                return getRecentSubstitutes({
+                  fromName,
+                  templateId,
+                  templateExerciseId: ex.templateExerciseId,
+                }).filter((n) => n.toLowerCase() !== ex.name.toLowerCase())
+              })()
+            : []
         }
         onSelect={(picked) => {
           const swapId = swapTargetRef.current
@@ -2794,6 +3007,8 @@ export default function WorkoutsPage() {
   } | null>(null)
   const [startError, setStartError] = useState<string | null>(null)
   const [startingWorkout, setStartingWorkout] = useState(false)
+  /** Template the current active session was started from (for remembering swaps). */
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null)
   /** Bumped after a workout is finished so the progression hero re-fetches. */
   const [progressionRefresh, setProgressionRefresh] = useState(0)
 
@@ -2906,17 +3121,36 @@ export default function WorkoutsPage() {
     name: string,
     templateExercises?: TemplateExercise[],
     routineCoverUrl?: string | null,
+    templateId?: string | null,
   ) {
     setStartError(null)
     const exercises: SessionExercise[] = templateExercises
       ? templateExercises.map((te) => {
           const m = migrateTemplateExercise(te)
+          const pref =
+            getPreferredSubstitute({
+              fromName: m.name,
+              templateId,
+              templateExerciseId: m.id,
+            }) ||
+            (m.preferredSubstituteName
+              ? {
+                  toName: m.preferredSubstituteName,
+                  recentTo: m.recentSubstitutes ?? [m.preferredSubstituteName],
+                }
+              : null)
+          const useName =
+            pref?.toName && pref.toName.toLowerCase() !== m.name.toLowerCase()
+              ? pref.toName
+              : m.name
           return {
             id: uid(),
-            name: m.name,
+            name: useName,
             notes: m.notes,
             primaryMuscles: m.primaryMuscles,
             sets: sessionSetsFromTemplate(m),
+            templateExerciseId: m.id,
+            originalName: m.name,
           }
         })
       : []
@@ -2957,6 +3191,7 @@ export default function WorkoutsPage() {
       }
 
       const session = normalizeSessionStatus(raw)
+      setActiveTemplateId(templateId ?? null)
       setSessions((prev) => [
         session,
         ...prev.filter((s) => s.id !== session.id),
@@ -3050,6 +3285,7 @@ export default function WorkoutsPage() {
         /* Summary is best-effort; never block finishing the workout. */
       }
       setProgressionRefresh((n) => n + 1)
+      setActiveTemplateId(null)
     }
   }
 
@@ -3061,7 +3297,40 @@ export default function WorkoutsPage() {
     })
     if (res.ok) {
       setSessions((prev) => prev.filter((s) => s.id !== activeSession.id))
+      setActiveTemplateId(null)
     }
+  }
+
+  async function rememberTemplateSubstitution(input: {
+    templateExerciseId?: string
+    fromName: string
+    toName: string
+  }) {
+    if (!activeTemplateId || !input.templateExerciseId) return
+    const tmpl = templatesRef.current.find((t) => t.id === activeTemplateId)
+    if (!tmpl) return
+    const exs = parseExercises<TemplateExercise>(tmpl.exercises).map((raw) => {
+      const m = migrateTemplateExercise(raw)
+      if (m.id !== input.templateExerciseId) return templateExerciseToPersist(m)
+      const recent = [
+        input.toName,
+        ...(m.recentSubstitutes ?? []).filter(
+          (n) => n.toLowerCase() !== input.toName.toLowerCase(),
+        ),
+      ].slice(0, 6)
+      return templateExerciseToPersist({
+        ...m,
+        preferredSubstituteName: input.toName,
+        recentSubstitutes: recent,
+      })
+    })
+    await saveTemplate(
+      tmpl.name,
+      exs,
+      tmpl.id,
+      tmpl.coverImageUrl ?? null,
+      parseTemplateTags(tmpl.tags),
+    )
   }
 
   async function deleteSession(id: string) {
@@ -3490,6 +3759,10 @@ export default function WorkoutsPage() {
           onFinish={finishActiveSession}
           onDiscard={discardActiveSession}
           previousSessions={completedSessions}
+          templateId={activeTemplateId}
+          onRememberSubstitution={(input) => {
+            void rememberTemplateSubstitution(input)
+          }}
         />
       ) : (
         <div className="space-y-6">
@@ -3796,7 +4069,12 @@ export default function WorkoutsPage() {
                             routineRearrangeMode && "pointer-events-none",
                           )}
                           onClick={() =>
-                            startSession(tmpl.name, exs, tmpl.coverImageUrl?.trim() ?? null)
+                            startSession(
+                              tmpl.name,
+                              exs,
+                              tmpl.coverImageUrl?.trim() ?? null,
+                              tmpl.id,
+                            )
                           }
                         >
                           <Play className="size-3 shrink-0" />

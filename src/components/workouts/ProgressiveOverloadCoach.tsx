@@ -14,6 +14,7 @@ import { apiFetch } from "@/lib/api-fetch"
 import { cn } from "@/lib/utils"
 import {
   COACH_STATUS_LABELS,
+  REASON_CODE_LABELS,
   RIR_CHOICES,
   calculateNextSetRecommendation,
   getComparableExerciseHistory,
@@ -249,7 +250,7 @@ export function ProgressiveOverloadCoach({
                 className={cn(
                   "glass-subtle flex flex-col items-center justify-center rounded-lg font-bold tabular-nums transition-colors touch-manipulation active:scale-[0.95] hover:border-primary/35 hover:bg-glass-highlight/25",
                   density.rirBtn,
-                  c.rir === 2 && "border-primary/30 text-primary",
+                  c.rir === rec.targetRir && "border-primary/30 text-primary",
                 )}
               >
                 {label}
@@ -349,14 +350,22 @@ export function ProgressiveOverloadCoach({
         <div className="flex min-h-0 flex-1 flex-col justify-center gap-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p
-                className={cn(
-                  "font-medium uppercase tracking-[0.15em] text-muted-foreground/55",
-                  density.label,
-                )}
-              >
-                Next target
-              </p>
+              <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                <p
+                  className={cn(
+                    "font-medium uppercase tracking-[0.15em] text-muted-foreground/55",
+                    density.label,
+                  )}
+                >
+                  {rec.kind === "next-set" ? "Next set" : "Today’s target"}
+                </p>
+                <span className="rounded-md border border-glass-border/40 bg-glass-highlight/15 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-muted-foreground/70">
+                  {rec.repMin}–{rec.repMax} reps
+                </span>
+                <span className="rounded-md border border-glass-border/40 bg-glass-highlight/15 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-muted-foreground/70">
+                  {scale === "rpe" ? `RPE ${rirToRpe(rec.targetRir)}` : `${rec.targetRir} RIR`}
+                </span>
+              </div>
               <p
                 className={cn(
                   "font-heading font-bold leading-tight text-foreground",
@@ -503,6 +512,33 @@ function CoachWhyDialog({
           </div>
 
           <div className="space-y-3 px-4 pb-4">
+            <div className="flex flex-wrap gap-1.5">
+              <span
+                className={cn(
+                  "rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
+                  STATUS_BADGE_CLASSES[rec.status],
+                )}
+              >
+                {COACH_STATUS_LABELS[rec.status]}
+              </span>
+              <span className="rounded-md border border-glass-border/40 bg-glass-highlight/15 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-muted-foreground/70">
+                {rec.repMin}–{rec.repMax} · {rec.targetRir} RIR
+              </span>
+            </div>
+
+            {rec.reasonCodes.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {rec.reasonCodes.slice(0, 4).map((code) => (
+                  <span
+                    key={code}
+                    className="rounded-md bg-muted/30 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground/75"
+                  >
+                    {REASON_CODE_LABELS[code] ?? code}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
             <ul className="space-y-1.5">
               {rec.explanation.map((line, i) => (
                 <li
