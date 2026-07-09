@@ -59,6 +59,11 @@ import {
   getRecentSubstitutes,
   rememberSubstitution,
 } from "@/lib/workouts/exercise-substitutions"
+import {
+  defaultFreeFormSets,
+  recommendFreeFormWorkout,
+  type BodySplit,
+} from "@/lib/workouts/free-form-recommender"
 
 /* ──────────────────────────────────────────────────────────
    Types
@@ -1464,6 +1469,8 @@ function ActiveWorkout({
   previousSessions,
   templateId,
   onRememberSubstitution,
+  weekStart,
+  weekEnd,
 }: {
   session: WorkoutSession
   onUpdate: (
@@ -1480,6 +1487,8 @@ function ActiveWorkout({
     fromName: string
     toName: string
   }) => void
+  weekStart: string
+  weekEnd: string
 }) {
   const { activeDate } = useActiveDate()
   const { setFullscreen } = useFullscreenOverlay()
@@ -1491,6 +1500,9 @@ function ActiveWorkout({
     null | "discard" | "finish"
   >(null)
   const [endMenuOpen, setEndMenuOpen] = useState(false)
+  const [freeFormSplit, setFreeFormSplit] = useState<BodySplit | null>(null)
+  const [freeFormBusy, setFreeFormBusy] = useState(false)
+  const [freeFormError, setFreeFormError] = useState<string | null>(null)
   const [restConfig, setRestConfig] =
     useState<WorkoutRestConfig>(DEFAULT_WORKOUT_REST)
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null)
@@ -1705,6 +1717,52 @@ function ActiveWorkout({
       },
     ]
     onUpdate(updated)
+  }
+
+  async function generateFreeFormWorkout(split: BodySplit) {
+    if (freeFormBusy) return
+    setFreeFormBusy(true)
+    setFreeFormError(null)
+    setFreeFormSplit(split)
+    try {
+      let library = exerciseListCache
+      if (!library || library.length === 0) {
+        const res = await apiFetch("/api/exercise-library", { cache: "no-store" })
+        const data = await res.json()
+        if (Array.isArray(data) && data.length > 0) {
+          exerciseListCache = data
+          library = data
+        } else {
+          library = FALLBACK_EXERCISES
+        }
+      }
+      const recs = recommendFreeFormWorkout({
+        library,
+        sessions: previousSessions,
+        split,
+        weekStart,
+        weekEnd,
+        count: 5,
+      })
+      if (recs.length === 0) {
+        setFreeFormError("Couldn’t build a session from your library — add exercises manually.")
+        return
+      }
+      const next: SessionExercise[] = recs.map((r) => ({
+        id: uid(),
+        name: r.name,
+        notes: "",
+        primaryMuscles: r.primaryMuscles,
+        secondaryMuscles: r.secondaryMuscles,
+        category: r.category,
+        sets: defaultFreeFormSets(3).map((s) => ({ ...s, id: uid() })),
+      }))
+      onUpdate(next)
+    } catch {
+      setFreeFormError("Something went wrong building this workout. Try again.")
+    } finally {
+      setFreeFormBusy(false)
+    }
   }
 
   function swapExercise(exId: string, picked: PickedExercise) {
@@ -2364,14 +2422,75 @@ function ActiveWorkout({
           {/* One movement at a time — edge-to-edge on mobile */}
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-1 sm:px-5 sm:py-2">
             {exercises.length === 0 ? (
-              <div className="my-auto rounded-2xl border border-dashed border-glass-border/35 px-6 py-10 text-center">
-                <Dumbbell className="mx-auto size-8 text-muted-foreground/35" aria-hidden />
-                <p className="mt-3 text-base font-medium text-foreground/90">
-                  No exercises yet
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground/65">
-                  Use More → Add exercise to start logging sets.
-                </p>
+              <div className="my-auto flex flex-col gap-4 px-1 py-6 sm:px-2">
+                <div className="text-center">
+                  <Dumbbell className="mx-auto size-8 text-primary/50" aria-hidden />
+                  <p className="mt-3 font-heading text-lg font-semibold text-foreground">
+                    Free-form workout
+                  </p>
+                  <p className="mx-auto mt-1.5 max-w-[20rem] text-sm leading-relaxed text-muted-foreground/70">
+                    Pick upper or lower — we&apos;ll fill a session from your favorites and
+                    the muscle groups that still need volume this week.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  {(
+                    [
+                      {
+                        id: "upper" as const,
+                        label: "Upper",
+                        hint: "Push · pull · arms",
+                      },
+                      {
+                        id: "lower" as const,
+                        label: "Lower",
+                        hint: "Squat · hinge · glutes",
+                      },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      disabled={freeFormBusy}
+                      onClick={() => void generateFreeFormWorkout(opt.id)}
+                      className={cn(
+                        "rounded-2xl border px-3 py-5 text-left transition-all touch-manipulation active:scale-[0.98]",
+                        freeFormSplit === opt.id && freeFormBusy
+                          ? "border-primary/45 bg-primary/15 ring-1 ring-primary/30"
+                          : "border-glass-border/35 bg-glass-highlight/[0.06] hover:border-primary/35 hover:bg-primary/[0.08]",
+                        freeFormBusy && freeFormSplit !== opt.id && "opacity-45",
+                      )}
+                    >
+                      <p className="text-base font-semibold text-foreground">{opt.label}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground/60">{opt.hint}</p>
+                      {freeFormBusy && freeFormSplit === opt.id ? (
+                        <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                          Building…
+                        </p>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+
+                {freeFormError ? (
+                  <p className="text-center text-[12px] text-destructive" role="alert">
+                    {freeFormError}
+                  </p>
+                ) : null}
+
+                <button
+                  type="button"
+                  disabled={freeFormBusy}
+                  onClick={() => {
+                    swapTargetRef.current = null
+                    setSwapExerciseId(null)
+                    setShowPicker(true)
+                  }}
+                  className="mx-auto text-[12px] font-medium text-muted-foreground/60 underline-offset-2 transition-colors hover:text-foreground hover:underline touch-manipulation"
+                >
+                  Or add exercises manually
+                </button>
               </div>
             ) : displayedExercise ? (
               (() => {
@@ -3764,6 +3883,8 @@ export default function WorkoutsPage() {
           onRememberSubstitution={(input) => {
             void rememberTemplateSubstitution(input)
           }}
+          weekStart={weekStart}
+          weekEnd={weekEnd}
         />
       ) : (
         <div className="space-y-6">
