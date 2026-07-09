@@ -679,25 +679,28 @@ export function WeeklyHero({
             />
           ) : (
             <div
-              className="relative z-10 -mx-4 lg:-mx-5"
+              className="relative z-10 px-0.5 py-1 sm:px-1"
               role="group"
               aria-label="Protocol and training"
             >
-              <div className="flex items-stretch">
+              {/* 2-col rail: vial @ 2/3 of left cell (=1/3), workout @ 1/3 of right (=2/3) — matches ring gaps */}
+              <div className="relative grid grid-cols-2 items-stretch">
                 <button
                   type="button"
                   onClick={() => toggleExpand("peptides")}
                   aria-label="Expand peptides"
                   aria-expanded={false}
-                  className="group flex min-w-0 flex-1 items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 lg:px-5"
+                  className="group relative flex min-h-[5.5rem] min-w-0 items-center py-3.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem]"
                 >
-                  <PeptideVialGraphic
-                    color="#94a3b8"
-                    doseMg={peptideSummary?.lastDoseMg ?? null}
-                    size="md"
-                    className="shrink-0 opacity-90"
-                  />
-                  <div className="min-w-0 flex-1">
+                  <span className="pointer-events-none absolute left-2/3 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
+                    <PeptideVialGraphic
+                      color="#94a3b8"
+                      doseMg={peptideSummary?.lastDoseMg ?? null}
+                      size="md"
+                      className="mx-0 shrink-0 opacity-90"
+                    />
+                  </span>
+                  <div className="min-w-0 w-[calc(66.666%-3.25rem)] pr-1 text-right sm:w-[calc(66.666%-3.5rem)]">
                     <p className="type-hud-micro text-muted-foreground/70">Protocol</p>
                     <p
                       className={cn(
@@ -717,7 +720,7 @@ export function WeeklyHero({
                 </button>
 
                 <div
-                  className="my-3 w-px shrink-0 bg-gradient-to-b from-transparent via-white/12 to-transparent"
+                  className="pointer-events-none absolute inset-y-3 left-1/2 z-[1] w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-white/12 to-transparent"
                   aria-hidden
                 />
 
@@ -726,15 +729,17 @@ export function WeeklyHero({
                   onClick={() => toggleExpand("workouts")}
                   aria-label="Expand workouts"
                   aria-expanded={false}
-                  className="group flex min-w-0 flex-1 items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 lg:px-5"
+                  className="group relative flex min-h-[5.5rem] min-w-0 items-center py-3.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem]"
                 >
-                  <WeekWorkoutGoalRing
-                    count={weekWo}
-                    size="md"
-                    color="#c4d632"
-                    className="shrink-0"
-                  />
-                  <div className="min-w-0 flex-1">
+                  <span className="pointer-events-none absolute left-1/3 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
+                    <WeekWorkoutGoalRing
+                      count={weekWo}
+                      size="md"
+                      color="#c4d632"
+                      className="shrink-0"
+                    />
+                  </span>
+                  <div className="min-w-0 w-full pl-[calc(33.333%+3.25rem)] sm:pl-[calc(33.333%+3.5rem)]">
                     <p className="type-hud-micro text-muted-foreground/70">Training</p>
                     <p
                       className="truncate text-[13px] font-semibold tracking-wide text-foreground/90"
