@@ -43,6 +43,11 @@ import { displaySleepScore, qualityToScore, sleepScoreBand, SLEEP_SCORE_BAND_LAB
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
+import {
+  StageTimeline,
+  StageMinuteBars,
+  parseStages,
+} from "@/components/sleep/SleepStageViews"
 
 const sleepGoalPresets: GoalPreset[] = [
   { type: "daily", label: "Nightly Hours", unit: "hrs", placeholder: "8" },
@@ -65,8 +70,6 @@ interface SleepEntry {
   notes: string | null
 }
 
-type StageSegment = { type: string; startTime: string; endTime: string }
-
 const SLEEP_COLOR = "#6366f1"
 
 const SCORE_BAND_COLOR: Record<string, string> = {
@@ -76,13 +79,6 @@ const SCORE_BAND_COLOR: Record<string, string> = {
   poor: "#ef4444",
 }
 
-const STAGE_STYLE: Record<string, { label: string; color: string }> = {
-  AWAKE: { label: "Awake", color: "#f59e0b" },
-  LIGHT: { label: "Light", color: "#818cf8" },
-  DEEP: { label: "Deep", color: "#4338ca" },
-  REM: { label: "REM", color: "#2dd4bf" },
-}
-
 function entryScore(entry: Pick<SleepEntry, "score" | "quality">): number | null {
   return entry.score ?? (entry.quality != null ? qualityToScore(entry.quality) : null)
 }
@@ -90,16 +86,6 @@ function entryScore(entry: Pick<SleepEntry, "score" | "quality">): number | null
 function scoreColor(score: number | null): string {
   const band = sleepScoreBand(score)
   return band ? SCORE_BAND_COLOR[band] : SLEEP_COLOR
-}
-
-function parseStages(json: string | null): StageSegment[] {
-  if (!json) return []
-  try {
-    const parsed = JSON.parse(json)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
 }
 
 function calcDuration(bed: string, wake: string): string {
@@ -133,83 +119,6 @@ function ScoreBadge({ score, size = "sm" }: { score: number | null; size?: "sm" 
       {displaySleepScore(score)}
       <span className="opacity-60">/100</span>
     </span>
-  )
-}
-
-/** Horizontal stage timeline for one night — proportional segments in chronological order. */
-function StageTimeline({ stages }: { stages: StageSegment[] }) {
-  if (stages.length === 0) return null
-  const start = new Date(stages[0].startTime).getTime()
-  const end = new Date(stages[stages.length - 1].endTime).getTime()
-  const total = end - start
-  if (!Number.isFinite(total) || total <= 0) return null
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted/20">
-        {stages.map((s, i) => {
-          const segStart = new Date(s.startTime).getTime()
-          const segEnd = new Date(s.endTime).getTime()
-          const width = Math.max(((segEnd - segStart) / total) * 100, 0.4)
-          const style = STAGE_STYLE[s.type.toUpperCase()] ?? { label: s.type, color: "#94a3b8" }
-          return (
-            <div
-              key={i}
-              className="h-full first:rounded-l-full last:rounded-r-full"
-              style={{ width: `${width}%`, backgroundColor: style.color }}
-              title={`${style.label} · ${format(new Date(s.startTime), "h:mm a")}`}
-            />
-          )
-        })}
-      </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        {Object.entries(STAGE_STYLE).map(([key, style]) => (
-          <span key={key} className="flex items-center gap-1 type-hud-micro normal-case text-muted-foreground/75">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: style.color }} />
-            {style.label}
-          </span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/** REM / light / deep / awake minute bars for one night. */
-function StageMinuteBars({ entry }: { entry: SleepEntry }) {
-  const rows: Array<{ key: string; minutes: number }> = [
-    { key: "REM", minutes: entry.remMinutes ?? 0 },
-    { key: "LIGHT", minutes: entry.lightMinutes ?? 0 },
-    { key: "DEEP", minutes: entry.deepMinutes ?? 0 },
-    { key: "AWAKE", minutes: entry.awakeMinutes ?? 0 },
-  ]
-  const total = rows.reduce((s, r) => s + r.minutes, 0)
-  if (total <= 0) return null
-
-  return (
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-      {rows.map((r) => {
-        const style = STAGE_STYLE[r.key]
-        const hours = Math.round((r.minutes / 60) * 10) / 10
-        const pct = total > 0 ? (r.minutes / total) * 100 : 0
-        return (
-          <div key={r.key} className="glass-subtle min-w-0 rounded-xl p-2.5">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: style.color }} />
-              <span className="type-hud-caption-tight truncate">{style.label}</span>
-            </div>
-            <p className="type-hud-stat-sm mt-1 tabular-nums" style={{ color: style.color }}>
-              {hours}h
-            </p>
-            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted/25">
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${Math.max(pct, 3)}%`, backgroundColor: style.color }}
-              />
-            </div>
-          </div>
-        )
-      })}
-    </div>
   )
 }
 
