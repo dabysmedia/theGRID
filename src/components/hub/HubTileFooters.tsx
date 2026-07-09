@@ -5,9 +5,14 @@ import { BowelToiletIcon } from "@/components/BowelToiletIcon"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { SleepAlarmClockGraphic } from "@/components/sleep/SleepAlarmClockGraphic"
 import { CaloriePipTracker, caloriePipAccentHex } from "@/components/calories/CaloriePipTracker"
+import { MeshHeartSvg } from "@/components/hub/MeshHeartSvg"
 import { cn } from "@/lib/utils"
 import type { NextInjectionInfo } from "@/lib/hub-tile-prefs"
 import { computeTargetBedtimeParts } from "@/lib/hub-tile-prefs"
+import {
+  READINESS_BAND_LABEL,
+  readinessBand,
+} from "@/lib/readiness-score"
 
 export function HubCalorieFooter({
   consumed,
@@ -205,6 +210,60 @@ export function HubBowelFooter({
           style={met || todayCount > 0 ? { color } : undefined}
         >
           {status}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/** Vitals system tile: mesh heart with HRV centered. */
+export function HubVitalsFooter({
+  hrvMs,
+  readiness,
+  color = "#f43f5e",
+}: {
+  hrvMs: number | null
+  readiness?: number | null
+  color?: string
+}) {
+  const band = readinessBand(readiness ?? null)
+  const accent = color
+  const hrvLabel =
+    hrvMs != null && Number.isFinite(hrvMs) ? String(Math.round(hrvMs)) : "—"
+
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-1.5 text-center">
+      <div className="relative flex h-[4.75rem] w-[4.75rem] shrink-0 items-center justify-center sm:h-[5.25rem] sm:w-[5.25rem]">
+        <MeshHeartSvg
+          accent={accent}
+          className="absolute inset-0 h-full w-full drop-shadow-[0_0_14px_rgba(244,63,94,0.3)]"
+        />
+        <div className="relative z-10 flex flex-col items-center justify-center pt-0.5">
+          <span
+            className="font-semibold tabular-nums leading-none tracking-tight text-foreground"
+            style={{
+              fontSize: hrvLabel.length > 3 ? "1.05rem" : "1.35rem",
+              textShadow: `0 0 16px ${accent}77`,
+            }}
+          >
+            {hrvLabel}
+          </span>
+          <span className="mt-0.5 text-[8px] font-semibold uppercase tracking-[0.18em] text-rose-100/70">
+            ms
+          </span>
+        </div>
+      </div>
+      <div className="space-y-0.5">
+        <p className="type-hud-caption-tight text-[8px]">HRV</p>
+        <p
+          className="text-[11px] font-semibold tabular-nums leading-tight tracking-wide"
+          style={hrvMs != null || band ? { color: accent } : undefined}
+        >
+          {band
+            ? READINESS_BAND_LABEL[band]
+            : hrvMs != null
+              ? "Today"
+              : "Sync Fitbit"}
         </p>
       </div>
     </div>
