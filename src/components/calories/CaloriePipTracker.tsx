@@ -14,13 +14,13 @@ const SIZE_CONFIG = {
   default: {
     pipCount: 200,
     columns: 20,
-    gapPx: 3,
+    gapPx: 8,
     glow: true,
   },
   compact: {
     pipCount: 100,
     columns: 20,
-    gapPx: 2,
+    gapPx: 5,
     glow: false,
   },
 } as const
@@ -76,63 +76,66 @@ function IsoPip({
   const emptySide = "oklch(0.22 0.01 250 / 55%)"
 
   return (
-    <div
-      className={cn(
-        "relative aspect-square w-full origin-bottom",
-        lit && "motion-safe:animate-calorie-pip-pop motion-reduce:animate-none",
-      )}
-      style={{
-        animationDelay: lit ? `${delayMs}ms` : undefined,
-        opacity: partial ? 0.65 : 1,
-      }}
-    >
-      {/* Front */}
+    <div className="relative aspect-square w-full">
+      {/* Inset so extruded faces don't collide with neighbors */}
       <div
-        className="absolute inset-0"
+        className={cn(
+          "absolute inset-[12%] origin-bottom",
+          lit && "motion-safe:animate-calorie-pip-pop motion-reduce:animate-none",
+        )}
         style={{
-          borderRadius: "1px",
-          background: lit
-            ? `linear-gradient(180deg, ${mid} 0%, ${accent} 55%, ${side} 100%)`
-            : emptyFront,
-          boxShadow: lit
-            ? `inset 0 1px 0 ${top}99, 0 0 10px ${accent}55`
-            : "inset 0 0 0 1px oklch(0.5 0.01 250 / 12%)",
+          animationDelay: lit ? `${delayMs}ms` : undefined,
+          opacity: partial ? 0.65 : 1,
         }}
       >
-        {lit ? (
-          <div
-            className="absolute inset-x-0 top-0 h-[45%] opacity-40"
-            style={{
-              background: "linear-gradient(180deg, #ffffff77, transparent)",
-            }}
-          />
-        ) : null}
+        {/* Front */}
+        <div
+          className="absolute inset-0"
+          style={{
+            borderRadius: "1px",
+            background: lit
+              ? `linear-gradient(180deg, ${mid} 0%, ${accent} 55%, ${side} 100%)`
+              : emptyFront,
+            boxShadow: lit
+              ? `inset 0 1px 0 ${top}99, 0 0 10px ${accent}55`
+              : "inset 0 0 0 1px oklch(0.5 0.01 250 / 12%)",
+          }}
+        >
+          {lit ? (
+            <div
+              className="absolute inset-x-0 top-0 h-[45%] opacity-40"
+              style={{
+                background: "linear-gradient(180deg, #ffffff77, transparent)",
+              }}
+            />
+          ) : null}
+        </div>
+        {/* Top face */}
+        <div
+          className="absolute left-0 right-[18%] top-0"
+          style={{
+            height: "34%",
+            transform: "translateY(-72%) skewX(-32deg)",
+            transformOrigin: "bottom left",
+            background: lit
+              ? `linear-gradient(135deg, ${top}, ${mid})`
+              : emptyTop,
+            boxShadow: lit ? `0 0 8px ${accent}66` : undefined,
+          }}
+        />
+        {/* Right face */}
+        <div
+          className="absolute bottom-0 right-0 top-[2%]"
+          style={{
+            width: "22%",
+            transform: "translateX(72%) skewY(-32deg)",
+            transformOrigin: "left bottom",
+            background: lit
+              ? `linear-gradient(180deg, ${shade(accent, -28)}, ${side})`
+              : emptySide,
+          }}
+        />
       </div>
-      {/* Top face */}
-      <div
-        className="absolute left-0 right-[18%] top-0"
-        style={{
-          height: "34%",
-          transform: "translateY(-72%) skewX(-32deg)",
-          transformOrigin: "bottom left",
-          background: lit
-            ? `linear-gradient(135deg, ${top}, ${mid})`
-            : emptyTop,
-          boxShadow: lit ? `0 0 8px ${accent}66` : undefined,
-        }}
-      />
-      {/* Right face */}
-      <div
-        className="absolute bottom-0 right-0 top-[2%]"
-        style={{
-          width: "22%",
-          transform: "translateX(72%) skewY(-32deg)",
-          transformOrigin: "left bottom",
-          background: lit
-            ? `linear-gradient(180deg, ${shade(accent, -28)}, ${side})`
-            : emptySide,
-        }}
-      />
     </div>
   )
 }
@@ -231,9 +234,10 @@ export function CaloriePipTracker({
             gap: `${gapPx}px`,
             gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
             gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))`,
-            /* Room for extruded top/side faces */
-            paddingRight: "3%",
-            paddingTop: "4%",
+            /* Room for extruded top/side faces + breathing room */
+            paddingRight: "5%",
+            paddingTop: "6%",
+            paddingBottom: "2%",
           }}
         >
           {visualIndices.map((dataIndex, visualOrder) => {
