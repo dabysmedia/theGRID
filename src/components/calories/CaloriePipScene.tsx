@@ -26,6 +26,11 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches
 }
 
+function isCoarsePointer(): boolean {
+  if (typeof window === "undefined") return false
+  return window.matchMedia("(pointer: coarse)").matches
+}
+
 function hexToColor(hex: string): THREE.Color {
   try {
     return new THREE.Color(hex)
@@ -36,104 +41,82 @@ function hexToColor(hex: string): THREE.Color {
 
 /**
  * WebGL isometric calorie tank — 20×10 instanced cubes.
- * Fill maths: each cube = target / 200 calories; fills bottom → top.
+ * Mobile-tuned: low DPR, MeshLambert, pause when offscreen/hidden, stop RAF when settled.
  */
 export function CaloriePipScene({ consumed, target, accent, className }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
-  const stateRef = useRef({
-    consumed,
-    target,
-    accent,
-    reduced: false,
-  })
-  stateRef.current = {
-    consumed,
-    target,
-    accent,
-    reduced: prefersReducedMotion(),
-  }
+  const wakeRef = useRef<(() => void) | null>(null)
+  const stateRef = useRef({ consumed, target, accent })
+  stateRef.current = { consumed, target, accent }
 
+  // Mount WebGL once
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
 
-    const scene = new THREE.Scene()
-    scene.fog = new THREE.FogExp2(0x05070c, 0.035)
+    const mobile = isCoarsePointer()
+    const reducedInit = prefersReducedMotion()
 
+    const scene = new THREE.Scene()
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 80)
     camera.position.set(14, 12, 14)
     camera.lookAt(0, 0.2, 0)
 
     const renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: !mobile,
       alpha: true,
-      powerPreference: "high-performance",
+      powerPreference: mobile ? "low-power" : "high-performance",
+      stencil: false,
+      depth: true,
     })
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 1.75),
+    )
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.setClearColor(0x000000, 0)
+    renderer.domElement.style.width = "100%"
+    renderer.domElement.style.height = "100%"
+    renderer.domElement.style.display = "block"
+    renderer.domElement.style.touchAction = "none"
     host.appendChild(renderer.domElement)
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.55)
+    const ambient = new THREE.AmbientLight(0xffffff, mobile ? 0.85 : 0.6)
     scene.add(ambient)
-    const key = new THREE.DirectionalLight(0xffffff, 1.15)
+    const key = new THREE.DirectionalLight(0xffffff, mobile ? 0.9 : 1.1)
     key.position.set(8, 14, 6)
     scene.add(key)
-    const fill = new THREE.DirectionalLight(0x88aaff, 0.35)
-    fill.position.set(-6, 4, -4)
-    scene.add(fill)
-    const rim = new THREE.DirectionalLight(0xffffff, 0.25)
-    rim.position.set(-2, 6, 10)
-    scene.add(rim)
+    if (!mobile) {
+      const fill = new THREE.DirectionalLight(0x88aaff, 0.3)
+      fill.position.set(-6, 4, -4)
+      scene.add(fill)
+    }
 
-    // Floor plate
     const floorGeo = new THREE.PlaneGeometry(
       COLS * STEP + GAP * 2,
       ROWS * STEP + GAP * 2,
     )
-    const floorMat = new THREE.MeshStandardMaterial({
+    const floorMat = new THREE.MeshBasicMaterial({
       color: 0x12161f,
-      metalness: 0.35,
-      roughness: 0.85,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.5,
     })
     const floor = new THREE.Mesh(floorGeo, floorMat)
     floor.rotation.x = -Math.PI / 2
     floor.position.y = -CUBE * 0.52
-    scene.add(floor)
-
-    // Soft grid helper on floor
-    const grid = new THREE.GridHelper(
-      Math.max(COLS, ROWS) * STEP,
-      Math.max(COLS, ROWS),
-      0x3a4558,
-      0x222833,
-    )
-    grid.position.y = -CUBE * 0.5 + 0.01
-    const gridMats = Array.isArray(grid.material) ? grid.material : [grid.material]
-    for (const m of gridMats) {
-      m.transparent = true
-      m.opacity = 0.35
-    }
-    scene.add(grid)
 
     const geometry = new THREE.BoxGeometry(CUBE, CUBE, CUBE)
-    const material = new THREE.MeshStandardMaterial({
+    const material = new THREE.MeshLambertMaterial({
       color: 0x38bdf8,
-      metalness: 0.28,
-      roughness: 0.38,
       emissive: 0x000000,
       emissiveIntensity: 0,
     })
     const mesh = new THREE.InstancedMesh(geometry, material, THREE_PIP_COUNT)
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-    // Per-instance colors
     mesh.instanceColor = new THREE.InstancedBufferAttribute(
       new Float32Array(THREE_PIP_COUNT * 3),
       3,
     )
-    scene.add(mesh)
+    mesh.frustumCulled = false
 
     const dummy = new THREE.Object3D()
     const litColor = new THREE.Color()
@@ -141,20 +124,22 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     const availableColor = new THREE.Color("#3d4a5c")
     const rise = new Float32Array(THREE_PIP_COUNT)
     const targetRise = new Float32Array(THREE_PIP_COUNT)
-    const originY = new Float32Array(THREE_PIP_COUNT)
+    const posX = new Float32Array(THREE_PIP_COUNT)
+    const posZ = new Float32Array(THREE_PIP_COUNT)
+    const stagger = new Float32Array(THREE_PIP_COUNT)
 
     const gridW = (COLS - 1) * STEP
     const gridD = (ROWS - 1) * STEP
 
     for (let i = 0; i < THREE_PIP_COUNT; i++) {
       const col = i % COLS
-      const row = Math.floor(i / COLS) // 0 = bottom
-      const x = col * STEP - gridW / 2
-      const z = -(row * STEP - gridD / 2)
-      originY[i] = 0
+      const row = Math.floor(i / COLS)
+      posX[i] = col * STEP - gridW / 2
+      posZ[i] = -(row * STEP - gridD / 2)
+      stagger[i] = (row * COLS + col) * (mobile ? 0.008 : 0.014)
       rise[i] = 0
       targetRise[i] = 0
-      dummy.position.set(x, -0.35, z)
+      dummy.position.set(posX[i]!, -0.35, posZ[i]!)
       dummy.scale.setScalar(0.01)
       dummy.updateMatrix()
       mesh.setMatrixAt(i, dummy.matrix)
@@ -164,10 +149,17 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     mesh.instanceColor!.needsUpdate = true
 
     const group = new THREE.Group()
-    // Re-parent mesh+floor into group for subtle idle sway
-    scene.remove(mesh, floor, grid)
-    group.add(floor, grid, mesh)
+    group.add(floor, mesh)
     scene.add(group)
+
+    let raf = 0
+    let last = performance.now()
+    let disposed = false
+    let lastKey = ""
+    let waveStart = performance.now()
+    let dirty = true
+    let visible = true
+    let running = false
 
     function fitCamera() {
       const el = hostRef.current
@@ -189,22 +181,14 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
         camera.bottom = -frustum / aspect
       }
       camera.updateProjectionMatrix()
+      dirty = true
+      kick()
     }
-    fitCamera()
-
-    const ro = new ResizeObserver(() => fitCamera())
-    ro.observe(host)
-
-    let raf = 0
-    let last = performance.now()
-    let disposed = false
-    let lastKey = ""
-    let waveStart = performance.now()
 
     function syncTargets(force = false) {
       const { consumed: c, target: t, accent: a } = stateRef.current
       const key = `${c}|${t}|${a}`
-      if (!force && key === lastKey) return
+      if (!force && key === lastKey) return false
       const prev = lastKey
       lastKey = key
       if (prev !== "") waveStart = performance.now()
@@ -229,71 +213,126 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       }
       mesh.instanceColor!.needsUpdate = true
       material.emissive.copy(litColor)
-      material.emissiveIntensity = 0.22
+      material.emissiveIntensity = mobile ? 0.12 : 0.2
+      dirty = true
+      return true
     }
     syncTargets(true)
 
-    // Stagger: light bottom-left first
-    const stagger = new Float32Array(THREE_PIP_COUNT)
-    for (let i = 0; i < THREE_PIP_COUNT; i++) {
-      const col = i % COLS
-      const row = Math.floor(i / COLS)
-      stagger[i] = (row * COLS + col) * 0.014
+    function kick() {
+      if (disposed || !visible || running) return
+      running = true
+      last = performance.now()
+      raf = requestAnimationFrame(tick)
+    }
+    wakeRef.current = () => {
+      dirty = true
+      syncTargets(true)
+      kick()
     }
 
     function tick(now: number) {
-      if (disposed) return
+      if (disposed || !visible) {
+        running = false
+        return
+      }
+
       const dt = Math.min(0.05, (now - last) / 1000)
       last = now
-      const reduced = stateRef.current.reduced
+      const reducedMotion = prefersReducedMotion()
       const waveElapsed = (now - waveStart) / 1000
-      const idleT = now / 1000
 
       syncTargets()
 
+      let maxDelta = 0
       for (let i = 0; i < THREE_PIP_COUNT; i++) {
-        const col = i % COLS
-        const row = Math.floor(i / COLS)
-        const x = col * STEP - gridW / 2
-        const z = -(row * STEP - gridD / 2)
-
-        const delay = stagger[i]!
         const want = targetRise[i]!
-        const gate = reduced
+        const delay = stagger[i]!
+        const gate = reducedMotion
           ? 1
-          : Math.min(1, Math.max(0, (waveElapsed - delay) * 2.8))
-        const goal = want > 0.5 ? Math.max(gate, rise[i]! > 0.95 ? 1 : gate) : 0
-        const speed = reduced ? 14 : 6.5
-        rise[i] = rise[i]! + (goal - rise[i]!) * Math.min(1, dt * speed)
+          : Math.min(1, Math.max(0, (waveElapsed - delay) * (mobile ? 3.4 : 2.8)))
+        const goal = want > 0.5 ? gate : 0
+        const speed = reducedMotion ? 16 : mobile ? 9 : 6.5
+        const next = rise[i]! + (goal - rise[i]!) * Math.min(1, dt * speed)
+        maxDelta = Math.max(maxDelta, Math.abs(next - rise[i]!))
+        rise[i] = next
 
         const r = rise[i]!
-        // Lit cubes sit on the floor; empty cubes are slightly smaller dim blocks
-        const litY = 0
-        const emptyY = 0
-        const litS = 1
-        const emptyS = 0.68
-        const y = THREE.MathUtils.lerp(emptyY - 0.35 * (1 - r), litY, r)
-        const s = THREE.MathUtils.lerp(emptyS, litS, r)
-
-        dummy.position.set(x, y, z)
-        dummy.scale.setScalar(Math.max(0.05, s))
+        dummy.position.set(posX[i]!, -0.35 * (1 - r), posZ[i]!)
+        dummy.scale.setScalar(Math.max(0.05, 0.68 + 0.32 * r))
         dummy.rotation.set(0, 0, 0)
         dummy.updateMatrix()
         mesh.setMatrixAt(i, dummy.matrix)
       }
       mesh.instanceMatrix.needsUpdate = true
 
-      group.rotation.y = reduced ? 0 : Math.sin(idleT * 0.32) * 0.045
+      if (!mobile && !reducedMotion && maxDelta > 0.002) {
+        group.rotation.y = Math.sin((now / 1000) * 0.32) * 0.03
+        dirty = true
+      } else if (group.rotation.y !== 0 && (mobile || reducedMotion || reducedInit)) {
+        group.rotation.y = 0
+      }
 
-      renderer.render(scene, camera)
-      raf = requestAnimationFrame(tick)
+      if (dirty || maxDelta > 0.0015) {
+        renderer.render(scene, camera)
+        dirty = false
+      }
+
+      // Sleep the loop once settled — critical for mobile scroll/battery
+      if (maxDelta > 0.0015) {
+        raf = requestAnimationFrame(tick)
+      } else {
+        running = false
+        renderer.render(scene, camera)
+      }
     }
-    raf = requestAnimationFrame(tick)
+
+    fitCamera()
+
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null
+    const ro = new ResizeObserver(() => {
+      if (resizeTimer) clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(fitCamera, mobile ? 100 : 40)
+    })
+    ro.observe(host)
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        visible = entry?.isIntersecting ?? false
+        if (visible) {
+          dirty = true
+          kick()
+        } else if (raf) {
+          cancelAnimationFrame(raf)
+          running = false
+        }
+      },
+      { threshold: 0.05 },
+    )
+    io.observe(host)
+
+    const onVis = () => {
+      if (document.hidden) {
+        if (raf) cancelAnimationFrame(raf)
+        running = false
+      } else if (visible) {
+        dirty = true
+        kick()
+      }
+    }
+    document.addEventListener("visibilitychange", onVis)
+
+    kick()
 
     return () => {
       disposed = true
+      running = false
+      wakeRef.current = null
       cancelAnimationFrame(raf)
+      if (resizeTimer) clearTimeout(resizeTimer)
       ro.disconnect()
+      io.disconnect()
+      document.removeEventListener("visibilitychange", onVis)
       geometry.dispose()
       material.dispose()
       floorGeo.dispose()
@@ -305,12 +344,18 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     }
   }, [])
 
-  // Accent / values update via stateRef each frame — no scene rebuild needed.
+  // Wake sleeping loop when calorie values change
+  useEffect(() => {
+    wakeRef.current?.()
+  }, [consumed, target, accent])
 
   return (
     <div
       ref={hostRef}
-      className={cn("relative h-full w-full min-h-[12rem] overflow-hidden", className)}
+      className={cn(
+        "relative h-full w-full min-h-[12rem] overflow-hidden [contain:strict]",
+        className,
+      )}
     />
   )
 }

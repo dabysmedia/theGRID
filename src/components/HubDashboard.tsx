@@ -311,31 +311,21 @@ export function HubDashboard() {
         />
       </div>
 
-      <div
-        className={cn(
-          "animate-fade-up stagger-3 grid transition-[grid-template-rows,opacity] duration-500 ease-out motion-reduce:transition-none",
-          hubExpanded
-            ? "pointer-events-none grid-rows-[0fr] opacity-0"
-            : "grid-rows-[1fr] opacity-100",
-        )}
-        aria-hidden={hubExpanded != null}
-      >
-        <div className="min-h-0 overflow-hidden">
+      {/* Unmount fasting + SYSTEMS while a hub panel is expanded — they will
+          eventually be replaced by expand-in-place; keep them off the tree so
+          mobile isn't paying for hidden charts/tiles during WebGL expands. */}
+      {hubExpanded == null ? (
+      <div className="animate-fade-up stagger-3">
+        <div className="min-h-0">
           <FastingTimer />
         </div>
       </div>
+      ) : null}
 
-      <div
-        className={cn(
-          "animate-fade-up stagger-4 grid transition-[grid-template-rows,opacity] duration-500 ease-out motion-reduce:transition-none",
-          hubExpanded
-            ? "pointer-events-none grid-rows-[0fr] opacity-0"
-            : "grid-rows-[1fr] opacity-100",
-        )}
-        aria-hidden={hubExpanded != null}
-      >
-        <div className="min-h-0 overflow-hidden">
-        <div className="flex items-center gap-2 mb-4">
+      {hubExpanded == null ? (
+      <div className="animate-fade-up stagger-4">
+        <div className="min-h-0">
+        <div className="mb-4 flex items-center gap-2">
           <div className="hud-divider flex-1" />
           <span className="type-hud-rail shrink-0">SYSTEMS</span>
           <div className="hud-divider flex-1" />
@@ -442,6 +432,7 @@ export function HubDashboard() {
         </div>
         </div>
       </div>
+      ) : null}
     </div>
   )
 }
