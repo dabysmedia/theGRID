@@ -22,6 +22,18 @@ import { cn, glassPanelClass, parseLocalDate } from "@/lib/utils"
 /** Show today’s weigh-in prompt on the hub only from this local hour onward (inclusive). */
 const WEIGH_IN_PROMPT_FROM_HOUR = 4
 
+/** Single-letter weekday labels indexed by `Date#getDay()` (Sun–Sat). */
+const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"] as const
+
+/** Labels for a rolling last-N window ending on `refDate` (matches `/api/dashboard` last7 order). */
+function lastNWeekdayLabels(refDate: Date, length: number): string[] {
+  return Array.from({ length }, (_, i) => {
+    const day = new Date(refDate)
+    day.setDate(refDate.getDate() - (length - 1 - i))
+    return WEEKDAY_LETTERS[day.getDay()]
+  })
+}
+
 interface CategorySummary {
   todayValue: number
   goal: number | null
@@ -384,7 +396,7 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         },
       ]
 
-  const dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
+  const dayLabels = lastNWeekdayLabels(refDate, data.steps.last7.length)
   const stepsMax = Math.max(...data.steps.last7, 1)
 
   return (
