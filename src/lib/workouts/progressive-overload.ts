@@ -105,12 +105,37 @@ export type CoachAction =
   | "choose_load"
 
 export const COACH_STATUS_LABELS: Record<CoachStatus, string> = {
-  calibration: "Calibration",
-  push: "Push",
-  hold: "Hold",
-  "back-off": "Back off",
+  calibration: "Find your load",
+  push: "Progress",
+  hold: "Build reps",
+  "back-off": "Ease up",
   "on-track": "On track",
   "new-best": "New best",
+}
+
+/** Plain-language labels for reason codes shown in the Why? sheet. */
+export const REASON_CODE_LABELS: Partial<Record<ReasonCode, string>> = {
+  EXACT_HISTORY_FOUND: "Matched your recent history on this movement",
+  SIMILAR_EXERCISE_FALLBACK: "Estimated from a similar movement",
+  FIRST_SET_CALIBRATION: "First exposure — pick a confident starting load",
+  ABOVE_TARGET_RIR: "Left more reps in reserve than the target",
+  BELOW_TARGET_RIR: "Closer to failure than planned",
+  ON_TARGET_RIR: "Effort landed on the target RIR",
+  RIR_MISSING: "No effort rating logged — confidence is lower",
+  UPPER_REP_RANGE_REACHED: "Top of the rep range hit on most sets",
+  IN_REP_RANGE: "Inside the target rep range",
+  MISSED_MINIMUM_REPS: "Fell short of the minimum reps",
+  SHARP_REP_DECLINE: "Reps dropped sharply between sets",
+  EQUIPMENT_INCREMENT_ROUNDED: "Rounded to the next equipment increment",
+  LARGE_INCREMENT_PREFERS_REPS: "Next weight jump is large — add reps first",
+  TECHNIQUE_FLAGGED: "Technique broke down",
+  PAIN_FLAGGED: "Pain or discomfort flagged",
+  OPTIONAL_VOLUME_APPROPRIATE: "Room for an optional extra set",
+  VOLUME_CAP_REACHED: "Volume cap reached for this movement",
+  INSUFFICIENT_DATA: "Not enough history yet",
+  BODYWEIGHT_REPS_ONLY: "Bodyweight — progress with reps",
+  NEW_BEST_DETECTED: "New best performance",
+  REPEATED_BELOW_TARGET: "Below target across multiple sessions",
 }
 
 export interface ApplyPayload {
@@ -302,13 +327,11 @@ const DEFAULT_INCREMENTS: Record<EquipmentKind, number> = {
 }
 
 export function defaultRepRange(
-  pattern: MovementPattern,
-  isolation: boolean,
+  _pattern: MovementPattern,
+  _isolation: boolean,
 ): { repMin: number; repMax: number; targetRir: number } {
-  if (pattern === "squat" || pattern === "hinge") {
-    return { repMin: 6, repMax: 10, targetRir: 2 }
-  }
-  if (isolation) return { repMin: 10, repMax: 15, targetRir: 1 }
+  /* Default to a hypertrophy-friendly 8–12 double-progression band for all
+     movements. Users can still override per exercise in the coach Why? sheet. */
   return { repMin: 8, repMax: 12, targetRir: 2 }
 }
 
@@ -891,16 +914,32 @@ export function calculateInitialPrescription(
     setsAtBase.filter((s) => (s.reps ?? 0) >= profile.repMax).length * 2 >=
       setsAtBase.length
   const effortOk = medianRir == null ? false : medianRir >= profile.targetRir
+  /* Prefer maximum progressive overload: only treat a session as a struggle when
+     every working set missed the floor OR median RIR is clearly past failure
+     (target − 2). A single missed-rep set should not trigger a deload. */
   const struggled =
-    (medianRir != null && medianRir < Math.max(0, profile.targetRir - 1.5)) ||
+    (medianRir != null && medianRir < Math.max(0, profile.targetRir - 2)) ||
     (setsAtBase.length > 0 && setsAtBase.every((s) => (s.reps ?? 0) < profile.repMin))
 
-  /* Two-session regression check for back-off. */
+  /* Require three consecutive below-target sessions before backing off load.
+     Two hard sessions alone keep the load and rebuild reps. */
   const prior = source.exposures[1]
+  const prior2 = source.exposures[2]
+  const sessionClearlyBelow = (
+    sets: { reps: number | null; rir?: number | null }[],
+  ) =>
+    sets.length > 0 &&
+    sets.every(
+      (s) =>
+        (s.reps ?? 0) < profile.repMin ||
+        ((s.rir ?? 99) as number) < Math.max(0, profile.targetRir - 2),
+    )
   const repeatedBelow =
-    prior != null &&
     struggled &&
-    prior.sets.every((s) => (s.reps ?? 0) < profile.repMin || ((s.rir ?? 99) as number) < profile.targetRir - 1.5)
+    prior != null &&
+    prior2 != null &&
+    sessionClearlyBelow(prior.sets) &&
+    sessionClearlyBelow(prior2.sets)
 
   if (latest.hadPainOrTechniqueFlag) {
     reasons.push(latest.sets.some((s) => s.painFlag) ? "PAIN_FLAGGED" : "TECHNIQUE_FLAGGED")
@@ -989,14 +1028,14 @@ export function calculateInitialPrescription(
   }
 
   if (baseWeight != null && (repeatedBelow || (struggled && latest.hadPainOrTechniqueFlag))) {
-    /* Back off */
+    /* Back off — only after repeated failure or struggle + pain/technique. */
     reasons.push(repeatedBelow ? "REPEATED_BELOW_TARGET" : "MISSED_MINIMUM_REPS", "BELOW_TARGET_RIR")
     const reduced =
       profile.incrementLb > 0
         ? roundToIncrement(baseWeight - dir * profile.incrementLb, profile.incrementLb, "down")
         : Math.round(baseWeight * 0.9)
     explanation.push(
-      "Performance has been below target for two sessions. Consider a lighter exposure and reassess.",
+      "Performance has been below target across three sessions (or pain/technique intervened). Drop one increment, rebuild clean reps, then push again.",
     )
     return {
       kind: "initial",
@@ -1008,9 +1047,9 @@ export function calculateInitialPrescription(
       targetRir: profile.targetRir + 1,
       delta: basis === "assisted" ? `+${profile.incrementLb} lb assist` : `−${profile.incrementLb} lb`,
       headline: `${fmtLb(reduced, basis)} × ${fmtRange(profile.repMin, profile.repMax)}`,
-      detail: `Stop at ${profile.targetRir + 1} RIR · lighter exposure`,
+      detail: `Stop at ${profile.targetRir + 1} RIR · rebuild quality`,
       basedOn,
-      goal: "Goal: a clean, confident session before pushing again",
+      goal: "Goal: clean sets in range, then resume progressive overload",
       sourceLabel: null,
       confidence,
       reasonCodes: reasons,
@@ -1019,6 +1058,39 @@ export function calculateInitialPrescription(
         weight: reduced,
         reps: profile.repMin,
         label: `Reduce to ${formatLoad(reduced)} lb`,
+      },
+      sourceSessionIds: sourceIds,
+      sourceExerciseKey: null,
+    }
+  }
+
+  /* Hard session but not a multi-session collapse: hold load, rebuild reps. */
+  if (baseWeight != null && struggled && !latest.hadPainOrTechniqueFlag) {
+    reasons.push("MISSED_MINIMUM_REPS", "BELOW_TARGET_RIR", "IN_REP_RANGE")
+    explanation.push(
+      "Last session was tough, but progressive overload stays aggressive: keep the load and rebuild toward the top of the rep range before considering a deload.",
+    )
+    return {
+      kind: "initial",
+      status: "hold",
+      action: "hold",
+      loadLb: baseWeight,
+      repMin: profile.repMin,
+      repMax: profile.repMax,
+      targetRir: profile.targetRir,
+      delta: "Same weight",
+      headline: `${fmtLb(baseWeight, basis)} × ${fmtRange(profile.repMin, profile.repMax)}`,
+      detail: `Stop at ${profile.targetRir} RIR · rebuild reps`,
+      basedOn,
+      goal: `Goal: reclaim ${fmtRange(profile.repMin, profile.repMax)} before changing load`,
+      sourceLabel: null,
+      confidence,
+      reasonCodes: reasons,
+      explanation,
+      apply: {
+        weight: baseWeight,
+        reps: profile.repMin,
+        label: `Keep ${formatLoad(baseWeight)} lb`,
       },
       sourceSessionIds: sourceIds,
       sourceExerciseKey: null,
@@ -1147,16 +1219,39 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
   const anyPain = done.some((s) => s.painFlag)
   const anyTechnique = done.some((s) => s.techniqueFlag)
 
-  /* Sharp decline check (~20%+ drop between same-load sets). */
+  /* Sharp decline check (~35%+ drop between same-load sets). Normal fatigue
+     between sets should not trigger a deload — only a collapse. */
   let sharpDecline = false
   if (done.length >= 2) {
     const prevSame = [...done.slice(0, -1)]
       .reverse()
       .find((s) => s.weight === lastWeight && s.reps != null)
     if (prevSame && (prevSame.reps ?? 0) > 0) {
-      sharpDecline = (last.reps ?? 0) <= (prevSame.reps ?? 0) * 0.8
+      sharpDecline = (last.reps ?? 0) <= (prevSame.reps ?? 0) * 0.65
     }
   }
+
+  /* Consecutive hard sets at this load — one tough set is not enough to deload. */
+  const consecutiveHard = (() => {
+    let n = 0
+    for (let i = done.length - 1; i >= 0; i--) {
+      const s = done[i]
+      if (s.weight !== lastWeight) break
+      const a = evaluateCompletedSet(s, {
+        repMin: initial.repMin,
+        repMax: initial.repMax,
+        targetRir: initial.targetRir,
+      })
+      const hard =
+        a.vsRange === "below" ||
+        a.vsRir === "harder" ||
+        s.type === "failure" ||
+        s.rir === 0
+      if (!hard) break
+      n++
+    }
+    return n
+  })()
 
   /* ── Pain: suppress all progression ─────────────── */
   if (anyPain) {
@@ -1253,50 +1348,82 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
     )
   }
 
-  /* ── Too hard: reduce ────────────────────────────── */
+  /* ── Too hard: prefer holding load + lower rep target; only drop weight
+     after consecutive hard sets or a true collapse. ── */
   const unexpectedFailure = last.type === "failure" || last.rir === 0
-  if (assess.vsRange === "below" || assess.vsRir === "harder" || unexpectedFailure || sharpDecline) {
+  const tooHard =
+    assess.vsRange === "below" ||
+    assess.vsRir === "harder" ||
+    unexpectedFailure ||
+    sharpDecline
+  if (tooHard) {
     if (assess.vsRange === "below") reasons.push("MISSED_MINIMUM_REPS")
     if (assess.vsRir === "harder" || unexpectedFailure) reasons.push("BELOW_TARGET_RIR")
     if (sharpDecline) reasons.push("SHARP_REP_DECLINE")
-    const reduced =
-      lastWeight != null && profile.incrementLb > 0
-        ? roundToIncrement(lastWeight - dir * profile.incrementLb, profile.incrementLb, "down")
-        : lastWeight
-    explanation.push(
-      sharpDecline
-        ? `${setLabel} dropped ~20%+ from the previous set — fatigue is stacking up. The smallest useful adjustment is one increment down or a lower rep target.`
-        : `${setLabel} was closer to failure than planned, so the next set comes down one increment (or hold the weight and cut the rep target).`,
+
+    const lowerRepTarget = Math.max(
+      1,
+      Math.min((last.reps ?? initial.repMin), Math.max(initial.repMin - 1, 1)),
     )
-    const lowerRepTarget = Math.max(1, Math.min((last.reps ?? initial.repMin) - 1, initial.repMax))
+    const shouldDropLoad = sharpDecline || consecutiveHard >= 2
+
+    if (shouldDropLoad && lastWeight != null && profile.incrementLb > 0) {
+      const reduced = roundToIncrement(
+        lastWeight - dir * profile.incrementLb,
+        profile.incrementLb,
+        "down",
+      )
+      explanation.push(
+        sharpDecline
+          ? `${setLabel} collapsed ~35%+ from the previous set — drop one increment and finish clean.`
+          : `${setLabel} was the second hard set in a row. Drop one increment so the remaining work stays productive.`,
+      )
+      return {
+        ...initial,
+        kind: "next-set",
+        status: "back-off",
+        action: "reduce_load",
+        loadLb: reduced,
+        delta:
+          basis === "assisted"
+            ? `+${profile.incrementLb} lb assist`
+            : `−${profile.incrementLb} lb`,
+        headline: `${fmtLb(reduced, basis)} × ${fmtRange(initial.repMin, initial.repMax)}`,
+        detail: `Stop at ${initial.targetRir} RIR`,
+        goal: `Or keep ${formatLoad(lastWeight)} lb and target ${lowerRepTarget} reps`,
+        confidence,
+        reasonCodes: [...initial.reasonCodes, ...reasons],
+        explanation,
+        apply: {
+          weight: reduced,
+          reps: null,
+          label: `Reduce to ${formatLoad(reduced)} lb`,
+        },
+      }
+    }
+
+    /* Default aggressive path: keep the load, tighten the rep target. */
+    explanation.push(
+      `${setLabel} was harder than planned. Keep the load for maximum progressive overload and aim ${lowerRepTarget} clean reps — only deload if the next set also falls apart.`,
+    )
     return {
       ...initial,
       kind: "next-set",
-      status: "back-off",
-      action: "reduce_load",
-      loadLb: reduced ?? lastWeight,
-      delta:
-        reduced != null && lastWeight != null && reduced !== lastWeight
-          ? basis === "assisted"
-            ? `+${profile.incrementLb} lb assist`
-            : `−${profile.incrementLb} lb`
-          : `Aim ${lowerRepTarget} reps`,
-      headline:
-        reduced != null
-          ? `${fmtLb(reduced, basis)} × ${fmtRange(initial.repMin, initial.repMax)}`
-          : `${fmtLb(lastWeight, basis)} × ${lowerRepTarget}`,
-      detail: `Stop at ${initial.targetRir} RIR`,
-      goal:
-        lastWeight != null && reduced != null && reduced !== lastWeight
-          ? `Or keep ${formatLoad(lastWeight)} lb and target ${lowerRepTarget} reps`
-          : null,
+      status: "hold",
+      action: "hold",
+      loadLb: lastWeight,
+      delta: `Aim ${lowerRepTarget} reps`,
+      headline: `${fmtLb(lastWeight, basis)} × ${lowerRepTarget}`,
+      detail: `Stop at ${initial.targetRir} RIR · hold the load`,
+      goal: "Goal: finish remaining sets without dropping weight",
       confidence,
       reasonCodes: [...initial.reasonCodes, ...reasons],
       explanation,
-      apply:
-        reduced != null && reduced !== lastWeight
-          ? { weight: reduced, reps: null, label: `Reduce to ${formatLoad(reduced)} lb` }
-          : { weight: lastWeight, reps: lowerRepTarget, label: `Keep ${lastWeight != null ? formatLoad(lastWeight) : "weight"}, aim ${lowerRepTarget}` },
+      apply: {
+        weight: lastWeight,
+        reps: lowerRepTarget,
+        label: `Keep ${lastWeight != null ? formatLoad(lastWeight) : "weight"}, aim ${lowerRepTarget}`,
+      },
     }
   }
 

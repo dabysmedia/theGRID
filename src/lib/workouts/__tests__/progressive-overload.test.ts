@@ -69,13 +69,13 @@ function session(
   }
 }
 
-/** Triceps Pushdown defaults: isolation 10–15 reps @ 1 RIR, cable, 5 lb increment. */
+/** Triceps Pushdown defaults: 8–12 reps @ 2 RIR, cable, 5 lb increment. */
 function pushdownHistory(daysAgo = 3): PoSession {
   return session(daysAgo, [
     exercise("Triceps Pushdown", [
-      set(50, 12, { rir: 2 }),
-      set(50, 12, { rir: 2 }),
-      set(50, 11, { rir: 1 }),
+      set(50, 10, { rir: 2 }),
+      set(50, 10, { rir: 2 }),
+      set(50, 9, { rir: 2 }),
     ], { category: "Cable" }),
   ])
 }
@@ -248,7 +248,7 @@ describe("calculateInitialPrescription", () => {
     expect(rec.confidence).toBe("high")
   })
 
-  it("recommends a lighter exposure after two below-target sessions", () => {
+  it("holds load after two below-target sessions (deload needs three)", () => {
     const hist = [
       session(2, [
         exercise("Lat Pulldown", [
@@ -259,6 +259,35 @@ describe("calculateInitialPrescription", () => {
       ]),
       session(9, [
         exercise("Lat Pulldown", [set(100, 6, { rir: 0 }), set(100, 5, { rir: 0 })], {
+          category: "Cable",
+        }),
+      ]),
+    ]
+    const rec = calculateInitialPrescription({
+      exercise: { name: "Lat Pulldown", category: "Cable" },
+      sessions: hist,
+    })
+    expect(rec.status).toBe("hold")
+    expect(rec.action).toBe("hold")
+    expect(rec.loadLb).toBe(100)
+  })
+
+  it("recommends a lighter exposure after three below-target sessions", () => {
+    const hist = [
+      session(2, [
+        exercise("Lat Pulldown", [
+          set(100, 6, { rir: 0 }),
+          set(100, 5, { rir: 0 }),
+          set(100, 5, { rir: 0 }),
+        ], { category: "Cable" }),
+      ]),
+      session(9, [
+        exercise("Lat Pulldown", [set(100, 6, { rir: 0 }), set(100, 5, { rir: 0 })], {
+          category: "Cable",
+        }),
+      ]),
+      session(16, [
+        exercise("Lat Pulldown", [set(100, 5, { rir: 0 }), set(100, 5, { rir: 0 })], {
           category: "Cable",
         }),
       ]),
@@ -399,10 +428,24 @@ describe("calculateNextSetRecommendation", () => {
     expect(rec.status).toBe("hold")
   })
 
-  it("recommends a reduction after an excessively hard set", () => {
+  it("holds the load after one hard set (deload needs consecutive hard sets)", () => {
     const rec = calculateNextSetRecommendation({
       exercise: liveExercise([
         set(50, 7, { rir: 0 }),
+        set(50, null, { completed: false }),
+      ]),
+      sessions,
+    })
+    expect(rec.action).toBe("hold")
+    expect(rec.loadLb).toBe(50)
+    expect(rec.status).toBe("hold")
+  })
+
+  it("recommends a reduction after two consecutive hard sets", () => {
+    const rec = calculateNextSetRecommendation({
+      exercise: liveExercise([
+        set(50, 7, { rir: 0 }),
+        set(50, 6, { rir: 0 }),
         set(50, null, { completed: false }),
       ]),
       sessions,
@@ -412,7 +455,20 @@ describe("calculateNextSetRecommendation", () => {
     expect(rec.status).toBe("back-off")
   })
 
-  it("flags a sharp rep decline between sets", () => {
+  it("flags a sharp rep collapse between sets (~35%+)", () => {
+    const rec = calculateNextSetRecommendation({
+      exercise: liveExercise([
+        set(50, 13, { rir: 2 }),
+        set(50, 8, { rir: 1 }),
+        set(50, null, { completed: false }),
+      ]),
+      sessions,
+    })
+    expect(rec.reasonCodes).toContain("SHARP_REP_DECLINE")
+    expect(rec.action).toBe("reduce_load")
+  })
+
+  it("does not deload on a normal fatigue drop within the set", () => {
     const rec = calculateNextSetRecommendation({
       exercise: liveExercise([
         set(50, 13, { rir: 2 }),
@@ -421,8 +477,8 @@ describe("calculateNextSetRecommendation", () => {
       ]),
       sessions,
     })
-    expect(rec.reasonCodes).toContain("SHARP_REP_DECLINE")
-    expect(rec.action).toBe("reduce_load")
+    expect(rec.reasonCodes).not.toContain("SHARP_REP_DECLINE")
+    expect(rec.action).not.toBe("reduce_load")
   })
 
   it("pain flags suppress all progression", () => {
@@ -527,7 +583,9 @@ describe("calculateNextSetRecommendation", () => {
       sessions,
     })
     expect(before.action).toBe("increase_load")
-    expect(after.action).toBe("reduce_load")
+    /* One hard set holds the load; deload requires consecutive hard sets. */
+    expect(after.action).toBe("hold")
+    expect(after.loadLb).toBe(50)
   })
 
   it("assisted movements progress by reducing assistance", () => {
@@ -553,7 +611,7 @@ describe("calculateNextSetRecommendation", () => {
 
 describe("summarizeMovementPerformance", () => {
   it("compares against the most recent comparable session", () => {
-    const recent = pushdownHistory(3) // 35 total reps at 50 lb
+    const recent = pushdownHistory(3) // 29 total reps at 50 lb
     const older = session(10, [
       exercise("Triceps Pushdown", [set(50, 15), set(50, 15), set(50, 15)], {
         category: "Cable",
@@ -569,7 +627,7 @@ describe("summarizeMovementPerformance", () => {
       sessions: [older, recent],
     })
     expect(summary.comparison?.sessionId).toBe(recent.id)
-    expect(summary.comparison?.totalRepsDelta).toBe(38 - 35)
+    expect(summary.comparison?.totalRepsDelta).toBe(38 - 29)
     expect(summary.outcome).toBe("progressed")
     expect(summary.totalReps).toBe(38)
     expect(summary.medianRir).toBe(2)
