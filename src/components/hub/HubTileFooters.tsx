@@ -27,12 +27,12 @@ export function HubCalorieFooter({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-2">
-      <div className="relative min-h-0 w-full flex-1 overflow-hidden">
+      <div className="relative min-h-0 w-full flex-1 overflow-hidden px-0.5 pt-1">
         <CaloriePipTracker
           consumed={consumed}
           target={target}
           size="compact"
-          className="absolute inset-0"
+          className="h-full max-h-full"
         />
       </div>
       <div className="shrink-0 space-y-0.5 text-center">
