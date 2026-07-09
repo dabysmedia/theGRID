@@ -763,19 +763,6 @@ export function WeeklyHero({
             aria-hidden
           />
           <div className="relative z-10 space-y-3 px-0.5 py-0.5">
-            {expanded !== "weight" ? (
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => toggleExpand("weight")}
-                  aria-label="Expand weight correlations"
-                  className="inline-flex h-7 items-center gap-1 rounded-lg px-2 type-hud-micro text-muted-foreground/70 transition-colors hover:bg-muted/20 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
-                >
-                  Correlations
-                  <ChevronRight className="h-3 w-3 opacity-60" aria-hidden />
-                </button>
-              </div>
-            ) : null}
             <DailyWeighIn
               embedded
               weightTrend={data.weightTrend}
