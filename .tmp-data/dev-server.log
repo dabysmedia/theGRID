@@ -1,120 +1,48 @@
-﻿
-> the-grid@0.1.0 dev
-> prisma generate && prisma db push && next dev
-
-node.exe : Loaded Prisma config from prisma.config.ts.
+﻿node.exe : ΓÜá Port 3000 is in use by process 18232, using available port 3001 instead.
 At line:1 char:1
 + & "C:\Users\carbh\AppData\Local\Programs\nodejs/node.exe" "C:\Users\c ...
 + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (Loaded Prisma c...isma.config.ts.:String) [], RemoteException
+    + CategoryInfo          : NotSpecified: (ΓÜá Port 3000 i...t 3001 instead.:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
  
-
-Prisma schema loaded from prisma\schema.prisma.
-
-Γ£ö Generated Prisma Client (7.6.0) to .\src\generated\prisma in 185ms
-
-Loaded Prisma config from prisma.config.ts.
-
-Prisma schema loaded from prisma\schema.prisma.
-Datasource "db": SQLite database "dev.db" at "file:./prisma/dev.db"
-
-The database is already in sync with the Prisma schema.
-
 Γû▓ Next.js 16.2.2 (Turbopack)
-- Local:         http://localhost:3000
-- Network:       http://10.0.0.182:3000
+- Local:         http://localhost:3001
+- Network:       http://10.0.0.182:3001
 - Environments: .env.local, .env
-Γ£ô Ready in 356ms
+Γ£ô Ready in 397ms
 
- GET /workouts 200 in 1057ms (next.js: 692ms, application-code: 365ms)
- GET /api/workout-progression?limit=1&_=1781289988883 200 in 193ms (next.js: 93ms, application-code: 100ms)
- GET /api/workout-templates?_=1781289988884 200 in 234ms (next.js: 226ms, application-code: 8ms)
- GET /api/workout-sessions?_=1781289988884 200 in 285ms (next.js: 278ms, application-code: 6ms)
- GET /api/users 200 in 44ms (next.js: 38ms, application-code: 6ms)
- POST /api/progression-recommendations 201 in 47ms (next.js: 33ms, application-code: 14ms)
- POST /api/progression-recommendations 201 in 8ms (next.js: 2ms, application-code: 6ms)
- PUT /api/workout-sessions/cmqba1nyc0004zwvdivvdyenm 200 in 654ms (next.js: 642ms, application-code: 13ms)
- POST /api/workout-sessions 201 in 12ms (next.js: 2ms, application-code: 9ms)
- PUT /api/workout-sessions/cmqba2zbu0002n8vd5r45z45g 200 in 15ms (next.js: 9ms, application-code: 6ms)
- GET /api/workout-sessions/cmqba2zbu0002n8vd5r45z45g 200 in 10ms (next.js: 2ms, application-code: 8ms)
- PUT /api/workout-sessions/cmqba2zbu0002n8vd5r45z45g 200 in 10ms (next.js: 3ms, application-code: 7ms)
- POST /api/workout-progression 201 in 13ms (next.js: 2ms, application-code: 11ms)
- GET /api/workout-progression?limit=1 200 in 6ms (next.js: 1649┬╡s, application-code: 4ms)
- POST /api/progression-recommendations 201 in 9ms (next.js: 2ms, application-code: 6ms)
- GET /api/workout-progression?limit=1 404 in 5ms (next.js: 1492┬╡s, application-code: 3ms)
- DELETE /api/workout-sessions/cmqba1nyc0004zwvdivvdyenm 200 in 13ms (next.js: 7ms, application-code: 6ms)
- GET /api/workout-progression?limit=1&_=1781290015249 200 in 6ms (next.js: 2ms, application-code: 4ms)
- GET /api/workout-progression?limit=1&_=1781290015250 200 in 6ms (next.js: 1980┬╡s, application-code: 4ms)
- DELETE /api/workout-sessions/cmqba1wju0005zwvd5d976lsl 200 in 9ms (next.js: 6ms, application-code: 4ms)
- DELETE /api/workout-sessions/cmqba2zbu0002n8vd5r45z45g 200 in 5ms (next.js: 1368┬╡s, application-code: 4ms)
-Γ£ô Compiled in 95ms
-Γ£ô Compiled in 102ms
-Γ£ô Compiled in 102ms
-Γ£ô Compiled in 84ms
-Γ£ô Compiled in 101ms
-Γ£ô Compiled in 93ms
- GET /api/workout-progression?limit=1 200 in 6ms (next.js: 1561┬╡s, application-code: 4ms)
- GET /api/workout-sessions?_=1 200 in 5ms (next.js: 1441┬╡s, application-code: 3ms)
- POST /api/workout-sessions?_=1781291587422 201 in 49ms (next.js: 12ms, application-code: 36ms)
- POST /api/progression-recommendations 201 in 20ms (next.js: 7ms, application-code: 14ms)
- GET /api/weigh-in?d=2026-06-12 200 in 238ms (next.js: 224ms, application-code: 14ms)
- GET /api/weigh-in?d=2026-06-12 200 in 242ms (next.js: 238ms, application-code: 4ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 560ms (next.js: 547ms, application-code: 13ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 6ms (next.js: 1380┬╡s, application-code: 4ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 6ms (next.js: 1429┬╡s, application-code: 4ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 12ms (next.js: 6ms, application-code: 6ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 10ms (next.js: 6ms, application-code: 5ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 10ms (next.js: 5ms, application-code: 4ms)
- POST /api/progression-recommendations 201 in 5ms (next.js: 1357┬╡s, application-code: 4ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 10ms (next.js: 6ms, application-code: 4ms)
- POST /api/progression-recommendations 201 in 7ms (next.js: 1722┬╡s, application-code: 6ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 11ms (next.js: 6ms, application-code: 5ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 13ms (next.js: 7ms, application-code: 5ms)
- POST /api/progression-recommendations 201 in 5ms (next.js: 1246┬╡s, application-code: 4ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 12ms (next.js: 5ms, application-code: 6ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 11ms (next.js: 6ms, application-code: 5ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 9ms (next.js: 5ms, application-code: 4ms)
- POST /api/progression-recommendations 201 in 5ms (next.js: 1506┬╡s, application-code: 4ms)
- POST /api/progression-recommendations 201 in 5ms (next.js: 1317┬╡s, application-code: 4ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 11ms (next.js: 6ms, application-code: 5ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 11ms (next.js: 6ms, application-code: 5ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 20ms (next.js: 12ms, application-code: 9ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 11ms (next.js: 6ms, application-code: 5ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 10ms (next.js: 6ms, application-code: 5ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 12ms (next.js: 5ms, application-code: 6ms)
- POST /api/progression-recommendations 201 in 6ms (next.js: 1427┬╡s, application-code: 4ms)
- POST /api/progression-recommendations 201 in 6ms (next.js: 1556┬╡s, application-code: 4ms)
- PUT /api/workout-sessions/cmqbb0peo0005n8vdocvlw6yq 200 in 11ms (next.js: 6ms, application-code: 5ms)
- POST /api/workout-progression 201 in 24ms (next.js: 9ms, application-code: 15ms)
- GET /api/workout-progression?limit=1&_=1781291692861 200 in 5ms (next.js: 1614┬╡s, application-code: 3ms)
- GET /api/workout-progression?limit=1&_=1781291692862 200 in 9ms (next.js: 6ms, application-code: 3ms)
- GET /api/workout-progression?limit=1&_=1781291692922 200 in 6ms (next.js: 2ms, application-code: 4ms)
- POST /api/workout-sessions?_=1781291707552 201 in 5ms (next.js: 1560┬╡s, application-code: 4ms)
- GET /api/weigh-in?d=2026-06-15 200 in 6ms (next.js: 1474┬╡s, application-code: 5ms)
- GET /api/weigh-in?d=2026-06-15 200 in 5ms (next.js: 1293┬╡s, application-code: 4ms)
- POST /api/progression-recommendations 201 in 6ms (next.js: 1351┬╡s, application-code: 4ms)
- PUT /api/workout-sessions/cmqbb3a1z000fn8vds3vw2iqz 200 in 11ms (next.js: 6ms, application-code: 5ms)
- POST /api/progression-recommendations 201 in 6ms (next.js: 1369┬╡s, application-code: 5ms)
- PUT /api/workout-sessions/cmqbb3a1z000fn8vds3vw2iqz 200 in 10ms (next.js: 5ms, application-code: 5ms)
- POST /api/progression-recommendations 201 in 5ms (next.js: 1268┬╡s, application-code: 3ms)
- PUT /api/workout-sessions/cmqbb3a1z000fn8vds3vw2iqz 200 in 10ms (next.js: 6ms, application-code: 4ms)
- POST /api/progression-recommendations 201 in 6ms (next.js: 1571┬╡s, application-code: 4ms)
- POST /api/progression-recommendations 201 in 5ms (next.js: 1381┬╡s, application-code: 4ms)
- POST /api/progression-recommendations 201 in 6ms (next.js: 1351┬╡s, application-code: 4ms)
- POST /api/progression-recommendations 201 in 6ms (next.js: 1536┬╡s, application-code: 4ms)
- PUT /api/workout-sessions/cmqbb3a1z000fn8vds3vw2iqz 200 in 11ms (next.js: 6ms, application-code: 5ms)
- PUT /api/workout-sessions/cmqbb3a1z000fn8vds3vw2iqz 200 in 14ms (next.js: 9ms, application-code: 5ms)
-Γ£ô Compiled in 505ms
-Γ£ô Compiled in 283ms
- POST /api/progression-recommendations 201 in 7ms (next.js: 1704┬╡s, application-code: 5ms)
-Γ£ô Compiled in 282ms
-Γ£ô Compiled in 97ms
-Γ£ô Compiled in 90ms
-Γ£ô Compiled in 254ms
-Γ£ô Compiled in 266ms
-Γ£ô Compiled in 90ms
-Γ£ô Compiled in 87ms
-Γ£ô Compiled in 89ms
-Γ£ô Compiled in 84ms
-Γ£ô Compiled in 102ms
+The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ GET / 200 in 511ms (next.js: 157ms, application-code: 354ms)
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ GET /api/dashboard?d=2026-06-12&_ts=1781298021695 200 in 222ms (next.js: 100ms, application-code: 122ms)
+ GET /api/peptides 200 in 258ms (next.js: 250ms, application-code: 8ms)
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[browser] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ GET /api/weigh-in?d=2026-06-12 200 in 44ms (next.js: 37ms, application-code: 8ms)
+ PUT /api/notifications/fasting-profile 200 in 96ms (next.js: 75ms, application-code: 21ms)
+ GET /api/users 200 in 129ms (next.js: 124ms, application-code: 5ms)
+ GET /api/weigh-in?d=2026-06-12 200 in 7ms (next.js: 1624┬╡s, application-code: 5ms)

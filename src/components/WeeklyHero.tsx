@@ -121,14 +121,13 @@ function ProgressRing({
           staggerClass,
         )}
       >
-        {/* Soft instrument wash behind the ring */}
+        {/* Soft steel instrument wash behind the ring */}
         <div
           className="pointer-events-none absolute inset-[12%] rounded-full opacity-80"
           style={{
-            background: disabled
-              ? "radial-gradient(circle, oklch(0.5 0.01 250 / 12%) 0%, transparent 70%)"
-              : `radial-gradient(circle, ${color}22 0%, ${color}08 42%, transparent 72%)`,
-            boxShadow: disabled ? undefined : `inset 0 0 18px ${color}18`,
+            background:
+              "radial-gradient(circle, oklch(0.72 0.02 250 / 14%) 0%, oklch(0.55 0.015 250 / 06%) 42%, transparent 72%)",
+            boxShadow: disabled ? undefined : "inset 0 0 18px oklch(0.7 0.02 250 / 12%)",
           }}
           aria-hidden
         />
@@ -140,24 +139,24 @@ function ProgressRing({
               <stop offset="100%" stopColor={color} stopOpacity="0.55" />
             </linearGradient>
           </defs>
-          {/* Outer bezel */}
+          {/* Outer steel bezel */}
           <circle
             cx="44"
             cy="44"
             r={trackR + 2}
             fill="none"
-            stroke={color}
+            stroke="oklch(0.72 0.02 250)"
             strokeWidth="0.6"
-            opacity={disabled ? 0.12 : 0.22}
+            opacity={disabled ? 0.12 : 0.28}
           />
           <circle
             cx="44"
             cy="44"
             r={trackR}
             fill="none"
-            stroke={color}
+            stroke="oklch(0.68 0.015 250)"
             strokeWidth={trackStroke}
-            opacity={disabled ? 0.12 : 0.18}
+            opacity={disabled ? 0.12 : 0.22}
           />
           <circle
             cx="44"
@@ -201,9 +200,9 @@ function ProgressRing({
                   y1={major ? 2.5 : 4}
                   x2="44"
                   y2={major ? 7 : 6}
-                  stroke={color}
+                  stroke="oklch(0.75 0.02 250)"
                   strokeWidth={major ? 1 : 0.55}
-                  opacity={major ? 0.45 : 0.22}
+                  opacity={major ? 0.4 : 0.2}
                   transform={`rotate(${deg} 44 44)`}
                 />
               )
@@ -328,13 +327,13 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         loading ? "opacity-50" : "opacity-100",
       )}
     >
-      {/* Full-card HUD wash — matches readiness/steps panel language */}
+      {/* Full-card HUD wash — steel chrome */}
       <div
         className="pointer-events-none absolute inset-0"
         aria-hidden
         style={{
           background:
-            "linear-gradient(180deg, oklch(0.72 0.12 150 / 10%) 0%, oklch(0.72 0.08 200 / 05%) 42%, oklch(0.65 0.06 220 / 03%) 72%, transparent 100%)",
+            "linear-gradient(180deg, oklch(0.72 0.02 250 / 10%) 0%, oklch(0.65 0.015 250 / 05%) 42%, oklch(0.55 0.01 250 / 03%) 72%, transparent 100%)",
         }}
       />
       <div
@@ -342,13 +341,13 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         aria-hidden
         style={{
           backgroundImage:
-            "linear-gradient(to right, oklch(0.75 0.04 200 / 18%) 1px, transparent 1px), linear-gradient(to bottom, oklch(0.75 0.04 200 / 12%) 1px, transparent 1px)",
+            "linear-gradient(to right, oklch(0.75 0.015 250 / 18%) 1px, transparent 1px), linear-gradient(to bottom, oklch(0.75 0.015 250 / 12%) 1px, transparent 1px)",
           backgroundSize: "22px 22px",
           maskImage: "linear-gradient(180deg, black 0%, transparent 78%)",
         }}
       />
       <div
-        className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/35 to-transparent"
+        className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent"
         aria-hidden
       />
 
@@ -374,7 +373,7 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
             type="button"
             onClick={() => setViewMode((mode) => (mode === "today" ? "week" : "today"))}
             aria-label={isWeekView ? "Show today's values" : "Show weekly values"}
-            className="flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-500/15 bg-emerald-500/[0.06] text-muted-foreground transition-colors hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/35"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
           >
             <ChevronRight
               className={cn(
@@ -389,18 +388,10 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
 
       <div
         key={viewMode}
-        className="relative z-10 space-y-3 motion-safe:animate-fade-up motion-reduce:animate-none"
+        className="relative z-10 space-y-4 motion-safe:animate-fade-up motion-reduce:animate-none"
       >
-        {/* Rings instrument bay */}
-        <div className="relative overflow-hidden rounded-xl border border-emerald-500/15 px-2 py-3.5 sm:px-3">
-          <div
-            className="pointer-events-none absolute inset-0"
-            aria-hidden
-            style={{
-              background:
-                "linear-gradient(180deg, oklch(0.72 0.17 150 / 12%) 0%, oklch(0.72 0.12 180 / 06%) 55%, transparent 100%)",
-            }}
-          />
+        {/* Rings — open instrument bay (no nested frame) */}
+        <div className="relative px-0.5 py-1 sm:px-1">
           <div className="relative z-10 flex justify-around">
             <ProgressRing
               value={calValue}
@@ -440,6 +431,11 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
           </div>
         </div>
 
+        <div
+          className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
+          aria-hidden
+        />
+
         <StepsActivityBars
           key={`${viewMode}-activity`}
           values={data.steps.last7}
@@ -453,19 +449,15 @@ export function WeeklyHero({ data, loading, vacationBlocksCalories = false }: We
         />
 
         {showWeighInPrompt ? (
-          <div className="relative overflow-hidden rounded-xl border border-teal-500/15">
+          <>
             <div
-              className="pointer-events-none absolute inset-0"
+              className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
               aria-hidden
-              style={{
-                background:
-                  "linear-gradient(180deg, oklch(0.72 0.12 180 / 12%) 0%, oklch(0.7 0.1 160 / 06%) 50%, transparent 100%)",
-              }}
             />
-            <div className="relative z-10 px-3 py-3">
+            <div className="relative z-10 px-0.5 py-0.5">
               <DailyWeighIn embedded weightTrend={data.weightTrend} />
             </div>
-          </div>
+          </>
         ) : null}
       </div>
     </div>

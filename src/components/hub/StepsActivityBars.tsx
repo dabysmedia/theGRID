@@ -51,7 +51,7 @@ export function StepsActivityBars({
   const scaleMax = Math.max(...values, goalValue ?? 0, 1)
   const todayIdx = values.length - 1
   const band = readinessBand(readiness)
-  const accent = band ? BAND_ACCENT[band] : "#22c55e"
+  const accent = band ? BAND_ACCENT[band] : "#94a3b8"
   const readinessLabel =
     readiness != null && Number.isFinite(readiness) ? String(Math.round(readiness)) : "—"
   const hrvLabel =
@@ -62,43 +62,42 @@ export function StepsActivityBars({
       : null
 
   return (
-    <div className={cn("relative", className)}>
+    <div
+      className={cn("relative", className)}
+      style={{
+        perspective: "520px",
+        perspectiveOrigin: "50% 120%",
+      }}
+    >
+      {/* Soft steel wash — open composition, no nested frame */}
       <div
-        className="relative overflow-hidden rounded-xl border border-emerald-500/15"
+        className="pointer-events-none absolute inset-0 opacity-80"
+        aria-hidden
         style={{
-          perspective: "520px",
-          perspectiveOrigin: "50% 120%",
+          background:
+            "linear-gradient(180deg, oklch(0.72 0.02 250 / 08%) 0%, oklch(0.65 0.015 250 / 04%) 45%, transparent 100%)",
         }}
+      />
+
+      {/* Floor grid behind bars */}
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-8 h-14 opacity-30"
+        aria-hidden
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, oklch(0.7 0.015 250 / 14%) 1px, transparent 1px), linear-gradient(to top, oklch(0.7 0.015 250 / 10%) 1px, transparent 1px)",
+          backgroundSize: "14% 8px, 100% 8px",
+          maskImage: "linear-gradient(to top, black, transparent)",
+          transform: "rotateX(58deg) scaleY(0.85)",
+          transformOrigin: "bottom center",
+        }}
+      />
+
+      {/* Readiness row — steel HUD chrome; band accent stays semantic */}
+      <Link
+        href="/vitals"
+        className="relative z-10 flex items-center gap-2.5 px-0.5 py-2 transition-colors hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
       >
-        {/* Full-panel green wash — fades out at the bottom of the steps section */}
-        <div
-          className="pointer-events-none absolute inset-0"
-          aria-hidden
-          style={{
-            background:
-              "linear-gradient(180deg, oklch(0.72 0.17 150 / 14%) 0%, oklch(0.72 0.17 150 / 08%) 38%, oklch(0.72 0.17 150 / 04%) 68%, transparent 100%)",
-          }}
-        />
-
-        {/* Floor grid behind bars */}
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-8 h-14 opacity-35"
-          aria-hidden
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, oklch(0.7 0.15 150 / 12%) 1px, transparent 1px), linear-gradient(to top, oklch(0.7 0.15 150 / 10%) 1px, transparent 1px)",
-            backgroundSize: "14% 8px, 100% 8px",
-            maskImage: "linear-gradient(to top, black, transparent)",
-            transform: "rotateX(58deg) scaleY(0.85)",
-            transformOrigin: "bottom center",
-          }}
-        />
-
-        {/* Readiness row — same HUD language as the bars */}
-        <Link
-          href="/vitals"
-          className="relative z-10 flex items-center gap-2.5 border-b border-emerald-500/10 px-2.5 py-2.5 transition-colors hover:bg-emerald-500/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/30"
-        >
           <div
             className="relative flex h-12 w-12 shrink-0 items-center justify-center"
             style={{
@@ -108,7 +107,7 @@ export function StepsActivityBars({
           >
             <MeshHeartSvg
               accent={accent}
-              className="absolute inset-0 h-full w-full drop-shadow-[0_0_10px_rgba(34,197,94,0.25)]"
+              className="absolute inset-0 h-full w-full drop-shadow-[0_0_10px_rgba(148,163,184,0.22)]"
             />
             <div className="relative z-10 flex flex-col items-center justify-center pt-px text-center">
               <span
@@ -120,7 +119,7 @@ export function StepsActivityBars({
               >
                 {hrvLabel}
               </span>
-              <span className="mt-px text-[8px] font-semibold uppercase tracking-[0.14em] text-emerald-100/65">
+              <span className="mt-px text-[8px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/65">
                 ms
               </span>
             </div>
@@ -172,7 +171,7 @@ export function StepsActivityBars({
                 ) : null}
               </p>
             </div>
-            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-sm bg-emerald-950/40 shadow-[inset_0_1px_0_rgba(0,0,0,0.35)]">
+            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-sm bg-muted/40 shadow-[inset_0_1px_0_rgba(0,0,0,0.35)]">
               <div
                 className="relative h-full overflow-hidden rounded-sm transition-all duration-700 ease-out"
                 style={{
@@ -192,29 +191,34 @@ export function StepsActivityBars({
               </div>
             </div>
           </div>
-        </Link>
+      </Link>
 
-        {/* Steps bars */}
-        <div className="relative z-10 px-2.5 pb-2 pt-2.5">
-          <div className="mb-2 flex items-end justify-between gap-2">
-            <p className="type-hud-subsection">Steps Activity</p>
-            <p className="text-[10px] tabular-nums tracking-wide text-muted-foreground/55">
-              {values[todayIdx] > 0
-                ? `${Math.round(values[todayIdx]).toLocaleString()} today`
-                : "No steps yet"}
-              {goalValue != null ? (
-                <span className="text-amber-300/70">
-                  {" "}
-                  · goal {Math.round(goalValue).toLocaleString()}
-                </span>
-              ) : null}
-            </p>
-          </div>
+      <div
+        className="pointer-events-none mx-0.5 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent"
+        aria-hidden
+      />
 
-          <div
-            className="pointer-events-none absolute inset-x-3 bottom-[2.15rem] h-px bg-gradient-to-r from-transparent via-emerald-400/35 to-transparent"
-            aria-hidden
-          />
+      {/* Steps bars */}
+      <div className="relative z-10 px-0.5 pb-1 pt-2.5">
+        <div className="mb-2 flex items-end justify-between gap-2">
+          <p className="type-hud-subsection">Steps Activity</p>
+          <p className="text-[10px] tabular-nums tracking-wide text-muted-foreground/55">
+            {values[todayIdx] > 0
+              ? `${Math.round(values[todayIdx]).toLocaleString()} today`
+              : "No steps yet"}
+            {goalValue != null ? (
+              <span className="text-amber-300/70">
+                {" "}
+                · goal {Math.round(goalValue).toLocaleString()}
+              </span>
+            ) : null}
+          </p>
+        </div>
+
+        <div
+          className="pointer-events-none absolute inset-x-1 bottom-[2.15rem] h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
+          aria-hidden
+        />
 
           <div className="relative" style={{ transformStyle: "preserve-3d" }}>
             <div
@@ -341,7 +345,6 @@ export function StepsActivityBars({
             </div>
           </div>
         </div>
-      </div>
     </div>
   )
 }

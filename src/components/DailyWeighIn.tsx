@@ -212,7 +212,7 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
     ) : trend === "gaining" ? (
       <TrendingUp className="h-3.5 w-3.5 shrink-0" style={{ color: "#ef4444" }} aria-hidden />
     ) : trend === "maintaining" ? (
-      <Minus className="h-3.5 w-3.5 shrink-0" style={{ color: "#14b8a6" }} aria-hidden />
+      <Minus className="h-3.5 w-3.5 shrink-0" style={{ color: "#94a3b8" }} aria-hidden />
     ) : null
   const trendLabel =
     trend === "losing" ? "Losing" : trend === "gaining" ? "Gaining" : trend === "maintaining" ? "Maintaining" : null
@@ -243,7 +243,7 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
           ) : null}
         </div>
         {trendIcon && trendValue ? (
-          <p className="flex shrink-0 items-center gap-1 rounded-md border border-teal-500/20 bg-teal-500/[0.07] px-2 py-1 text-[11px] font-medium tabular-nums text-teal-100/90">
+          <p className="flex shrink-0 items-center gap-1 px-1 py-0.5 text-[11px] font-medium tabular-nums text-foreground/80">
             {trendIcon}
             <span>{trendValue}</span>
           </p>
@@ -251,7 +251,7 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
       </div>
 
       <div className="space-y-2">
-        <div className="flex flex-wrap items-end gap-x-3 gap-y-1 border-b border-teal-500/20 pb-1.5">
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-1 border-b border-white/10 pb-1.5">
           <Input
             ref={inputRef}
             type="number"
@@ -269,7 +269,7 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
             )}
             required={!logged}
           />
-          <span className="pb-1.5 text-sm font-medium tracking-wide text-teal-200/55">
+          <span className="pb-1.5 text-sm font-medium tracking-wide text-muted-foreground/55">
             {unit}
           </span>
         </div>
@@ -293,7 +293,7 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
             href="/weight"
             className={cn(
               buttonVariants({ variant: "ghost", size: "sm" }),
-              "inline-flex w-full gap-1 border border-teal-500/15 bg-teal-500/[0.06] text-muted-foreground hover:border-teal-400/30 hover:bg-teal-500/10 hover:text-foreground sm:ml-auto sm:w-auto sm:shrink-0",
+              "inline-flex w-full gap-1 text-muted-foreground hover:bg-muted/15 hover:text-foreground sm:ml-auto sm:w-auto sm:shrink-0",
             )}
           >
             Weight
@@ -305,7 +305,7 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
             variant="glass"
             disabled={!value.trim() || submitting}
             size="sm"
-            className="w-full border border-teal-500/20 bg-teal-500/10 hover:bg-teal-500/15 sm:ml-auto sm:w-auto sm:shrink-0"
+            className="w-full bg-muted/20 hover:bg-muted/30 sm:ml-auto sm:w-auto sm:shrink-0"
           >
             {embedded ? "Log weight" : "Log"}
           </Button>
