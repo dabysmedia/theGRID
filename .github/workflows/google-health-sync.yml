@@ -24,12 +24,16 @@ jobs:
             exit 0
           fi
           BASE="${APP_URL%/}"
-          curl -fsS -X POST \
-            -H "Authorization: Bearer ${CRON_SECRET}" \
-            "${BASE}/api/google-health/cron?days=3" \
-            | tee /tmp/gh-sync.json
+          # Prefer query secret (works even when Authorization headers are stripped)
+          HTTP_CODE=$(curl -sS -o /tmp/gh-sync.json -w "%{http_code}" -X POST \
+            "${BASE}/api/google-health/cron?days=3&secret=${CRON_SECRET}")
+          echo "HTTP ${HTTP_CODE}"
+          cat /tmp/gh-sync.json
           echo
-          # Fail the job if the API returned an error payload with HTTP success edge cases
-          if grep -q '"error"' /tmp/gh-sync.json && ! grep -q '"ok":true' /tmp/gh-sync.json; then
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Cron endpoint returned HTTP ${HTTP_CODE}"
+            exit 1
+          fi
+          if grep -q '"error"' /tmp/gh-sync.json && ! grep -Eq '"success"[[:space:]]*:[[:space:]]*true|"ok"[[:space:]]*:[[:space:]]*[1-9]' /tmp/gh-sync.json; then
             exit 1
           fi

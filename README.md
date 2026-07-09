@@ -96,19 +96,21 @@ http://localhost:3000/api/google-health/callback
    - `.../auth/googlehealth.health_metrics_and_measurements.readonly`
 4. Create **OAuth client → Web application** with the redirect URI above
 
-### Automatic sync (steps + sleep)
+### Automatic sync (steps + sleep + vitals)
 
-Once a profile is connected, theGRID pulls steps and sleep in the background:
+Once a profile is connected, theGRID pulls Fitbit/Google Health data every **15 minutes**:
 
-1. **Bundled with notification cron** — `GET/POST /api/notifications/run` (already used every ~5 min) also syncs Google Health for connected users (last 3 days, steps + sleep).
+1. **In-process scheduler (primary)** — on Railway/`next start` production boot, `src/instrumentation.ts` starts a 15‑minute loop (no external cron required). Disable with `GOOGLE_HEALTH_SCHEDULER=0`.
 2. **Dedicated endpoint** — `GET/POST /api/google-health/cron?secret=CRON_SECRET` (optional `days=3`, `weight=1`).
-3. **GitHub Actions** — `.github/workflows/google-health-sync.yml` runs every 15 minutes. Set repo secrets `APP_URL=https://itslos.com` and `CRON_SECRET` (same as Railway).
+3. **GitHub Actions (backup)** — `.github/workflows/google-health-sync.yml` every 15 minutes. Repo secrets: `APP_URL=https://itslos.com`, `CRON_SECRET` (same as Railway).
+4. **Notification cron** — if something already hits `/api/notifications/run`, that path also syncs Google Health.
 
 Also set on Railway:
 
 | Variable | Notes |
 |----------|--------|
-| `CRON_SECRET` | Shared secret for cron endpoints (required for auto sync) |
+| `CRON_SECRET` | Shared secret for HTTP cron endpoints |
+| `GOOGLE_HEALTH_SCHEDULER` | Optional; set to `0` to disable the in-process 15‑min loop |
 
 ## Project Structure
 
