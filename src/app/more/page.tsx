@@ -1,11 +1,13 @@
 "use client"
 
+import { Suspense } from "react"
 import { Settings } from "lucide-react"
 import { PageHeader } from "@/components/PageHeader"
 import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { ProfileSwitcher } from "@/components/ProfileSwitcher"
 import { ProfilePhotoSettings } from "@/components/ProfilePhotoSettings"
 import { VacationModeSettings } from "@/components/VacationModeSettings"
+import { GoogleHealthSettings } from "@/components/GoogleHealthSettings"
 import { PushNotificationManager } from "@/components/PushNotificationManager"
 import { CATEGORY_THEME } from "@/lib/category-theme"
 import { cn, glassPanelClass } from "@/lib/utils"
@@ -44,6 +46,10 @@ export default function MorePage() {
           <h2 className="type-hud-rail text-muted-foreground/70">Settings</h2>
           <VacationModeSettings />
         </div>
+        <div className="hud-divider" />
+        <Suspense fallback={null}>
+          <GoogleHealthSettings />
+        </Suspense>
         <div className="hud-divider" />
         <PushNotificationManager />
       </div>

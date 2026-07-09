@@ -45,6 +45,7 @@ model User {
   notificationPreferences NotificationPreference[]
   notificationLogs        NotificationLog[]
   fastingProfile          FastingProfile?
+  googleHealthConnection  GoogleHealthConnection?
 }
 
 model CalorieEntry {
@@ -65,13 +66,18 @@ model CalorieEntry {
 }
 
 model StepEntry {
-  id        String   @id @default(cuid())
-  date      DateTime
-  count     Int
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  date       DateTime
+  count      Int
+  /** e.g. "google-health" for synced rows; null = manual */
+  source     String?
+  /** Stable external id for upsert (e.g. google-health:steps:2026-07-09) */
+  externalId String?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
 
+  @@unique([userId, externalId])
   @@index([date])
   @@index([userId])
 }
@@ -190,16 +196,19 @@ model ProgressionRecommendation {
 }
 
 model SleepEntry {
-  id        String   @id @default(cuid())
-  date      DateTime
-  bedtime   DateTime
-  wakeTime  DateTime
-  quality   Int
-  notes     String?
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  date       DateTime
+  bedtime    DateTime
+  wakeTime   DateTime
+  quality    Int
+  notes      String?
+  source     String?
+  externalId String?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
 
+  @@unique([userId, externalId])
   @@index([date])
   @@index([userId])
 }
@@ -273,16 +282,35 @@ model LongGoal {
 }
 
 model LongGoalEntry {
-  id        String   @id @default(cuid())
-  goalId    String
-  goal      LongGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  date      DateTime
-  value     Float
-  notes     String?
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  goalId     String
+  goal       LongGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  date       DateTime
+  value      Float
+  notes      String?
+  source     String?
+  externalId String?
+  createdAt  DateTime @default(now())
 
+  @@unique([goalId, externalId])
   @@index([goalId])
   @@index([date])
+}
+
+/** Per-user Google Health / Fitbit OAuth tokens (Google Health API). */
+model GoogleHealthConnection {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken    String
+  refreshToken   String
+  expiresAt      DateTime
+  scope          String?
+  googleAccount  String?
+  lastSyncAt     DateTime?
+  lastSyncError  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 model Habit {
