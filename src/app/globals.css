@@ -814,6 +814,27 @@ html {
   100% { transform: scale(1); }
 }
 
+/* High-readiness mesh heart — soft instrument pulse (scale + node shimmer) */
+@keyframes mesh-heart-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+@keyframes mesh-heart-node-shimmer {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 @keyframes workout-card-exit {
   from {
     opacity: 1;
@@ -908,6 +929,15 @@ html {
     transform-origin: center;
   }
 
+  .animate-mesh-heart-pulse {
+    animation: mesh-heart-pulse 2.8s ease-in-out infinite;
+    transform-origin: center;
+  }
+
+  .animate-mesh-heart-nodes {
+    animation: mesh-heart-node-shimmer 2.8s ease-in-out infinite;
+  }
+
   .animate-workout-card-exit {
     animation: workout-card-exit 0.38s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
@@ -934,6 +964,8 @@ html {
     }
 
     .animate-ring-pop,
+    .animate-mesh-heart-pulse,
+    .animate-mesh-heart-nodes,
     .animate-workout-card-exit,
     .animate-workout-card-enter,
     .animate-workout-complete-pop {
