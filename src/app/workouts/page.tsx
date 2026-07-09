@@ -60,10 +60,15 @@ import {
   rememberSubstitution,
 } from "@/lib/workouts/exercise-substitutions"
 import {
+  aggregateExerciseFrequency,
   defaultFreeFormSets,
+  isCompoundMovement,
   recommendFreeFormWorkout,
+  suggestedCompoundExercises,
+  topFrequentExercises,
   type BodySplit,
 } from "@/lib/workouts/free-form-recommender"
+import { normalizeExerciseKey } from "@/lib/workouts/progressive-overload"
 
 /* ──────────────────────────────────────────────────────────
    Types
@@ -565,6 +570,7 @@ function ExercisePicker({
   description = "Search or filter by muscle group, then pick an exercise",
   initialMuscleGroup,
   recentNames,
+  frequencySessions,
 }: {
   open: boolean
   onClose: () => void
@@ -577,17 +583,21 @@ function ExercisePicker({
   initialMuscleGroup?: string | null
   /** Recent substitutes to pin at the top of the picker. */
   recentNames?: string[]
+  /** Completed sessions used to rank favorites / frequency. */
+  frequencySessions?: WorkoutSession[]
 }) {
   const [exercises, setExercises] = useState<ApiExercise[]>(exerciseListCache ?? [])
   const [loading, setLoading] = useState(false)
   const [usingFallback, setUsingFallback] = useState(false)
   const [search, setSearch] = useState("")
   const [muscleFilter, setMuscleFilter] = useState<string>("All")
+  const [browseAll, setBrowseAll] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
     setSearch("")
+    setBrowseAll(false)
     const g = initialMuscleGroup?.trim()
     setMuscleFilter(g && g.length > 0 ? g : "All")
     setTimeout(() => inputRef.current?.focus(), 100)
@@ -631,9 +641,17 @@ function ExercisePicker({
     if (!allMuscles.includes(muscleFilter)) setMuscleFilter("All")
   }, [open, loading, allMuscles, muscleFilter])
 
+  const freq = useMemo(
+    () => aggregateExerciseFrequency(frequencySessions ?? []),
+    [frequencySessions],
+  )
+
+  const searching = search.trim().length > 0
+  const showFullLibrary = searching || browseAll
+
   const results = useMemo(() => {
     const q = search.toLowerCase().trim()
-    return exercises.filter((ex) => {
+    const filtered = exercises.filter((ex) => {
       if (
         muscleFilter !== "All" &&
         !ex.primaryMuscles.some((m) => m.name === muscleFilter)
@@ -642,7 +660,17 @@ function ExercisePicker({
       if (q && !ex.name.toLowerCase().includes(q)) return false
       return true
     })
-  }, [exercises, search, muscleFilter])
+    // Favorites + compounds first so the list isn't a wall of obscure isolations
+    return [...filtered].sort((a, b) => {
+      const fa = freq.get(normalizeExerciseKey(a.name))?.sessionCount ?? 0
+      const fb = freq.get(normalizeExerciseKey(b.name))?.sessionCount ?? 0
+      if (fb !== fa) return fb - fa
+      const ca = isCompoundMovement(a.name, a.primaryMuscles[0]?.name) ? 1 : 0
+      const cb = isCompoundMovement(b.name, b.primaryMuscles[0]?.name) ? 1 : 0
+      if (cb !== ca) return cb - ca
+      return a.name.localeCompare(b.name)
+    })
+  }, [exercises, search, muscleFilter, freq])
 
   const recentPicks = useMemo(() => {
     if (!recentNames?.length) return [] as ApiExercise[]
@@ -656,20 +684,151 @@ function ExercisePicker({
   }, [exercises, recentNames])
 
   const recentKeys = useMemo(
-    () => new Set(recentPicks.map((e) => e.name.toLowerCase())),
+    () => new Set(recentPicks.map((e) => normalizeExerciseKey(e.name))),
     [recentPicks],
   )
 
+  const favoritePicks = useMemo(() => {
+    if (searching) return [] as ApiExercise[]
+    return topFrequentExercises(exercises, freq, 10, {
+      muscleFilter,
+      excludeKeys: recentKeys,
+    })
+  }, [exercises, freq, muscleFilter, recentKeys, searching])
+
+  const favoriteKeys = useMemo(
+    () => new Set(favoritePicks.map((e) => normalizeExerciseKey(e.name))),
+    [favoritePicks],
+  )
+
+  const suggestedPicks = useMemo(() => {
+    if (searching) return [] as ApiExercise[]
+    // When the user already has plenty of favorites, skip generic suggestions
+    if (favoritePicks.length >= 6) return [] as ApiExercise[]
+    const exclude = new Set([...recentKeys, ...favoriteKeys])
+    return suggestedCompoundExercises(exercises, {
+      muscleFilter,
+      excludeKeys: exclude,
+      limit: 8,
+    })
+  }, [
+    exercises,
+    muscleFilter,
+    recentKeys,
+    favoriteKeys,
+    favoritePicks.length,
+    searching,
+  ])
+
+  const suggestedKeys = useMemo(
+    () => new Set(suggestedPicks.map((e) => normalizeExerciseKey(e.name))),
+    [suggestedPicks],
+  )
+
+  const pinnedKeys = useMemo(
+    () => new Set([...recentKeys, ...favoriteKeys, ...suggestedKeys]),
+    [recentKeys, favoriteKeys, suggestedKeys],
+  )
+
   const grouped = useMemo(() => {
+    if (!showFullLibrary) return new Map<string, ApiExercise[]>()
     const map = new Map<string, ApiExercise[]>()
     for (const ex of results) {
-      if (recentKeys.has(ex.name.toLowerCase()) && !search.trim()) continue
+      if (!searching && pinnedKeys.has(normalizeExerciseKey(ex.name))) continue
       const muscle = ex.primaryMuscles[0]?.name ?? "Other"
       if (!map.has(muscle)) map.set(muscle, [])
       map.get(muscle)!.push(ex)
     }
     return map
-  }, [results, recentKeys, search])
+  }, [results, pinnedKeys, searching, showFullLibrary])
+
+  const hiddenCount = useMemo(() => {
+    if (showFullLibrary || searching) return 0
+    return Math.max(0, results.length - pinnedKeys.size)
+  }, [showFullLibrary, searching, results.length, pinnedKeys.size])
+
+  function pickFromLibrary(ex: ApiExercise) {
+    onSelect({
+      name: ex.name,
+      primaryMuscles: ex.primaryMuscles.map((m) => ({
+        name: m.name,
+        color: m.color,
+        code: m.code,
+      })),
+      secondaryMuscles: ex.secondaryMuscles.map((m) => ({
+        name: m.name,
+        color: m.color,
+        code: m.code,
+      })),
+      category: ex.categories[0]?.name ?? "",
+    })
+    onClose()
+  }
+
+  function renderRow(
+    ex: ApiExercise,
+    badge?: { label: string; className?: string },
+  ) {
+    const swatch = muscleSwatchStyles(ex.primaryMuscles[0]?.color)
+    const sessions = freq.get(normalizeExerciseKey(ex.name))?.sessionCount ?? 0
+    return (
+      <button
+        key={ex.id}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          pickFromLibrary(ex)
+        }}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-primary/[0.08] active:bg-primary/10 touch-manipulation sm:py-2.5"
+      >
+        <div
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold sm:size-8"
+          style={{ backgroundColor: swatch.soft, color: swatch.dot }}
+        >
+          {(ex.primaryMuscles[0]?.code ?? "?").slice(0, 2)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium leading-snug text-foreground">
+            {ex.name}
+          </p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+            {ex.primaryMuscles.map((m) => (
+              <span
+                key={m.code}
+                className="rounded px-1.5 py-0.5 text-[9px] font-medium"
+                style={{
+                  backgroundColor: `${m.color}22`,
+                  color: m.color,
+                }}
+              >
+                {m.name}
+              </span>
+            ))}
+            {sessions > 0 && (
+              <span className="text-[9px] text-muted-foreground/45">
+                · {sessions}× logged
+              </span>
+            )}
+            {ex.categories[0]?.name && sessions === 0 && (
+              <span className="text-[9px] text-muted-foreground/45">
+                · {ex.categories[0].name}
+              </span>
+            )}
+          </div>
+        </div>
+        {badge ? (
+          <span
+            className={cn(
+              "shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
+              badge.className ?? "bg-primary/15 text-primary",
+            )}
+          >
+            {badge.label}
+          </span>
+        ) : null}
+      </button>
+    )
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -706,7 +865,10 @@ function ExercisePicker({
                 <button
                   key={mg}
                   type="button"
-                  onClick={() => setMuscleFilter(mg)}
+                  onClick={() => {
+                    setMuscleFilter(mg)
+                    setBrowseAll(false)
+                  }}
                   className={cn(
                     "shrink-0 rounded-lg px-2.5 py-2 text-[10px] font-medium uppercase tracking-wider transition-colors touch-manipulation sm:py-1.5",
                     muscleFilter === mg
@@ -727,18 +889,17 @@ function ExercisePicker({
             "scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0",
           )}
         >
-          {/* Loading skeleton */}
           {loading && (
             <div className="space-y-1 px-2 py-2">
-              {Array.from({ length: 10 }).map((_, i) => (
+              {Array.from({ length: 8 }).map((_, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-3 rounded-xl px-3 py-3 animate-pulse"
+                  className="flex animate-pulse items-center gap-3 rounded-xl px-3 py-3"
                 >
-                  <div className="size-9 rounded-lg bg-muted/20 shrink-0" />
+                  <div className="size-9 shrink-0 rounded-lg bg-muted/20" />
                   <div className="flex-1 space-y-1.5">
-                    <div className="h-3 bg-muted/20 rounded w-3/4" />
-                    <div className="h-2 bg-muted/15 rounded w-1/2" />
+                    <div className="h-3 w-3/4 rounded bg-muted/20" />
+                    <div className="h-2 w-1/2 rounded bg-muted/15" />
                   </div>
                 </div>
               ))}
@@ -746,67 +907,55 @@ function ExercisePicker({
           )}
 
           {!loading && usingFallback && (
-            <p className="px-4 pt-2 pb-0 text-[10px] text-amber-400/70 text-center">
+            <p className="px-4 pb-0 pt-2 text-center text-[10px] text-amber-400/70">
               Offline — using built-in list
             </p>
           )}
 
-          {!loading && recentPicks.length > 0 && !search.trim() && (
+          {!loading && recentPicks.length > 0 && !searching && (
             <div>
-              <p className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-[0.15em] text-primary/70">
+              <p className="px-4 pb-1 pt-3 text-[10px] font-medium uppercase tracking-[0.15em] text-primary/70">
                 Recently substituted
               </p>
-              {recentPicks.map((ex) => {
-                const swatch = muscleSwatchStyles(ex.primaryMuscles[0]?.color)
-                return (
-                  <button
-                    key={`recent-${ex.id}`}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onSelect({
-                        name: ex.name,
-                        primaryMuscles: ex.primaryMuscles.map((m) => ({
-                          name: m.name,
-                          color: m.color,
-                          code: m.code,
-                        })),
-                        secondaryMuscles: ex.secondaryMuscles.map((m) => ({
-                          name: m.name,
-                          color: m.color,
-                          code: m.code,
-                        })),
-                        category: ex.categories[0]?.name ?? "",
-                      })
-                      onClose()
-                    }}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-primary/[0.08] active:bg-primary/10 touch-manipulation"
-                  >
-                    <div
-                      className="flex size-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold"
-                      style={{ backgroundColor: swatch.soft, color: swatch.dot }}
-                    >
-                      {(ex.primaryMuscles[0]?.code ?? "?").slice(0, 2)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">{ex.name}</p>
-                      <p className="truncate text-[11px] text-muted-foreground/55">
-                        {ex.primaryMuscles.map((m) => m.name).join(" · ") ||
-                          ex.categories[0]?.name ||
-                          ""}
-                      </p>
-                    </div>
-                    <span className="shrink-0 rounded-md bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-primary">
-                      Recent
-                    </span>
-                  </button>
-                )
-              })}
+              {recentPicks.map((ex) =>
+                renderRow(ex, {
+                  label: "Recent",
+                  className: "bg-primary/15 text-primary",
+                }),
+              )}
             </div>
           )}
 
-          {!loading && results.length === 0 && search.trim() && (
-            <div className="py-6 px-4 text-center">
+          {!loading && favoritePicks.length > 0 && (
+            <div>
+              <p className="px-4 pb-1 pt-3 text-[10px] font-medium uppercase tracking-[0.15em] text-primary/70">
+                Your favorites
+              </p>
+              {favoritePicks.map((ex) =>
+                renderRow(ex, {
+                  label: "Often",
+                  className: "bg-primary/15 text-primary",
+                }),
+              )}
+            </div>
+          )}
+
+          {!loading && suggestedPicks.length > 0 && (
+            <div>
+              <p className="px-4 pb-1 pt-3 text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/55">
+                Suggested compounds
+              </p>
+              {suggestedPicks.map((ex) =>
+                renderRow(ex, {
+                  label: "Best",
+                  className: "bg-muted/40 text-muted-foreground",
+                }),
+              )}
+            </div>
+          )}
+
+          {!loading && results.length === 0 && searching && (
+            <div className="px-4 py-6 text-center">
               <p className="mb-3 text-sm text-muted-foreground/70">
                 No matches for &ldquo;{search}&rdquo;
               </p>
@@ -831,79 +980,46 @@ function ExercisePicker({
             </div>
           )}
 
+          {!loading && !showFullLibrary && hiddenCount > 0 && (
+            <div className="px-4 py-4">
+              <button
+                type="button"
+                onClick={() => setBrowseAll(true)}
+                className="w-full rounded-xl border border-border/30 bg-glass-highlight/[0.06] px-3 py-3 text-center transition-colors hover:border-primary/30 hover:bg-primary/[0.06] touch-manipulation"
+              >
+                <p className="text-sm font-medium text-foreground">
+                  Browse full library
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground/60">
+                  {hiddenCount} more exercise{hiddenCount === 1 ? "" : "s"}
+                  {muscleFilter !== "All" ? ` for ${muscleFilter}` : ""}
+                </p>
+              </button>
+            </div>
+          )}
+
           {!loading &&
+            showFullLibrary &&
             Array.from(grouped.entries()).map(([muscle, exList]) => (
               <div key={muscle}>
-                <p className="px-4 pt-3 pb-1 text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/50">
+                <p className="px-4 pb-1 pt-3 text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/50">
                   {muscle}
                 </p>
-                {exList.map((ex) => {
-                  const swatch = muscleSwatchStyles(ex.primaryMuscles[0]?.color)
-                  return (
-                    <button
-                      key={ex.id}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onSelect({
-                          name: ex.name,
-                          primaryMuscles: ex.primaryMuscles.map((m) => ({
-                            name: m.name,
-                            color: m.color,
-                            code: m.code,
-                          })),
-                          secondaryMuscles: ex.secondaryMuscles.map((m) => ({
-                            name: m.name,
-                            color: m.color,
-                            code: m.code,
-                          })),
-                          category: ex.categories[0]?.name ?? "",
-                        })
-                        onClose()
-                      }}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/25 active:bg-muted/35 sm:py-2.5 touch-manipulation"
-                    >
-                      <div
-                        className="flex size-9 shrink-0 items-center justify-center rounded-lg sm:size-8"
-                        style={{ backgroundColor: swatch.soft }}
-                      >
-                        <div
-                          className="size-2 rounded-full"
-                          style={{ backgroundColor: swatch.dot }}
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium leading-snug">{ex.name}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          {ex.primaryMuscles.map((m) => (
-                            <span
-                              key={m.code}
-                              className="text-[9px] font-medium rounded px-1.5 py-0.5"
-                              style={{
-                                backgroundColor: `${m.color}22`,
-                                color: m.color,
-                              }}
-                            >
-                              {m.name}
-                            </span>
-                          ))}
-                          {ex.categories[0]?.name && (
-                            <span className="text-[9px] text-muted-foreground/45">
-                              · {ex.categories[0].name}
-                            </span>
-                          )}
-                          {ex.secondaryMuscles.length > 0 && (
-                            <span className="text-[9px] text-muted-foreground/35">
-                              + {ex.secondaryMuscles.map((m) => m.name).join(", ")}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  )
-                })}
+                {exList.map((ex) => renderRow(ex))}
               </div>
             ))}
+
+          {!loading && showFullLibrary && !searching && browseAll && (
+            <div className="px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setBrowseAll(false)}
+                className="w-full text-center text-[11px] font-medium text-muted-foreground/60 underline-offset-2 hover:text-foreground hover:underline touch-manipulation"
+              >
+                Show favorites only
+              </button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -3051,6 +3167,7 @@ function ActiveWorkout({
               })()
             : []
         }
+        frequencySessions={previousSessions}
         onSelect={(picked) => {
           const swapId = swapTargetRef.current
           swapTargetRef.current = null
