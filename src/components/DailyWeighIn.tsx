@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react"
 import Link from "next/link"
-import { ArrowDown, ArrowUp, ChevronRight } from "lucide-react"
+import { ArrowDown, ArrowUp, ChevronRight, Minus, TrendingDown, TrendingUp } from "lucide-react"
 import { apiFetch } from "@/lib/api-fetch"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -56,11 +56,18 @@ function applyPayload(
   }
 }
 
-interface DailyWeighInProps {
-  embedded?: boolean
+interface WeightTrendSummary {
+  baselineTrend: "losing" | "maintaining" | "gaining"
+  vsBaselineLb: number
 }
 
-export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
+interface DailyWeighInProps {
+  embedded?: boolean
+  /** Baseline weight trend from the hub dashboard (shown under the large weight). */
+  weightTrend?: WeightTrendSummary | null
+}
+
+export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeighInProps) {
   const { activeDate } = useActiveDate()
   const { user } = useUser()
   const [status, setStatus] = useState<Status>("loading")
@@ -197,6 +204,23 @@ export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
       ? Math.round((dayWeight - previousWeight) * 10) / 10
       : null
 
+  const trend = weightTrend?.baselineTrend ?? null
+  const trendDelta = weightTrend?.vsBaselineLb ?? 0
+  const trendIcon =
+    trend === "losing" ? (
+      <TrendingDown className="h-3.5 w-3.5 shrink-0" style={{ color: "#22c55e" }} aria-hidden />
+    ) : trend === "gaining" ? (
+      <TrendingUp className="h-3.5 w-3.5 shrink-0" style={{ color: "#ef4444" }} aria-hidden />
+    ) : trend === "maintaining" ? (
+      <Minus className="h-3.5 w-3.5 shrink-0" style={{ color: "#14b8a6" }} aria-hidden />
+    ) : null
+  const trendLabel =
+    trend === "losing" ? "Losing" : trend === "gaining" ? "Gaining" : trend === "maintaining" ? "Maintaining" : null
+  const trendValue =
+    trendLabel != null
+      ? `${trendLabel} ${trendDelta > 0 ? `+${trendDelta}` : trendDelta} lb`
+      : null
+
   const formInner = (
     <div className="space-y-4">
       <div className="min-w-0 space-y-1">
@@ -219,27 +243,35 @@ export function DailyWeighIn({ embedded = false }: DailyWeighInProps) {
         )}
       </div>
 
-      <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
-        <Input
-          ref={inputRef}
-          type="number"
-          step="0.1"
-          placeholder={latestWeight != null ? `${latestWeight}` : "—"}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          readOnly={logged}
-          className={cn(
-            "h-auto min-h-0 w-[min(100%,12rem)] flex-1 border-0 border-b border-transparent rounded-none bg-transparent px-0 py-0 text-4xl sm:text-5xl font-extralight tracking-tight tabular-nums shadow-none backdrop-blur-none",
-            "placeholder:text-muted-foreground/35 focus-visible:border-primary/35 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:bg-transparent",
-            "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-            greyedHint && "text-muted-foreground/90 placeholder:text-muted-foreground/40",
-            logged && "text-muted-foreground/85 border-muted-foreground/20 cursor-default"
-          )}
-          required={!logged}
-        />
-        <span className="pb-1.5 text-sm font-medium tracking-wide text-muted-foreground/60">
-          {unit}
-        </span>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
+          <Input
+            ref={inputRef}
+            type="number"
+            step="0.1"
+            placeholder={latestWeight != null ? `${latestWeight}` : "—"}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            readOnly={logged}
+            className={cn(
+              "h-auto min-h-0 w-[min(100%,12rem)] flex-1 border-0 border-b border-transparent rounded-none bg-transparent px-0 py-0 text-4xl sm:text-5xl font-extralight tracking-tight tabular-nums shadow-none backdrop-blur-none",
+              "placeholder:text-muted-foreground/35 focus-visible:border-primary/35 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:bg-transparent",
+              "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+              greyedHint && "text-muted-foreground/90 placeholder:text-muted-foreground/40",
+              logged && "text-muted-foreground/85 border-muted-foreground/20 cursor-default"
+            )}
+            required={!logged}
+          />
+          <span className="pb-1.5 text-sm font-medium tracking-wide text-muted-foreground/60">
+            {unit}
+          </span>
+        </div>
+        {trendIcon && trendValue && (
+          <p className="flex items-center gap-1.5 type-hud-stat-sm leading-none text-muted-foreground">
+            {trendIcon}
+            <span className="tabular-nums">{trendValue}</span>
+          </p>
+        )}
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
