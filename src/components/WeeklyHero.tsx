@@ -656,10 +656,6 @@ export function WeeklyHero({
 
         {/* Protocol / training instrument rail — open HUD band above weigh-in coda */}
         <FadeSection show={showProtocolRail}>
-          <div
-            className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
-            aria-hidden
-          />
           {expanded === "peptides" ? (
             <HubPeptidesExpand
               lastDoseMg={peptideSummary?.lastDoseMg ?? null}
@@ -763,10 +759,6 @@ export function WeeklyHero({
 
         {/* Weigh-in stays the coda — always last in the overview stack */}
         <FadeSection show={showWeighIn}>
-          <div
-            className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
-            aria-hidden
-          />
           <div className="relative z-10 space-y-3 px-0.5 py-0.5">
             <DailyWeighIn
               embedded
