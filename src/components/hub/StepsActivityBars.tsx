@@ -55,8 +55,12 @@ export function StepsActivityBars({
   const todayIdx = values.length - 1
   const band = readinessBand(readiness)
   const accent = band ? BAND_ACCENT[band] : "#64748b"
-  const readinessLabel =
-    readiness != null && Number.isFinite(readiness) ? String(Math.round(readiness)) : "—"
+  const readinessScore =
+    readiness != null && Number.isFinite(readiness)
+      ? Math.max(0, Math.min(100, Math.round(readiness)))
+      : null
+  const readinessLabel = readinessScore != null ? String(readinessScore) : "—"
+  const highReadinessPulse = band === "peak" || band === "high"
   const hrvLabel =
     hrvMs != null && Number.isFinite(hrvMs) ? String(Math.round(hrvMs)) : "—"
   const goalLineBottomPx =
@@ -94,6 +98,7 @@ export function StepsActivityBars({
         className="relative z-10 block transition-colors hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
       >
         <div className="flex items-center gap-2.5 px-4 py-2 lg:px-5">
+          {/* Outer keeps isometric tilt; inner pulse won't clobber rotateX/Y */}
           <div
             className="relative flex h-16 w-16 shrink-0 items-center justify-center"
             style={{
@@ -101,10 +106,19 @@ export function StepsActivityBars({
               transformStyle: "preserve-3d",
             }}
           >
-            <MeshHeartSvg
-              accent={accent}
-              className="absolute inset-0 h-full w-full drop-shadow-[0_0_10px_rgba(100,116,139,0.28)]"
-            />
+            <div
+              className={cn(
+                "absolute inset-0",
+                highReadinessPulse &&
+                  "motion-safe:animate-mesh-heart-pulse motion-reduce:animate-none",
+              )}
+            >
+              <MeshHeartSvg
+                accent={accent}
+                pulse={highReadinessPulse}
+                className="h-full w-full drop-shadow-[0_0_10px_rgba(100,116,139,0.28)]"
+              />
+            </div>
             <div className="relative z-10 flex flex-col items-center justify-center pt-px text-center">
               <span
                 className="font-semibold tabular-nums leading-none tracking-tight text-foreground"
@@ -168,13 +182,13 @@ export function StepsActivityBars({
           </div>
         </div>
 
-        {/* Edge-to-edge band gradient — full overview card width */}
+        {/* Edge-to-edge band gradient — full overview card width + score tick */}
         <div
-          className="relative h-1.5 w-full overflow-hidden transition-opacity duration-700 ease-out"
+          className="relative h-1.5 w-full overflow-visible transition-opacity duration-700 ease-out"
           style={{
-            opacity: readiness != null ? 1 : 0.45,
+            opacity: readinessScore != null ? 1 : 0.45,
             background:
-              readiness != null
+              readinessScore != null
                 ? `linear-gradient(90deg, ${accent}55 0%, ${accent} 42%, ${accent}cc 100%)`
                 : "linear-gradient(90deg, oklch(0.28 0.01 250 / 55%) 0%, oklch(0.34 0.01 250 / 70%) 50%, oklch(0.28 0.01 250 / 55%) 100%)",
             boxShadow: band
@@ -182,13 +196,36 @@ export function StepsActivityBars({
               : "inset 0 1px 0 oklch(0.40 0.01 250 / 22%)",
           }}
         >
-          {readiness != null ? (
-            <div
-              className="absolute inset-x-0 top-0 h-1/2 opacity-40"
-              style={{
-                background: "linear-gradient(180deg, #ffffff66, transparent)",
-              }}
-            />
+          {readinessScore != null ? (
+            <>
+              <div
+                className="absolute inset-x-0 top-0 h-1/2 opacity-40"
+                style={{
+                  background: "linear-gradient(180deg, #ffffff66, transparent)",
+                }}
+              />
+              {/* Soft score-position tick so /100 isn't only a number on the right */}
+              <div
+                className="pointer-events-none absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${readinessScore}%` }}
+                aria-hidden
+              >
+                <div
+                  className="h-3 w-px rounded-full"
+                  style={{
+                    background: `linear-gradient(180deg, #ffffffcc, ${accent}, #ffffff88)`,
+                    boxShadow: `0 0 6px ${accent}aa, 0 0 12px ${accent}55`,
+                  }}
+                />
+                <div
+                  className="absolute left-1/2 top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                  style={{
+                    background: "#ffffff",
+                    boxShadow: `0 0 8px ${accent}`,
+                  }}
+                />
+              </div>
+            </>
           ) : null}
         </div>
       </Link>

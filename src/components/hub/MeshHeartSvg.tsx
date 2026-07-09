@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils"
 type Props = {
   accent?: string
   className?: string
+  /** Soft node shimmer when readiness is high (respects prefers-reduced-motion). */
+  pulse?: boolean
 }
 
 type Pt = { x: number; y: number }
@@ -14,7 +16,7 @@ type Pt = { x: number; y: number }
  * Mesh/node heart — low-opacity fill, lattice edges + glowing nodes.
  * Used in hub readiness strip and Vitals tile.
  */
-export function MeshHeartSvg({ accent = "#f43f5e", className }: Props) {
+export function MeshHeartSvg({ accent = "#f43f5e", className, pulse = false }: Props) {
   const uid = useId().replace(/:/g, "")
   const clipId = `mesh-heart-clip-${uid}`
   const fillId = `mesh-heart-fill-${uid}`
@@ -70,7 +72,10 @@ export function MeshHeartSvg({ accent = "#f43f5e", className }: Props) {
 
       <path d={heartPath} fill={`url(#${fillId})`} />
 
-      <g clipPath={`url(#${clipId})`}>
+      <g
+        clipPath={`url(#${clipId})`}
+        className={cn(pulse && "motion-safe:animate-mesh-heart-nodes motion-reduce:animate-none")}
+      >
         {edges.map(([a, b], i) => (
           <line
             key={`e-${i}`}

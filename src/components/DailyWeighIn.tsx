@@ -222,10 +222,16 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
       : null
 
   const formInner = (
-    <div className="space-y-3.5">
+    <div className={cn(embedded ? "space-y-2.5" : "space-y-3.5")}>
       <div className="flex items-end justify-between gap-2">
         <div className="min-w-0 space-y-0.5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/85">
+          <p
+            className={cn(
+              embedded
+                ? "type-hud-subsection"
+                : "text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/85",
+            )}
+          >
             {logged ? "Logged weight" : "Weigh-in"}
           </p>
           {logged && previousWeight != null ? (
@@ -237,13 +243,18 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
             </p>
           ) : null}
           {!logged && latestWeight != null ? (
-            <p className="text-[11px] text-muted-foreground/70">
-              Last <span className="tabular-nums text-foreground/80">{latestWeight}</span> {unit}
+            <p className="type-hud-caption">
+              Last <span className="tabular-nums text-foreground/75">{latestWeight}</span> {unit}
             </p>
           ) : null}
         </div>
         {trendIcon && trendValue ? (
-          <p className="flex shrink-0 items-center gap-1 px-1 py-0.5 text-[11px] font-medium tabular-nums text-foreground/80">
+          <p
+            className={cn(
+              "flex shrink-0 items-center gap-1 px-1 py-0.5 tabular-nums text-foreground/75",
+              embedded ? "type-hud-micro normal-case tracking-normal" : "text-[11px] font-medium",
+            )}
+          >
             {trendIcon}
             <span>{trendValue}</span>
           </p>
@@ -251,7 +262,12 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
       </div>
 
       <div className="space-y-2">
-        <div className="flex flex-wrap items-end gap-x-3 gap-y-1 border-b border-white/10 pb-1.5">
+        <div
+          className={cn(
+            "flex flex-wrap items-end gap-x-3 gap-y-1 pb-1.5",
+            embedded ? "border-b border-white/[0.06]" : "border-b border-white/10",
+          )}
+        >
           <Input
             ref={inputRef}
             type="number"
@@ -261,7 +277,8 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
             onChange={(e) => setValue(e.target.value)}
             readOnly={logged}
             className={cn(
-              "h-auto min-h-0 w-[min(100%,12rem)] flex-1 border-0 rounded-none bg-transparent px-0 py-0 text-4xl font-extralight tracking-tight tabular-nums shadow-none backdrop-blur-none sm:text-5xl",
+              "h-auto min-h-0 w-[min(100%,12rem)] flex-1 border-0 rounded-none bg-transparent px-0 py-0 font-extralight tracking-tight tabular-nums shadow-none backdrop-blur-none",
+              embedded ? "text-3xl sm:text-4xl" : "text-4xl sm:text-5xl",
               "placeholder:text-muted-foreground/35 focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:bg-transparent",
               "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
               greyedHint && "text-muted-foreground/90 placeholder:text-muted-foreground/40",
@@ -269,7 +286,12 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
             )}
             required={!logged}
           />
-          <span className="pb-1.5 text-sm font-medium tracking-wide text-muted-foreground/55">
+          <span
+            className={cn(
+              "pb-1.5 tracking-wide",
+              embedded ? "type-hud-unit" : "text-sm font-medium text-muted-foreground/55",
+            )}
+          >
             {unit}
           </span>
         </div>
@@ -294,6 +316,7 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
             className={cn(
               buttonVariants({ variant: "ghost", size: "sm" }),
               "inline-flex w-full gap-1 text-muted-foreground hover:bg-muted/15 hover:text-foreground sm:ml-auto sm:w-auto sm:shrink-0",
+              embedded && "type-hud-micro h-8 px-2.5",
             )}
           >
             Weight
@@ -302,10 +325,15 @@ export function DailyWeighIn({ embedded = false, weightTrend = null }: DailyWeig
         ) : (
           <Button
             type="submit"
-            variant="glass"
+            variant={embedded ? "ghost" : "glass"}
             disabled={!value.trim() || submitting}
             size="sm"
-            className="w-full bg-muted/20 hover:bg-muted/30 sm:ml-auto sm:w-auto sm:shrink-0"
+            className={cn(
+              "w-full sm:ml-auto sm:w-auto sm:shrink-0",
+              embedded
+                ? "h-8 border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/85 hover:border-teal-400/25 hover:bg-teal-400/[0.06] hover:text-teal-100/90"
+                : "bg-muted/20 hover:bg-muted/30",
+            )}
           >
             {embedded ? "Log weight" : "Log"}
           </Button>
