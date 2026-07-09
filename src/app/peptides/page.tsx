@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { format, subDays } from "date-fns"
-import { Calendar, Syringe, Trash2, TrendingUp } from "lucide-react"
+import { Calendar, Plus, Syringe, Trash2, TrendingUp } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -20,17 +20,19 @@ import { apiFetch } from "@/lib/api-fetch"
 import { PageHeader } from "@/components/PageHeader"
 import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { formatDate, formatDisplayDate, last7Days, parseLocalDate, cn } from "@/lib/utils"
+import { LogPeptideInjectionDialog } from "@/components/quick-log/LogPeptideInjectionDialog"
+import { LogPeptideDailyDialog } from "@/components/quick-log/LogPeptideDailyDialog"
+import {
+  formatDate,
+  formatDisplayDate,
+  last7Days,
+  parseLocalDate,
+  cn,
+  glassPanelAccentClass,
+  glassPanelAccentStyle,
+  glassPanelClass,
+} from "@/lib/utils"
 import { GlassChip } from "@/components/GlassChip"
 import { SectionRail } from "@/components/SectionRail"
 import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
@@ -38,12 +40,7 @@ import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
 import {
-  COMPOUNDS,
-  DOSE_PRESETS_MG,
-  INJECTION_SITE_REGIONS,
-  INJECTION_SITES,
   PEPTIDE_COLOR,
-  SIDE_EFFECTS,
   compoundLabel,
   daysSinceLastInjection,
   injectionSiteLabel,
@@ -94,7 +91,6 @@ interface PeptideDailyEntry {
 function entryDateKey(entry: { date: string }): string {
   return utcCalendarDayKeyFromIso(entry.date)
 }
-
 
 function PeptideHistoryDayGroup({
   dateKey,
@@ -179,18 +175,8 @@ export default function PeptidesPage() {
   const [entries, setEntries] = useState<PeptideEntry[]>([])
   const [dailyEntries, setDailyEntries] = useState<PeptideDailyEntry[]>([])
   const [injectionIntervalDays, setInjectionIntervalDays] = useState(7)
-  const [compound, setCompound] = useState("retatrutide")
-  const [doseMg, setDoseMg] = useState(4)
-  const [customDose, setCustomDose] = useState("")
-  const [injectionSite, setInjectionSite] = useState("abdomen_upper_right")
-  const [siteRegion, setSiteRegion] = useState("abdomen")
-  const [hungerLevel, setHungerLevel] = useState(5)
-  const [dailyNotes, setDailyNotes] = useState("")
-  const [dailySideEffects, setDailySideEffects] = useState<string[]>([])
-  const [injectionSideEffects, setInjectionSideEffects] = useState<string[]>([])
-  const [injectionTime, setInjectionTime] = useState(() => format(new Date(), "HH:mm"))
-  const [injectionNotes, setInjectionNotes] = useState("")
   const [injectionOpen, setInjectionOpen] = useState(false)
+  const [dailyOpen, setDailyOpen] = useState(false)
 
   const { activeDate } = useActiveDate()
   const { user } = useUser()
@@ -202,7 +188,7 @@ export default function PeptidesPage() {
 
   const chartFrom = formatDate(subDays(parseLocalDate(activeDate), 29))
 
-  useEffect(() => {
+  const refreshEntries = useCallback(() => {
     apiFetch("/api/peptides")
       .then(async (r) => {
         const data = await r.json()
@@ -211,7 +197,7 @@ export default function PeptidesPage() {
       .catch(() => setEntries([]))
   }, [])
 
-  useEffect(() => {
+  const refreshDaily = useCallback(() => {
     apiFetch(`/api/peptides/daily?from=${chartFrom}&to=${activeDate}`)
       .then(async (r) => {
         const data = await r.json()
@@ -220,6 +206,14 @@ export default function PeptidesPage() {
       .catch(() => setDailyEntries([]))
   }, [chartFrom, activeDate])
 
+  useEffect(() => {
+    refreshEntries()
+  }, [refreshEntries])
+
+  useEffect(() => {
+    refreshDaily()
+  }, [refreshDaily])
+
   const dailyByDate = useMemo(() => {
     const map = new Map<string, PeptideDailyEntry>()
     for (const d of dailyEntries) {
@@ -227,19 +221,6 @@ export default function PeptidesPage() {
     }
     return map
   }, [dailyEntries])
-
-  useEffect(() => {
-    const row = dailyByDate.get(activeDate)
-    if (row) {
-      setHungerLevel(row.hungerLevel)
-      setDailyNotes(row.notes ?? "")
-      setDailySideEffects(parseSideEffectsJson(row.sideEffectsJson))
-    } else {
-      setHungerLevel(5)
-      setDailyNotes("")
-      setDailySideEffects([])
-    }
-  }, [activeDate, dailyByDate])
 
   const lastInjection = entries[0] ?? null
   const nextInjection = useMemo(
@@ -328,104 +309,7 @@ export default function PeptidesPage() {
     [historyGroups, today]
   )
 
-  const effectiveDoseLabel = customDose.trim() ? customDose : String(doseMg)
-  const effectiveDosePreview = customDose.trim()
-    ? Number(customDose)
-    : doseMg
-  const previewDoseMg =
-    Number.isFinite(effectiveDosePreview) && effectiveDosePreview > 0
-      ? effectiveDosePreview
-      : null
   const activeDateSaved = dailyByDate.has(activeDate)
-
-  const sitesInRegion = useMemo(
-    () => INJECTION_SITES.filter((s) => s.region === siteRegion),
-    [siteRegion]
-  )
-
-  function toggleDailySideEffect(id: string) {
-    setDailySideEffects((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    )
-  }
-
-  function toggleInjectionSideEffect(id: string) {
-    setInjectionSideEffects((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    )
-  }
-
-  function selectDosePreset(mg: number) {
-    setDoseMg(mg)
-    setCustomDose("")
-  }
-
-  function selectSiteRegion(region: string) {
-    setSiteRegion(region)
-    const first = INJECTION_SITES.find((s) => s.region === region)
-    if (first) setInjectionSite(first.id)
-  }
-
-  async function handleSaveDaily(e: React.FormEvent) {
-    e.preventDefault()
-
-    const res = await apiFetch("/api/peptides/daily", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        date: activeDate,
-        hungerLevel,
-        sideEffects: dailySideEffects,
-        notes: dailyNotes || null,
-      }),
-    })
-
-    if (res.ok) {
-      const entry = (await res.json()) as PeptideDailyEntry
-      setDailyEntries((prev) => {
-        const key = entryDateKey(entry)
-        const rest = prev.filter((d) => entryDateKey(d) !== key)
-        return [entry, ...rest].sort((a, b) => entryDateKey(b).localeCompare(entryDateKey(a)))
-      })
-    }
-  }
-
-  async function handleInjectionSubmit(e: React.FormEvent) {
-    e.preventDefault()
-
-    const effectiveDose = customDose.trim() ? Number(customDose) : doseMg
-    if (!Number.isFinite(effectiveDose) || effectiveDose <= 0) return
-
-    const [hh, mm] = injectionTime.split(":").map(Number)
-    const injectedAt = new Date(`${today}T00:00:00`)
-    injectedAt.setHours(hh ?? 0, mm ?? 0, 0, 0)
-
-    const res = await apiFetch("/api/peptides", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        date: today,
-        injectedAt: injectedAt.toISOString(),
-        compound,
-        doseMg: effectiveDose,
-        injectionSite,
-        sideEffects: injectionSideEffects,
-        notes: injectionNotes || null,
-      }),
-    })
-
-    if (res.ok) {
-      const entry = await res.json()
-      setEntries((prev) =>
-        [entry, ...prev].sort(
-          (a, b) => new Date(b.injectedAt).getTime() - new Date(a.injectedAt).getTime()
-        )
-      )
-      setInjectionNotes("")
-      setInjectionSideEffects([])
-      setInjectionOpen(false)
-    }
-  }
 
   async function handleDelete(id: string) {
     const res = await apiFetch(`/api/peptides?id=${id}`, { method: "DELETE" })
@@ -520,229 +404,56 @@ export default function PeptidesPage() {
         type="button"
         variant="glass"
         size="lg"
-        className="w-full press-scale animate-fade-up stagger-1 gap-2"
+        className="h-12 w-full press-scale animate-fade-up stagger-1 gap-2 touch-manipulation"
         onClick={() => setInjectionOpen(true)}
       >
-        <Syringe className="h-4 w-4 shrink-0" aria-hidden />
-        Log Injection
+        <Plus className="h-4 w-4 shrink-0" aria-hidden />
+        Log injection
       </Button>
 
-      <Dialog open={injectionOpen} onOpenChange={setInjectionOpen}>
-        <DialogContent className="glass-frost max-h-[min(90dvh,720px)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto overscroll-contain sm:p-5">
-          <DialogHeader>
-            <DialogTitle className="type-hud-title font-sans normal-case tracking-normal">
-              Log injection
-            </DialogTitle>
-            <DialogDescription className="type-hud-caption normal-case">
-              Retatrutide · typically every 5–7 days · {formatDisplayDate(parseLocalDate(today))}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex justify-center py-1">
-            <PeptideVialGraphic color={PURPLE} doseMg={previewDoseMg} size="lg" />
-          </div>
-
-          {lastSiteUsed && (
-            <p className="type-hud-caption -mt-1 normal-case">
-              Last site:{" "}
-              <span className="text-foreground/90">{injectionSiteLabel(lastSiteUsed)}</span>
-              {" — rotate for next shot"}
-            </p>
-          )}
-
-          <form onSubmit={handleInjectionSubmit} className="space-y-5">
-            <div className="space-y-3">
-              <SectionRail label="Dose & time" />
-              <div className="glass-subtle space-y-3 rounded-xl p-3.5">
-                <div className="space-y-1.5">
-                  <Label className="type-hud-label">Compound</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {COMPOUNDS.map((c) => (
-                      <GlassChip
-                        key={c.id}
-                        selected={compound === c.id}
-                        onClick={() => setCompound(c.id)}
-                      >
-                        {c.label}
-                      </GlassChip>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="type-hud-label">Dose · {effectiveDoseLabel} mg</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {DOSE_PRESETS_MG.map((mg) => (
-                      <GlassChip
-                        key={mg}
-                        selected={doseMg === mg && !customDose}
-                        onClick={() => selectDosePreset(mg)}
-                      >
-                        {mg} mg
-                      </GlassChip>
-                    ))}
-                  </div>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    placeholder="Custom dose (mg)..."
-                    value={customDose}
-                    onChange={(e) => setCustomDose(e.target.value)}
-                    className="bg-background/40 border-glass-border"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="injectionTime"
-                    className="type-hud-label flex items-center gap-1.5"
-                  >
-                    <span className="status-dot" style={{ width: 4, height: 4 }} />
-                    Injection time
-                  </Label>
-                  <Input
-                    id="injectionTime"
-                    type="time"
-                    value={injectionTime}
-                    onChange={(e) => setInjectionTime(e.target.value)}
-                    className="tabular-nums text-lg tracking-widest bg-background/40 border-primary/15 focus-visible:border-primary/40 focus-visible:ring-primary/15"
-                  />
-                </div>
+      <div
+        className={cn(glassPanelClass, glassPanelAccentClass, "animate-fade-up stagger-1 p-4 lg:p-5")}
+        style={glassPanelAccentStyle(PURPLE)}
+      >
+        <div
+          className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"
+          style={{ backgroundColor: PURPLE }}
+          aria-hidden
+        />
+        <div className="relative space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="type-hud-label-soft mb-1">Today · appetite</p>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span className="type-hud-value-xl tabular-nums">
+                  {activeDayHunger != null ? activeDayHunger : "—"}
+                </span>
+                <span className="type-hud-unit">/10</span>
               </div>
+              {activeDayEffects.length > 0 && (
+                <p className="type-hud-caption mt-1.5 normal-case">
+                  {activeDayEffects.map(sideEffectLabel).join(" · ")}
+                </p>
+              )}
             </div>
-
-            <div className="space-y-3">
-              <SectionRail label="Injection site" />
-              <div className="glass-subtle space-y-3 rounded-xl p-3.5">
-                <div className="flex flex-wrap gap-2">
-                  {INJECTION_SITE_REGIONS.map((region) => (
-                    <GlassChip
-                      key={region.id}
-                      selected={siteRegion === region.id}
-                      onClick={() => selectSiteRegion(region.id)}
-                    >
-                      {region.label}
-                    </GlassChip>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {sitesInRegion.map((site) => (
-                    <GlassChip
-                      key={site.id}
-                      selected={injectionSite === site.id}
-                      onClick={() => setInjectionSite(site.id)}
-                    >
-                      {site.shortLabel}
-                    </GlassChip>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <SectionRail label="Shot day" />
-              <div className="glass-subtle space-y-3 rounded-xl p-3.5">
-                <div className="space-y-1.5">
-                  <Label className="type-hud-label">Side effects</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {SIDE_EFFECTS.map((fx) => (
-                      <GlassChip
-                        key={fx.id}
-                        selected={injectionSideEffects.includes(fx.id)}
-                        onClick={() => toggleInjectionSideEffect(fx.id)}
-                      >
-                        {fx.label}
-                      </GlassChip>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="injectionNotes" className="type-hud-label">
-                    Injection notes
-                  </Label>
-                  <Input
-                    id="injectionNotes"
-                    placeholder="Optional — titration, vial, etc."
-                    value={injectionNotes}
-                    onChange={(e) => setInjectionNotes(e.target.value)}
-                    className="bg-background/40 border-glass-border"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Button type="submit" variant="glass" className="w-full press-scale" size="lg">
-              Log Injection
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Daily appetite */}
-      <div className="glass-panel animate-fade-up stagger-1 p-4 lg:p-5">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <p className="type-hud-title">Daily appetite</p>
-            <p className="type-hud-caption mt-1 normal-case">
-              Log hunger &amp; side effects once per day between injections (every 5–7 days)
-            </p>
+            {activeDateSaved && (
+              <span className="type-hud-chip rounded-lg border border-primary/25 bg-primary/10 px-2 py-1 text-primary">
+                Saved
+              </span>
+            )}
           </div>
-          {activeDateSaved && (
-            <span className="type-hud-chip rounded-lg border border-primary/25 bg-primary/10 px-2 py-1 text-primary">
-              Saved
-            </span>
-          )}
-        </div>
-        <form onSubmit={handleSaveDaily} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label className="type-hud-label">
-              Hunger · {hungerLevel}/10
-            </Label>
-            <div className="flex flex-wrap gap-2">
-              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                <GlassChip
-                  key={n}
-                  selected={hungerLevel === n}
-                  onClick={() => setHungerLevel(n)}
-                  className="min-w-10 px-0"
-                >
-                  {n}
-                </GlassChip>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="type-hud-label">Side effects today</Label>
-            <div className="flex flex-wrap gap-2">
-              {SIDE_EFFECTS.map((fx) => (
-                <GlassChip
-                  key={fx.id}
-                  selected={dailySideEffects.includes(fx.id)}
-                  onClick={() => toggleDailySideEffect(fx.id)}
-                >
-                  {fx.label}
-                </GlassChip>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="dailyNotes" className="type-hud-label">
-              Notes (optional)
-            </Label>
-            <Input
-              id="dailyNotes"
-              placeholder="How's appetite today?"
-              value={dailyNotes}
-              onChange={(e) => setDailyNotes(e.target.value)}
-              className="bg-background/40 border-glass-border"
-            />
-          </div>
-          <Button type="submit" variant="glass" className="w-full press-scale sm:w-auto sm:min-w-[12rem]" size="lg">
-            Save daily rating
+
+          <Button
+            type="button"
+            variant="glass"
+            size="lg"
+            className="h-12 w-full gap-2 touch-manipulation"
+            onClick={() => setDailyOpen(true)}
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            {activeDateSaved ? "Edit daily appetite" : "Log daily appetite"}
           </Button>
-        </form>
+        </div>
       </div>
 
       <CategoryGoal
@@ -752,7 +463,6 @@ export default function PeptidesPage() {
         color={PURPLE}
       />
 
-      {/* Trends */}
       <div className={cn("glass-panel min-w-0 animate-fade-up stagger-1 p-4 lg:p-5")}>
         <div className="mb-3 flex items-center gap-2">
           <TrendingUp className="h-4 w-4 shrink-0" style={{ color: PURPLE }} />
@@ -857,7 +567,6 @@ export default function PeptidesPage() {
         )}
       </div>
 
-      {/* Injection history */}
       <div className="glass-panel animate-fade-up stagger-2 p-4 lg:p-5 space-y-3">
           <div className="flex items-center gap-2 mb-1">
             <span className="type-hud-title">Injection history</span>
@@ -902,6 +611,44 @@ export default function PeptidesPage() {
           )}
           <HistoryArchivedNote archivedDayCount={historyDisplay.archivedDayCount} />
       </div>
+
+      <LogPeptideInjectionDialog
+        open={injectionOpen}
+        onOpenChange={setInjectionOpen}
+        lastSiteUsed={lastSiteUsed}
+        onSaved={(entry) => {
+          if (entry && typeof entry === "object" && "id" in entry) {
+            setEntries((prev) =>
+              [entry as PeptideEntry, ...prev].sort(
+                (a, b) => new Date(b.injectedAt).getTime() - new Date(a.injectedAt).getTime()
+              )
+            )
+          } else {
+            refreshEntries()
+          }
+        }}
+      />
+
+      <LogPeptideDailyDialog
+        open={dailyOpen}
+        onOpenChange={setDailyOpen}
+        editing={activeDateSaved}
+        initialHunger={activeDayDaily?.hungerLevel ?? 5}
+        initialNotes={activeDayDaily?.notes ?? ""}
+        initialSideEffects={activeDayEffects}
+        onSaved={(entry) => {
+          if (entry && typeof entry === "object" && "id" in entry) {
+            const saved = entry as PeptideDailyEntry
+            setDailyEntries((prev) => {
+              const key = entryDateKey(saved)
+              const rest = prev.filter((d) => entryDateKey(d) !== key)
+              return [saved, ...rest].sort((a, b) => entryDateKey(b).localeCompare(entryDateKey(a)))
+            })
+          } else {
+            refreshDaily()
+          }
+        }}
+      />
     </div>
   )
 }
