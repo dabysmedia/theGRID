@@ -368,6 +368,14 @@ function FastingSettingsDialog({
   )
 }
 
+/** Turn off the live fasting timer (shared by hub End + dock chip). */
+function endFastingTimer(userId: string | null): void {
+  saveFastingTimerPausedAtMs(null)
+  saveFastingLastMealAtMs(null)
+  saveFastingTimerDisabled(true)
+  void syncFastingProfileToServer(userId)
+}
+
 function FastingStatsStrip({
   activeDate,
   logs,
@@ -483,14 +491,11 @@ export function FastingTimer({ hubCompact = false }: { hubCompact?: boolean }) {
 
   /** Turn off the fasting widget until the user enables it again (not the same as pause). */
   const handleEnd = useCallback(() => {
-    saveFastingTimerPausedAtMs(null)
+    endFastingTimer(userId)
     setPausedAtMs(null)
-    saveFastingLastMealAtMs(null)
     setLastMealAtMs(null)
-    saveFastingTimerDisabled(true)
     setTimerDisabled(true)
     setNow(Date.now())
-    void syncFastingProfileToServer(userId)
   }, [userId])
 
   useEffect(() => {
@@ -562,6 +567,16 @@ export function FastingTimer({ hubCompact = false }: { hubCompact?: boolean }) {
           {headerTitleContent}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground/50 hover:text-foreground"
+            onClick={handleEnd}
+            aria-label="End and turn off fasting timer"
+          >
+            <Square className="h-3.5 w-3.5" />
+          </Button>
           <FastingSettingsDialog config={config} onSave={handleConfigSave} />
         </div>
       </div>
@@ -656,7 +671,13 @@ export function FastingTimer({ hubCompact = false }: { hubCompact?: boolean }) {
         </div>
       </div>
 
-      <div className="relative z-10 mt-4 border-t border-border/25 pt-4">
+      <div
+        className={cn(
+          "relative z-10 mt-4 border-t border-border/25 pt-4",
+          // Hub mobile overview is overflow-locked; drop the strip so End stays reachable.
+          hubCompact && "max-lg:hidden",
+        )}
+      >
         <FastingStatsStrip
           activeDate={activeDate}
           logs={fastLogs}
@@ -667,7 +688,14 @@ export function FastingTimer({ hubCompact = false }: { hubCompact?: boolean }) {
   )
 }
 
-/** Compact inactive fasting control — sits left of the bottom nav menu FAB. */
+const NAV_CHIP_BASE = cn(
+  "relative flex h-16 shrink-0 touch-manipulation flex-col items-center justify-center gap-0.5 px-2.5",
+  "rounded-lg shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)]",
+  "transition-colors duration-200",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+)
+
+/** Compact fasting control — left of the bottom nav menu FAB. Start when off; End when on. */
 export function FastingNavChip() {
   const { user } = useUser()
   const userId = user?.id ?? null
@@ -675,6 +703,7 @@ export function FastingNavChip() {
   const [timerDisabled, setTimerDisabled] = useState(false)
   const [config, setConfig] = useState<FastingConfig>(loadFastingConfig)
   const [startFastingOpen, setStartFastingOpen] = useState(false)
+  const [endFastingOpen, setEndFastingOpen] = useState(false)
   const [lastMealInput, setLastMealInput] = useState("")
   const [startFastingError, setStartFastingError] = useState<string | null>(null)
 
@@ -717,7 +746,62 @@ export function FastingNavChip() {
     void syncFastingProfileToServer(userId)
   }, [lastMealInput, userId])
 
-  if (!mounted || !timerDisabled) return null
+  const handleConfirmEndFasting = useCallback(() => {
+    endFastingTimer(userId)
+    setTimerDisabled(true)
+    setEndFastingOpen(false)
+  }, [userId])
+
+  if (!mounted) return null
+
+  if (!timerDisabled) {
+    return (
+      <Dialog open={endFastingOpen} onOpenChange={setEndFastingOpen}>
+        <DialogTrigger
+          render={
+            <button
+              type="button"
+              className={cn(
+                NAV_CHIP_BASE,
+                "border border-orange-500/45",
+                "bg-gradient-to-b from-orange-500/25 via-orange-500/12 to-muted/35",
+                "text-orange-400",
+                "hover:border-orange-400/60 hover:text-orange-300",
+                "dark:from-orange-500/20 dark:via-orange-500/10 dark:to-muted/20 dark:border-orange-500/40",
+              )}
+              aria-label="End fasting"
+            />
+          }
+        >
+          <Square className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+          <span className="text-[9px] font-semibold uppercase tracking-[0.16em]">
+            End
+          </span>
+        </DialogTrigger>
+        <DialogContent className="glass-frost min-h-0 overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>End fasting timer?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Turns off the live countdown and returns the Fast chip beside the menu.
+            Your schedule presets stay saved.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row-reverse">
+            <Button variant="glass" className="w-full sm:flex-1" onClick={handleConfirmEndFasting}>
+              End timer
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full sm:flex-1"
+              onClick={() => setEndFastingOpen(false)}
+            >
+              Keep going
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog open={startFastingOpen} onOpenChange={handleStartFastingOpenChange}>
@@ -726,13 +810,11 @@ export function FastingNavChip() {
           <button
             type="button"
             className={cn(
-              "relative flex h-16 shrink-0 touch-manipulation flex-col items-center justify-center gap-0.5 px-2.5",
-              "rounded-lg border border-dashed border-muted-foreground/35",
+              NAV_CHIP_BASE,
+              "border border-dashed border-muted-foreground/35",
               "bg-gradient-to-b from-muted/45 via-muted/25 to-muted/40",
-              "shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)]",
-              "text-muted-foreground transition-colors duration-200",
+              "text-muted-foreground",
               "hover:border-muted-foreground/50 hover:text-foreground",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
               "dark:from-muted/30 dark:via-muted/15 dark:to-muted/25 dark:border-muted-foreground/30",
             )}
             aria-label="Start fasting"

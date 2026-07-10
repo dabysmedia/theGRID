@@ -108,7 +108,8 @@ export function BottomNav() {
         aria-label="Main navigation"
       >
         <div className="mb-2 flex max-w-full flex-row items-end justify-end gap-2">
-          <FastingNavChip />
+          {/* Keep the dock row clear while the menu sheet is open. */}
+          {!open ? <FastingNavChip /> : null}
           <div className="glass-panel relative flex w-fit max-w-[min(100vw-1.5rem,calc(42rem+3.5rem))] flex-col overflow-hidden shadow-lg shadow-black/40">
             <div
               className={cn(
