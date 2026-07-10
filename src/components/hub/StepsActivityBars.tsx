@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react"
 import { Plus } from "lucide-react"
 import { MeshHeartSvg } from "@/components/hub/MeshHeartSvg"
+import { HubCollapse } from "@/components/hub/HubMotion"
 import { useQuickLog } from "@/context/QuickLogContext"
+import { useCountUp } from "@/lib/use-count-up"
 import { cn } from "@/lib/utils"
 import {
   READINESS_BAND_LABEL,
@@ -54,8 +56,12 @@ type Props = {
   /** When set, readiness/HRV row toggles vitals expand instead of navigating away. */
   onReadinessClick?: () => void
   readinessSelected?: boolean
+  /** Hide readiness while the steps panel is expanded without remounting it. */
+  hideReadiness?: boolean
   /** Hide the steps chart (keep readiness) — used when vitals panel is open. */
   hideSteps?: boolean
+  /** Whether the chart is currently exposed in the hub stack. */
+  chartVisible?: boolean
   /** Collapsed hub: use viewport-scaled bar area (`--hub-bar-area`) instead of fixed px. */
   scaleToFit?: boolean
   className?: string
@@ -79,7 +85,9 @@ export function StepsActivityBars({
   onStepsClick,
   onReadinessClick,
   readinessSelected = false,
+  hideReadiness = false,
   hideSteps = false,
+  chartVisible = true,
   scaleToFit = false,
   className,
 }: Props) {
@@ -89,13 +97,18 @@ export function StepsActivityBars({
   // Include goal in the scale so the yellow line always sits inside the chart.
   const scaleMax = Math.max(...values, goalValue ?? 0, 1)
   const todayIdx = values.length - 1
-  const useScaledBars = scaleToFit && !expanded
-  const barAreaPx = expanded ? BAR_AREA_EXPANDED_PX : BAR_AREA_PX
-  const barMaxPx = expanded ? BAR_MAX_EXPANDED_PX : BAR_MAX_PX
-  const barFillRatio = barMaxPx / barAreaPx
-  const barAreaStyle = useScaledBars
-    ? ({ height: "var(--hub-bar-area)" } as const)
-    : ({ height: barAreaPx } as const)
+  // Stable fill ratio so % bar heights don't jump while the area grows on expand.
+  const barFillRatio = BAR_MAX_PX / BAR_AREA_PX
+  const barAreaStyle = {
+    height: expanded
+      ? `${BAR_AREA_EXPANDED_PX}px`
+      : scaleToFit
+        ? "var(--hub-bar-area)"
+        : `${BAR_AREA_PX}px`,
+    transitionProperty: "height",
+    transitionDuration: "500ms",
+    transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+  } as const
   const band = readinessBand(readiness)
   const accent = band ? BAND_ACCENT[band] : "#64748b"
   const readinessScore =
@@ -103,17 +116,14 @@ export function StepsActivityBars({
       ? Math.max(0, Math.min(100, Math.round(readiness)))
       : null
   const readinessLabel = readinessScore != null ? String(readinessScore) : "—"
+  const animatedReadiness = useCountUp(hideReadiness ? null : readinessScore, {
+    duration: 480,
+  })
   const highReadinessPulse = band === "peak" || band === "high"
   const hrvLabel =
     hrvMs != null && Number.isFinite(hrvMs) ? String(Math.round(hrvMs)) : "—"
-  const goalLineBottomPx =
-    goalValue != null && !useScaledBars
-      ? Math.max(4, Math.round((goalValue / scaleMax) * barMaxPx))
-      : null
   const goalLineBottomPct =
-    goalValue != null && useScaledBars
-      ? Math.max(4, (goalValue / scaleMax) * barFillRatio * 100)
-      : null
+    goalValue != null ? Math.max(4, (goalValue / scaleMax) * barFillRatio * 100) : null
   const todaySteps = values[todayIdx] ?? 0
   const loggedDays = values.filter((v) => v > 0)
   const weekAvg =
@@ -126,15 +136,36 @@ export function StepsActivityBars({
   /** Chart surface expands when collapsed; collapse via ring / back / title. */
   const chartExpandsOnTap = stepsInteractive && !expanded
 
-  // Remount bars on expand so L→R stagger plays again (and on first mount).
-  const [barGrowGen, setBarGrowGen] = useState(0)
-  const wasExpanded = useRef(expanded)
+  const [readinessTickPct, setReadinessTickPct] = useState(0)
+  const [readinessBarVisible, setReadinessBarVisible] = useState(false)
   useEffect(() => {
-    if (expanded && !wasExpanded.current) {
-      setBarGrowGen((g) => g + 1)
+    if (hideReadiness || readinessScore == null) return
+    let secondFrame = 0
+    const firstFrame = requestAnimationFrame(() => {
+      setReadinessTickPct(0)
+      setReadinessBarVisible(false)
+      secondFrame = requestAnimationFrame(() => {
+        setReadinessTickPct(readinessScore)
+        setReadinessBarVisible(true)
+      })
+    })
+    return () => {
+      cancelAnimationFrame(firstFrame)
+      cancelAnimationFrame(secondFrame)
     }
-    wasExpanded.current = expanded
-  }, [expanded])
+  }, [hideReadiness, readinessScore])
+
+  // Remount grow layers only when the chart enters view, never on an expand toggle.
+  const [barGrowGen, setBarGrowGen] = useState(0)
+  const wasChartVisible = useRef(false)
+  useEffect(() => {
+    let frame = 0
+    if (chartVisible && !wasChartVisible.current) {
+      frame = requestAnimationFrame(() => setBarGrowGen((g) => g + 1))
+    }
+    wasChartVisible.current = chartVisible
+    return () => cancelAnimationFrame(frame)
+  }, [chartVisible])
 
   return (
     <div
@@ -161,6 +192,7 @@ export function StepsActivityBars({
       />
 
       {/* Readiness — text inset; gradient full-bleed to card edges */}
+      <HubCollapse open={!hideReadiness}>
       <button
         type="button"
         onClick={onReadinessClick}
@@ -254,7 +286,7 @@ export function StepsActivityBars({
                   textShadow: band ? `0 0 12px ${accent}44` : undefined,
                 }}
               >
-                {readinessLabel}
+                {animatedReadiness ?? readinessLabel}
                 {readiness != null ? (
                   <span className="ml-0.5 text-[11px] font-medium text-muted-foreground/55">
                     /100
@@ -267,9 +299,9 @@ export function StepsActivityBars({
 
         {/* Edge-to-edge band gradient — full overview card width + score tick */}
         <div
-          className="relative h-1.5 w-full overflow-visible transition-opacity duration-700 ease-out"
+          className="relative h-1.5 w-full overflow-visible transition-opacity duration-[780ms] ease-out"
           style={{
-            opacity: readinessScore != null ? 1 : 0.45,
+            opacity: readinessScore != null ? (readinessBarVisible ? 1 : 0) : 0.45,
             background:
               readinessScore != null
                 ? `linear-gradient(90deg, ${accent}55 0%, ${accent} 42%, ${accent}cc 100%)`
@@ -289,8 +321,8 @@ export function StepsActivityBars({
               />
               {/* Soft score-position tick so /100 isn't only a number on the right */}
               <div
-                className="pointer-events-none absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${readinessScore}%` }}
+                className="pointer-events-none absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 transition-[left] duration-[720ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none"
+                style={{ left: `${readinessTickPct}%` }}
                 aria-hidden
               >
                 <div
@@ -320,9 +352,10 @@ export function StepsActivityBars({
           aria-hidden
         />
       ) : null}
+      </HubCollapse>
 
       {/* Steps bars — same instance grows in place on expand (no remount). */}
-      {!hideSteps ? (
+      <HubCollapse open={!hideSteps}>
       <div
         className={cn(
           "relative z-10 px-4 pb-1 pt-2.5 transition-[padding] duration-500 ease-out lg:px-5",
@@ -344,17 +377,6 @@ export function StepsActivityBars({
           ) : (
             <p className="min-w-0 shrink type-hud-subsection">Steps Activity</p>
           )}
-          <p className="-mr-0.5 shrink-0 whitespace-nowrap text-[10px] tabular-nums tracking-normal text-muted-foreground/55">
-            {todaySteps > 0
-              ? `${Math.round(todaySteps).toLocaleString()} today`
-              : "No steps yet"}
-            {goalValue != null ? (
-              <span className="text-amber-300/70">
-                {" "}
-                · goal {Math.round(goalValue).toLocaleString()}
-              </span>
-            ) : null}
-          </p>
         </div>
 
         {/* Summary strip — grid-rows collapse so expand grows from the chart */}
@@ -427,14 +449,10 @@ export function StepsActivityBars({
             className="relative flex items-end justify-between gap-1 px-0.5 transition-[height] duration-500 ease-out motion-reduce:transition-none"
             style={barAreaStyle}
           >
-            {goalLineBottomPx != null || goalLineBottomPct != null ? (
+            {goalLineBottomPct != null ? (
               <div
                 className="pointer-events-none absolute inset-x-0 z-20 transition-[bottom] duration-500 ease-out"
-                style={
-                  goalLineBottomPct != null
-                    ? { bottom: `${goalLineBottomPct}%` }
-                    : { bottom: goalLineBottomPx! }
-                }
+                style={{ bottom: `${goalLineBottomPct}%` }}
                 aria-hidden
               >
                 <div
@@ -449,9 +467,8 @@ export function StepsActivityBars({
 
             {values.map((val, i) => {
               const pct = scaleMax > 0 ? val / scaleMax : 0
-              const heightPx = Math.max(10, Math.round(pct * barMaxPx))
               const heightPct = Math.max(
-                (10 / barAreaPx) * 100,
+                (10 / BAR_AREA_PX) * 100,
                 pct * barFillRatio * 100,
               )
               const isToday = i === todayIdx
@@ -474,9 +491,7 @@ export function StepsActivityBars({
                         : "translate-y-1 opacity-0",
                     )}
                     style={{
-                      bottom: useScaledBars
-                        ? `calc(${heightPct}% + 4px)`
-                        : heightPx + (expanded ? 10 : 4),
+                      bottom: `calc(${heightPct}% + ${expanded ? 10 : 4}px)`,
                       minHeight: VALUE_LABEL_SLOT_PX,
                     }}
                     aria-hidden={!expanded}
@@ -503,11 +518,11 @@ export function StepsActivityBars({
                   {/* Outer: isometric pose. Inner: scaleY grow — must be separate
                       or the inline 3D transform kills animate-bar-grow. */}
                   <div
-                    className="absolute bottom-0 transition-[height] duration-500 ease-out motion-reduce:transition-none"
+                    className="absolute bottom-0 transition-[height,max-width] duration-500 ease-out motion-reduce:transition-none"
                     style={{
                       width: "78%",
                       maxWidth: expanded ? 34 : 30,
-                      height: useScaledBars ? `${heightPct}%` : heightPx,
+                      height: `${heightPct}%`,
                       transformStyle: "preserve-3d",
                       transform: "rotateX(12deg) rotateY(-18deg)",
                     }}
@@ -626,7 +641,7 @@ export function StepsActivityBars({
           </div>
         </div>
       </div>
-      ) : null}
+      </HubCollapse>
     </div>
   )
 }

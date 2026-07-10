@@ -815,6 +815,17 @@ html {
   to   { transform: scaleY(1); }
 }
 
+@keyframes sleep-stage-enter {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
 @keyframes count-up {
   from { transform: translateY(6px); }
   to   { transform: translateY(0); }
@@ -948,6 +959,10 @@ html {
     transform-origin: bottom;
   }
 
+  .animate-sleep-stage-enter {
+    animation: sleep-stage-enter 0.76s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
   .animate-count-up {
     animation: count-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
@@ -1008,6 +1023,7 @@ html {
     }
 
     .animate-ring-pop,
+    .animate-sleep-stage-enter,
     .animate-mesh-heart-pulse,
     .animate-mesh-heart-nodes,
     .animate-calorie-pip-pop,

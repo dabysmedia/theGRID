@@ -29,7 +29,9 @@ export function parseStages(json: string | null | undefined): SleepStageSegment[
   }
 }
 
-/** Horizontal stage timeline for one night — proportional segments in chronological order. */
+const STAGE_TRACKS = ["REM", "LIGHT", "AWAKE", "DEEP"] as const
+
+/** Layered Google-style timeline for one night, with one track per sleep stage. */
 export function StageTimeline({
   stages,
   className,
@@ -38,26 +40,53 @@ export function StageTimeline({
   className?: string
 }) {
   if (stages.length === 0) return null
-  const start = new Date(stages[0].startTime).getTime()
-  const end = new Date(stages[stages.length - 1].endTime).getTime()
+  const timedStages = stages
+    .map((stage, index) => ({
+      ...stage,
+      index,
+      start: new Date(stage.startTime).getTime(),
+      end: new Date(stage.endTime).getTime(),
+      key: stage.type.toUpperCase(),
+    }))
+    .filter((stage) => Number.isFinite(stage.start) && Number.isFinite(stage.end) && stage.end > stage.start)
+  if (timedStages.length === 0) return null
+
+  const start = Math.min(...timedStages.map((stage) => stage.start))
+  const end = Math.max(...timedStages.map((stage) => stage.end))
   const total = end - start
   if (!Number.isFinite(total) || total <= 0) return null
 
   return (
-    <div className={cn("space-y-1.5", className)}>
-      <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted/20">
-        {stages.map((s, i) => {
-          const segStart = new Date(s.startTime).getTime()
-          const segEnd = new Date(s.endTime).getTime()
-          const width = Math.max(((segEnd - segStart) / total) * 100, 0.4)
-          const style = STAGE_STYLE[s.type.toUpperCase()] ?? { label: s.type, color: "#94a3b8" }
+    <div className={cn("space-y-2.5", className)}>
+      <div className="space-y-1.5">
+        {STAGE_TRACKS.map((track, trackIndex) => {
+          const style = STAGE_STYLE[track]
+          const trackStages = timedStages.filter((stage) => stage.key === track)
           return (
-            <div
-              key={i}
-              className="h-full first:rounded-l-full last:rounded-r-full"
-              style={{ width: `${width}%`, backgroundColor: style.color }}
-              title={`${style.label} · ${format(new Date(s.startTime), "h:mm a")}`}
-            />
+            <div key={track} className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-2">
+              <span className="type-hud-micro text-right normal-case tracking-normal text-muted-foreground/65">
+                {style.label}
+              </span>
+              <div className="relative h-3.5 overflow-hidden rounded-sm bg-muted/15">
+                {trackStages.map((stage, segmentIndex) => {
+                  const left = ((stage.start - start) / total) * 100
+                  const width = Math.max(((stage.end - stage.start) / total) * 100, 0.4)
+                  return (
+                    <div
+                      key={stage.index}
+                      className="animate-sleep-stage-enter absolute inset-y-0 origin-left rounded-sm motion-reduce:animate-none"
+                      style={{
+                        left: `${left}%`,
+                        width: `${width}%`,
+                        backgroundColor: style.color,
+                        animationDelay: `${trackIndex * 100 + segmentIndex * 55}ms`,
+                      }}
+                      title={`${style.label} · ${format(new Date(stage.startTime), "h:mm a")} – ${format(new Date(stage.endTime), "h:mm a")}`}
+                    />
+                  )
+                })}
+              </div>
+            </div>
           )
         })}
       </div>

@@ -253,14 +253,22 @@ export function HubSleepExpand({
             return (
               <div key={i} className="flex min-w-0 flex-1 flex-col items-center gap-1">
                 <div
-                  className="w-[70%] max-w-[18px] rounded-sm"
+                  className="relative w-[70%] max-w-[18px]"
                   style={{
                     height: h,
+                  }}
+                >
+                  <div
+                    key={`sleep-grow-${i}`}
+                    className="absolute inset-0 origin-bottom rounded-sm animate-bar-grow motion-reduce:animate-none"
+                    style={{
+                      animationDelay: `${60 + i * 95}ms`,
                     background: isToday
                       ? "linear-gradient(180deg, #818cf8, #4338ca)"
                       : "linear-gradient(180deg, #6366f188, #312e8188)",
-                  }}
-                />
+                    }}
+                  />
+                </div>
                 <span
                   className={cn(
                     "text-[9px] tracking-wider",

@@ -677,7 +677,9 @@ export function WeeklyHero({
             onStepsClick={() => toggleExpand("steps")}
             onReadinessClick={() => toggleExpand("vitals")}
             readinessSelected={expanded === "vitals"}
+            hideReadiness={expanded === "steps"}
             hideSteps={expanded === "vitals"}
+            chartVisible={showStepsBars && expanded !== "vitals"}
             scaleToFit={fillViewport && expanded == null}
             className="animate-fade-up stagger-3 motion-safe:animate-fade-up motion-reduce:animate-none"
           />
