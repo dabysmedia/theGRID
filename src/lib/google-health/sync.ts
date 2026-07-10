@@ -1,7 +1,12 @@
 import "server-only"
 
 import { prisma } from "@/lib/prisma"
-import { parseYyyyMmDdToStoredDate, utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
+import {
+  parseYyyyMmDdToStoredDate,
+  utcCalendarDayKeyFromIso,
+  utcCalendarDayRangeInclusive,
+  utcRangeWhereForCalendarDay,
+} from "@/lib/dateStorage"
 import { formatDate } from "@/lib/utils"
 import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 import { GOOGLE_HEALTH_SOURCE } from "@/lib/google-health/config"
@@ -14,11 +19,19 @@ import {
   fetchDailyWeight,
   fetchHeartRateDailyRollup,
   fetchHeartRateSamplesBucketed,
+  fetchHourlySteps,
   fetchSleepSessions,
   fetchTimeInHeartRateZoneDailyRollup,
+  type DailyStepsRollup,
   type HeartRateZoneMinutes,
   type HeartRateZoneThreshold,
 } from "@/lib/google-health/client"
+import {
+  bucketStepsByStepsDay,
+  getStepsDayRange,
+  resolveStepsTimezone,
+  stepsDayKey,
+} from "@/lib/steps-day"
 import { deriveSleepScore, computeSleepEfficiency } from "@/lib/sleep-score"
 import { subDays } from "date-fns"
 
@@ -74,6 +87,36 @@ function gramsToLbs(grams: number): number {
   return Math.round((grams / GRAMS_PER_LB) * 10) / 10
 }
 
+async function fetchStepsForStepsDays(
+  userId: string,
+  startStepsKey: string,
+  endStepsKey: string,
+  timeZone: string,
+): Promise<DailyStepsRollup[]> {
+  const { start } = getStepsDayRange(startStepsKey, timeZone)
+  const { end } = getStepsDayRange(endStepsKey, timeZone)
+  try {
+    const hourly = await fetchHourlySteps(userId, start.toISOString(), end.toISOString())
+    const bucketed = bucketStepsByStepsDay(
+      hourly.map((h) => ({
+        startTime: new Date(h.startTime),
+        count: h.count,
+      })),
+      timeZone,
+    )
+    const out: DailyStepsRollup[] = []
+    for (const [date, count] of bucketed) {
+      if (date < startStepsKey || date > endStepsKey) continue
+      if (count > 0) out.push({ date, count: Math.round(count) })
+    }
+    return out
+  } catch {
+    // Fallback: civil midnight dailyRollUp (cannot apply 7am boundary without hourly data).
+    const endExclusive = addDaysYmd(endStepsKey, 1)
+    return fetchDailySteps(userId, startStepsKey, endExclusive)
+  }
+}
+
 export async function syncGoogleHealthForUser(
   userId: string,
   opts?: { days?: number; metrics?: SyncMetrics },
@@ -85,6 +128,13 @@ export async function syncGoogleHealthForUser(
     weight: opts?.metrics?.weight ?? true,
     vitals: opts?.metrics?.vitals ?? true,
   }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { vacationResumeDate: true, timeZone: true },
+  })
+  const stepsTz = resolveStepsTimezone(user?.timeZone)
+  const endStepsKey = stepsDayKey(new Date(), stepsTz)
+  const startStepsKey = addDaysYmd(endStepsKey, -(days - 1))
   const endYmd = formatDate(new Date())
   const startYmd = formatDate(subDays(new Date(), days - 1))
   const endExclusive = addDaysYmd(endYmd, 1)
@@ -92,7 +142,9 @@ export async function syncGoogleHealthForUser(
 
   const [steps, sleep, weights, restingHr, hrv, hrZoneThresholds, hrRollup, timeInZone] =
     await Promise.all([
-      metrics.steps ? fetchDailySteps(userId, startYmd, endExclusive) : Promise.resolve([]),
+      metrics.steps
+        ? fetchStepsForStepsDays(userId, startStepsKey, endStepsKey, stepsTz)
+        : Promise.resolve([]),
       metrics.sleep ? fetchSleepSessions(userId, startYmd) : Promise.resolve([]),
       metrics.weight ? fetchDailyWeight(userId, startYmd, endExclusive) : Promise.resolve([]),
       metrics.vitals
@@ -127,7 +179,9 @@ export async function syncGoogleHealthForUser(
   }
 
   let stepsUpserted = 0
+  const syncedStepsKeys = new Set<string>()
   for (const row of steps) {
+    syncedStepsKeys.add(row.date)
     const externalId = `${GOOGLE_HEALTH_SOURCE}:steps:${row.date}`
     const date = parseYyyyMmDdToStoredDate(row.date)
     const existing = await prisma.stepEntry.findFirst({
@@ -139,7 +193,7 @@ export async function syncGoogleHealthForUser(
         data: { count: row.count, date, source: GOOGLE_HEALTH_SOURCE },
       })
     } else {
-      // Replace prior google-health step row for the same calendar day if externalId missing (legacy)
+      // Replace prior google-health step row for the same steps-day if externalId missing (legacy)
       const dayRange = utcRangeWhereForCalendarDay(row.date)
       const sameDay = await prisma.stepEntry.findFirst({
         where: {
@@ -166,6 +220,22 @@ export async function syncGoogleHealthForUser(
       }
     }
     stepsUpserted++
+  }
+
+  // Drop stale google-health rows in the sync window (e.g. early-morning steps
+  // that moved to the previous steps-day after 7am re-bucketing).
+  if (metrics.steps) {
+    const stepsRange = utcCalendarDayRangeInclusive(startStepsKey, endStepsKey)
+    const existingGh = await prisma.stepEntry.findMany({
+      where: { userId, source: GOOGLE_HEALTH_SOURCE, date: stepsRange },
+      select: { id: true, date: true },
+    })
+    for (const row of existingGh) {
+      const key = utcCalendarDayKeyFromIso(row.date)
+      if (key && !syncedStepsKeys.has(key)) {
+        await prisma.stepEntry.delete({ where: { id: row.id } })
+      }
+    }
   }
 
   let sleepUpserted = 0
@@ -216,10 +286,6 @@ export async function syncGoogleHealthForUser(
     sleepUpserted++
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { vacationResumeDate: true },
-  })
   const goal = await getOrCreateBodyweightGoal(userId)
   let weightUpserted = 0
   let weightSkippedVacation = 0
@@ -375,8 +441,8 @@ export async function syncGoogleHealthForUser(
     weightUpserted,
     weightSkippedVacation,
     vitalsUpserted,
-    rangeStart: startYmd,
-    rangeEnd: endYmd,
+    rangeStart: startStepsKey,
+    rangeEnd: endStepsKey,
   }
 }
 

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { useActiveDate } from "@/context/DateContext"
 import { cn, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
+import { stepsDayKey } from "@/lib/steps-day"
 
 const STEPS_PER_MILE = 2000
 const STEPS_COLOR = "#22c55e"
@@ -27,7 +28,8 @@ export interface LogStepsDialogProps {
 }
 
 export function LogStepsDialog({ open, onOpenChange, onSaved }: LogStepsDialogProps) {
-  const { activeDate } = useActiveDate()
+  const { activeDate, isToday } = useActiveDate()
+  const logDate = isToday ? stepsDayKey(new Date()) : activeDate
   const [count, setCount] = useState("")
   const [inputMode, setInputMode] = useState<"steps" | "miles">("steps")
   const [submitting, setSubmitting] = useState(false)
@@ -83,7 +85,7 @@ export function LogStepsDialog({ open, onOpenChange, onSaved }: LogStepsDialogPr
       const res = await apiFetch("/api/steps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: activeDate, count: stepsToLog }),
+        body: JSON.stringify({ date: logDate, count: stepsToLog }),
       })
 
       if (res.ok) {
@@ -107,7 +109,7 @@ export function LogStepsDialog({ open, onOpenChange, onSaved }: LogStepsDialogPr
       open={open}
       onOpenChange={onOpenChange}
       title="Log steps"
-      description={formatDisplayDate(parseLocalDate(activeDate))}
+      description={formatDisplayDate(parseLocalDate(logDate))}
       icon={Footprints}
       accentColor={STEPS_COLOR}
       footer={
