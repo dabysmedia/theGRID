@@ -240,12 +240,9 @@ export function HubDashboard() {
       </div>
 
       {/* Unmount fasting while a hub panel is expanded so mobile isn't paying
-          for the timer UI during expand-in-place views. */}
-      {overview ? (
-        <div className="animate-fade-up stagger-3 shrink-0 max-lg:mt-[var(--hub-section-gap)]">
-          <FastingTimer hubCompact />
-        </div>
-      ) : null}
+          for the timer UI during expand-in-place views. Inactive fasting sits
+          beside the bottom nav (`FastingNavChip`), not in this hub column. */}
+      {overview ? <FastingTimer hubCompact /> : null}
     </div>
   )
 }

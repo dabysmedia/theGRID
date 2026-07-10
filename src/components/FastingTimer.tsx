@@ -11,7 +11,6 @@ import {
   Play,
   Square,
   PowerOff,
-  ChevronDown,
   ChevronRight,
 } from "lucide-react"
 import { cn, glassPanelClass, parseLocalDate } from "@/lib/utils"
@@ -49,6 +48,7 @@ import {
   syncFastingProfileToServer,
   aggregateFastHoursByDay,
   loadFastLogs,
+  FASTING_TIMER_CHANGED_EVENT,
   type FastLogEntry,
 } from "@/lib/fasting"
 import { useUser } from "@/context/UserContext"
@@ -71,10 +71,6 @@ const FASTING_CARD_SHEEN = cn(
   glassPanelClass,
   "bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] dark:from-glass-highlight/[0.1] dark:to-primary/[0.05]"
 )
-
-/** Timer disabled — steel / grey glass (no filter:saturate — it would grey out the Start CTA) */
-const FASTING_CARD_INACTIVE =
-  "border-dashed border-muted-foreground/35 bg-gradient-to-b from-muted/45 via-muted/25 to-muted/40 shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)] dark:from-muted/30 dark:via-muted/15 dark:to-muted/25 dark:border-muted-foreground/30"
 
 function padTwo(n: number) {
   return String(Math.floor(n)).padStart(2, "0")
@@ -418,26 +414,26 @@ export function FastingTimer({ hubCompact = false }: { hubCompact?: boolean }) {
   const [now, setNow] = useState(() => Date.now())
   const [pausedAtMs, setPausedAtMs] = useState<number | null>(null)
   const [timerDisabled, setTimerDisabled] = useState(false)
-  const [collapsed, setCollapsed] = useState(true)
   const [lastMealAtMs, setLastMealAtMs] = useState<number | null>(null)
   const [fastLogs, setFastLogs] = useState<FastLogEntry[]>([])
-  const [startFastingOpen, setStartFastingOpen] = useState(false)
-  const [lastMealInput, setLastMealInput] = useState("")
-  const [startFastingError, setStartFastingError] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const skipTransitionLog = useRef(false)
 
   // Client-only: avoid SSR/localStorage mismatch for timer shell + config
   /* eslint-disable react-hooks/set-state-in-effect -- intentional mount gate */
   useEffect(() => {
-    setConfig(loadFastingConfig())
-    setPausedAtMs(loadFastingTimerPausedAtMs())
-    const disabled = loadFastingTimerDisabled()
-    setTimerDisabled(disabled)
-    setCollapsed(disabled)
-    setLastMealAtMs(loadFastingLastMealAtMs())
-    setFastLogs(loadFastLogs())
-    setMounted(true)
+    function refreshTimerShell() {
+      setConfig(loadFastingConfig())
+      setPausedAtMs(loadFastingTimerPausedAtMs())
+      setTimerDisabled(loadFastingTimerDisabled())
+      setLastMealAtMs(loadFastingLastMealAtMs())
+      setFastLogs(loadFastLogs())
+      setMounted(true)
+    }
+    refreshTimerShell()
+    window.addEventListener(FASTING_TIMER_CHANGED_EVENT, refreshTimerShell)
+    return () =>
+      window.removeEventListener(FASTING_TIMER_CHANGED_EVENT, refreshTimerShell)
   }, [])
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -493,40 +489,9 @@ export function FastingTimer({ hubCompact = false }: { hubCompact?: boolean }) {
     setLastMealAtMs(null)
     saveFastingTimerDisabled(true)
     setTimerDisabled(true)
-    setCollapsed(true)
     setNow(Date.now())
     void syncFastingProfileToServer(userId)
   }, [userId])
-
-  const handleStartFastingOpenChange = useCallback((open: boolean) => {
-    setStartFastingOpen(open)
-    setStartFastingError(null)
-    if (open) {
-      const suggested = new Date(Date.now() - 60 * 60 * 1000)
-      setLastMealInput(minutesToTimeInputValue(minutesFromMidnight(suggested)))
-    }
-  }, [])
-
-  const handleConfirmStartFasting = useCallback(() => {
-    const tEnd = Date.now()
-    const parsed = parseTimeInputToLastMealDate(lastMealInput, new Date(tEnd))
-    if (!parsed) {
-      setStartFastingError("Enter a valid time.")
-      return
-    }
-    const ms = parsed.getTime()
-    saveFastingLastMealAtMs(ms)
-    setLastMealAtMs(ms)
-    saveFastingTimerDisabled(false)
-    setTimerDisabled(false)
-    setCollapsed(false)
-    saveFastingTimerPausedAtMs(null)
-    setPausedAtMs(null)
-    setNow(tEnd)
-    setStartFastingOpen(false)
-    setStartFastingError(null)
-    void syncFastingProfileToServer(userId)
-  }, [lastMealInput, userId])
 
   useEffect(() => {
     if (!mounted) return
@@ -546,171 +511,61 @@ export function FastingTimer({ hubCompact = false }: { hubCompact?: boolean }) {
   }, [userId])
 
   const phaseColor = snapshot.phase === "fasting" ? COLORS.fasting : COLORS.eating
-  const showExpanded = !timerDisabled || !collapsed
 
   const headerTitleContent = (
     <>
       <div
-        className={cn(
-          "h-1.5 w-1.5 shrink-0 rounded-full",
-          timerDisabled && "bg-muted-foreground/50 shadow-none",
-        )}
-        style={
-          timerDisabled
-            ? undefined
-            : {
-                backgroundColor: phaseColor,
-                boxShadow: `0 0 6px ${phaseColor}60`,
-                animation: isPaused ? "none" : "pulse-glow 2.5s ease-in-out infinite",
-              }
-        }
+        className="h-1.5 w-1.5 shrink-0 rounded-full"
+        style={{
+          backgroundColor: phaseColor,
+          boxShadow: `0 0 6px ${phaseColor}60`,
+          animation: isPaused ? "none" : "pulse-glow 2.5s ease-in-out infinite",
+        }}
       />
-      <h2
-        className={cn(
-          "type-hud-title truncate",
-          timerDisabled && "text-muted-foreground/80",
-        )}
-      >
-        Fasting
-      </h2>
-      <span
-        className={cn(
-          "hidden text-[10px] sm:inline",
-          timerDisabled ? "text-muted-foreground/40" : "text-muted-foreground/55",
-        )}
-      >
+      <h2 className="type-hud-title truncate">Fasting</h2>
+      <span className="hidden text-[10px] text-muted-foreground/55 sm:inline">
         · {config.presetName}
       </span>
-      {timerDisabled && (
-        <span className="rounded-md border border-muted-foreground/25 bg-muted/50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Off
-        </span>
-      )}
-      {!timerDisabled && isPaused && (
+      {isPaused && (
         <span className="rounded-md bg-muted/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
           Paused
-        </span>
-      )}
-      {timerDisabled && collapsed && (
-        <span className="truncate text-[10px] text-muted-foreground/50">
-          Tap to expand
         </span>
       )}
     </>
   )
 
-  if (!mounted) {
-    return (
-      <div
-        className={cn(
-          FASTING_CARD_SHEEN,
-          hubCompact ? "p-3 sm:p-6 max-lg:p-3" : "p-5 sm:p-6",
-        )}
-      >
-        <div
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12"
-          aria-hidden
-        />
-        <div className="relative z-10">
-          <div className="flex items-center gap-2">
-            <Timer className="h-3.5 w-3.5 text-muted-foreground/50" />
-            <span className="type-hud-title text-muted-foreground/50">Fasting</span>
-          </div>
-          <div className={cn("flex justify-center", hubCompact ? "max-lg:py-3 py-8" : "py-8")}>
-            <div
-              className={cn(
-                "rounded-full bg-muted/10 animate-pulse",
-                hubCompact
-                  ? "size-[var(--hub-fasting-ring)] lg:h-[200px] lg:w-[200px]"
-                  : "h-[200px] w-[200px]",
-              )}
-            />
-          </div>
-        </div>
-      </div>
-    )
+  // Inactive timer lives beside the bottom nav (`FastingNavChip`), not in the hub body.
+  if (!mounted || timerDisabled) {
+    return null
   }
 
   return (
     <div
       className={cn(
         FASTING_CARD_SHEEN,
-        showExpanded
-          ? hubCompact
-            ? "p-3 sm:p-6 max-lg:p-3"
-            : "p-5 sm:p-6"
-          : "px-4 py-3 sm:px-5 sm:py-3.5",
-        timerDisabled && FASTING_CARD_INACTIVE,
+        "shrink-0",
+        hubCompact ? "p-3 sm:p-6 max-lg:p-3" : "p-5 sm:p-6",
+        hubCompact && "animate-fade-up stagger-3 max-lg:mt-[var(--hub-section-gap)]",
       )}
     >
       <div
-        className={cn(
-          "pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]",
-          timerDisabled && "opacity-30",
-        )}
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]"
         aria-hidden
       />
       <div
-        className={cn(
-          "pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12",
-          timerDisabled && "via-muted-foreground/20 opacity-50 dark:via-muted-foreground/15",
-        )}
+        className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12"
         aria-hidden
       />
-      {timerDisabled && (
-        <div
-          className="pointer-events-none absolute inset-0 z-[1] rounded-[inherit] bg-gradient-to-b from-background/50 via-transparent to-muted/30 dark:from-background/40 dark:to-muted/25"
-          aria-hidden
-        />
-      )}
 
-      <div
-        className={cn(
-          "relative z-10 flex items-center justify-between gap-2",
-          showExpanded && "mb-4",
-          timerDisabled && "text-muted-foreground",
-        )}
-      >
-        {timerDisabled ? (
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 touch-manipulation items-center gap-2 text-left"
-            onClick={() => setCollapsed((c) => !c)}
-            aria-expanded={showExpanded}
-          >
-            {headerTitleContent}
-          </button>
-        ) : (
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            {headerTitleContent}
-          </div>
-        )}
+      <div className="relative z-10 mb-4 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {headerTitleContent}
+        </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <FastingSettingsDialog config={config} onSave={handleConfigSave} />
-          {timerDisabled && (
-            <button
-              type="button"
-              onClick={() => setCollapsed((c) => !c)}
-              aria-expanded={showExpanded}
-              aria-label={showExpanded ? "Collapse fasting timer" : "Expand fasting timer"}
-              className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-glass-highlight/30 hover:text-foreground sm:h-8 sm:w-8"
-            >
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 sm:h-3.5 sm:w-3.5 transition-transform duration-200",
-                  showExpanded && "rotate-180",
-                )}
-              />
-            </button>
-          )}
         </div>
       </div>
 
-      {showExpanded && (
       <div
         className={cn(
           "relative z-10 flex flex-col items-stretch gap-5 sm:flex-row sm:items-center sm:gap-8 lg:gap-10",
@@ -722,7 +577,6 @@ export function FastingTimer({ hubCompact = false }: { hubCompact?: boolean }) {
           phase={snapshot.phase}
           elapsed={formatDuration(snapshot.elapsedMs)}
           remaining={formatDuration(snapshot.remainingMs)}
-          inactive={timerDisabled}
           compact={hubCompact}
         />
 
@@ -730,65 +584,32 @@ export function FastingTimer({ hubCompact = false }: { hubCompact?: boolean }) {
           <div
             className={cn(
               "grid grid-cols-2 gap-2 sm:gap-3",
-              timerDisabled && "opacity-75",
               hubCompact && "max-lg:gap-1.5",
             )}
           >
-            <div
-              className={cn(
-                "flex min-w-0 items-start gap-2 rounded-sm border px-2 py-2 sm:px-2.5",
-                timerDisabled
-                  ? "border-muted-foreground/20 bg-muted/25"
-                  : "border-border/35 bg-muted/15",
-              )}
-            >
+            <div className="flex min-w-0 items-start gap-2 rounded-sm border border-border/35 bg-muted/15 px-2 py-2 sm:px-2.5">
               <Utensils
-                className={cn(
-                  "mt-0.5 h-3 w-3 shrink-0",
-                  timerDisabled && "text-muted-foreground/50",
-                )}
-                style={timerDisabled ? undefined : { color: COLORS.eating }}
+                className="mt-0.5 h-3 w-3 shrink-0"
+                style={{ color: COLORS.eating }}
               />
               <div className="min-w-0">
                 <p className="type-hud-micro">Eat window</p>
-                <p
-                  className={cn(
-                    "type-hud-readout",
-                    timerDisabled ? "text-muted-foreground/70" : "text-foreground",
-                  )}
-                >
-                  {timerDisabled
-                    ? "—"
-                    : `${formatShortTime(snapshot.eatingWindowStart)} – ${formatShortTime(snapshot.eatingWindowEnd)}`}
+                <p className="type-hud-readout text-foreground">
+                  {`${formatShortTime(snapshot.eatingWindowStart)} – ${formatShortTime(snapshot.eatingWindowEnd)}`}
                 </p>
               </div>
             </div>
-            <div
-              className={cn(
-                "flex min-w-0 items-start gap-2 rounded-sm border px-2 py-2 sm:px-2.5",
-                timerDisabled
-                  ? "border-muted-foreground/20 bg-muted/25"
-                  : "border-border/35 bg-muted/15",
-              )}
-            >
+            <div className="flex min-w-0 items-start gap-2 rounded-sm border border-border/35 bg-muted/15 px-2 py-2 sm:px-2.5">
               <Timer
-                className={cn(
-                  "mt-0.5 h-3 w-3 shrink-0",
-                  timerDisabled && "text-muted-foreground/50",
-                )}
-                style={timerDisabled ? undefined : { color: COLORS.fasting }}
+                className="mt-0.5 h-3 w-3 shrink-0"
+                style={{ color: COLORS.fasting }}
               />
               <div className="min-w-0">
                 <p className="type-hud-micro">
-                  {timerDisabled ? "Phase" : snapshot.phase === "fasting" ? "Next eat" : "Next fast"}
+                  {snapshot.phase === "fasting" ? "Next eat" : "Next fast"}
                 </p>
-                <p
-                  className={cn(
-                    "type-hud-readout",
-                    timerDisabled ? "text-muted-foreground/70" : "text-foreground",
-                  )}
-                >
-                  {timerDisabled ? "—" : formatShortTime(snapshot.phaseEnd)}
+                <p className="type-hud-readout text-foreground">
+                  {formatShortTime(snapshot.phaseEnd)}
                 </p>
               </div>
             </div>
@@ -800,106 +621,163 @@ export function FastingTimer({ hubCompact = false }: { hubCompact?: boolean }) {
               hubCompact && "max-lg:mt-2",
             )}
           >
-            {timerDisabled ? (
-              <Dialog open={startFastingOpen} onOpenChange={handleStartFastingOpenChange}>
-                <DialogTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="glass"
-                      size="sm"
-                      className="h-9 gap-1.5 touch-manipulation sm:h-8"
-                      aria-label="Start fasting"
-                    />
-                  }
-                >
+            <Button
+              type="button"
+              variant={isPaused ? "default" : "outline"}
+              size="sm"
+              className="h-9 gap-1.5 touch-manipulation sm:h-8"
+              onClick={isPaused ? handleResume : handlePause}
+              aria-label={isPaused ? "Resume live timer" : "Pause timer"}
+            >
+              {isPaused ? (
+                <>
                   <Play className="h-3.5 w-3.5" />
-                  Start fasting
-                </DialogTrigger>
-                <DialogContent className="glass-frost min-h-0 overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>What time was your last meal?</DialogTitle>
-                  </DialogHeader>
-                  <p className="text-sm text-muted-foreground">
-                    Your fast starts from that moment using your{" "}
-                    <span className="font-medium text-foreground">
-                      {config.fastHours}h fast / {config.eatHours}h eat
-                    </span>{" "}
-                    schedule{config.presetName ? ` (${config.presetName})` : ""}. We use today’s
-                    date, or yesterday if that time hasn’t happened yet today.
-                  </p>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="fasting-last-meal" className="type-hud-label">
-                      Time
-                    </Label>
-                    <Input
-                      id="fasting-last-meal"
-                      type="time"
-                      value={lastMealInput}
-                      onChange={(e) => {
-                        setLastMealInput(e.target.value)
-                        setStartFastingError(null)
-                      }}
-                      className="tabular-nums"
-                    />
-                  </div>
-                  {startFastingError ? (
-                    <p className="text-sm text-destructive">{startFastingError}</p>
-                  ) : null}
-                  <Button variant="glass" className="w-full" onClick={handleConfirmStartFasting}>
-                    Start timer
-                  </Button>
-                </DialogContent>
-              </Dialog>
-            ) : (
-              <>
-                <Button
-                  type="button"
-                  variant={isPaused ? "default" : "outline"}
-                  size="sm"
-                  className="h-9 gap-1.5 touch-manipulation sm:h-8"
-                  onClick={isPaused ? handleResume : handlePause}
-                  aria-label={isPaused ? "Resume live timer" : "Pause timer"}
-                >
-                  {isPaused ? (
-                    <>
-                      <Play className="h-3.5 w-3.5" />
-                      Resume
-                    </>
-                  ) : (
-                    <>
-                      <Pause className="h-3.5 w-3.5" />
-                      Pause
-                    </>
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="h-9 gap-1.5 touch-manipulation sm:h-8"
-                  onClick={handleEnd}
-                  aria-label="End and turn off fasting timer"
-                >
-                  <Square className="h-3.5 w-3.5" />
-                  End
-                </Button>
-              </>
-            )}
+                  Resume
+                </>
+              ) : (
+                <>
+                  <Pause className="h-3.5 w-3.5" />
+                  Pause
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-9 gap-1.5 touch-manipulation sm:h-8"
+              onClick={handleEnd}
+              aria-label="End and turn off fasting timer"
+            >
+              <Square className="h-3.5 w-3.5" />
+              End
+            </Button>
           </div>
         </div>
       </div>
-      )}
 
-      {showExpanded && !timerDisabled && (
-        <div className="relative z-10 mt-4 border-t border-border/25 pt-4">
-          <FastingStatsStrip
-            activeDate={activeDate}
-            logs={fastLogs}
-            goal={config.fastHours}
+      <div className="relative z-10 mt-4 border-t border-border/25 pt-4">
+        <FastingStatsStrip
+          activeDate={activeDate}
+          logs={fastLogs}
+          goal={config.fastHours}
+        />
+      </div>
+    </div>
+  )
+}
+
+/** Compact inactive fasting control — sits left of the bottom nav menu FAB. */
+export function FastingNavChip() {
+  const { user } = useUser()
+  const userId = user?.id ?? null
+  const [mounted, setMounted] = useState(false)
+  const [timerDisabled, setTimerDisabled] = useState(false)
+  const [config, setConfig] = useState<FastingConfig>(loadFastingConfig)
+  const [startFastingOpen, setStartFastingOpen] = useState(false)
+  const [lastMealInput, setLastMealInput] = useState("")
+  const [startFastingError, setStartFastingError] = useState<string | null>(null)
+
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional mount gate */
+  useEffect(() => {
+    function refresh() {
+      setTimerDisabled(loadFastingTimerDisabled())
+      setConfig(loadFastingConfig())
+      setMounted(true)
+    }
+    refresh()
+    window.addEventListener(FASTING_TIMER_CHANGED_EVENT, refresh)
+    return () => window.removeEventListener(FASTING_TIMER_CHANGED_EVENT, refresh)
+  }, [])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const handleStartFastingOpenChange = useCallback((open: boolean) => {
+    setStartFastingOpen(open)
+    setStartFastingError(null)
+    if (open) {
+      const suggested = new Date(Date.now() - 60 * 60 * 1000)
+      setLastMealInput(minutesToTimeInputValue(minutesFromMidnight(suggested)))
+    }
+  }, [])
+
+  const handleConfirmStartFasting = useCallback(() => {
+    const tEnd = Date.now()
+    const parsed = parseTimeInputToLastMealDate(lastMealInput, new Date(tEnd))
+    if (!parsed) {
+      setStartFastingError("Enter a valid time.")
+      return
+    }
+    const ms = parsed.getTime()
+    saveFastingLastMealAtMs(ms)
+    saveFastingTimerDisabled(false)
+    saveFastingTimerPausedAtMs(null)
+    setTimerDisabled(false)
+    setStartFastingOpen(false)
+    setStartFastingError(null)
+    void syncFastingProfileToServer(userId)
+  }, [lastMealInput, userId])
+
+  if (!mounted || !timerDisabled) return null
+
+  return (
+    <Dialog open={startFastingOpen} onOpenChange={handleStartFastingOpenChange}>
+      <DialogTrigger
+        render={
+          <button
+            type="button"
+            className={cn(
+              "relative flex h-16 shrink-0 touch-manipulation flex-col items-center justify-center gap-0.5 px-2.5",
+              "rounded-lg border border-dashed border-muted-foreground/35",
+              "bg-gradient-to-b from-muted/45 via-muted/25 to-muted/40",
+              "shadow-[inset_0_1px_0_0_oklch(1_0_0/6%)]",
+              "text-muted-foreground transition-colors duration-200",
+              "hover:border-muted-foreground/50 hover:text-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+              "dark:from-muted/30 dark:via-muted/15 dark:to-muted/25 dark:border-muted-foreground/30",
+            )}
+            aria-label="Start fasting"
+          />
+        }
+      >
+        <PowerOff className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+        <span className="text-[9px] font-semibold uppercase tracking-[0.16em]">
+          Fast
+        </span>
+      </DialogTrigger>
+      <DialogContent className="glass-frost min-h-0 overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>What time was your last meal?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Your fast starts from that moment using your{" "}
+          <span className="font-medium text-foreground">
+            {config.fastHours}h fast / {config.eatHours}h eat
+          </span>{" "}
+          schedule{config.presetName ? ` (${config.presetName})` : ""}. We use today’s
+          date, or yesterday if that time hasn’t happened yet today.
+        </p>
+        <div className="space-y-1.5">
+          <Label htmlFor="fasting-nav-last-meal" className="type-hud-label">
+            Time
+          </Label>
+          <Input
+            id="fasting-nav-last-meal"
+            type="time"
+            value={lastMealInput}
+            onChange={(e) => {
+              setLastMealInput(e.target.value)
+              setStartFastingError(null)
+            }}
+            className="tabular-nums"
           />
         </div>
-      )}
-    </div>
+        {startFastingError ? (
+          <p className="text-sm text-destructive">{startFastingError}</p>
+        ) : null}
+        <Button variant="glass" className="w-full" onClick={handleConfirmStartFasting}>
+          Start timer
+        </Button>
+      </DialogContent>
+    </Dialog>
   )
 }
