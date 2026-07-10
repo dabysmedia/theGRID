@@ -245,8 +245,8 @@ export function HubDashboard() {
       </div>
 
       {/* Unmount fasting while a hub panel is expanded so mobile isn't paying
-          for the timer UI during expand-in-place views. Inactive fasting sits
-          beside the bottom nav (`FastingNavChip`), not in this hub column. */}
+          for the timer UI during expand-in-place views. Inactive fasting and
+          End controls sit beside the bottom nav (`FastingNavChip`). */}
       {overview ? <FastingTimer hubCompact /> : null}
     </div>
   )
