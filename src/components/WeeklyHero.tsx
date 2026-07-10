@@ -719,41 +719,33 @@ export function WeeklyHero({
           />
         </HubPresence>
 
-        {/* Protocol / training instrument rail — open HUD band above weigh-in coda */}
+        {/* Protocol / training — classic 2-col rail (text must not sit in nested HubCollapse) */}
         <FadeSection show={showProtocolRail} className={fillViewport ? "shrink-0" : undefined}>
-          <div
-            className="relative z-10 px-0.5 py-0.5 sm:px-1 sm:py-1"
-            role="group"
-            aria-label="Protocol and training"
+          <HubCollapse
+            open={expanded !== "peptides" && expanded !== "workouts"}
+            durationMs={680}
           >
-            {/* Keep both rail heroes mounted. The active hero takes the rail while
-                its sibling height-collapses, so it can slide into center in place. */}
-            <div className="relative min-h-[var(--hub-protocol-min-h)] sm:min-h-[6rem]">
-              <button
-                type="button"
-                onClick={() => toggleExpand("peptides")}
-                aria-label={expanded === "peptides" ? "Collapse peptides" : "Expand peptides"}
-                aria-expanded={expanded === "peptides"}
-                className={cn(
-                  "group absolute inset-y-0 left-0 flex min-w-0 items-center py-2 text-left transition-[width,background-color] duration-[760ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:py-3.5",
-                  expanded === "peptides" ? "w-full" : "w-1/2",
-                )}
-              >
-                <span
-                  className={cn(
-                    "pointer-events-none absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 transition-[left,opacity] duration-[760ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
-                    expanded === "workouts" && "opacity-0",
-                  )}
-                  style={{ left: expanded === "peptides" ? "50%" : "66.666%" }}
+            <div
+              className="relative z-10 px-0.5 py-0.5 sm:px-1 sm:py-1"
+              role="group"
+              aria-label="Protocol and training"
+            >
+              <div className="relative grid grid-cols-2 items-stretch">
+                <button
+                  type="button"
+                  onClick={() => toggleExpand("peptides")}
+                  aria-label="Expand peptides"
+                  aria-expanded={false}
+                  className="group relative flex min-h-[var(--hub-protocol-min-h)] min-w-0 items-center py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem] sm:py-3.5"
                 >
-                  <PeptideVialGraphic
-                    color="#94a3b8"
-                    doseMg={peptideSummary?.lastDoseMg ?? null}
-                    size="md"
-                    className="mx-0 shrink-0 opacity-90"
-                  />
-                </span>
-                <HubCollapse open={expanded !== "peptides"} durationMs={HUB_SECTION_MOTION_MS}>
+                  <span className="pointer-events-none absolute left-2/3 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
+                    <PeptideVialGraphic
+                      color="#94a3b8"
+                      doseMg={peptideSummary?.lastDoseMg ?? null}
+                      size="md"
+                      className="mx-0 shrink-0 opacity-90"
+                    />
+                  </span>
                   <div className="min-w-0 w-[calc(66.666%-3.25rem)] pr-1 text-right sm:w-[calc(66.666%-3.5rem)]">
                     <p className="type-hud-micro text-muted-foreground/70">Protocol</p>
                     <p
@@ -771,32 +763,21 @@ export function WeeklyHero({
                         : "No dose logged"}
                     </p>
                   </div>
-                </HubCollapse>
-              </button>
+                </button>
 
-              <HubCollapse
-                open={expanded !== "peptides"}
-                durationMs={HUB_SECTION_MOTION_MS}
-                className={cn(
-                  "absolute inset-y-0 right-0 transition-[left,width] duration-[760ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
-                  expanded === "workouts" ? "left-0" : "w-1/2",
-                )}
-              >
                 <div
-                  className="pointer-events-none absolute inset-y-3 left-0 z-[1] w-px bg-gradient-to-b from-transparent via-white/12 to-transparent"
+                  className="pointer-events-none absolute inset-y-3 left-1/2 z-[1] w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-white/12 to-transparent"
                   aria-hidden
                 />
+
                 <button
                   type="button"
                   onClick={() => toggleExpand("workouts")}
-                  aria-label={expanded === "workouts" ? "Collapse workouts" : "Expand workouts"}
-                  aria-expanded={expanded === "workouts"}
-                  className="group relative flex h-full w-full min-w-0 items-center py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:py-3.5"
+                  aria-label="Expand workouts"
+                  aria-expanded={false}
+                  className="group relative flex min-h-[var(--hub-protocol-min-h)] min-w-0 items-center py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem] sm:py-3.5"
                 >
-                  <span
-                    className="pointer-events-none absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 transition-[left] duration-[760ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
-                    style={{ left: expanded === "workouts" ? "50%" : "33.333%" }}
-                  >
+                  <span className="pointer-events-none absolute left-1/3 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
                     <WeekWorkoutGoalRing
                       count={weekWo}
                       size="md"
@@ -821,12 +802,11 @@ export function WeeklyHero({
                     </p>
                   </div>
                 </button>
-              </HubCollapse>
-
+              </div>
             </div>
-          </div>
+          </HubCollapse>
 
-          <HubPresence open={expanded === "peptides"} durationMs={HUB_MOTION_MS}>
+          <HubPresence open={expanded === "peptides"} durationMs={680}>
             <HubPeptidesExpand
               lastDoseMg={peptideSummary?.lastDoseMg ?? null}
               lastInjectedAt={peptideSummary?.lastInjectedAt ?? null}
@@ -837,18 +817,16 @@ export function WeeklyHero({
               lastSiteUsed={peptideSummary?.lastSiteUsed ?? null}
               dosedWeekCount={peptideSummary?.dosedWeekCount ?? 0}
               hungerLogs={peptideSummary?.hungerLogs ?? []}
-              hideHero
             />
           </HubPresence>
 
-          <HubPresence open={expanded === "workouts"} durationMs={HUB_MOTION_MS}>
+          <HubPresence open={expanded === "workouts"} durationMs={680}>
             <HubWorkoutsExpand
               weekCount={weekWo}
               todayCount={workoutSummary?.todayCount ?? data.workouts.todayValue}
               last7={workoutSummary?.last7 ?? data.workouts.last7}
               dayLabels={dayLabels}
               recoveryScore={workoutSummary?.recoveryScore ?? null}
-              hideHero
             />
           </HubPresence>
         </FadeSection>
