@@ -30,6 +30,7 @@ import { useUser } from "@/context/UserContext"
 import { useActiveDate } from "@/context/DateContext"
 import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 import { COACH_AVATAR_SRC } from "@/lib/coach/branding"
+import { FastingNavChip } from "@/components/FastingTimer"
 
 type QuickActionItem = {
   href: string
@@ -106,7 +107,8 @@ export function BottomNav() {
         className="fixed bottom-0 right-0 z-50 flex w-full animate-slide-up flex-col items-end ps-[max(0.75rem,env(safe-area-inset-left,0px))] pe-[max(0.75rem,env(safe-area-inset-right,0px))] pb-[env(safe-area-inset-bottom,0px)] sm:ps-4 sm:pe-4 md:ps-6 md:pe-6"
         aria-label="Main navigation"
       >
-        <div className="mb-2 flex max-w-full flex-col items-end justify-end">
+        <div className="mb-2 flex max-w-full flex-row items-end justify-end gap-2">
+          <FastingNavChip />
           <div className="glass-panel relative flex w-fit max-w-[min(100vw-1.5rem,calc(42rem+3.5rem))] flex-col overflow-hidden shadow-lg shadow-black/40">
             <div
               className={cn(

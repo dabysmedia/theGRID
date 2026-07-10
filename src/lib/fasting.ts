@@ -158,11 +158,19 @@ export function loadFastingTimerDisabled(): boolean {
   }
 }
 
+export const FASTING_TIMER_CHANGED_EVENT = "fasting-timer-changed"
+
+export function notifyFastingTimerChanged(): void {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new CustomEvent(FASTING_TIMER_CHANGED_EVENT))
+}
+
 export function saveFastingTimerDisabled(disabled: boolean): void {
   if (typeof window === "undefined") return
   try {
     if (disabled) localStorage.setItem(FASTING_TIMER_DISABLED_KEY, "1")
     else localStorage.removeItem(FASTING_TIMER_DISABLED_KEY)
+    notifyFastingTimerChanged()
   } catch {
     /* noop */
   }
