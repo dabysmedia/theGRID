@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { format, subDays } from "date-fns"
-import { Calendar, Plus, Syringe, Trash2, TrendingUp } from "lucide-react"
+import { Calendar, ChevronDown, Plus, Syringe, Trash2, TrendingUp } from "lucide-react"
 import {
   Bar,
   BarChart,
@@ -43,6 +43,7 @@ import {
   INJECTION_INTERVAL_PRESETS,
   PEPTIDE_COLOR,
   compoundLabel,
+  countDosedWeeks,
   daysSinceLastInjection,
   injectionSiteLabel,
   parseSideEffectsJson,
@@ -53,6 +54,7 @@ import {
   readInjectionIntervalDays,
   writeInjectionIntervalDays,
 } from "@/lib/hub-tile-prefs"
+import { PeptideHalfLifeMeter } from "@/components/PeptideHalfLifeMeter"
 
 const peptideGoalPresets: GoalPreset[] = [
   { type: "weekly", label: "Weekly Injections", unit: "doses", placeholder: "1" },
@@ -96,11 +98,17 @@ function PeptideHistoryDayGroup({
   items,
   showDayHeader,
   onDelete,
+  latestId,
+  expandedIds,
+  onToggle,
 }: {
   dateKey: string
   items: PeptideEntry[]
   showDayHeader: boolean
   onDelete: (id: string) => void
+  latestId: string | null
+  expandedIds: ReadonlySet<string>
+  onToggle: (id: string) => void
 }) {
   return (
     <div className="space-y-2">
@@ -114,7 +122,34 @@ function PeptideHistoryDayGroup({
       )}
       <div className="space-y-2">
         {items.map((entry) => {
+          const isLatest = entry.id === latestId
+          const open = isLatest || expandedIds.has(entry.id)
           const effects = parseSideEffectsJson(entry.sideEffectsJson)
+
+          if (!open) {
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                aria-expanded={false}
+                onClick={() => onToggle(entry.id)}
+                className="glass-subtle flex w-full items-center justify-between gap-3 rounded-xl px-3.5 py-3 text-left transition-colors hover:bg-glass-highlight/15"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium tabular-nums text-foreground/85">
+                    {format(new Date(entry.injectedAt), "MMM d")}
+                    {" · "}
+                    {entry.doseMg} mg
+                  </p>
+                  <p className="type-hud-caption mt-0.5 normal-case">
+                    {injectionSiteLabel(entry.injectionSite)}
+                  </p>
+                </div>
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground/45" aria-hidden />
+              </button>
+            )
+          }
+
           return (
             <div
               key={entry.id}
@@ -132,17 +167,33 @@ function PeptideHistoryDayGroup({
                     <div className="min-w-0">
                       <p className="text-sm font-semibold leading-snug">
                         {entry.doseMg} mg · {compoundLabel(entry.compound)}
+                        {isLatest ? (
+                          <span className="ml-2 type-hud-micro text-slate-300/70">Latest</span>
+                        ) : null}
                       </p>
                       <p className="type-hud-caption mt-0.5 normal-case">
                         {injectionSiteLabel(entry.injectionSite)}
                       </p>
                     </div>
-                    <time
-                      dateTime={entry.injectedAt}
-                      className="type-hud-readout text-muted-foreground shrink-0 pt-0.5"
-                    >
-                      {format(new Date(entry.injectedAt), "p")}
-                    </time>
+                    <div className="flex shrink-0 items-start gap-1.5 pt-0.5">
+                      <time
+                        dateTime={entry.injectedAt}
+                        className="type-hud-readout text-muted-foreground"
+                      >
+                        {format(new Date(entry.injectedAt), "p")}
+                      </time>
+                      {!isLatest ? (
+                        <button
+                          type="button"
+                          aria-expanded
+                          aria-label="Collapse dose"
+                          onClick={() => onToggle(entry.id)}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/25 bg-background/35"
+                        >
+                          <ChevronDown className="h-3.5 w-3.5 rotate-180 text-muted-foreground/55" />
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                   {effects.length > 0 && (
                     <p className="text-xs text-muted-foreground/70 mt-1 line-clamp-2">
@@ -177,6 +228,7 @@ export default function PeptidesPage() {
   const [customInterval, setCustomInterval] = useState("")
   const [injectionOpen, setInjectionOpen] = useState(false)
   const [dailyOpen, setDailyOpen] = useState(false)
+  const [expandedDoseIds, setExpandedDoseIds] = useState<Set<string>>(() => new Set())
 
   const { activeDate } = useActiveDate()
   const { user } = useUser()
@@ -184,6 +236,15 @@ export default function PeptidesPage() {
   const isPreset = (INJECTION_INTERVAL_PRESETS as readonly number[]).includes(
     injectionIntervalDays,
   )
+
+  const toggleDoseExpanded = useCallback((id: string) => {
+    setExpandedDoseIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     if (user?.id) setInjectionIntervalDays(readInjectionIntervalDays(user.id))
@@ -238,6 +299,9 @@ export default function PeptidesPage() {
   }, [dailyEntries])
 
   const lastInjection = entries[0] ?? null
+  const latestId = lastInjection?.id ?? null
+  const dosedWeekCount = useMemo(() => countDosedWeeks(entries), [entries])
+  const weekLabel = dosedWeekCount > 0 ? `Week ${dosedWeekCount}` : null
   const nextInjection = useMemo(
     () =>
       computeNextInjection(
@@ -357,6 +421,7 @@ export default function PeptidesPage() {
             : []),
         ]}
         metrics={[
+          { label: "Protocol", value: weekLabel ?? "—", sub: weekLabel ? "dosed weeks" : undefined },
           { label: "Days since shot", value: daysSinceStr },
           { label: "Avg hunger", value: avgHungerStr, sub: "7-day" },
           { label: "Last dose", value: lastDoseMg, sub: "mg" },
@@ -387,6 +452,7 @@ export default function PeptidesPage() {
         <SectionRail label="Injection schedule" />
         <p className="type-hud-caption -mt-1 normal-case">
           Drives the home tile countdown · days until your next shot
+          {weekLabel ? ` · ${weekLabel}` : ""}
         </p>
         <div className="flex flex-wrap gap-2">
           {INJECTION_INTERVAL_PRESETS.map((days) => (
@@ -440,6 +506,14 @@ export default function PeptidesPage() {
                 : ` · in ${nextInjection.daysUntil}d`}
           </p>
         )}
+      </div>
+
+      <div className="glass-panel animate-fade-up stagger-1 space-y-1 p-4">
+        <PeptideHalfLifeMeter
+          entries={entries}
+          lastDoseMg={lastInjection?.doseMg ?? null}
+          lastInjectedAt={lastInjection?.injectedAt ?? null}
+        />
       </div>
 
       <Button
@@ -634,6 +708,9 @@ export default function PeptidesPage() {
                   items={items}
                   showDayHeader={false}
                   onDelete={handleDelete}
+                  latestId={latestId}
+                  expandedIds={expandedDoseIds}
+                  onToggle={toggleDoseExpanded}
                 />
               ))}
             </div>
@@ -647,6 +724,9 @@ export default function PeptidesPage() {
                   items={items}
                   showDayHeader
                   onDelete={handleDelete}
+                  latestId={latestId}
+                  expandedIds={expandedDoseIds}
+                  onToggle={toggleDoseExpanded}
                 />
               ))}
             </HistoryEarlierSection>

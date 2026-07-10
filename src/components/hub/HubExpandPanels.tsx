@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { addDays, format, startOfWeek } from "date-fns"
 import {
+  ChevronDown,
   Dumbbell,
   Moon,
   Pencil,
@@ -32,6 +33,7 @@ import {
 import { CaloriePipTracker } from "@/components/calories/CaloriePipTracker"
 import { LogFoodDialog } from "@/components/calories/LogFoodDialog"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
+import { PeptideHalfLifeMeter } from "@/components/PeptideHalfLifeMeter"
 import { Button } from "@/components/ui/button"
 import { WeekWorkoutGoalRing, WEEKLY_WORKOUT_GOAL } from "@/components/WeekWorkoutGoalRing"
 import {
@@ -1295,6 +1297,7 @@ export function HubPeptidesExpand({
   intervalDays,
   recentEntries = [],
   lastSiteUsed = null,
+  dosedWeekCount = 0,
 }: {
   lastDoseMg: number | null
   lastInjectedAt: string | null
@@ -1303,11 +1306,15 @@ export function HubPeptidesExpand({
   intervalDays: number
   recentEntries?: HubPeptideHistoryEntry[]
   lastSiteUsed?: string | null
+  /** Distinct Monday-start weeks with ≥1 dose (protocol week number). */
+  dosedWeekCount?: number
 }) {
   const { user } = useUser()
   const [injectionOpen, setInjectionOpen] = useState(false)
   const [dailyOpen, setDailyOpen] = useState(false)
   const [customInterval, setCustomInterval] = useState("")
+  /** Older doses start collapsed; tap to expand one at a time. */
+  const [expandedOlderKey, setExpandedOlderKey] = useState<string | null>(null)
   const isPreset = (INJECTION_INTERVAL_PRESETS as readonly number[]).includes(intervalDays)
 
   let untilLabel = "Log first shot"
@@ -1340,6 +1347,9 @@ export function HubPeptidesExpand({
   })()
 
   const history = recentEntries.slice(0, 8)
+  const latestEntry = history[0] ?? null
+  const olderEntries = history.slice(1)
+  const weekLabel = dosedWeekCount > 0 ? `Week ${dosedWeekCount}` : null
 
   function bumpHub() {
     window.dispatchEvent(new CustomEvent("grid:log-saved"))
@@ -1357,24 +1367,40 @@ export function HubPeptidesExpand({
     writeInjectionIntervalDays(user.id, n)
   }
 
+  function entryKey(entry: HubPeptideHistoryEntry, i: number) {
+    return entry.id ?? `${entry.injectedAt}-${i}`
+  }
+
   return (
     <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
       <div className="min-w-0">
-        <p className="type-hud-subsection">Peptides</p>
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="type-hud-subsection">Peptides</p>
+          {weekLabel ? (
+            <p className="type-hud-micro tabular-nums text-slate-300/75">{weekLabel}</p>
+          ) : null}
+        </div>
         <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
           {untilLabel}
           {lastDoseMg != null ? ` · last ${lastDoseMg} mg` : ""}
+          {weekLabel ? ` · ${weekLabel}` : ""}
         </p>
       </div>
 
       <div className="flex items-center gap-4">
         <PeptideVialGraphic color={PEPTIDE_COLOR} doseMg={lastDoseMg} size="md" />
         <div className="min-w-0 flex-1 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div className="px-0.5 py-1">
               <p className="type-hud-micro text-muted-foreground/55">Today</p>
               <p className="type-hud-stat-sm tabular-nums text-foreground/90">
                 {todayMg > 0 ? `${todayMg} mg` : "—"}
+              </p>
+            </div>
+            <div className="px-0.5 py-1">
+              <p className="type-hud-micro text-muted-foreground/55">Protocol</p>
+              <p className="type-hud-stat-sm tabular-nums text-foreground/90">
+                {weekLabel ?? "—"}
               </p>
             </div>
             <div className="px-0.5 py-1">
@@ -1531,6 +1557,13 @@ export function HubPeptidesExpand({
         )}
       </div>
 
+      <PeptideHalfLifeMeter
+        entries={recentEntries}
+        lastDoseMg={lastDoseMg}
+        lastInjectedAt={lastInjectedAt}
+        compact
+      />
+
       <div className="space-y-2">
         <div className="flex items-baseline justify-between gap-2">
           <p className="type-hud-caption">Recent injections</p>
@@ -1547,27 +1580,63 @@ export function HubPeptidesExpand({
           </p>
         ) : (
           <ul className="space-y-0 divide-y divide-white/[0.05]">
-            {history.map((entry, i) => (
-              <li
-                key={entry.id ?? `${entry.injectedAt}-${i}`}
-                className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-medium tabular-nums text-foreground/90">
-                    {entry.doseMg} mg
-                    {entry.injectionSite
-                      ? ` · ${injectionSiteLabel(entry.injectionSite)}`
-                      : ""}
-                  </p>
-                  <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/50">
-                    {format(new Date(entry.injectedAt), "EEE · MMM d · h:mm a")}
-                  </p>
-                </div>
-                {i === 0 ? (
+            {latestEntry ? (
+              <li className="py-2 first:pt-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold tabular-nums text-foreground/95">
+                      {latestEntry.doseMg} mg
+                      {latestEntry.injectionSite
+                        ? ` · ${injectionSiteLabel(latestEntry.injectionSite)}`
+                        : ""}
+                    </p>
+                    <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/55">
+                      {format(new Date(latestEntry.injectedAt), "EEE · MMM d · h:mm a")}
+                    </p>
+                  </div>
                   <span className="shrink-0 type-hud-micro text-slate-300/70">Latest</span>
-                ) : null}
+                </div>
               </li>
-            ))}
+            ) : null}
+            {olderEntries.map((entry, i) => {
+              const key = entryKey(entry, i + 1)
+              const open = expandedOlderKey === key
+              return (
+                <li key={key} className="py-0">
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() =>
+                      setExpandedOlderKey((prev) => (prev === key ? null : key))
+                    }
+                    className="flex w-full items-center justify-between gap-3 py-2 text-left transition-colors hover:bg-white/[0.02]"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-[12px] font-medium tabular-nums text-foreground/75">
+                        {format(new Date(entry.injectedAt), "MMM d")}
+                        {" · "}
+                        {entry.doseMg} mg
+                      </p>
+                      {open ? (
+                        <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/50">
+                          {format(new Date(entry.injectedAt), "EEE · h:mm a")}
+                          {entry.injectionSite
+                            ? ` · ${injectionSiteLabel(entry.injectionSite)}`
+                            : ""}
+                        </p>
+                      ) : null}
+                    </div>
+                    <ChevronDown
+                      className={cn(
+                        "h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform duration-200",
+                        open && "rotate-180 text-slate-300/70",
+                      )}
+                      aria-hidden
+                    />
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>
