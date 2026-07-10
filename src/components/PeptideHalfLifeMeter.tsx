@@ -1,20 +1,21 @@
 "use client"
 
-import { useMemo } from "react"
+import { useId, useMemo } from "react"
 import {
   PEPTIDE_COLOR,
   RETA_HALF_LIFE_DAYS,
-  circulatingCurvePoints,
   daysElapsedSince,
   estimateCirculatingMg,
   formatEstimateMg,
+  fullCycleCirculatingCurve,
 } from "@/lib/peptides"
 import { cn } from "@/lib/utils"
 
 type DoseEntry = { injectedAt: string; doseMg: number }
 
 /**
- * Steel HUD meter: stacked half-life estimate of circulating Reta (mg).
+ * Steel HUD meter: stacked half-life estimate of circulating Reta (mg),
+ * plus a full-cycle decay curve from first shot → now (+ short lookahead).
  * Formula: Σ doseᵢ × 0.5^(daysᵢ / 6)
  */
 export function PeptideHalfLifeMeter({
@@ -30,6 +31,7 @@ export function PeptideHalfLifeMeter({
   className?: string
   compact?: boolean
 }) {
+  const fillId = useId().replace(/:/g, "")
   const model = useMemo(() => {
     if (entries.length === 0 && (lastDoseMg == null || !lastInjectedAt)) {
       return null
@@ -58,29 +60,48 @@ export function PeptideHalfLifeMeter({
     const scaleMg = Math.max(lastMg, circulating, 0.01)
     const fillPct = Math.min(100, (circulating / scaleMg) * 100)
 
-    const lookback = Math.min(RETA_HALF_LIFE_DAYS, Math.max(0, daysSince))
-    const curve = circulatingCurvePoints(shots, {
+    const cycle = fullCycleCirculatingCurve(shots, {
       nowMs,
-      fromDaysAgo: lookback,
-      toDaysAhead: RETA_HALF_LIFE_DAYS * 2,
-      steps: 28,
+      toDaysAhead: RETA_HALF_LIFE_DAYS,
+      steps: compact ? 48 : 72,
     })
-    const maxCurve = Math.max(...curve.map((p) => p.mg), scaleMg, 0.01)
-    const x0 = curve[0]?.dayOffset ?? 0
-    const x1 = curve[curve.length - 1]?.dayOffset ?? 1
-    const span = Math.max(0.001, x1 - x0)
-    const w = 120
-    const h = 36
-    const padY = 3
-    const path = curve
+    if (!cycle) return null
+
+    const maxCurve = Math.max(...cycle.points.map((p) => p.mg), scaleMg, 0.01)
+    const w = compact ? 280 : 320
+    const h = compact ? 52 : 64
+    const padX = 4
+    const padY = 6
+    const span = Math.max(0.001, cycle.spanDays)
+    const xOf = (dayOffset: number) => padX + (dayOffset / span) * (w - padX * 2)
+    const yOf = (mg: number) => h - padY - (mg / maxCurve) * (h - padY * 2)
+
+    const path = cycle.points
       .map((p, i) => {
-        const x = ((p.dayOffset - x0) / span) * w
-        const y = h - padY - (p.mg / maxCurve) * (h - padY * 2)
+        const x = xOf(p.dayOffset)
+        const y = yOf(p.mg)
         return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`
       })
       .join(" ")
-    const nowX = ((0 - x0) / span) * w
-    const nowY = h - padY - (circulating / maxCurve) * (h - padY * 2)
+
+    // Soft fill under the path (close to baseline).
+    const area =
+      path +
+      ` L${xOf(cycle.points[cycle.points.length - 1]!.dayOffset).toFixed(1)},${(h - padY).toFixed(1)}` +
+      ` L${xOf(cycle.points[0]!.dayOffset).toFixed(1)},${(h - padY).toFixed(1)} Z`
+
+    const nowX = xOf(cycle.nowDayOffset)
+    const nowY = yOf(circulating)
+    const injectionMarks = cycle.injections.map((inj) => ({
+      x: xOf(inj.dayOffset),
+      y: yOf(estimateCirculatingMg(shots, inj.atMs)),
+      doseMg: inj.doseMg,
+    }))
+
+    const startLabel = formatCycleDayLabel(cycle.points[0]!.atMs)
+    const endLabel = formatCycleDayLabel(
+      cycle.points[cycle.points.length - 1]!.atMs,
+    )
 
     return {
       circulating,
@@ -88,13 +109,18 @@ export function PeptideHalfLifeMeter({
       pctOfLast,
       fillPct,
       path,
+      area,
       nowX,
       nowY,
       w,
       h,
       shotCount: shots.length,
+      injectionMarks,
+      startLabel,
+      endLabel,
+      spanDays: cycle.spanDays,
     }
-  }, [entries, lastDoseMg, lastInjectedAt])
+  }, [entries, lastDoseMg, lastInjectedAt, compact])
 
   if (!model) {
     return (
@@ -144,38 +170,6 @@ export function PeptideHalfLifeMeter({
               : ""}
           </p>
         </div>
-        <svg
-          viewBox={`0 0 ${model.w} ${model.h}`}
-          className="h-9 w-[7.5rem] shrink-0 overflow-visible"
-          aria-hidden
-        >
-          <path
-            d={model.path}
-            fill="none"
-            stroke={PEPTIDE_COLOR}
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity={0.85}
-          />
-          <line
-            x1={model.nowX}
-            y1={2}
-            x2={model.nowX}
-            y2={model.h - 2}
-            stroke="oklch(1 0 0 / 18%)"
-            strokeWidth="1"
-            strokeDasharray="2 2"
-          />
-          <circle
-            cx={model.nowX}
-            cy={model.nowY}
-            r="2.75"
-            fill={PEPTIDE_COLOR}
-            stroke="oklch(0.18 0.01 250)"
-            strokeWidth="1"
-          />
-        </svg>
       </div>
 
       <div className="relative h-2 overflow-hidden rounded-full bg-white/[0.06]">
@@ -184,10 +178,97 @@ export function PeptideHalfLifeMeter({
           style={{ width: `${Math.round(model.fillPct)}%` }}
         />
       </div>
+
+      <div className="space-y-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="type-hud-micro text-muted-foreground/55">Full cycle</p>
+          <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/45">
+            {model.shotCount} shot{model.shotCount === 1 ? "" : "s"} ·{" "}
+            {model.spanDays < 1.5
+              ? "<2d"
+              : `${Math.round(model.spanDays)}d`}
+          </p>
+        </div>
+        <svg
+          viewBox={`0 0 ${model.w} ${model.h}`}
+          className="h-14 w-full overflow-visible sm:h-16"
+          role="img"
+          aria-label="Estimated circulating dose over the full injection cycle"
+        >
+          <defs>
+            <linearGradient id={`reta-cycle-fill-${fillId}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={PEPTIDE_COLOR} stopOpacity="0.28" />
+              <stop offset="100%" stopColor={PEPTIDE_COLOR} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          <path d={model.area} fill={`url(#reta-cycle-fill-${fillId})`} />
+          <path
+            d={model.path}
+            fill="none"
+            stroke={PEPTIDE_COLOR}
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={0.9}
+          />
+          {/* Injection event ticks */}
+          {model.injectionMarks.map((m, i) => (
+            <g key={i}>
+              <line
+                x1={m.x}
+                y1={m.y}
+                x2={m.x}
+                y2={model.h - 4}
+                stroke="oklch(1 0 0 / 14%)"
+                strokeWidth="1"
+                strokeDasharray="2 2"
+              />
+              <circle
+                cx={m.x}
+                cy={m.y}
+                r="2.2"
+                fill="oklch(0.18 0.01 250)"
+                stroke={PEPTIDE_COLOR}
+                strokeWidth="1.25"
+                opacity={0.9}
+              />
+            </g>
+          ))}
+          {/* Now marker */}
+          <line
+            x1={model.nowX}
+            y1={2}
+            x2={model.nowX}
+            y2={model.h - 2}
+            stroke="oklch(1 0 0 / 22%)"
+            strokeWidth="1"
+            strokeDasharray="2 2"
+          />
+          <circle
+            cx={model.nowX}
+            cy={model.nowY}
+            r="3"
+            fill={PEPTIDE_COLOR}
+            stroke="oklch(0.18 0.01 250)"
+            strokeWidth="1.25"
+          />
+        </svg>
+        <div className="flex items-center justify-between gap-2 type-hud-micro normal-case tracking-normal text-muted-foreground/45">
+          <span>{model.startLabel}</span>
+          <span>now</span>
+          <span>{model.endLabel}</span>
+        </div>
+      </div>
+
       <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/45">
         Estimate only · Σ dose × 0.5^(days / {RETA_HALF_LIFE_DAYS})
         {model.shotCount > 1 ? ` · ${model.shotCount} shots` : ""}
       </p>
     </div>
   )
+}
+
+function formatCycleDayLabel(atMs: number): string {
+  const d = new Date(atMs)
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" })
 }

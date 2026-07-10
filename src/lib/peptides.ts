@@ -48,6 +48,7 @@ export function remainingDoseMg(
 /**
  * Multi-dose superposition: sum of each past shot’s remaining contribution.
  * Prefer this when injection history is available.
+ * Shots after `nowMs` are ignored (needed for historical curve sampling).
  */
 export function estimateCirculatingMg(
   entries: { injectedAt: string; doseMg: number }[],
@@ -57,6 +58,8 @@ export function estimateCirculatingMg(
   let sum = 0
   for (const e of entries) {
     if (!e.injectedAt || !(e.doseMg > 0)) continue
+    const at = new Date(e.injectedAt).getTime()
+    if (at > nowMs) continue
     sum += remainingDoseMg(e.doseMg, daysElapsedSince(e.injectedAt, nowMs), halfLifeDays)
   }
   return sum
@@ -100,6 +103,171 @@ export function circulatingCurvePoints(
     })
   }
   return points
+}
+
+/**
+ * Full-cycle circulating curve: first injection → now (+ optional lookahead).
+ * `dayOffset` is days since the earliest shot (0 = cycle start).
+ * Injection markers are included for timeline ticks.
+ */
+export function fullCycleCirculatingCurve(
+  entries: { injectedAt: string; doseMg: number }[],
+  opts?: {
+    nowMs?: number
+    toDaysAhead?: number
+    steps?: number
+    halfLifeDays?: number
+  },
+): {
+  points: Array<{ dayOffset: number; mg: number; atMs: number }>
+  injections: Array<{ dayOffset: number; doseMg: number; atMs: number }>
+  nowDayOffset: number
+  spanDays: number
+} | null {
+  const shots = entries
+    .filter((e) => e.injectedAt && e.doseMg > 0)
+    .map((e) => ({
+      injectedAt: e.injectedAt,
+      doseMg: e.doseMg,
+      atMs: new Date(e.injectedAt).getTime(),
+    }))
+    .sort((a, b) => a.atMs - b.atMs)
+  if (shots.length === 0) return null
+
+  const nowMs = opts?.nowMs ?? Date.now()
+  const toDaysAhead = opts?.toDaysAhead ?? RETA_HALF_LIFE_DAYS
+  const halfLifeDays = opts?.halfLifeDays ?? RETA_HALF_LIFE_DAYS
+  const startMs = shots[0]!.atMs
+  const endMs = nowMs + toDaysAhead * 24 * 60 * 60 * 1000
+  const spanDays = Math.max(0.001, (endMs - startMs) / (1000 * 60 * 60 * 24))
+  // Dense enough for multi-week cycles without drowning mobile SVG.
+  const steps = Math.max(24, opts?.steps ?? Math.min(96, Math.ceil(spanDays * 4)))
+
+  const points: Array<{ dayOffset: number; mg: number; atMs: number }> = []
+  for (let i = 0; i <= steps; i++) {
+    const dayOffset = (spanDays * i) / steps
+    const atMs = startMs + dayOffset * 24 * 60 * 60 * 1000
+    points.push({
+      dayOffset,
+      atMs,
+      mg: estimateCirculatingMg(shots, atMs, halfLifeDays),
+    })
+  }
+
+  // Ensure a sample exactly at "now" so the marker sits on the path.
+  const nowDayOffset = (nowMs - startMs) / (1000 * 60 * 60 * 24)
+  const nowMg = estimateCirculatingMg(shots, nowMs, halfLifeDays)
+  const insertAt = points.findIndex((p) => p.dayOffset >= nowDayOffset)
+  if (insertAt < 0) {
+    points.push({ dayOffset: nowDayOffset, atMs: nowMs, mg: nowMg })
+  } else if (Math.abs(points[insertAt]!.dayOffset - nowDayOffset) > 1e-6) {
+    points.splice(insertAt, 0, { dayOffset: nowDayOffset, atMs: nowMs, mg: nowMg })
+  }
+
+  const injections = shots.map((s) => ({
+    dayOffset: (s.atMs - startMs) / (1000 * 60 * 60 * 24),
+    doseMg: s.doseMg,
+    atMs: s.atMs,
+  }))
+
+  return { points, injections, nowDayOffset, spanDays }
+}
+
+/**
+ * Chronological ordinal (1-based) of each Monday-start week that had ≥1 dose.
+ * Earliest dosed week = 1 … latest = countDosedWeeks.
+ */
+export function dosedWeekNumberMap(entries: { injectedAt: string }[]): Map<string, number> {
+  const keys = new Set<string>()
+  for (const e of entries) {
+    if (!e.injectedAt) continue
+    keys.add(injectionWeekKey(e.injectedAt))
+  }
+  const sorted = [...keys].sort((a, b) => a.localeCompare(b))
+  const map = new Map<string, number>()
+  sorted.forEach((k, i) => map.set(k, i + 1))
+  return map
+}
+
+export type DosedWeekGroup<T extends { injectedAt: string }> = {
+  weekKey: string
+  weekNumber: number
+  /** Short label for week-of Monday, e.g. "Jun 29". */
+  weekOfLabel: string
+  entries: T[]
+}
+
+/**
+ * Group injections by Monday-start dosed week (newest week first).
+ * Week numbers match protocol counting (oldest dosed week = Week 1).
+ */
+export function groupInjectionsByDosedWeek<T extends { injectedAt: string }>(
+  entries: T[],
+): DosedWeekGroup<T>[] {
+  const weekNums = dosedWeekNumberMap(entries)
+  const byWeek = new Map<string, T[]>()
+  for (const e of entries) {
+    if (!e.injectedAt) continue
+    const key = injectionWeekKey(e.injectedAt)
+    if (!byWeek.has(key)) byWeek.set(key, [])
+    byWeek.get(key)!.push(e)
+  }
+  const groups: DosedWeekGroup<T>[] = []
+  for (const [weekKey, weekEntries] of byWeek) {
+    const sorted = [...weekEntries].sort(
+      (a, b) => new Date(b.injectedAt).getTime() - new Date(a.injectedAt).getTime(),
+    )
+    groups.push({
+      weekKey,
+      weekNumber: weekNums.get(weekKey) ?? 0,
+      weekOfLabel: format(new Date(`${weekKey}T12:00:00`), "MMM d"),
+      entries: sorted,
+    })
+  }
+  return groups.sort((a, b) => b.weekKey.localeCompare(a.weekKey))
+}
+
+/**
+ * Inverse appetite cue from circulating level (1–10, 10 = very hungry).
+ * Higher circulating → lower estimated hunger. Clearly secondary to logged data.
+ */
+export function estimateHungerFromCirculating(
+  circulatingMg: number,
+  referenceMg: number,
+): number {
+  const ref = Math.max(0.01, referenceMg)
+  const ratio = Math.min(1.25, Math.max(0, circulatingMg / ref))
+  // Full reference ≈ hunger 2; empty ≈ hunger 10; slight overshoot → ~1.
+  const raw = 10 - ratio * 8
+  return Math.min(10, Math.max(1, Math.round(raw * 10) / 10))
+}
+
+/** Prefer latest logged hunger; fall back to circulating inverse estimate. */
+export function resolveHungerReadout(opts: {
+  loggedHunger?: number | null
+  circulatingMg?: number | null
+  referenceMg?: number | null
+}): {
+  value: number | null
+  source: "logged" | "estimate" | "none"
+  estimate: number | null
+} {
+  const logged =
+    opts.loggedHunger != null &&
+    Number.isFinite(opts.loggedHunger) &&
+    opts.loggedHunger >= 1 &&
+    opts.loggedHunger <= 10
+      ? opts.loggedHunger
+      : null
+  const circ = opts.circulatingMg
+  const ref = opts.referenceMg
+  const estimate =
+    circ != null && circ >= 0 && ref != null && ref > 0
+      ? estimateHungerFromCirculating(circ, ref)
+      : null
+  if (logged != null) return { value: logged, source: "logged", estimate }
+  if (estimate != null) return { value: estimate, source: "estimate", estimate }
+  return { value: null, source: "none", estimate: null }
 }
 
 export const COMPOUNDS = [

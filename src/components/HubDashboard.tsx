@@ -1,14 +1,16 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { subDays } from "date-fns"
 import { PageHeader } from "./PageHeader"
 import { WeeklyHero } from "./WeeklyHero"
 import type { HubExpandedPanel } from "./hub/HubExpandPanels"
 import { FastingTimer } from "./FastingTimer"
 import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
-import { cn, parseLocalDate } from "@/lib/utils"
+import { cn, formatDate, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
+import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { isVacationBlockingCalendarDay, vacationCalorieDayMask } from "@/lib/vacation-mode"
 import {
   HUB_PREFS_CHANGED_EVENT,
@@ -93,6 +95,9 @@ export function HubDashboard() {
   const { user } = useUser()
   const [data, setData] = useState<DashboardData>(defaultData)
   const [peptideEntries, setPeptideEntries] = useState<PeptideHubEntry[]>([])
+  const [peptideHungerLogs, setPeptideHungerLogs] = useState<
+    Array<{ date: string; hungerLevel: number }>
+  >([])
   const [loading, setLoading] = useState(true)
   const [injectionIntervalDays, setInjectionIntervalDays] = useState(7)
   const [hubExpanded, setHubExpanded] = useState<HubExpandedPanel | null>(null)
@@ -150,9 +155,11 @@ export function HubDashboard() {
     async function fetchDashboard() {
       setLoading(true)
       try {
-        const [dashRes, peptideRes] = await Promise.all([
+        const from = formatDate(subDays(parseLocalDate(activeDate), 21))
+        const [dashRes, peptideRes, hungerRes] = await Promise.all([
           apiFetch(`/api/dashboard?d=${activeDate}&_ts=${Date.now()}`, { cache: "no-store" }),
           apiFetch("/api/peptides"),
+          apiFetch(`/api/peptides/daily?from=${from}&to=${activeDate}`),
         ])
         if (dashRes.ok && !cancelled) {
           setData(await dashRes.json())
@@ -160,6 +167,23 @@ export function HubDashboard() {
         if (peptideRes.ok && !cancelled) {
           const rows = await peptideRes.json()
           setPeptideEntries(Array.isArray(rows) ? rows : [])
+        }
+        if (hungerRes.ok && !cancelled) {
+          const rows = await hungerRes.json()
+          setPeptideHungerLogs(
+            Array.isArray(rows)
+              ? rows
+                  .map((r: { date?: string; hungerLevel?: number }) => ({
+                    date:
+                      typeof r.date === "string"
+                        ? utcCalendarDayKeyFromIso(r.date)
+                        : "",
+                    hungerLevel:
+                      typeof r.hungerLevel === "number" ? r.hungerLevel : 0,
+                  }))
+                  .filter((r) => r.date && r.hungerLevel >= 1)
+              : [],
+          )
         }
       } catch {
         // DB not yet connected
@@ -239,6 +263,7 @@ export function HubDashboard() {
             recentEntries: peptideEntries,
             lastSiteUsed: lastPeptide?.injectionSite ?? null,
             dosedWeekCount,
+            hungerLogs: peptideHungerLogs,
           }}
           workoutSummary={{
             weekCount: weekWorkoutCount,

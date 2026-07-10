@@ -55,6 +55,7 @@ import {
   writeInjectionIntervalDays,
 } from "@/lib/hub-tile-prefs"
 import { PeptideHalfLifeMeter } from "@/components/PeptideHalfLifeMeter"
+import { PeptideHungerMeter } from "@/components/PeptideHungerMeter"
 
 const peptideGoalPresets: GoalPreset[] = [
   { type: "weekly", label: "Weekly Injections", unit: "doses", placeholder: "1" },
@@ -508,11 +509,20 @@ export default function PeptidesPage() {
         )}
       </div>
 
-      <div className="glass-panel animate-fade-up stagger-1 space-y-1 p-4">
+      <div className="glass-panel animate-fade-up stagger-1 space-y-4 p-4">
         <PeptideHalfLifeMeter
           entries={entries}
           lastDoseMg={lastInjection?.doseMg ?? null}
           lastInjectedAt={lastInjection?.injectedAt ?? null}
+        />
+        <div className="hud-divider" />
+        <PeptideHungerMeter
+          hungerLogs={dailyEntries.map((d) => ({
+            date: entryDateKey(d),
+            hungerLevel: d.hungerLevel,
+          }))}
+          doseEntries={entries}
+          lastDoseMg={lastInjection?.doseMg ?? null}
         />
       </div>
 
