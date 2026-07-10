@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { format, isToday, isYesterday, subDays } from "date-fns"
+import { format, subDays } from "date-fns"
 import { PageHeader } from "@/components/PageHeader"
 import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { apiFetch } from "@/lib/api-fetch"
@@ -33,6 +33,7 @@ import { kmToMiles, runKmToStepsFromRun, STEPS_PER_MILE_FROM_RUN } from "@/lib/u
 import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
+import { stepsDayKey } from "@/lib/steps-day"
 
 const stepsGoalPresets: GoalPreset[] = [
   { type: "daily", label: "Daily Total", unit: "steps", placeholder: "10000" },
@@ -57,11 +58,17 @@ function dayKeyFromEntry(dateIso: string): string {
   return utcCalendarDayKeyFromIso(dateIso)
 }
 
-function groupHeaderLabel(dayKey: string): string {
+function groupHeaderLabel(dayKey: string, stepsTodayKey: string): string {
   const d = parseLocalDate(dayKey)
-  if (isToday(d)) return "Today"
-  if (isYesterday(d)) return "Yesterday"
+  if (dayKey === stepsTodayKey) return "Today"
+  if (dayKey === addCalendarDay(stepsTodayKey, -1)) return "Yesterday"
   return formatDisplayDate(d)
+}
+
+function addCalendarDay(ymd: string, delta: number): string {
+  const d = parseLocalDate(ymd)
+  d.setDate(d.getDate() + delta)
+  return formatDate(d)
 }
 
 /** Common rule-of-thumb: ~2,000 steps ≈ 1 mile walked */
@@ -176,13 +183,14 @@ function StepHistoryDayBlock({
 }
 
 export default function StepsPage() {
-  const { activeDate } = useActiveDate()
+  const { activeDate, isToday: isActiveToday } = useActiveDate()
   const [entries, setEntries] = useState<StepEntry[]>([])
   const [runEntries, setRunEntries] = useState<RunEntry[]>([])
   const [logOpen, setLogOpen] = useState(false)
   const [dailyStepTarget, setDailyStepTarget] = useState<number | null>(null)
 
-  const today = activeDate
+  const stepsTodayKey = stepsDayKey(new Date())
+  const today = isActiveToday ? stepsTodayKey : activeDate
 
   const fetchDailyStepGoal = useCallback(async () => {
     try {
@@ -259,8 +267,8 @@ export default function StepsPage() {
   }, [runEntries, today])
 
   const weekDayKeys = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => formatDate(subDays(parseLocalDate(activeDate), 6 - i))),
-    [activeDate],
+    () => Array.from({ length: 7 }, (_, i) => formatDate(subDays(parseLocalDate(today), 6 - i))),
+    [today],
   )
 
   const stats = useMemo(() => {
@@ -318,7 +326,7 @@ export default function StepsPage() {
     const keys = [...buckets.keys()].sort((a, b) => (a > b ? -1 : a < b ? 1 : 0))
     return keys.map((dayKey) => ({
       dayKey,
-      header: groupHeaderLabel(dayKey),
+      header: groupHeaderLabel(dayKey, stepsTodayKey),
       rows: buckets.get(dayKey)!.sort((a, b) => {
         const timeOf = (row: HistoryRow) =>
           new Date(
@@ -329,7 +337,7 @@ export default function StepsPage() {
         return timeOf(b) - timeOf(a)
       }),
     }))
-  }, [entries, runEntries])
+  }, [entries, runEntries, stepsTodayKey])
 
   const historyDisplay = useMemo(
     () => partitionHistoryDayGroups(historyGroups, (g) => g.dayKey, today),

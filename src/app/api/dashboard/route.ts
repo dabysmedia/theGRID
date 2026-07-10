@@ -13,6 +13,11 @@ import { resolveUserId, UserError } from "@/lib/current-user"
 import { sleepDurationHours } from "@/lib/sleepDuration"
 import { computeReadinessScore } from "@/lib/readiness-score"
 import { deriveSleepScore, qualityToScore } from "@/lib/sleep-score"
+import {
+  addDaysYmd,
+  resolveStepsTimezone,
+  stepsRefDayKey,
+} from "@/lib/steps-day"
 
 interface GoalRow {
   category: string
@@ -157,7 +162,20 @@ export async function GET(req: NextRequest) {
     const weekStartStr = formatDate(subDays(refDate, 6))
     const vitalsBaselineStartStr = formatDate(subDays(refDate, 29))
     const weightRangeStartStr = formatDate(subDays(refDate, 55))
-    const dateInRange = utcCalendarDayRangeInclusive(weekStartStr, refDayStr)
+
+    const profile = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { timeZone: true },
+    })
+    const stepsTz = resolveStepsTimezone(profile?.timeZone)
+    // When viewing "today", steps use the 7am→7am day (pre-7am still counts as yesterday).
+    const stepsRefDayStr = stepsRefDayKey(refDayStr, new Date(), stepsTz)
+    const stepsWeekStartStr = addDaysYmd(stepsRefDayStr, -6)
+
+    const rangeFirst =
+      weekStartStr <= stepsWeekStartStr ? weekStartStr : stepsWeekStartStr
+    const rangeLast = refDayStr >= stepsRefDayStr ? refDayStr : stepsRefDayStr
+    const dateInRange = utcCalendarDayRangeInclusive(rangeFirst, rangeLast)
     const vitalsBaselineRange = utcCalendarDayRangeInclusive(
       vitalsBaselineStartStr,
       refDayStr,
@@ -258,16 +276,28 @@ export async function GET(req: NextRequest) {
       return result
     }
 
+    function stepsDayTotals(
+      entries: { date: Date; count: number }[],
+      runRows: { date: Date; distance: number }[],
+    ): number[] {
+      const result: number[] = []
+      for (let i = 0; i <= 6; i++) {
+        const dayKey = addDaysYmd(stepsRefDayStr, -(6 - i))
+        const logged = entries
+          .filter((e) => utcCalendarDayKeyFromIso(e.date) === dayKey)
+          .reduce((s, e) => s + e.count, 0)
+        const fromRuns = runRows
+          .filter((e) => utcCalendarDayKeyFromIso(e.date) === dayKey)
+          .reduce((s, e) => s + runKmToStepsFromRun(e.distance), 0)
+        result.push(logged + fromRuns)
+      }
+      return result
+    }
+
     const calorieLast7 = dailyTotals(calorieEntries, (items) =>
       items.reduce((s, e) => s + e.calories, 0)
     )
-    const stepsLoggedLast7 = dailyTotals(stepEntries, (items) =>
-      items.reduce((s, e) => s + e.count, 0)
-    )
-    const stepsFromRunsLast7 = dailyTotals(runEntries, (items) =>
-      items.reduce((s, e) => s + runKmToStepsFromRun(e.distance), 0)
-    )
-    const stepsLast7 = stepsLoggedLast7.map((s, i) => s + stepsFromRunsLast7[i])
+    const stepsLast7 = stepsDayTotals(stepEntries, runEntries)
     const runLast7Km = dailyTotals(runEntries, (items) =>
       items.reduce((s, e) => s + e.distance, 0)
     )
@@ -402,6 +432,8 @@ export async function GET(req: NextRequest) {
         direction: stepsG?.direction ?? "up",
         unit: "steps",
         last7: stepsLast7,
+        /** yyyy-MM-dd key for the 7am→7am steps day ending the last7 window */
+        refDay: stepsRefDayStr,
       },
       running: {
         todayValue: Math.round(runLast7[6] * 10) / 10,

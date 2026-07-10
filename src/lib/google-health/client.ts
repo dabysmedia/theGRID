@@ -47,6 +47,7 @@ async function healthFetch(
 }
 
 export type DailyStepsRollup = { date: string; count: number }
+export type HourlyStepsBucket = { startTime: string; endTime: string; count: number }
 export type DailyWeightRollup = { date: string; weightGrams: number }
 
 export async function fetchDailySteps(
@@ -84,6 +85,56 @@ export async function fetchDailySteps(
       out.push({ date, count: Math.round(count) })
     }
   }
+  return out
+}
+
+/**
+ * Hourly step totals over a physical UTC range (for 7am→7am re-bucketing).
+ * Google Health caps steps rollUp ranges at 90 days.
+ */
+export async function fetchHourlySteps(
+  userId: string,
+  startTimeIso: string,
+  endTimeIso: string,
+): Promise<HourlyStepsBucket[]> {
+  const out: HourlyStepsBucket[] = []
+  let pageToken: string | undefined
+
+  do {
+    const res = await healthFetch(userId, "/users/me/dataTypes/steps/dataPoints:rollUp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        range: { startTime: startTimeIso, endTime: endTimeIso },
+        windowSize: "3600s",
+        ...(pageToken ? { pageToken } : {}),
+      }),
+    })
+    const data = (await res.json().catch(() => ({}))) as {
+      rollupDataPoints?: Array<{
+        startTime?: string
+        endTime?: string
+        steps?: { countSum?: string | number }
+      }>
+      nextPageToken?: string
+      error?: { message?: string }
+    }
+    if (!res.ok) {
+      throw new Error(data.error?.message || `Steps hourly rollup failed (${res.status})`)
+    }
+    for (const row of data.rollupDataPoints ?? []) {
+      if (!row.startTime || !row.endTime) continue
+      const count = Number(row.steps?.countSum ?? 0)
+      if (!Number.isFinite(count) || count <= 0) continue
+      out.push({
+        startTime: row.startTime,
+        endTime: row.endTime,
+        count: Math.round(count),
+      })
+    }
+    pageToken = data.nextPageToken || undefined
+  } while (pageToken)
+
   return out
 }
 

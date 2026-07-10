@@ -73,7 +73,8 @@ model StepEntry {
   count      Int
   /** e.g. "google-health" for synced rows; null = manual */
   source     String?
-  /** Stable external id for upsert (e.g. google-health:steps:2026-07-09) */
+  /** Stable external id for upsert (e.g. google-health:steps:2026-07-09).
+   *  For google-health steps, the date segment is the 7am→7am steps-day key. */
   externalId String?
   userId     String?
   user       User?    @relation(fields: [userId], references: [id])

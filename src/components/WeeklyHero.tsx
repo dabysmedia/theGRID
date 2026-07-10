@@ -46,6 +46,8 @@ interface CategorySummary {
   goal: number | null
   unit: string
   last7: number[]
+  /** Present for steps: 7am→7am day key for the last7 window end */
+  refDay?: string
 }
 
 interface DashboardData {
@@ -420,6 +422,10 @@ export function WeeklyHero({
     : `${monthNames[refDate.getMonth()]} ${refDate.getDate()}`
 
   const dayLabels = lastNWeekdayLabels(refDate, data.steps.last7.length)
+  const stepsLabelRef = data.steps.refDay
+    ? parseLocalDate(data.steps.refDay)
+    : refDate
+  const stepsDayLabels = lastNWeekdayLabels(stepsLabelRef, data.steps.last7.length)
 
   const showRings =
     expanded == null || expanded === "calories" || expanded === "steps" || expanded === "sleep"
@@ -667,7 +673,7 @@ export function WeeklyHero({
               expanded so the isometric bars grow in place instead of remounting. */}
           <StepsActivityBars
             values={data.steps.last7}
-            labels={dayLabels}
+            labels={stepsDayLabels}
             goal={stepsGoal}
             readiness={readinessValue}
             hrvMs={hrvMs}

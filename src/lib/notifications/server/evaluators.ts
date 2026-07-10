@@ -8,6 +8,7 @@ import {
 } from "../catalog"
 import { utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
 import { localTimeParts } from "./local-time"
+import { stepsDayKey } from "@/lib/steps-day"
 import type { PushPayload } from "./send"
 
 /** Tolerance window so the every-5-min cron can match HH:mm reminders even
@@ -283,7 +284,7 @@ const evaluators: Record<NotificationKey, Evaluator> = {
   steps_check_in: async ({ ctx, timeOfDay }) => {
     if (!matchesScheduledTime(timeOfDay, ctx.local)) return { shouldSend: false }
     const goal = await dailyStepGoal(ctx.userId)
-    const count = await stepsToday(ctx.userId, ctx.local.dayKey)
+    const count = await stepsToday(ctx.userId, stepsDayKey(ctx.now, ctx.timeZone))
     if (!goal || count >= goal) {
       return { shouldSend: false, recordOnSkip: true }
     }
