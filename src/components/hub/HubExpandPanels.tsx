@@ -126,6 +126,48 @@ export function HubBackToOverview({ onBack }: { onBack: () => void }) {
 
 const MEAL_PREVIEW_LIMIT = 2
 
+/** Steel-HUD meal accents — coral calorie family + cool steel, no purple. */
+const MEAL_ACCENT: Record<
+  string,
+  { bar: string; wash: string; label: string; cal: string }
+> = {
+  breakfast: {
+    bar: "#f59e0b",
+    wash: "oklch(0.72 0.14 75 / 10%)",
+    label: "#fbbf24",
+    cal: "#fcd34d",
+  },
+  lunch: {
+    bar: "#38bdf8",
+    wash: "oklch(0.72 0.1 230 / 10%)",
+    label: "#7dd3fc",
+    cal: "#bae6fd",
+  },
+  dinner: {
+    bar: "#f87171",
+    wash: "oklch(0.68 0.16 25 / 11%)",
+    label: "#fca5a5",
+    cal: "#fecaca",
+  },
+  snack: {
+    bar: "#94a3b8",
+    wash: "oklch(0.7 0.02 250 / 10%)",
+    label: "#cbd5e1",
+    cal: "#e2e8f0",
+  },
+}
+
+const DEFAULT_MEAL_ACCENT = {
+  bar: "#ef4444",
+  wash: "oklch(0.65 0.18 25 / 10%)",
+  label: "#fca5a5",
+  cal: "#fecaca",
+} as const
+
+function mealAccent(meal: string) {
+  return MEAL_ACCENT[meal.toLowerCase().trim()] ?? DEFAULT_MEAL_ACCENT
+}
+
 /* ─── Calories ───────────────────────────────────────────── */
 
 export function HubCaloriesExpand({
@@ -295,8 +337,8 @@ export function HubCaloriesExpand({
         </div>
       ) : (
         <>
-          {/* Pips = full-bleed background; Today's food = right-side floating rail */}
-          <div className="relative -mx-1 min-h-[min(62vh,30rem)] w-[calc(100%+0.5rem)] overflow-hidden sm:-mx-2 sm:min-h-[min(58vh,32rem)] sm:w-[calc(100%+1rem)]">
+          {/* Pips = full-bleed background; Today's food = floating panel (bottom sheet → right float) */}
+          <div className="relative -mx-1 min-h-[min(74vh,36rem)] w-[calc(100%+0.5rem)] overflow-hidden sm:-mx-2 sm:min-h-[min(68vh,38rem)] sm:w-[calc(100%+1rem)]">
             <div className="pointer-events-none absolute inset-0 z-0" aria-hidden>
               <CaloriePipTracker
                 consumed={consumed}
@@ -306,25 +348,46 @@ export function HubCaloriesExpand({
                 hideMeta
               />
             </div>
+            {/* Readability wash — keeps food panel legible over bright pips */}
+            <div
+              className="pointer-events-none absolute inset-0 z-[1]"
+              aria-hidden
+              style={{
+                background:
+                  "linear-gradient(180deg, oklch(0.1 0.01 250 / 45%) 0%, oklch(0.08 0.01 250 / 12%) 28%, oklch(0.08 0.01 250 / 8%) 55%, oklch(0.07 0.012 250 / 55%) 100%)",
+              }}
+            />
+            <div
+              className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-[42%] sm:inset-y-0 sm:left-auto sm:right-0 sm:h-auto sm:w-[48%]"
+              aria-hidden
+              style={{
+                background:
+                  "radial-gradient(ellipse 90% 70% at 50% 100%, oklch(0.08 0.01 250 / 70%) 0%, transparent 72%)",
+              }}
+            />
 
-            <div className="relative z-10 flex min-h-[min(62vh,30rem)] flex-col sm:min-h-[min(58vh,32rem)]">
-              <div className="flex shrink-0 flex-col gap-2.5 px-2.5 pt-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3 sm:px-3">
+            <div className="relative z-10 flex min-h-[min(74vh,36rem)] flex-col sm:min-h-[min(68vh,38rem)]">
+              <div className="flex shrink-0 flex-col gap-2.5 px-3 pt-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3 sm:px-4">
                 <div className="min-w-0">
-                  <p className="type-hud-subsection text-foreground/80 drop-shadow-[0_1px_8px_oklch(0.08_0.01_250/80%)]">
+                  <p className="type-hud-subsection text-foreground/90 drop-shadow-[0_1px_8px_oklch(0.08_0.01_250/80%)]">
                     Calories
                   </p>
-                  <p className="mt-1 text-[12px] font-medium tabular-nums leading-snug text-foreground/75 drop-shadow-[0_1px_6px_oklch(0.08_0.01_250/70%)] sm:text-[13px]">
-                    {`${consumed.toLocaleString()} of ${target.toLocaleString()}`}
+                  <p className="mt-1 text-[12px] font-medium tabular-nums leading-snug text-foreground/80 drop-shadow-[0_1px_6px_oklch(0.08_0.01_250/70%)] sm:text-[13px]">
+                    <span className="text-red-200/95">{consumed.toLocaleString()}</span>
                     <span className="text-muted-foreground/70">
-                      {` · ${remaining.toLocaleString()} left · ${pct}%`}
+                      {` of ${target.toLocaleString()}`}
                     </span>
+                    <span className="text-muted-foreground/65">
+                      {` · ${remaining.toLocaleString()} left · `}
+                    </span>
+                    <span className="font-semibold text-red-300/90">{pct}%</span>
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2 sm:shrink-0">
                   <button
                     type="button"
                     onClick={openAddFood}
-                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/14 bg-[oklch(0.14_0.01_250/70%)] px-3 type-hud-micro text-foreground/85 backdrop-blur-md transition-colors duration-200 hover:border-red-400/35 hover:bg-red-400/[0.1] hover:text-red-100/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:h-10 sm:flex-none sm:px-4"
+                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-[oklch(0.14_0.02_25/72%)] px-3 type-hud-micro text-red-100/90 backdrop-blur-md transition-colors duration-200 hover:border-red-400/45 hover:bg-red-400/[0.14] hover:text-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:h-10 sm:flex-none sm:px-4"
                   >
                     <Plus className="h-3.5 w-3.5" aria-hidden />
                     Add food
@@ -339,28 +402,29 @@ export function HubCaloriesExpand({
                 </div>
               </div>
 
-              <div className="relative mt-2 flex min-h-0 flex-1">
-                {/* Left: pips breathe through; soft fade into the rail */}
-                <div className="pointer-events-none relative min-w-0 flex-1" aria-hidden>
-                  <div className="absolute inset-y-0 right-0 w-10 bg-gradient-to-r from-transparent to-[oklch(0.11_0.01_250/55%)] sm:w-14" />
-                </div>
-
+              {/* Floating food panel — bottom sheet on mobile, right float on wider */}
+              <div className="relative mt-3 flex min-h-0 flex-1 flex-col justify-end px-2.5 pb-2.5 sm:mt-2.5 sm:justify-stretch sm:px-3 sm:pb-3 sm:pt-1">
                 <aside
                   className={cn(
-                    "pointer-events-auto flex min-h-0 w-[min(72%,20rem)] shrink-0 flex-col sm:w-[min(46%,22.5rem)] md:w-[min(40%,24rem)]",
-                    "border-l border-white/[0.1] bg-[oklch(0.11_0.012_250/78%)] shadow-[-12px_0_28px_oklch(0.08_0.01_250/35%)] backdrop-blur-[14px]",
+                    "pointer-events-auto flex min-h-0 w-full max-h-[min(52vh,24rem)] flex-col overflow-hidden",
+                    "rounded-2xl border border-white/[0.12] bg-[oklch(0.12_0.014_250/82%)] shadow-[0_12px_40px_oklch(0.05_0.01_250/55%),0_0_0_1px_oklch(1_0_0/4%)] backdrop-blur-[16px]",
+                    "sm:ml-auto sm:h-full sm:max-h-none sm:w-[min(44%,22.5rem)] sm:max-w-[24rem] sm:self-stretch",
+                    "md:w-[min(38%,24rem)]",
                     "motion-safe:animate-fade-up motion-reduce:animate-none",
                   )}
                   style={{ animationDuration: `${HUB_MOTION_MS}ms` }}
                   aria-label="Today's food"
                 >
-                  <div className="flex shrink-0 items-baseline justify-between gap-2 border-b border-white/[0.08] px-3 py-2.5">
+                  <div className="flex shrink-0 items-baseline justify-between gap-2 border-b border-white/[0.09] px-3.5 py-2.5">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/90">
                       Today&apos;s food
                     </p>
                     {entriesStatus === "ready" && entries.length > 0 ? (
-                      <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/65">
-                        {entries.length}
+                      <span className="text-[11px] font-semibold tabular-nums text-red-300/80">
+                        {entries.reduce((s, e) => s + e.calories, 0).toLocaleString()}
+                        <span className="ml-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/55">
+                          cal
+                        </span>
                       </span>
                     ) : null}
                   </div>
@@ -398,10 +462,14 @@ export function HubCaloriesExpand({
                             ? items
                             : items.slice(0, MEAL_PREVIEW_LIMIT)
                           const hiddenCount = items.length - visibleItems.length
+                          const accent = mealAccent(meal)
                           return (
                             <div
                               key={meal}
-                              className="overflow-hidden rounded-xl border border-white/[0.09] bg-white/[0.045]"
+                              className="overflow-hidden rounded-xl border border-white/[0.09]"
+                              style={{
+                                background: `linear-gradient(90deg, ${accent.wash} 0%, oklch(1 0 0 / 3.5%) 42%)`,
+                              }}
                             >
                               <button
                                 type="button"
@@ -409,16 +477,32 @@ export function HubCaloriesExpand({
                                 onClick={() => toggleMealOpen(meal)}
                                 className="flex w-full items-center justify-between gap-2.5 px-2.5 py-2.5 text-left transition-colors duration-200 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-400/25"
                               >
-                                <div className="min-w-0">
-                                  <p className="text-[12px] font-semibold capitalize tracking-wide text-foreground/95">
-                                    {meal}
-                                  </p>
-                                  <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground/60">
-                                    {items.length} item{items.length === 1 ? "" : "s"}
-                                  </p>
+                                <div className="flex min-w-0 items-center gap-2.5">
+                                  <span
+                                    className="h-8 w-1 shrink-0 rounded-full"
+                                    style={{
+                                      background: accent.bar,
+                                      boxShadow: `0 0 10px ${accent.bar}66`,
+                                    }}
+                                    aria-hidden
+                                  />
+                                  <div className="min-w-0">
+                                    <p
+                                      className="text-[12px] font-semibold capitalize tracking-wide"
+                                      style={{ color: accent.label }}
+                                    >
+                                      {meal}
+                                    </p>
+                                    <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground/60">
+                                      {items.length} item{items.length === 1 ? "" : "s"}
+                                    </p>
+                                  </div>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1.5">
-                                  <span className="text-[13px] font-bold tabular-nums text-foreground">
+                                  <span
+                                    className="text-[13px] font-bold tabular-nums"
+                                    style={{ color: accent.cal }}
+                                  >
                                     {total.toLocaleString()}
                                     <span className="ml-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/55">
                                       cal
@@ -427,8 +511,9 @@ export function HubCaloriesExpand({
                                   <ChevronDown
                                     className={cn(
                                       "h-3.5 w-3.5 text-muted-foreground/45 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                                      mealOpen && "rotate-180 text-red-200/75",
+                                      mealOpen && "rotate-180",
                                     )}
+                                    style={mealOpen ? { color: accent.bar } : undefined}
                                     aria-hidden
                                   />
                                 </div>
@@ -452,7 +537,7 @@ export function HubCaloriesExpand({
                                           </p>
                                         )}
                                         <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                                          <span className="text-[12px] font-semibold tabular-nums text-foreground/88">
+                                          <span className="text-[12px] font-semibold tabular-nums text-red-200/90">
                                             {entry.calories.toLocaleString()} cal
                                           </span>
                                           {(entry.protein != null ||

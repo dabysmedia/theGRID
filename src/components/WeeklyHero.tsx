@@ -434,8 +434,10 @@ export function WeeklyHero({
   const showWeighIn = showWeighInPrompt && (expanded == null || expanded === "weight")
   const showProtocolRail =
     expanded == null || expanded === "peptides" || expanded === "workouts"
+  /** Calories expand hides sibling rings (not just dims) to free vertical space. */
+  const hideSiblingRingsForCalories = expanded === "calories"
   const dimUnrelatedRings =
-    expanded === "calories" || expanded === "steps" || expanded === "sleep"
+    expanded === "steps" || expanded === "sleep"
 
   const peptideNext = peptideSummary?.nextInjection ?? null
   let peptideCue = "Log first shot"
@@ -566,11 +568,16 @@ export function WeeklyHero({
         {/* Rings — open instrument bay (no nested frame) */}
         <FadeSection show={showRings} className={fillViewport ? "shrink-0" : undefined}>
           <div className="relative px-0.5 py-0.5 sm:px-1 sm:py-1">
-            <div className="relative z-10 flex justify-around">
+            <div
+              className={cn(
+                "relative z-10 flex transition-[justify-content] duration-500 ease-out",
+                hideSiblingRingsForCalories ? "justify-center" : "justify-around",
+              )}
+            >
               <div
                 className={cn(
                   "transition-opacity duration-500 ease-out",
-                  dimUnrelatedRings && expanded !== "calories" && "pointer-events-none opacity-25",
+                  dimUnrelatedRings && "pointer-events-none opacity-25",
                 )}
               >
                 <ProgressRing
@@ -590,9 +597,15 @@ export function WeeklyHero({
               </div>
               <div
                 className={cn(
-                  "transition-opacity duration-500 ease-out",
-                  dimUnrelatedRings && expanded !== "steps" && "pointer-events-none opacity-25",
+                  "overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+                  hideSiblingRingsForCalories
+                    ? "pointer-events-none max-w-0 flex-[0_0_0%] scale-90 opacity-0"
+                    : "max-w-[11rem] flex-none",
+                  dimUnrelatedRings &&
+                    expanded !== "steps" &&
+                    "pointer-events-none opacity-25",
                 )}
+                aria-hidden={hideSiblingRingsForCalories}
               >
                 <ProgressRing
                   value={stepsValue}
@@ -609,9 +622,15 @@ export function WeeklyHero({
               </div>
               <div
                 className={cn(
-                  "transition-opacity duration-500 ease-out",
-                  dimUnrelatedRings && expanded !== "sleep" && "pointer-events-none opacity-25",
+                  "overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+                  hideSiblingRingsForCalories
+                    ? "pointer-events-none max-w-0 flex-[0_0_0%] scale-90 opacity-0"
+                    : "max-w-[11rem] flex-none",
+                  dimUnrelatedRings &&
+                    expanded !== "sleep" &&
+                    "pointer-events-none opacity-25",
                 )}
+                aria-hidden={hideSiblingRingsForCalories}
               >
                 <ProgressRing
                   value={sleepValue}
