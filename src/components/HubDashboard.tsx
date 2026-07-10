@@ -72,8 +72,11 @@ const defaultData: DashboardData = {
 }
 
 interface PeptideHubEntry {
+  id?: string
   injectedAt: string
   doseMg: number
+  injectionSite?: string
+  compound?: string
 }
 
 function workoutsThisWeek(last7: number[], refDateKey: string): number {
@@ -227,7 +230,9 @@ export function HubDashboard() {
             lastInjectedAt: lastPeptide?.injectedAt ?? null,
             nextInjection,
             todayMg: data.peptides.todayValue,
-            last7: data.peptides.last7,
+            intervalDays: injectionIntervalDays,
+            recentEntries: peptideEntries.slice(0, 8),
+            lastSiteUsed: lastPeptide?.injectionSite ?? null,
           }}
           workoutSummary={{
             weekCount: weekWorkoutCount,

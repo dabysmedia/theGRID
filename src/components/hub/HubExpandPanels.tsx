@@ -50,6 +50,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { GlassChip } from "@/components/GlassChip"
 import { LogPeptideDailyDialog } from "@/components/quick-log/LogPeptideDailyDialog"
 import { LogPeptideInjectionDialog } from "@/components/quick-log/LogPeptideInjectionDialog"
 import { LogWeightDialog } from "@/components/quick-log/LogWeightDialog"
@@ -57,8 +58,17 @@ import { ProgressionSummaryHero } from "@/components/workouts/ProgressionSummary
 import { WorkoutMuscleMap } from "@/components/workouts/WorkoutMuscleMap"
 import { useActiveDate } from "@/context/DateContext"
 import { useQuickLog } from "@/context/QuickLogContext"
+import { useUser } from "@/context/UserContext"
 import { apiFetch } from "@/lib/api-fetch"
-import type { NextInjectionInfo } from "@/lib/hub-tile-prefs"
+import {
+  writeInjectionIntervalDays,
+  type NextInjectionInfo,
+} from "@/lib/hub-tile-prefs"
+import {
+  INJECTION_INTERVAL_PRESETS,
+  PEPTIDE_COLOR,
+  injectionSiteLabel,
+} from "@/lib/peptides"
 import {
   READINESS_BAND_LABEL,
   readinessBand,
@@ -1269,23 +1279,36 @@ export function HubVitalsExpand({
 
 /* ─── Peptides ───────────────────────────────────────────── */
 
+export type HubPeptideHistoryEntry = {
+  id?: string
+  injectedAt: string
+  doseMg: number
+  injectionSite?: string
+  compound?: string
+}
+
 export function HubPeptidesExpand({
   lastDoseMg,
   lastInjectedAt,
   nextInjection,
   todayMg,
-  last7,
-  dayLabels,
+  intervalDays,
+  recentEntries = [],
+  lastSiteUsed = null,
 }: {
   lastDoseMg: number | null
   lastInjectedAt: string | null
   nextInjection: NextInjectionInfo | null
   todayMg: number
-  last7: number[]
-  dayLabels: string[]
+  intervalDays: number
+  recentEntries?: HubPeptideHistoryEntry[]
+  lastSiteUsed?: string | null
 }) {
+  const { user } = useUser()
   const [injectionOpen, setInjectionOpen] = useState(false)
   const [dailyOpen, setDailyOpen] = useState(false)
+  const [customInterval, setCustomInterval] = useState("")
+  const isPreset = (INJECTION_INTERVAL_PRESETS as readonly number[]).includes(intervalDays)
 
   let untilLabel = "Log first shot"
   if (nextInjection) {
@@ -1300,31 +1323,61 @@ export function HubPeptidesExpand({
       ? format(new Date(lastInjectedAt), "MMM d · h:mm a")
       : null
 
+  const daysSince =
+    lastInjectedAt != null
+      ? Math.max(
+          0,
+          Math.floor(
+            (Date.now() - new Date(lastInjectedAt).getTime()) / (1000 * 60 * 60 * 24),
+          ),
+        )
+      : null
+
+  const cycleProgress = (() => {
+    if (daysSince == null || intervalDays <= 0) return 0
+    if (nextInjection?.overdue) return 1
+    return Math.min(1, daysSince / intervalDays)
+  })()
+
+  const history = recentEntries.slice(0, 8)
+
   function bumpHub() {
     window.dispatchEvent(new CustomEvent("grid:log-saved"))
+  }
+
+  function setIntervalDays(days: number) {
+    if (!user?.id) return
+    writeInjectionIntervalDays(user.id, days)
+    setCustomInterval("")
+  }
+
+  function commitCustomInterval() {
+    const n = Math.round(Number(customInterval))
+    if (!Number.isFinite(n) || n < 1 || n > 30 || !user?.id) return
+    writeInjectionIntervalDays(user.id, n)
   }
 
   return (
     <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
       <div className="min-w-0">
-          <p className="type-hud-subsection">Peptides</p>
-          <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-            {untilLabel}
-            {lastDoseMg != null ? ` · last ${lastDoseMg} mg` : ""}
-          </p>
+        <p className="type-hud-subsection">Peptides</p>
+        <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
+          {untilLabel}
+          {lastDoseMg != null ? ` · last ${lastDoseMg} mg` : ""}
+        </p>
       </div>
 
       <div className="flex items-center gap-4">
-        <PeptideVialGraphic color="#a855f7" doseMg={lastDoseMg} size="md" />
+        <PeptideVialGraphic color={PEPTIDE_COLOR} doseMg={lastDoseMg} size="md" />
         <div className="min-w-0 flex-1 space-y-2">
           <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
+            <div className="px-0.5 py-1">
               <p className="type-hud-micro text-muted-foreground/55">Today</p>
-              <p className="type-hud-stat-sm tabular-nums text-violet-200/90">
+              <p className="type-hud-stat-sm tabular-nums text-foreground/90">
                 {todayMg > 0 ? `${todayMg} mg` : "—"}
               </p>
             </div>
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
+            <div className="px-0.5 py-1">
               <p className="type-hud-micro text-muted-foreground/55">Last shot</p>
               <p className="truncate text-[12px] font-medium tabular-nums text-foreground/85">
                 {lastLabel ?? "—"}
@@ -1336,7 +1389,7 @@ export function HubPeptidesExpand({
               "text-[12px] font-semibold tracking-wide",
               nextInjection?.overdue && "text-negative",
               nextInjection?.dueToday && "text-primary",
-              !nextInjection?.overdue && !nextInjection?.dueToday && "text-violet-200/80",
+              !nextInjection?.overdue && !nextInjection?.dueToday && "text-slate-300/85",
             )}
           >
             {untilLabel}
@@ -1348,7 +1401,7 @@ export function HubPeptidesExpand({
         <button
           type="button"
           onClick={() => setInjectionOpen(true)}
-          className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-violet-400/30 hover:bg-violet-400/[0.06] hover:text-violet-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30 sm:flex-none sm:px-4"
+          className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-slate-400/35 hover:bg-slate-400/[0.07] hover:text-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/30 sm:flex-none sm:px-4"
         >
           <Syringe className="h-3.5 w-3.5" aria-hidden />
           Log injection
@@ -1356,7 +1409,7 @@ export function HubPeptidesExpand({
         <button
           type="button"
           onClick={() => setDailyOpen(true)}
-          className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-violet-400/30 hover:bg-violet-400/[0.06] hover:text-violet-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30 sm:flex-none sm:px-4"
+          className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-slate-400/35 hover:bg-slate-400/[0.07] hover:text-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/30 sm:flex-none sm:px-4"
         >
           <Plus className="h-3.5 w-3.5" aria-hidden />
           Log appetite
@@ -1364,40 +1417,165 @@ export function HubPeptidesExpand({
       </div>
 
       <div className="space-y-2">
-        <p className="type-hud-caption">Last 7 days</p>
-        <div className="flex items-end justify-between gap-1" style={{ height: 44 }}>
-          {last7.map((v, i) => {
-            const max = Math.max(...last7, 1)
-            const h = Math.max(4, Math.round((v / max) * 40))
-            const isToday = i === last7.length - 1
-            return (
-              <div key={i} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-                <div
-                  className="w-[70%] max-w-[18px] rounded-sm"
-                  style={{
-                    height: h,
-                    background: isToday
-                      ? "linear-gradient(180deg, #c084fc, #7e22ce)"
-                      : "linear-gradient(180deg, #a855f788, #581c8788)",
-                  }}
-                />
-                <span
+        <p className="type-hud-caption">Injection frequency</p>
+        <div className="flex flex-wrap gap-2">
+          {INJECTION_INTERVAL_PRESETS.map((days) => (
+            <GlassChip
+              key={days}
+              selected={intervalDays === days && customInterval === ""}
+              onClick={() => setIntervalDays(days)}
+            >
+              Every {days}d
+            </GlassChip>
+          ))}
+          <GlassChip
+            selected={!isPreset || customInterval !== ""}
+            onClick={() => {
+              setCustomInterval(String(intervalDays))
+            }}
+          >
+            Custom
+          </GlassChip>
+        </div>
+        {(!isPreset || customInterval !== "") && (
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              max={30}
+              inputMode="numeric"
+              value={customInterval || String(intervalDays)}
+              onChange={(e) => setCustomInterval(e.target.value)}
+              onBlur={commitCustomInterval}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  commitCustomInterval()
+                }
+              }}
+              className="h-9 w-20 rounded-lg border border-white/10 bg-white/[0.04] px-2 text-sm tabular-nums outline-none focus:border-slate-400/40 focus:ring-1 focus:ring-slate-400/20"
+              aria-label="Custom interval days"
+            />
+            <span className="type-hud-caption normal-case tracking-normal text-muted-foreground/60">
+              days between shots
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2.5">
+        <p className="type-hud-caption">Schedule</p>
+        {lastInjectedAt && nextInjection ? (
+          <div className="space-y-2">
+            <div className="relative h-2 overflow-hidden rounded-full bg-white/[0.06]">
+              <div
+                className={cn(
+                  "absolute inset-y-0 left-0 rounded-full transition-[width] duration-500",
+                  nextInjection.overdue
+                    ? "bg-negative/80"
+                    : nextInjection.dueToday
+                      ? "bg-primary/80"
+                      : "bg-slate-400/70",
+                )}
+                style={{ width: `${Math.round(cycleProgress * 100)}%` }}
+              />
+              {intervalDays <= 10
+                ? Array.from({ length: Math.max(0, intervalDays - 1) }, (_, i) => {
+                    const pct = ((i + 1) / intervalDays) * 100
+                    return (
+                      <span
+                        key={i}
+                        className="absolute top-0 bottom-0 w-px bg-white/15"
+                        style={{ left: `${pct}%` }}
+                        aria-hidden
+                      />
+                    )
+                  })
+                : null}
+            </div>
+            <div className="flex items-start justify-between gap-2 text-[11px] tabular-nums">
+              <div className="min-w-0">
+                <p className="text-muted-foreground/50">Last</p>
+                <p className="font-medium text-foreground/85">
+                  {format(new Date(lastInjectedAt), "MMM d")}
+                  {lastDoseMg != null ? ` · ${lastDoseMg} mg` : ""}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-muted-foreground/50">Cycle</p>
+                <p className="font-medium text-foreground/85">
+                  {daysSince != null
+                    ? `Day ${Math.min(daysSince, intervalDays)}${nextInjection.overdue ? "+" : ""} / ${intervalDays}`
+                    : `Every ${intervalDays}d`}
+                </p>
+              </div>
+              <div className="min-w-0 text-right">
+                <p className="text-muted-foreground/50">Next due</p>
+                <p
                   className={cn(
-                    "text-[9px] tracking-wider",
-                    isToday ? "font-semibold text-violet-300" : "text-muted-foreground/45",
+                    "font-medium",
+                    nextInjection.overdue && "text-negative",
+                    nextInjection.dueToday && "text-primary",
+                    !nextInjection.overdue && !nextInjection.dueToday && "text-foreground/85",
                   )}
                 >
-                  {dayLabels[i] ?? ""}
-                </span>
+                  {nextInjection.nextLabel}
+                </p>
               </div>
-            )
-          })}
+            </div>
+          </div>
+        ) : (
+          <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+            Log an injection to start the schedule countdown.
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="type-hud-caption">Recent injections</p>
+          <Link
+            href="/peptides"
+            className="type-hud-micro text-muted-foreground/55 transition-colors hover:text-foreground/80"
+          >
+            Full history
+          </Link>
         </div>
+        {history.length === 0 ? (
+          <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+            No shots logged yet.
+          </p>
+        ) : (
+          <ul className="space-y-0 divide-y divide-white/[0.05]">
+            {history.map((entry, i) => (
+              <li
+                key={entry.id ?? `${entry.injectedAt}-${i}`}
+                className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-medium tabular-nums text-foreground/90">
+                    {entry.doseMg} mg
+                    {entry.injectionSite
+                      ? ` · ${injectionSiteLabel(entry.injectionSite)}`
+                      : ""}
+                  </p>
+                  <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/50">
+                    {format(new Date(entry.injectedAt), "EEE · MMM d · h:mm a")}
+                  </p>
+                </div>
+                {i === 0 ? (
+                  <span className="shrink-0 type-hud-micro text-slate-300/70">Latest</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <LogPeptideInjectionDialog
         open={injectionOpen}
         onOpenChange={setInjectionOpen}
+        lastSiteUsed={lastSiteUsed}
         onSaved={() => {
           setInjectionOpen(false)
           bumpHub()

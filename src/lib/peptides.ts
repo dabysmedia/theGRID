@@ -1,4 +1,5 @@
-export const PEPTIDE_COLOR = "#a855f7"
+/** Steel HUD accent — matches hub protocol rail (not purple). */
+export const PEPTIDE_COLOR = "#94a3b8"
 
 export const COMPOUNDS = [
   { id: "retatrutide", label: "Retatrutide (Reta)" },
@@ -8,31 +9,44 @@ export type CompoundId = (typeof COMPOUNDS)[number]["id"]
 
 export const DOSE_PRESETS_MG = [1, 2, 4, 8, 12] as const
 
+/** Sites offered for new logs — abdomen / leg / glute only. */
 export const INJECTION_SITES = [
-  { id: "abdomen_upper_left", label: "Abdomen — upper left", shortLabel: "Upper L", region: "abdomen" },
-  { id: "abdomen_upper_right", label: "Abdomen — upper right", shortLabel: "Upper R", region: "abdomen" },
-  { id: "abdomen_lower_left", label: "Abdomen — lower left", shortLabel: "Lower L", region: "abdomen" },
-  { id: "abdomen_lower_right", label: "Abdomen — lower right", shortLabel: "Lower R", region: "abdomen" },
-  { id: "thigh_left", label: "Thigh — left", shortLabel: "Left", region: "thigh" },
-  { id: "thigh_right", label: "Thigh — right", shortLabel: "Right", region: "thigh" },
-  { id: "upper_arm_left", label: "Upper arm — left", shortLabel: "Left", region: "arm" },
-  { id: "upper_arm_right", label: "Upper arm — right", shortLabel: "Right", region: "arm" },
-  { id: "glute_left", label: "Glute — left", shortLabel: "Left", region: "glute" },
-  { id: "glute_right", label: "Glute — right", shortLabel: "Right", region: "glute" },
-  { id: "other", label: "Other", shortLabel: "Other", region: "other" },
-] as const
-
-export const INJECTION_SITE_REGIONS = [
-  { id: "abdomen", label: "Abdomen" },
-  { id: "thigh", label: "Thigh" },
-  { id: "arm", label: "Arm" },
-  { id: "glute", label: "Glute" },
-  { id: "other", label: "Other" },
+  { id: "abd", label: "Abdomen", shortLabel: "Abd" },
+  { id: "leg", label: "Leg", shortLabel: "Leg" },
+  { id: "glute", label: "Glute", shortLabel: "Glute" },
 ] as const
 
 export type InjectionSiteId = (typeof INJECTION_SITES)[number]["id"]
 
 export const INJECTION_SITE_IDS = new Set<string>(INJECTION_SITES.map((s) => s.id))
+
+/** Legacy site ids still present in older DB rows — display only. */
+const LEGACY_SITE_LABELS: Record<string, string> = {
+  abdomen_upper_left: "Abdomen — upper left",
+  abdomen_upper_right: "Abdomen — upper right",
+  abdomen_lower_left: "Abdomen — lower left",
+  abdomen_lower_right: "Abdomen — lower right",
+  thigh_left: "Thigh — left",
+  thigh_right: "Thigh — right",
+  upper_arm_left: "Upper arm — left",
+  upper_arm_right: "Upper arm — right",
+  glute_left: "Glute — left",
+  glute_right: "Glute — right",
+  other: "Other",
+  abdomen: "Abdomen",
+  thigh: "Leg",
+  arm: "Arm",
+}
+
+/** Map a legacy site id to the closest current site for UI hints (e.g. last-used). */
+export function coerceInjectionSite(id: string | null | undefined): InjectionSiteId {
+  if (id && INJECTION_SITE_IDS.has(id)) return id as InjectionSiteId
+  if (!id) return "abd"
+  if (id.startsWith("abdomen") || id === "abdomen") return "abd"
+  if (id.startsWith("thigh") || id === "thigh" || id === "leg") return "leg"
+  if (id.startsWith("glute") || id === "glute") return "glute"
+  return "abd"
+}
 
 export const SIDE_EFFECTS = [
   { id: "nausea", label: "Nausea" },
@@ -51,8 +65,12 @@ export type SideEffectId = (typeof SIDE_EFFECTS)[number]["id"]
 
 export const SIDE_EFFECT_IDS = new Set<string>(SIDE_EFFECTS.map((s) => s.id))
 
+export const INJECTION_INTERVAL_PRESETS = [5, 7, 14] as const
+
 export function injectionSiteLabel(id: string): string {
-  return INJECTION_SITES.find((s) => s.id === id)?.label ?? id
+  const current = INJECTION_SITES.find((s) => s.id === id)
+  if (current) return current.label
+  return LEGACY_SITE_LABELS[id] ?? id
 }
 
 export function sideEffectLabel(id: string): string {

@@ -88,7 +88,7 @@ export function HubWorkoutFooter({
 export function HubPeptideFooter({
   lastDoseMg,
   nextInjection,
-  color = "#a855f7",
+  color = "#94a3b8",
 }: {
   lastDoseMg: number | null
   nextInjection: NextInjectionInfo | null

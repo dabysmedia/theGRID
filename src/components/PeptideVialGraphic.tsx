@@ -9,7 +9,7 @@ const RIM_X = "34.2%"
 const RIM_Y = "34.2%"
 
 export function PeptideVialGraphic({
-  color = "#a855f7",
+  color = "#94a3b8",
   doseMg,
   className,
   size = "lg",
