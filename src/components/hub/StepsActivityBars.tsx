@@ -349,7 +349,7 @@ export function StepsActivityBars({
         {/* Summary strip — grid-rows collapse so expand grows from the chart */}
         <div
           className={cn(
-            "grid transition-[grid-template-rows,opacity,margin] duration-500 ease-out motion-reduce:transition-none",
+            "grid transition-[grid-template-rows,opacity,margin] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
             expanded
               ? "mb-3 grid-rows-[1fr] opacity-100"
               : "pointer-events-none mb-0 grid-rows-[0fr] opacity-0",
@@ -582,7 +582,7 @@ export function StepsActivityBars({
 
         <div
           className={cn(
-            "grid transition-[grid-template-rows,opacity,margin] duration-500 ease-out motion-reduce:transition-none",
+            "grid transition-[grid-template-rows,opacity,margin] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
             expanded
               ? "mt-3 grid-rows-[1fr] opacity-100"
               : "pointer-events-none mt-0 grid-rows-[0fr] opacity-0",

@@ -19,6 +19,7 @@ import {
   HubBackToOverview,
   type HubExpandedPanel,
 } from "@/components/hub/HubExpandPanels"
+import { HubCollapse, HubPresence, HUB_MOTION_MS, HUB_SECTION_MOTION_MS } from "@/components/hub/HubMotion"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { WeekWorkoutGoalRing, WEEKLY_WORKOUT_GOAL } from "@/components/WeekWorkoutGoalRing"
 import { useActiveDate } from "@/context/DateContext"
@@ -135,6 +136,7 @@ function ProgressRing({
         className={cn(
           "relative size-[var(--hub-ring-size)] motion-safe:animate-ring-pop motion-reduce:animate-none lg:h-[124px] lg:w-[124px]",
           staggerClass,
+          "transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
           selected && "scale-[1.06]",
         )}
       >
@@ -338,16 +340,9 @@ function FadeSection({
   className?: string
 }) {
   return (
-    <div
-      className={cn(
-        "grid transition-[grid-template-rows,opacity] duration-500 ease-out motion-reduce:transition-none",
-        show ? "grid-rows-[1fr] opacity-100" : "pointer-events-none grid-rows-[0fr] opacity-0",
-        className,
-      )}
-      aria-hidden={!show}
-    >
-      <div className="min-h-0 overflow-hidden">{children}</div>
-    </div>
+    <HubCollapse open={show} durationMs={HUB_SECTION_MOTION_MS} className={className}>
+      {children}
+    </HubCollapse>
   )
 }
 
@@ -490,52 +485,67 @@ export function WeeklyHero({
         aria-hidden
       />
 
-      {/* Header — expand swaps back control into the same slot (same height/margin) */}
+      {/* Header — same h-7 slot; overview title ↔ back chrome crossfade (no push-down) */}
       <div
         className={cn(
           "relative flex h-7 shrink-0 items-center mb-[var(--hub-section-gap)]",
-          expanded != null
-            ? "z-20 sticky top-0 -mx-3 px-3 bg-[oklch(0.12_0.008_250_/0.88)] backdrop-blur-md lg:-mx-5 lg:px-5"
-            : "z-10 justify-between",
+          expanded != null ? "z-20 sticky top-0" : "z-10",
         )}
       >
-        {expanded != null ? (
+        <div
+          className={cn(
+            "absolute inset-0 flex items-center justify-between transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+            expanded != null
+              ? "pointer-events-none translate-y-0.5 opacity-0"
+              : "translate-y-0 opacity-100",
+          )}
+          aria-hidden={expanded != null}
+        >
+          <div className="flex items-center gap-2">
+            <div className="status-dot" />
+            <h2
+              key={viewMode}
+              className="type-hud-title motion-safe:animate-fade-up motion-reduce:animate-none"
+            >
+              {isWeekView ? "Weekly Overview" : "Daily Overview"}
+            </h2>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span
+              key={`${viewMode}-eyebrow`}
+              className="type-hud-eyebrow motion-safe:animate-fade-up motion-reduce:animate-none"
+            >
+              {isWeekView ? dateRange : dayLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => setViewMode((mode) => (mode === "today" ? "week" : "today"))}
+              aria-label={isWeekView ? "Show today's values" : "Show weekly values"}
+              tabIndex={expanded != null ? -1 : undefined}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
+            >
+              <ChevronRight
+                className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-300 ease-out",
+                  isWeekView && "rotate-180",
+                )}
+                aria-hidden
+              />
+            </button>
+          </div>
+        </div>
+
+        <div
+          className={cn(
+            "absolute inset-0 flex items-center transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+            expanded != null
+              ? "translate-y-0 opacity-100"
+              : "pointer-events-none -translate-y-0.5 opacity-0",
+          )}
+          aria-hidden={expanded == null}
+        >
           <HubBackToOverview onBack={() => setExpanded(null)} />
-        ) : (
-          <>
-            <div className="flex items-center gap-2">
-              <div className="status-dot" />
-              <h2
-                key={viewMode}
-                className="type-hud-title motion-safe:animate-fade-up motion-reduce:animate-none"
-              >
-                {isWeekView ? "Weekly Overview" : "Daily Overview"}
-              </h2>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span
-                key={`${viewMode}-eyebrow`}
-                className="type-hud-eyebrow motion-safe:animate-fade-up motion-reduce:animate-none"
-              >
-                {isWeekView ? dateRange : dayLabel}
-              </span>
-              <button
-                type="button"
-                onClick={() => setViewMode((mode) => (mode === "today" ? "week" : "today"))}
-                aria-label={isWeekView ? "Show today's values" : "Show weekly values"}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
-              >
-                <ChevronRight
-                  className={cn(
-                    "h-3.5 w-3.5 transition-transform duration-300 ease-out",
-                    isWeekView && "rotate-180",
-                  )}
-                  aria-hidden
-                />
-              </button>
-            </div>
-          </>
-        )}
+        </div>
       </div>
 
       <div
@@ -614,34 +624,34 @@ export function WeeklyHero({
           </div>
         </FadeSection>
 
-        {expanded === "calories" ? (
-          <>
-            <div
-              className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
-              aria-hidden
-            />
-            <HubCaloriesExpand
-              consumed={data.calories.todayValue}
-              target={calGoal}
-              vacationBlocked={vacationBlocksCalories}
-            />
-          </>
-        ) : null}
+        <HubCollapse
+          open={
+            expanded === "calories" || expanded === "sleep" || expanded === "vitals"
+          }
+          durationMs={HUB_MOTION_MS}
+        >
+          <div
+            className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
+            aria-hidden
+          />
+        </HubCollapse>
 
-        {expanded === "sleep" ? (
-          <>
-            <div
-              className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
-              aria-hidden
-            />
-            <HubSleepExpand
-              hours={data.sleep.todayValue}
-              goal={sleepGoal}
-              last7={data.sleep.last7}
-              dayLabels={dayLabels}
-            />
-          </>
-        ) : null}
+        <HubPresence open={expanded === "calories"} durationMs={HUB_MOTION_MS}>
+          <HubCaloriesExpand
+            consumed={data.calories.todayValue}
+            target={calGoal}
+            vacationBlocked={vacationBlocksCalories}
+          />
+        </HubPresence>
+
+        <HubPresence open={expanded === "sleep"} durationMs={HUB_MOTION_MS}>
+          <HubSleepExpand
+            hours={data.sleep.todayValue}
+            goal={sleepGoal}
+            last7={data.sleep.last7}
+            dayLabels={dayLabels}
+          />
+        </HubPresence>
 
         <FadeSection
           show={showStepsBars}
@@ -673,43 +683,20 @@ export function WeeklyHero({
           />
         </FadeSection>
 
-        {expanded === "vitals" ? (
-          <>
-            <div
-              className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
-              aria-hidden
-            />
-            <HubVitalsExpand
-              readiness={readinessValue}
-              fallbackHrvMs={hrvMs}
-              fallbackRhr={restingHeartRate}
-            />
-          </>
-        ) : null}
+        <HubPresence open={expanded === "vitals"} durationMs={HUB_MOTION_MS}>
+          <HubVitalsExpand
+            readiness={readinessValue}
+            fallbackHrvMs={hrvMs}
+            fallbackRhr={restingHeartRate}
+          />
+        </HubPresence>
 
         {/* Protocol / training instrument rail — open HUD band above weigh-in coda */}
         <FadeSection show={showProtocolRail} className={fillViewport ? "shrink-0" : undefined}>
-          {expanded === "peptides" ? (
-            <HubPeptidesExpand
-              lastDoseMg={peptideSummary?.lastDoseMg ?? null}
-              lastInjectedAt={peptideSummary?.lastInjectedAt ?? null}
-              nextInjection={peptideNext}
-              todayMg={peptideSummary?.todayMg ?? 0}
-              intervalDays={peptideSummary?.intervalDays ?? 7}
-              recentEntries={peptideSummary?.recentEntries ?? []}
-              lastSiteUsed={peptideSummary?.lastSiteUsed ?? null}
-              dosedWeekCount={peptideSummary?.dosedWeekCount ?? 0}
-              hungerLogs={peptideSummary?.hungerLogs ?? []}
-            />
-          ) : expanded === "workouts" ? (
-            <HubWorkoutsExpand
-              weekCount={weekWo}
-              todayCount={workoutSummary?.todayCount ?? data.workouts.todayValue}
-              last7={workoutSummary?.last7 ?? data.workouts.last7}
-              dayLabels={dayLabels}
-              recoveryScore={workoutSummary?.recoveryScore ?? null}
-            />
-          ) : (
+          <HubCollapse
+            open={expanded !== "peptides" && expanded !== "workouts"}
+            durationMs={HUB_MOTION_MS}
+          >
             <div
               className="relative z-10 px-0.5 py-0.5 sm:px-1 sm:py-1"
               role="group"
@@ -790,7 +777,31 @@ export function WeeklyHero({
                 </button>
               </div>
             </div>
-          )}
+          </HubCollapse>
+
+          <HubPresence open={expanded === "peptides"} durationMs={HUB_MOTION_MS}>
+            <HubPeptidesExpand
+              lastDoseMg={peptideSummary?.lastDoseMg ?? null}
+              lastInjectedAt={peptideSummary?.lastInjectedAt ?? null}
+              nextInjection={peptideNext}
+              todayMg={peptideSummary?.todayMg ?? 0}
+              intervalDays={peptideSummary?.intervalDays ?? 7}
+              recentEntries={peptideSummary?.recentEntries ?? []}
+              lastSiteUsed={peptideSummary?.lastSiteUsed ?? null}
+              dosedWeekCount={peptideSummary?.dosedWeekCount ?? 0}
+              hungerLogs={peptideSummary?.hungerLogs ?? []}
+            />
+          </HubPresence>
+
+          <HubPresence open={expanded === "workouts"} durationMs={HUB_MOTION_MS}>
+            <HubWorkoutsExpand
+              weekCount={weekWo}
+              todayCount={workoutSummary?.todayCount ?? data.workouts.todayValue}
+              last7={workoutSummary?.last7 ?? data.workouts.last7}
+              dayLabels={dayLabels}
+              recoveryScore={workoutSummary?.recoveryScore ?? null}
+            />
+          </HubPresence>
         </FadeSection>
 
         {/* Weigh-in stays the coda — always last in the overview stack */}
@@ -801,9 +812,9 @@ export function WeeklyHero({
               weightTrend={data.weightTrend}
               onActivate={expanded === "weight" ? undefined : () => toggleExpand("weight")}
             />
-            {expanded === "weight" ? (
+            <HubPresence open={expanded === "weight"} durationMs={HUB_MOTION_MS}>
               <HubWeightExpand />
-            ) : null}
+            </HubPresence>
           </div>
         </FadeSection>
       </div>
