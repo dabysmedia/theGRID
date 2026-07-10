@@ -263,9 +263,9 @@ export function CaloriePipTracker({
       }
     >
       <div
-        className="pointer-events-none absolute -inset-x-3 -inset-y-4 rounded-2xl opacity-30 blur-2xl"
+        className="pointer-events-none absolute -inset-x-3 -inset-y-4 rounded-2xl opacity-20 blur-3xl"
         style={{
-          background: `radial-gradient(ellipse 80% 70% at 50% 70%, ${accent}12 0%, transparent 72%)`,
+          background: `radial-gradient(ellipse 70% 60% at 35% 55%, ${accent}0a 0%, transparent 70%)`,
         }}
         aria-hidden
       />
@@ -273,7 +273,7 @@ export function CaloriePipTracker({
         className={cn(
           "relative w-full touch-none",
           fillHeight
-            ? "h-full opacity-[0.48]"
+            ? "h-full opacity-[0.34]"
             : "h-[min(58vh,28rem)] sm:h-[min(56vh,30rem)]",
         )}
       >

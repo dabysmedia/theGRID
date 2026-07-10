@@ -576,8 +576,11 @@ export function WeeklyHero({
           >
             <div
               className={cn(
-                "relative z-10 flex transition-[justify-content] duration-500 ease-out",
-                hideSiblingRingsForCalories ? "justify-center" : "justify-around",
+                "relative z-10 flex transition-[justify-content,padding] duration-500 ease-out",
+                // Upper-left when expanded — opens the right for the food rail
+                hideSiblingRingsForCalories
+                  ? "justify-start pl-0.5 sm:pl-1"
+                  : "justify-around",
               )}
             >
               <div
