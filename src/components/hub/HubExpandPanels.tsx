@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { addDays, format, startOfWeek } from "date-fns"
 import {
   ChevronDown,
+  ChevronLeft,
   Dumbbell,
   Moon,
   Pencil,
@@ -16,8 +17,8 @@ import {
   Syringe,
   Trash2,
   Waves,
-  ArrowLeft,
 } from "lucide-react"
+import { HubCollapse, HUB_MOTION_MS } from "@/components/hub/HubMotion"
 import {
   ResponsiveContainer,
   AreaChart,
@@ -99,28 +100,31 @@ export type HubExpandedPanel =
   | "peptides"
   | "workouts"
 
-/** HUD back control — fits the overview header slot (h-7) without adding net height. */
+/**
+ * Hub header back control — same h-7 slot / type-hud-title language as
+ * Daily/Weekly Overview so expand chrome feels permanent, not bolted on.
+ */
 export function HubBackToOverview({ onBack }: { onBack: () => void }) {
   return (
     <button
       type="button"
       onClick={onBack}
       aria-label="Back to overview"
-      className="group flex h-7 w-full touch-manipulation items-center gap-1.5 text-left transition-colors hover:bg-white/[0.03] active:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25"
+      className="group flex h-7 w-full touch-manipulation items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25"
     >
-      <ArrowLeft
-        className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70 transition-colors group-hover:text-foreground/85"
+      <ChevronLeft
+        className="h-3.5 w-3.5 shrink-0 text-muted-foreground/55 transition-colors duration-200 group-hover:text-foreground/80"
         aria-hidden
       />
-      <span className="min-w-0 flex items-baseline gap-2">
-        <span className="type-hud-micro text-muted-foreground/55">Hub</span>
-        <span className="text-[13px] font-medium tracking-wide text-foreground/80 transition-colors group-hover:text-foreground/95">
-          Back to overview
-        </span>
+      <span className="status-dot shrink-0 opacity-70 transition-opacity duration-200 group-hover:opacity-100" />
+      <span className="type-hud-title min-w-0 truncate text-foreground/85 transition-colors duration-200 group-hover:text-foreground">
+        Overview
       </span>
     </button>
   )
 }
+
+const MEAL_PREVIEW_LIMIT = 2
 
 /* ─── Calories ───────────────────────────────────────────── */
 
@@ -146,6 +150,11 @@ export function HubCaloriesExpand({
   const [pendingDelete, setPendingDelete] = useState<{ id: string; label: string } | null>(null)
   const [pendingDeleteBusy, setPendingDeleteBusy] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+  /** Meals with item lists expanded (header + total always visible). */
+  const [openMeals, setOpenMeals] = useState<Set<string>>(() => new Set())
+  /** Meals showing every item past the preview limit. */
+  const [showAllItems, setShowAllItems] = useState<Set<string>>(() => new Set())
+  const mealsInitRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -184,14 +193,49 @@ export function HubCaloriesExpand({
       map.get(key)!.push(entry)
     }
     const order = mealTypes as readonly string[]
-    const ordered: { meal: string; items: CalorieEntry[] }[] = order
+    const ordered: { meal: string; items: CalorieEntry[]; total: number }[] = order
       .filter((m) => map.has(m))
-      .map((meal) => ({ meal, items: map.get(meal)! }))
+      .map((meal) => {
+        const items = map.get(meal)!
+        return {
+          meal,
+          items,
+          total: items.reduce((s, e) => s + e.calories, 0),
+        }
+      })
     for (const [meal, mealItems] of map) {
-      if (!order.includes(meal)) ordered.push({ meal, items: mealItems })
+      if (!order.includes(meal)) {
+        ordered.push({
+          meal,
+          items: mealItems,
+          total: mealItems.reduce((s, e) => s + e.calories, 0),
+        })
+      }
     }
     return ordered
   }, [entries])
+
+  // Open the first meal once per day load; don't fight later user toggles.
+  useEffect(() => {
+    mealsInitRef.current = false
+    setOpenMeals(new Set())
+    setShowAllItems(new Set())
+  }, [activeDate])
+
+  useEffect(() => {
+    if (entriesStatus !== "ready" || mealGroups.length === 0 || mealsInitRef.current) return
+    mealsInitRef.current = true
+    setOpenMeals(new Set([mealGroups[0]!.meal]))
+  }, [entriesStatus, mealGroups])
+
+  function toggleMealOpen(meal: string) {
+    setOpenMeals((prev) => {
+      const next = new Set(prev)
+      if (next.has(meal)) next.delete(meal)
+      else next.add(meal)
+      return next
+    })
+  }
 
   function bumpHub() {
     window.dispatchEvent(new CustomEvent("grid:log-saved"))
@@ -236,167 +280,262 @@ export function HubCaloriesExpand({
   }
 
   return (
-    <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-3 px-0.5">
-      <div className="min-w-0">
-          <p className="type-hud-subsection">Calories</p>
-          <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-            {vacationBlocked
-              ? "Vacation mode — intake tracking paused."
-              : `${consumed.toLocaleString()} of ${target.toLocaleString()} · ${remaining.toLocaleString()} left · ${pct}%`}
-          </p>
-      </div>
-
+    <div className="px-0.5">
       {vacationBlocked ? (
-        <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-3 text-[12px] leading-relaxed text-amber-100/90">
-          Food logging is paused until vacation ends.
-        </p>
+        <div className="space-y-3">
+          <div className="min-w-0">
+            <p className="type-hud-subsection">Calories</p>
+            <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
+              Vacation mode — intake tracking paused.
+            </p>
+          </div>
+          <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-3 text-[12px] leading-relaxed text-amber-100/90">
+            Food logging is paused until vacation ends.
+          </p>
+        </div>
       ) : (
         <>
-          <div className="relative -mx-1 w-[calc(100%+0.5rem)] overflow-hidden sm:-mx-2 sm:w-[calc(100%+1rem)]">
-            <CaloriePipTracker
-              consumed={consumed}
-              target={target}
-              size="default"
-            />
-
-            {/* Today's food — steel HUD overlay on the pip scene */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex max-h-[min(52%,18.5rem)] flex-col sm:max-h-[min(48%,20rem)]">
-              <div
-                className="pointer-events-none h-10 shrink-0 bg-gradient-to-t from-[oklch(0.16_0.012_250/92%)] via-[oklch(0.16_0.012_250/55%)] to-transparent sm:h-12"
-                aria-hidden
+          {/* Pips = full-bleed stylistic background; food floats as foreground */}
+          <div className="relative -mx-1 min-h-[min(62vh,30rem)] w-[calc(100%+0.5rem)] overflow-hidden sm:-mx-2 sm:min-h-[min(58vh,32rem)] sm:w-[calc(100%+1rem)]">
+            <div className="pointer-events-none absolute inset-0 z-0" aria-hidden>
+              <CaloriePipTracker
+                consumed={consumed}
+                target={target}
+                size="default"
+                fillHeight
+                hideMeta
               />
-              <div className="pointer-events-auto flex min-h-0 flex-1 flex-col border-t border-white/[0.06] bg-[oklch(0.16_0.012_250/88%)] px-2.5 pb-2.5 pt-1.5 backdrop-blur-md sm:px-3 sm:pb-3">
-                <div className="mb-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={openAddFood}
-                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:h-10 sm:flex-none sm:px-4"
-                  >
-                    <Plus className="h-3.5 w-3.5" aria-hidden />
-                    Add food
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openQuickLog("calories")}
-                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-red-400/30 hover:bg-red-400/[0.06] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:h-10 sm:flex-none sm:px-4"
-                  >
-                    Quick log
-                  </button>
-                </div>
+            </div>
 
-                <div className="flex min-h-0 flex-1 flex-col space-y-2">
-                  <div className="flex shrink-0 items-baseline justify-between gap-2">
-                    <p className="type-hud-caption">Today&apos;s food</p>
-                    {entriesStatus === "ready" && entries.length > 0 ? (
-                      <span className="type-hud-micro tabular-nums text-muted-foreground/50">
-                        {entries.length}
-                      </span>
-                    ) : null}
+            <div className="relative z-10 flex min-h-[min(62vh,30rem)] flex-col sm:min-h-[min(58vh,32rem)]">
+              <div className="shrink-0 px-2.5 pt-1 sm:px-3">
+                <p className="type-hud-subsection text-foreground/70 drop-shadow-[0_1px_8px_oklch(0.08_0.01_250/80%)]">
+                  Calories
+                </p>
+                <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/75 drop-shadow-[0_1px_6px_oklch(0.08_0.01_250/70%)]">
+                  {`${consumed.toLocaleString()} of ${target.toLocaleString()} · ${remaining.toLocaleString()} left · ${pct}%`}
+                </p>
+              </div>
+
+              <div className="min-h-[4.5rem] flex-1" aria-hidden />
+
+              <div className="pointer-events-none flex max-h-[min(58%,22rem)] flex-col sm:max-h-[min(54%,24rem)]">
+                <div
+                  className="pointer-events-none h-14 shrink-0 bg-gradient-to-t from-[oklch(0.12_0.01_250/75%)] via-[oklch(0.12_0.01_250/35%)] to-transparent sm:h-16"
+                  aria-hidden
+                />
+                <div
+                  className={cn(
+                    "pointer-events-auto flex min-h-0 flex-1 flex-col px-2.5 pb-2.5 pt-0 sm:px-3 sm:pb-3",
+                    "bg-[oklch(0.13_0.01_250/55%)] backdrop-blur-[10px]",
+                    "motion-safe:animate-fade-up motion-reduce:animate-none",
+                  )}
+                  style={{ animationDuration: `${HUB_MOTION_MS}ms` }}
+                >
+                  <div className="mb-2.5 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={openAddFood}
+                      className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.06] px-3 type-hud-micro text-muted-foreground/90 transition-colors duration-200 hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:h-10 sm:flex-none sm:px-4"
+                    >
+                      <Plus className="h-3.5 w-3.5" aria-hidden />
+                      Add food
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openQuickLog("calories")}
+                      className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.06] px-3 type-hud-micro text-muted-foreground/90 transition-colors duration-200 hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:h-10 sm:flex-none sm:px-4"
+                    >
+                      Quick log
+                    </button>
                   </div>
 
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-                    {entriesStatus === "loading" ? (
-                      <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-                        Loading food log…
-                      </p>
-                    ) : null}
-                    {entriesStatus === "error" ? (
-                      <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-                        Couldn&apos;t load food log.{" "}
-                        <button
-                          type="button"
-                          onClick={() => setReloadKey((k) => k + 1)}
-                          className="text-foreground/75 underline-offset-2 hover:underline hover:text-red-200/90"
-                        >
-                          Retry
-                        </button>
-                      </p>
-                    ) : null}
-                    {entriesStatus === "ready" && entries.length === 0 ? (
-                      <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-                        Nothing logged yet — tap Add food.
-                      </p>
-                    ) : null}
+                  <div className="flex min-h-0 flex-1 flex-col space-y-2">
+                    <div className="flex shrink-0 items-baseline justify-between gap-2">
+                      <p className="type-hud-caption">Today&apos;s food</p>
+                      {entriesStatus === "ready" && entries.length > 0 ? (
+                        <span className="type-hud-micro tabular-nums text-muted-foreground/50">
+                          {entries.length}
+                        </span>
+                      ) : null}
+                    </div>
 
-                    {entriesStatus === "ready" && mealGroups.length > 0 ? (
-                      <div className="space-y-3 pb-0.5">
-                        {mealGroups.map(({ meal, items }) => (
-                          <div key={meal} className="space-y-1">
-                            <p className="type-hud-micro capitalize text-muted-foreground/50">
-                              {meal}
-                            </p>
-                            <ul className="divide-y divide-white/[0.05] border-y border-white/[0.05]">
-                              {items.map((entry) => (
-                                <li
-                                  key={entry.id}
-                                  className="group/row flex items-stretch gap-2 py-2"
+                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+                      {entriesStatus === "loading" ? (
+                        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+                          Loading food log…
+                        </p>
+                      ) : null}
+                      {entriesStatus === "error" ? (
+                        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+                          Couldn&apos;t load food log.{" "}
+                          <button
+                            type="button"
+                            onClick={() => setReloadKey((k) => k + 1)}
+                            className="text-foreground/75 underline-offset-2 hover:underline hover:text-red-200/90"
+                          >
+                            Retry
+                          </button>
+                        </p>
+                      ) : null}
+                      {entriesStatus === "ready" && entries.length === 0 ? (
+                        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+                          Nothing logged yet — tap Add food.
+                        </p>
+                      ) : null}
+
+                      {entriesStatus === "ready" && mealGroups.length > 0 ? (
+                        <div className="space-y-1.5 pb-0.5">
+                          {mealGroups.map(({ meal, items, total }) => {
+                            const mealOpen = openMeals.has(meal)
+                            const revealAll = showAllItems.has(meal)
+                            const visibleItems = revealAll
+                              ? items
+                              : items.slice(0, MEAL_PREVIEW_LIMIT)
+                            const hiddenCount = items.length - visibleItems.length
+                            return (
+                              <div
+                                key={meal}
+                                className="rounded-xl border border-white/[0.06] bg-white/[0.03]"
+                              >
+                                <button
+                                  type="button"
+                                  aria-expanded={mealOpen}
+                                  onClick={() => toggleMealOpen(meal)}
+                                  className="flex w-full items-center justify-between gap-3 px-2.5 py-2.5 text-left transition-colors duration-200 hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-400/25"
                                 >
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                                      <span className="type-hud-stat-sm tabular-nums text-foreground/90">
-                                        {entry.calories.toLocaleString()}
-                                      </span>
-                                      <span className="type-hud-unit text-muted-foreground/55">
+                                  <div className="min-w-0">
+                                    <p className="type-hud-micro capitalize text-muted-foreground/55">
+                                      {meal}
+                                    </p>
+                                    <p className="mt-0.5 type-hud-micro normal-case tracking-normal text-muted-foreground/45">
+                                      {items.length} item{items.length === 1 ? "" : "s"}
+                                    </p>
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-2">
+                                    <span className="type-hud-stat-sm tabular-nums text-foreground/90">
+                                      {total.toLocaleString()}
+                                      <span className="ml-1 type-hud-unit text-muted-foreground/50">
                                         cal
                                       </span>
-                                    </div>
-                                    {(entry.protein != null ||
-                                      entry.carbs != null ||
-                                      entry.fat != null) && (
-                                      <p className="mt-0.5 type-hud-micro normal-case tracking-normal tabular-nums text-muted-foreground/45">
-                                        {[
-                                          entry.protein != null
-                                            ? `P ${entry.protein}g`
-                                            : null,
-                                          entry.carbs != null
-                                            ? `C ${entry.carbs}g`
-                                            : null,
-                                          entry.fat != null
-                                            ? `F ${entry.fat}g`
-                                            : null,
-                                        ]
-                                          .filter(Boolean)
-                                          .join(" · ")}
-                                      </p>
-                                    )}
-                                    {entry.description?.trim() ? (
-                                      <p className="mt-1 line-clamp-2 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-                                        {entry.description}
-                                      </p>
-                                    ) : null}
+                                    </span>
+                                    <ChevronDown
+                                      className={cn(
+                                        "h-3.5 w-3.5 text-muted-foreground/40 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                                        mealOpen && "rotate-180 text-red-200/70",
+                                      )}
+                                      aria-hidden
+                                    />
                                   </div>
-                                  <div className="flex shrink-0 items-center gap-1 self-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => startEdit(entry)}
-                                      className="history-row-edit !min-h-9 !min-w-9 !m-0"
-                                      title="Edit"
-                                      aria-label={`Edit ${entry.description?.trim() || entry.calories + " cal"}`}
-                                    >
-                                      <Pencil />
-                                    </button>
+                                </button>
+
+                                <HubCollapse open={mealOpen}>
+                                  <ul className="divide-y divide-white/[0.05] border-t border-white/[0.05] px-2.5">
+                                    {visibleItems.map((entry) => (
+                                      <li
+                                        key={entry.id}
+                                        className="group/row flex items-stretch gap-2 py-2"
+                                      >
+                                        <div className="min-w-0 flex-1">
+                                          {entry.description?.trim() ? (
+                                            <p className="line-clamp-2 text-[12px] font-medium leading-snug text-foreground/85">
+                                              {entry.description}
+                                            </p>
+                                          ) : (
+                                            <p className="text-[12px] font-medium text-foreground/70">
+                                              Logged entry
+                                            </p>
+                                          )}
+                                          <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                            <span className="type-hud-stat-xs tabular-nums text-foreground/80">
+                                              {entry.calories.toLocaleString()} cal
+                                            </span>
+                                            {(entry.protein != null ||
+                                              entry.carbs != null ||
+                                              entry.fat != null) && (
+                                              <span className="type-hud-micro normal-case tracking-normal tabular-nums text-muted-foreground/45">
+                                                {[
+                                                  entry.protein != null
+                                                    ? `P ${entry.protein}g`
+                                                    : null,
+                                                  entry.carbs != null
+                                                    ? `C ${entry.carbs}g`
+                                                    : null,
+                                                  entry.fat != null
+                                                    ? `F ${entry.fat}g`
+                                                    : null,
+                                                ]
+                                                  .filter(Boolean)
+                                                  .join(" · ")}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="flex shrink-0 items-center gap-1 self-center">
+                                          <button
+                                            type="button"
+                                            onClick={() => startEdit(entry)}
+                                            className="history-row-edit !min-h-9 !min-w-9 !m-0"
+                                            title="Edit"
+                                            aria-label={`Edit ${entry.description?.trim() || entry.calories + " cal"}`}
+                                          >
+                                            <Pencil />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              requestDelete(
+                                                entry.id,
+                                                entry.description?.trim() ||
+                                                  `${entry.calories} cal · ${entry.mealType}`,
+                                              )
+                                            }
+                                            className="history-row-delete-row !min-h-9 !min-w-9 !m-0"
+                                            aria-label={`Delete ${entry.description?.trim() || entry.calories + " cal"}`}
+                                          >
+                                            <Trash2 />
+                                          </button>
+                                        </div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  {hiddenCount > 0 ? (
                                     <button
                                       type="button"
                                       onClick={() =>
-                                        requestDelete(
-                                          entry.id,
-                                          entry.description?.trim() ||
-                                            `${entry.calories} cal · ${entry.mealType}`,
-                                        )
+                                        setShowAllItems((prev) => {
+                                          const next = new Set(prev)
+                                          next.add(meal)
+                                          return next
+                                        })
                                       }
-                                      className="history-row-delete-row !min-h-9 !min-w-9 !m-0"
-                                      aria-label={`Delete ${entry.description?.trim() || entry.calories + " cal"}`}
+                                      className="w-full px-2.5 py-2 text-left type-hud-micro text-muted-foreground/55 transition-colors hover:text-red-200/80"
                                     >
-                                      <Trash2 />
+                                      +{hiddenCount} more
                                     </button>
-                                  </div>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
+                                  ) : null}
+                                  {revealAll && items.length > MEAL_PREVIEW_LIMIT ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setShowAllItems((prev) => {
+                                          const next = new Set(prev)
+                                          next.delete(meal)
+                                          return next
+                                        })
+                                      }
+                                      className="w-full px-2.5 py-2 text-left type-hud-micro text-muted-foreground/55 transition-colors hover:text-red-200/80"
+                                    >
+                                      Show less
+                                    </button>
+                                  ) : null}
+                                </HubCollapse>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -566,7 +705,7 @@ export function HubSleepExpand({
         : null
 
   return (
-    <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
+    <div className="space-y-4 px-0.5">
       <div className="min-w-0">
           <p className="type-hud-subsection">Sleep stages</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
@@ -696,7 +835,7 @@ export function HubWeightExpand() {
         : ""
 
   return (
-    <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-3 px-0.5">
+    <div className="space-y-3 px-0.5">
       <div className="min-w-0">
           <p className="type-hud-subsection">Weight correlation</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
@@ -950,7 +1089,7 @@ export function HubVitalsExpand({
   const totalZoneMinutes = zones.reduce((s, z) => s + z.minutes, 0)
 
   return (
-    <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
+    <div className="space-y-4 px-0.5">
       <div className="min-w-0">
           <p className="type-hud-subsection">Vitals</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
@@ -1396,7 +1535,7 @@ export function HubPeptidesExpand({
   }
 
   return (
-    <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
+    <div className="space-y-4 px-0.5">
       <div className="min-w-0">
         <div className="flex items-baseline justify-between gap-2">
           <p className="type-hud-subsection">Peptides</p>
@@ -1655,7 +1794,7 @@ export function HubPeptidesExpand({
                     aria-hidden
                   />
                 </button>
-                {pastWeeksOpen ? (
+                <HubCollapse open={pastWeeksOpen}>
                   <div className="space-y-2 border-t border-white/[0.04] pb-2 pt-1">
                     {pastWeekGroups.map((group) => (
                       <div key={group.weekKey} className="space-y-0">
@@ -1689,18 +1828,18 @@ export function HubPeptidesExpand({
                                       {" · "}
                                       {entry.doseMg} mg
                                     </p>
-                                    {open ? (
+                                    <HubCollapse open={open}>
                                       <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/50">
                                         {format(new Date(entry.injectedAt), "EEE · h:mm a")}
                                         {entry.injectionSite
                                           ? ` · ${injectionSiteLabel(entry.injectionSite)}`
                                           : ""}
                                       </p>
-                                    ) : null}
+                                    </HubCollapse>
                                   </div>
                                   <ChevronDown
                                     className={cn(
-                                      "h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform duration-200",
+                                      "h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
                                       open && "rotate-180 text-slate-300/70",
                                     )}
                                     aria-hidden
@@ -1721,7 +1860,7 @@ export function HubPeptidesExpand({
                       </Link>
                     </div>
                   </div>
-                ) : null}
+                </HubCollapse>
               </li>
             ) : null}
           </ul>
@@ -1905,7 +2044,7 @@ export function HubWorkoutsExpand({
   }
 
   return (
-    <div className="motion-safe:animate-fade-up motion-reduce:animate-none space-y-4 px-0.5">
+    <div className="space-y-4 px-0.5">
       <div className="min-w-0">
           <p className="type-hud-subsection">Workouts</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">

@@ -58,6 +58,10 @@ export type CaloriePipTrackerProps = {
   size?: "default" | "compact"
   /** Override grid columns (compact CSS only) */
   columns?: number
+  /** Stretch the 3D tank to the parent height (hub expand background). */
+  fillHeight?: boolean
+  /** Hide the cal/pip meta line under the tank. */
+  hideMeta?: boolean
   className?: string
 }
 
@@ -211,6 +215,8 @@ export function CaloriePipTracker({
   target,
   size = "default",
   columns,
+  fillHeight = false,
+  hideMeta = false,
   className,
 }: CaloriePipTrackerProps) {
   const accent = caloriePipAccentHex(consumed, target)
@@ -244,7 +250,11 @@ export function CaloriePipTracker({
 
   return (
     <div
-      className={cn("relative mx-auto w-full min-w-0 max-w-full", className)}
+      className={cn(
+        "relative mx-auto w-full min-w-0 max-w-full",
+        fillHeight && "h-full max-w-none",
+        className,
+      )}
       role="img"
       aria-label={
         target > 0
@@ -259,7 +269,14 @@ export function CaloriePipTracker({
         }}
         aria-hidden
       />
-      <div className="relative h-[min(58vh,28rem)] w-full touch-none sm:h-[min(56vh,30rem)]">
+      <div
+        className={cn(
+          "relative w-full touch-none",
+          fillHeight
+            ? "h-full"
+            : "h-[min(58vh,28rem)] sm:h-[min(56vh,30rem)]",
+        )}
+      >
         <CaloriePipScene
           consumed={consumed}
           target={target}
@@ -267,7 +284,7 @@ export function CaloriePipTracker({
           className="h-full w-full"
         />
       </div>
-      {target > 0 ? (
+      {target > 0 && !hideMeta ? (
         <p className="mt-1 text-right text-[9px] font-medium tabular-nums tracking-wide text-muted-foreground/45">
           {Math.round(filledAmount)}/{pipCount} · {Math.round(calPerPip)} cal/pip
           {ratio > 0 ? ` · ${Math.round(ratio * 100)}%` : ""}

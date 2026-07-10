@@ -5,6 +5,7 @@ import { subDays } from "date-fns"
 import { PageHeader } from "./PageHeader"
 import { WeeklyHero } from "./WeeklyHero"
 import type { HubExpandedPanel } from "./hub/HubExpandPanels"
+import { HubPresence, HUB_SECTION_MOTION_MS } from "./hub/HubMotion"
 import { FastingTimer } from "./FastingTimer"
 import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
@@ -275,10 +276,10 @@ export function HubDashboard() {
         />
       </div>
 
-      {/* Unmount fasting while a hub panel is expanded so mobile isn't paying
-          for the timer UI during expand-in-place views. Inactive fasting and
-          End controls sit beside the bottom nav (`FastingNavChip`). */}
-      {overview ? <FastingTimer hubCompact /> : null}
+      {/* Animate fasting out with hub expand so the layout morphs instead of snapping. */}
+      <HubPresence open={overview} durationMs={HUB_SECTION_MOTION_MS}>
+        <FastingTimer hubCompact />
+      </HubPresence>
     </div>
   )
 }
