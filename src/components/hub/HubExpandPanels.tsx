@@ -34,6 +34,7 @@ import { CaloriePipTracker } from "@/components/calories/CaloriePipTracker"
 import { LogFoodDialog } from "@/components/calories/LogFoodDialog"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { PeptideHalfLifeMeter } from "@/components/PeptideHalfLifeMeter"
+import { PeptideHungerMeter } from "@/components/PeptideHungerMeter"
 import { Button } from "@/components/ui/button"
 import { WeekWorkoutGoalRing, WEEKLY_WORKOUT_GOAL } from "@/components/WeekWorkoutGoalRing"
 import {
@@ -69,6 +70,8 @@ import {
 import {
   INJECTION_INTERVAL_PRESETS,
   PEPTIDE_COLOR,
+  dosedWeekNumberMap,
+  groupInjectionsByDosedWeek,
   injectionSiteLabel,
 } from "@/lib/peptides"
 import {
@@ -1289,6 +1292,11 @@ export type HubPeptideHistoryEntry = {
   compound?: string
 }
 
+export type HubPeptideHungerLog = {
+  date: string
+  hungerLevel: number
+}
+
 export function HubPeptidesExpand({
   lastDoseMg,
   lastInjectedAt,
@@ -1298,6 +1306,7 @@ export function HubPeptidesExpand({
   recentEntries = [],
   lastSiteUsed = null,
   dosedWeekCount = 0,
+  hungerLogs = [],
 }: {
   lastDoseMg: number | null
   lastInjectedAt: string | null
@@ -1308,12 +1317,16 @@ export function HubPeptidesExpand({
   lastSiteUsed?: string | null
   /** Distinct Monday-start weeks with ≥1 dose (protocol week number). */
   dosedWeekCount?: number
+  /** Recent daily appetite logs for the hunger meter. */
+  hungerLogs?: HubPeptideHungerLog[]
 }) {
   const { user } = useUser()
   const [injectionOpen, setInjectionOpen] = useState(false)
   const [dailyOpen, setDailyOpen] = useState(false)
   const [customInterval, setCustomInterval] = useState("")
-  /** Older doses start collapsed; tap to expand one at a time. */
+  /** Past weeks accordion starts collapsed. */
+  const [pastWeeksOpen, setPastWeeksOpen] = useState(false)
+  /** Nested older dose rows inside Past weeks; tap to expand one at a time. */
   const [expandedOlderKey, setExpandedOlderKey] = useState<string | null>(null)
   const isPreset = (INJECTION_INTERVAL_PRESETS as readonly number[]).includes(intervalDays)
 
@@ -1346,10 +1359,21 @@ export function HubPeptidesExpand({
     return Math.min(1, daysSince / intervalDays)
   })()
 
-  const history = recentEntries.slice(0, 8)
+  const history = recentEntries.slice(0, 12)
   const latestEntry = history[0] ?? null
   const olderEntries = history.slice(1)
+  const pastWeekGroups = useMemo(() => {
+    const older = recentEntries.slice(1, 12)
+    if (older.length === 0) return []
+    // Number weeks from full history so "Week N" matches protocol (PR #80).
+    const weekNums = dosedWeekNumberMap(recentEntries)
+    return groupInjectionsByDosedWeek(older).map((g) => ({
+      ...g,
+      weekNumber: weekNums.get(g.weekKey) ?? g.weekNumber,
+    }))
+  }, [recentEntries])
   const weekLabel = dosedWeekCount > 0 ? `Week ${dosedWeekCount}` : null
+  const pastDoseCount = olderEntries.length
 
   function bumpHub() {
     window.dispatchEvent(new CustomEvent("grid:log-saved"))
@@ -1564,6 +1588,13 @@ export function HubPeptidesExpand({
         compact
       />
 
+      <PeptideHungerMeter
+        hungerLogs={hungerLogs}
+        doseEntries={recentEntries}
+        lastDoseMg={lastDoseMg}
+        compact
+      />
+
       <div className="space-y-2">
         <div className="flex items-baseline justify-between gap-2">
           <p className="type-hud-caption">Recent injections</p>
@@ -1598,45 +1629,101 @@ export function HubPeptidesExpand({
                 </div>
               </li>
             ) : null}
-            {olderEntries.map((entry, i) => {
-              const key = entryKey(entry, i + 1)
-              const open = expandedOlderKey === key
-              return (
-                <li key={key} className="py-0">
-                  <button
-                    type="button"
-                    aria-expanded={open}
-                    onClick={() =>
-                      setExpandedOlderKey((prev) => (prev === key ? null : key))
-                    }
-                    className="flex w-full items-center justify-between gap-3 py-2 text-left transition-colors hover:bg-white/[0.02]"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-[12px] font-medium tabular-nums text-foreground/75">
-                        {format(new Date(entry.injectedAt), "MMM d")}
-                        {" · "}
-                        {entry.doseMg} mg
-                      </p>
-                      {open ? (
-                        <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/50">
-                          {format(new Date(entry.injectedAt), "EEE · h:mm a")}
-                          {entry.injectionSite
-                            ? ` · ${injectionSiteLabel(entry.injectionSite)}`
-                            : ""}
-                        </p>
-                      ) : null}
+            {pastDoseCount > 0 ? (
+              <li className="py-0">
+                <button
+                  type="button"
+                  aria-expanded={pastWeeksOpen}
+                  onClick={() => setPastWeeksOpen((o) => !o)}
+                  className="flex w-full items-center justify-between gap-3 py-2.5 text-left transition-colors hover:bg-white/[0.02]"
+                >
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-foreground/80">
+                      Past weeks
+                    </p>
+                    <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/50">
+                      {pastWeekGroups.length} week
+                      {pastWeekGroups.length === 1 ? "" : "s"} · {pastDoseCount} dose
+                      {pastDoseCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform duration-200",
+                      pastWeeksOpen && "rotate-180 text-slate-300/70",
+                    )}
+                    aria-hidden
+                  />
+                </button>
+                {pastWeeksOpen ? (
+                  <div className="space-y-2 border-t border-white/[0.04] pb-2 pt-1">
+                    {pastWeekGroups.map((group) => (
+                      <div key={group.weekKey} className="space-y-0">
+                        <div className="flex items-baseline justify-between gap-2 px-0.5 pt-1.5">
+                          <p className="type-hud-micro tabular-nums text-slate-300/70">
+                            Week {group.weekNumber}
+                          </p>
+                          <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/45">
+                            week of {group.weekOfLabel}
+                          </p>
+                        </div>
+                        <ul className="divide-y divide-white/[0.04]">
+                          {group.entries.map((entry, i) => {
+                            const key = entryKey(entry, i)
+                            const open = expandedOlderKey === key
+                            return (
+                              <li key={key} className="py-0">
+                                <button
+                                  type="button"
+                                  aria-expanded={open}
+                                  onClick={() =>
+                                    setExpandedOlderKey((prev) =>
+                                      prev === key ? null : key,
+                                    )
+                                  }
+                                  className="flex w-full items-center justify-between gap-3 py-2 pl-1 text-left transition-colors hover:bg-white/[0.02]"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate text-[12px] font-medium tabular-nums text-foreground/75">
+                                      {format(new Date(entry.injectedAt), "MMM d")}
+                                      {" · "}
+                                      {entry.doseMg} mg
+                                    </p>
+                                    {open ? (
+                                      <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/50">
+                                        {format(new Date(entry.injectedAt), "EEE · h:mm a")}
+                                        {entry.injectionSite
+                                          ? ` · ${injectionSiteLabel(entry.injectionSite)}`
+                                          : ""}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  <ChevronDown
+                                    className={cn(
+                                      "h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform duration-200",
+                                      open && "rotate-180 text-slate-300/70",
+                                    )}
+                                    aria-hidden
+                                  />
+                                </button>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </div>
+                    ))}
+                    <div className="px-0.5 pt-1">
+                      <Link
+                        href="/peptides"
+                        className="type-hud-micro text-muted-foreground/55 transition-colors hover:text-foreground/80"
+                      >
+                        Full history →
+                      </Link>
                     </div>
-                    <ChevronDown
-                      className={cn(
-                        "h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform duration-200",
-                        open && "rotate-180 text-slate-300/70",
-                      )}
-                      aria-hidden
-                    />
-                  </button>
-                </li>
-              )
-            })}
+                  </div>
+                ) : null}
+              </li>
+            ) : null}
           </ul>
         )}
       </div>
