@@ -695,7 +695,7 @@ export function WeeklyHero({
         <FadeSection show={showProtocolRail} className={fillViewport ? "shrink-0" : undefined}>
           <HubCollapse
             open={expanded !== "peptides" && expanded !== "workouts"}
-            durationMs={HUB_SECTION_MOTION_MS}
+            durationMs={680}
           >
             <div
               className="relative z-10 px-0.5 py-0.5 sm:px-1 sm:py-1"
@@ -778,7 +778,7 @@ export function WeeklyHero({
             </div>
           </HubCollapse>
 
-          <HubPresence open={expanded === "peptides"} durationMs={HUB_MOTION_MS}>
+          <HubPresence open={expanded === "peptides"} durationMs={680}>
             <HubPeptidesExpand
               lastDoseMg={peptideSummary?.lastDoseMg ?? null}
               lastInjectedAt={peptideSummary?.lastInjectedAt ?? null}
@@ -792,7 +792,7 @@ export function WeeklyHero({
             />
           </HubPresence>
 
-          <HubPresence open={expanded === "workouts"} durationMs={HUB_MOTION_MS}>
+          <HubPresence open={expanded === "workouts"} durationMs={680}>
             <HubWorkoutsExpand
               weekCount={weekWo}
               todayCount={workoutSummary?.todayCount ?? data.workouts.todayValue}

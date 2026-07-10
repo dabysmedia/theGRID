@@ -80,7 +80,11 @@ export function HubPresence({
   if (!mounted) return null
 
   return (
-    <HubCollapse open={visible} durationMs={durationMs} className={className}>
+    <HubCollapse
+      open={visible}
+      durationMs={durationMs}
+      className={cn("hub-expand-stagger", className)}
+    >
       {children}
     </HubCollapse>
   )

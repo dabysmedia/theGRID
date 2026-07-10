@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef, useState } from "react"
 import { Plus } from "lucide-react"
 import { MeshHeartSvg } from "@/components/hub/MeshHeartSvg"
 import { useQuickLog } from "@/context/QuickLogContext"
@@ -124,6 +125,16 @@ export function StepsActivityBars({
   const stepsInteractive = Boolean(onStepsClick) && !hideSteps
   /** Chart surface expands when collapsed; collapse via ring / back / title. */
   const chartExpandsOnTap = stepsInteractive && !expanded
+
+  // Remount bars on expand so L→R stagger plays again (and on first mount).
+  const [barGrowGen, setBarGrowGen] = useState(0)
+  const wasExpanded = useRef(expanded)
+  useEffect(() => {
+    if (expanded && !wasExpanded.current) {
+      setBarGrowGen((g) => g + 1)
+    }
+    wasExpanded.current = expanded
+  }, [expanded])
 
   return (
     <div
@@ -444,7 +455,8 @@ export function StepsActivityBars({
                 pct * barFillRatio * 100,
               )
               const isToday = i === todayIdx
-              const delay = 280 + i * 70
+              // Stagger left → right; longer gaps so each bar “rows” in clearly.
+              const delay = 60 + i * 95
               const hitGoal = goalValue != null && val >= goalValue
 
               return (
@@ -488,17 +500,26 @@ export function StepsActivityBars({
                     </span>
                   </div>
 
+                  {/* Outer: isometric pose. Inner: scaleY grow — must be separate
+                      or the inline 3D transform kills animate-bar-grow. */}
                   <div
-                    className="absolute bottom-0 origin-bottom animate-bar-grow transition-[height] duration-500 ease-out motion-reduce:transition-none"
+                    className="absolute bottom-0 transition-[height] duration-500 ease-out motion-reduce:transition-none"
                     style={{
                       width: "78%",
                       maxWidth: expanded ? 34 : 30,
                       height: useScaledBars ? `${heightPct}%` : heightPx,
-                      animationDelay: `${delay}ms`,
                       transformStyle: "preserve-3d",
                       transform: "rotateX(12deg) rotateY(-18deg)",
                     }}
                   >
+                    <div
+                      key={`grow-${barGrowGen}-${i}`}
+                      className="absolute inset-0 origin-bottom animate-bar-grow motion-reduce:animate-none"
+                      style={{
+                        animationDelay: `${delay}ms`,
+                        transformStyle: "preserve-3d",
+                      }}
+                    >
                     <div
                       className="absolute left-0 right-0 top-0"
                       style={{
@@ -553,6 +574,7 @@ export function StepsActivityBars({
                           }}
                         />
                       ) : null}
+                    </div>
                     </div>
                   </div>
                 </div>

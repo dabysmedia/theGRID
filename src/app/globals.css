@@ -944,7 +944,7 @@ html {
   }
 
   .animate-bar-grow {
-    animation: bar-grow 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: bar-grow 0.72s cubic-bezier(0.16, 1, 0.3, 1) both;
     transform-origin: bottom;
   }
 
@@ -956,6 +956,17 @@ html {
     animation: ring-pop 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
     transform-origin: center;
   }
+
+  /* Hub expand panels — staggered fade-up of section children on mount */
+  .hub-expand-stagger > div > * > * {
+    animation: fade-up 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .hub-expand-stagger > div > * > *:nth-child(1) { animation-delay: 70ms; }
+  .hub-expand-stagger > div > * > *:nth-child(2) { animation-delay: 140ms; }
+  .hub-expand-stagger > div > * > *:nth-child(3) { animation-delay: 210ms; }
+  .hub-expand-stagger > div > * > *:nth-child(4) { animation-delay: 280ms; }
+  .hub-expand-stagger > div > * > *:nth-child(5) { animation-delay: 350ms; }
+  .hub-expand-stagger > div > * > *:nth-child(6) { animation-delay: 420ms; }
 
   .animate-mesh-heart-pulse {
     animation: mesh-heart-pulse 2.8s ease-in-out infinite;
@@ -1002,7 +1013,8 @@ html {
     .animate-calorie-pip-pop,
     .animate-workout-card-exit,
     .animate-workout-card-enter,
-    .animate-workout-complete-pop {
+    .animate-workout-complete-pop,
+    .hub-expand-stagger > div > * > * {
       animation: none;
     }
   }
