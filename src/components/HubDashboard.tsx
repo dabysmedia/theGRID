@@ -16,6 +16,7 @@ import {
   computeNextInjection,
   readInjectionIntervalDays,
 } from "@/lib/hub-tile-prefs"
+import { countDosedWeeks } from "@/lib/peptides"
 
 interface CategorySummary {
   todayValue: number
@@ -194,6 +195,10 @@ export function HubDashboard() {
       ),
     [lastPeptide?.injectedAt, injectionIntervalDays, activeDate]
   )
+  const dosedWeekCount = useMemo(
+    () => countDosedWeeks(peptideEntries),
+    [peptideEntries],
+  )
 
   const overview = hubExpanded == null
 
@@ -231,8 +236,9 @@ export function HubDashboard() {
             nextInjection,
             todayMg: data.peptides.todayValue,
             intervalDays: injectionIntervalDays,
-            recentEntries: peptideEntries.slice(0, 8),
+            recentEntries: peptideEntries,
             lastSiteUsed: lastPeptide?.injectionSite ?? null,
+            dosedWeekCount,
           }}
           workoutSummary={{
             weekCount: weekWorkoutCount,

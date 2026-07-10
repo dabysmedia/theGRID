@@ -307,6 +307,8 @@ interface WeeklyHeroProps {
       compound?: string
     }>
     lastSiteUsed?: string | null
+    /** Distinct Monday-start weeks with ≥1 dose. */
+    dosedWeekCount?: number
   }
   workoutSummary?: {
     weekCount: number
@@ -695,6 +697,7 @@ export function WeeklyHero({
               intervalDays={peptideSummary?.intervalDays ?? 7}
               recentEntries={peptideSummary?.recentEntries ?? []}
               lastSiteUsed={peptideSummary?.lastSiteUsed ?? null}
+              dosedWeekCount={peptideSummary?.dosedWeekCount ?? 0}
             />
           ) : expanded === "workouts" ? (
             <HubWorkoutsExpand

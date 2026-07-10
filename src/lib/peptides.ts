@@ -1,5 +1,106 @@
+import { format, startOfWeek } from "date-fns"
+
 /** Steel HUD accent — matches hub protocol rail (not purple). */
 export const PEPTIDE_COLOR = "#94a3b8"
+
+/** Retatrutide (Reta) approximate plasma half-life used for circulating estimates. */
+export const RETA_HALF_LIFE_DAYS = 6
+
+/**
+ * Monday-start week key (`yyyy-MM-dd` of week start).
+ * Matches hub / workouts / calories (`weekStartsOn: 1`).
+ */
+export function injectionWeekKey(injectedAt: string | Date): string {
+  const d = typeof injectedAt === "string" ? new Date(injectedAt) : injectedAt
+  return format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd")
+}
+
+/**
+ * Protocol week number = how many distinct Monday-start weeks have had ≥1 dose.
+ * e.g. doses across 4 different weeks → 4 ("Week 4"), even if a calendar week was skipped.
+ */
+export function countDosedWeeks(entries: { injectedAt: string }[]): number {
+  const keys = new Set<string>()
+  for (const e of entries) {
+    if (!e.injectedAt) continue
+    keys.add(injectionWeekKey(e.injectedAt))
+  }
+  return keys.size
+}
+
+/** Fractional days since an injection (never negative). */
+export function daysElapsedSince(injectedAt: string, nowMs = Date.now()): number {
+  return Math.max(0, (nowMs - new Date(injectedAt).getTime()) / (1000 * 60 * 60 * 24))
+}
+
+/**
+ * Single-shot remaining dose: `doseMg * 0.5^(days / halfLifeDays)`.
+ */
+export function remainingDoseMg(
+  doseMg: number,
+  daysSince: number,
+  halfLifeDays = RETA_HALF_LIFE_DAYS,
+): number {
+  if (!(doseMg > 0) || !(halfLifeDays > 0) || daysSince < 0) return 0
+  return doseMg * Math.pow(0.5, daysSince / halfLifeDays)
+}
+
+/**
+ * Multi-dose superposition: sum of each past shot’s remaining contribution.
+ * Prefer this when injection history is available.
+ */
+export function estimateCirculatingMg(
+  entries: { injectedAt: string; doseMg: number }[],
+  nowMs = Date.now(),
+  halfLifeDays = RETA_HALF_LIFE_DAYS,
+): number {
+  let sum = 0
+  for (const e of entries) {
+    if (!e.injectedAt || !(e.doseMg > 0)) continue
+    sum += remainingDoseMg(e.doseMg, daysElapsedSince(e.injectedAt, nowMs), halfLifeDays)
+  }
+  return sum
+}
+
+/** Compact display for estimated mg (HUD readouts). */
+export function formatEstimateMg(mg: number): string {
+  if (!(mg > 0)) return "0"
+  if (mg < 0.05) return "<0.1"
+  if (mg < 10) return (Math.round(mg * 10) / 10).toFixed(1)
+  return String(Math.round(mg * 10) / 10).replace(/\.0$/, "")
+}
+
+/**
+ * Sample points for a decay curve of stacked circulating mg.
+ * `fromDaysAgo` → `toDaysAhead` relative to `nowMs` (negative = past).
+ */
+export function circulatingCurvePoints(
+  entries: { injectedAt: string; doseMg: number }[],
+  opts?: {
+    nowMs?: number
+    fromDaysAgo?: number
+    toDaysAhead?: number
+    steps?: number
+    halfLifeDays?: number
+  },
+): Array<{ dayOffset: number; mg: number }> {
+  const nowMs = opts?.nowMs ?? Date.now()
+  const fromDaysAgo = opts?.fromDaysAgo ?? 0
+  const toDaysAhead = opts?.toDaysAhead ?? RETA_HALF_LIFE_DAYS * 2
+  const steps = Math.max(2, opts?.steps ?? 25)
+  const halfLifeDays = opts?.halfLifeDays ?? RETA_HALF_LIFE_DAYS
+  const span = fromDaysAgo + toDaysAhead
+  const points: Array<{ dayOffset: number; mg: number }> = []
+  for (let i = 0; i <= steps; i++) {
+    const dayOffset = -fromDaysAgo + (span * i) / steps
+    const t = nowMs + dayOffset * 24 * 60 * 60 * 1000
+    points.push({
+      dayOffset,
+      mg: estimateCirculatingMg(entries, t, halfLifeDays),
+    })
+  }
+  return points
+}
 
 export const COMPOUNDS = [
   { id: "retatrutide", label: "Retatrutide (Reta)" },
