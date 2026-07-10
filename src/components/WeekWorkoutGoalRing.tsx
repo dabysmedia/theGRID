@@ -52,7 +52,7 @@ export function WeekWorkoutGoalRing({
     size === "lg"
       ? "h-[8.25rem] w-[8.25rem] sm:h-[8.75rem] sm:w-[8.75rem]"
       : size === "md"
-        ? "h-[5.5rem] w-[5.5rem] sm:h-[6rem] sm:w-[6rem]"
+        ? "size-[var(--hub-protocol-glyph)] sm:h-[6rem] sm:w-[6rem]"
         : undefined
 
   const svgClass =

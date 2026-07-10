@@ -13,6 +13,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const { fullscreen } = useFullscreenOverlay()
   const pathname = usePathname()
   const agentPublic = isAgentPublicPath(pathname)
+  const isHub = pathname === "/"
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -20,7 +21,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
         className={cn(
           "mx-auto flex w-full max-w-full min-h-0 flex-1 flex-col",
           "ps-[max(0.75rem,env(safe-area-inset-left,0px))] pe-[max(0.75rem,env(safe-area-inset-right,0px))]",
-          "pt-[calc(env(safe-area-inset-top,0px)+2rem)]",
+          "pt-[var(--app-chrome-top)]",
           fullscreen || agentPublic
             ? "pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
             : "pb-0",
@@ -31,7 +32,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
         )}
       >
         {children}
-        {!fullscreen && !agentPublic && <PageFooter />}
+        {!fullscreen && !agentPublic && <PageFooter dockOnly={isHub} />}
       </main>
       {!fullscreen && !agentPublic && <BottomNav />}
     </div>

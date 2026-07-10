@@ -55,6 +55,8 @@ type Props = {
   readinessSelected?: boolean
   /** Hide the steps chart (keep readiness) — used when vitals panel is open. */
   hideSteps?: boolean
+  /** Collapsed hub: use viewport-scaled bar area (`--hub-bar-area`) instead of fixed px. */
+  scaleToFit?: boolean
   className?: string
 }
 
@@ -77,6 +79,7 @@ export function StepsActivityBars({
   onReadinessClick,
   readinessSelected = false,
   hideSteps = false,
+  scaleToFit = false,
   className,
 }: Props) {
   const { openQuickLog } = useQuickLog()
@@ -85,8 +88,13 @@ export function StepsActivityBars({
   // Include goal in the scale so the yellow line always sits inside the chart.
   const scaleMax = Math.max(...values, goalValue ?? 0, 1)
   const todayIdx = values.length - 1
+  const useScaledBars = scaleToFit && !expanded
   const barAreaPx = expanded ? BAR_AREA_EXPANDED_PX : BAR_AREA_PX
   const barMaxPx = expanded ? BAR_MAX_EXPANDED_PX : BAR_MAX_PX
+  const barFillRatio = barMaxPx / barAreaPx
+  const barAreaStyle = useScaledBars
+    ? ({ height: "var(--hub-bar-area)" } as const)
+    : ({ height: barAreaPx } as const)
   const band = readinessBand(readiness)
   const accent = band ? BAND_ACCENT[band] : "#64748b"
   const readinessScore =
@@ -98,8 +106,12 @@ export function StepsActivityBars({
   const hrvLabel =
     hrvMs != null && Number.isFinite(hrvMs) ? String(Math.round(hrvMs)) : "—"
   const goalLineBottomPx =
-    goalValue != null
+    goalValue != null && !useScaledBars
       ? Math.max(4, Math.round((goalValue / scaleMax) * barMaxPx))
+      : null
+  const goalLineBottomPct =
+    goalValue != null && useScaledBars
+      ? Math.max(4, (goalValue / scaleMax) * barFillRatio * 100)
       : null
   const todaySteps = values[todayIdx] ?? 0
   const loggedDays = values.filter((v) => v > 0)
@@ -149,10 +161,18 @@ export function StepsActivityBars({
           !onReadinessClick && "pointer-events-none",
         )}
       >
-        <div className="flex items-center gap-2.5 px-4 py-2 lg:px-5">
+        <div
+          className={cn(
+            "flex items-center gap-2.5 px-4 py-2 lg:px-5",
+            scaleToFit && !expanded && "max-lg:gap-2 max-lg:py-1.5",
+          )}
+        >
           {/* Outer keeps isometric tilt; inner pulse won't clobber rotateX/Y */}
           <div
-            className="relative flex h-16 w-16 shrink-0 items-center justify-center"
+            className={cn(
+              "relative flex h-16 w-16 shrink-0 items-center justify-center",
+              scaleToFit && !expanded && "max-lg:h-12 max-lg:w-12",
+            )}
             style={{
               transform: "rotateX(8deg) rotateY(-12deg)",
               transformStyle: "preserve-3d",
@@ -296,6 +316,7 @@ export function StepsActivityBars({
         className={cn(
           "relative z-10 px-4 pb-1 pt-2.5 transition-[padding] duration-500 ease-out lg:px-5",
           expanded && "pb-3 pt-3",
+          scaleToFit && !expanded && "max-lg:pt-1.5",
         )}
       >
         <div className="mb-2 flex items-end justify-between gap-1.5">
@@ -393,12 +414,16 @@ export function StepsActivityBars({
         >
           <div
             className="relative flex items-end justify-between gap-1 px-0.5 transition-[height] duration-500 ease-out motion-reduce:transition-none"
-            style={{ height: barAreaPx }}
+            style={barAreaStyle}
           >
-            {goalLineBottomPx != null ? (
+            {goalLineBottomPx != null || goalLineBottomPct != null ? (
               <div
                 className="pointer-events-none absolute inset-x-0 z-20 transition-[bottom] duration-500 ease-out"
-                style={{ bottom: goalLineBottomPx }}
+                style={
+                  goalLineBottomPct != null
+                    ? { bottom: `${goalLineBottomPct}%` }
+                    : { bottom: goalLineBottomPx! }
+                }
                 aria-hidden
               >
                 <div
@@ -414,6 +439,10 @@ export function StepsActivityBars({
             {values.map((val, i) => {
               const pct = scaleMax > 0 ? val / scaleMax : 0
               const heightPx = Math.max(10, Math.round(pct * barMaxPx))
+              const heightPct = Math.max(
+                (10 / barAreaPx) * 100,
+                pct * barFillRatio * 100,
+              )
               const isToday = i === todayIdx
               const delay = 280 + i * 70
               const hitGoal = goalValue != null && val >= goalValue
@@ -422,7 +451,7 @@ export function StepsActivityBars({
                 <div
                   key={i}
                   className="relative flex min-w-0 flex-1 justify-center"
-                  style={{ height: barAreaPx, perspective: "240px" }}
+                  style={{ ...barAreaStyle, perspective: "240px" }}
                 >
                   {/* Per-day step value — fades in as the chart grows */}
                   <div
@@ -433,7 +462,9 @@ export function StepsActivityBars({
                         : "translate-y-1 opacity-0",
                     )}
                     style={{
-                      bottom: heightPx + (expanded ? 10 : 4),
+                      bottom: useScaledBars
+                        ? `calc(${heightPct}% + 4px)`
+                        : heightPx + (expanded ? 10 : 4),
                       minHeight: VALUE_LABEL_SLOT_PX,
                     }}
                     aria-hidden={!expanded}
@@ -462,7 +493,7 @@ export function StepsActivityBars({
                     style={{
                       width: "78%",
                       maxWidth: expanded ? 34 : 30,
-                      height: heightPx,
+                      height: useScaledBars ? `${heightPct}%` : heightPx,
                       animationDelay: `${delay}ms`,
                       transformStyle: "preserve-3d",
                       transform: "rotateX(12deg) rotateY(-18deg)",
