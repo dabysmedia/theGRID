@@ -567,7 +567,13 @@ export function WeeklyHero({
       >
         {/* Rings — open instrument bay (no nested frame) */}
         <FadeSection show={showRings} className={fillViewport ? "shrink-0" : undefined}>
-          <div className="relative px-0.5 py-0.5 sm:px-1 sm:py-1">
+          <div
+            className={cn(
+              "relative px-0.5 py-0.5 sm:px-1 sm:py-1",
+              // Sit above calories expand pip bleed so the dial stays interactive
+              hideSiblingRingsForCalories && "z-20",
+            )}
+          >
             <div
               className={cn(
                 "relative z-10 flex transition-[justify-content] duration-500 ease-out",
@@ -651,7 +657,7 @@ export function WeeklyHero({
 
         <HubCollapse
           open={
-            expanded === "calories" || expanded === "sleep" || expanded === "vitals"
+            expanded === "sleep" || expanded === "vitals"
           }
           durationMs={HUB_MOTION_MS}
         >

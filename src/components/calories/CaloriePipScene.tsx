@@ -60,11 +60,12 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     const mobile = isCoarsePointer()
 
     const scene = new THREE.Scene()
-    scene.fog = new THREE.FogExp2(0x05070c, 0.028)
+    // Deeper fog so the tank reads as atmosphere, not a foreground prop
+    scene.fog = new THREE.FogExp2(0x05070c, 0.042)
 
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 80)
-    // Closer isometric vantage — fills the frame
-    camera.position.set(11.5, 10.2, 11.5)
+    // Slightly pulled back — fills tall expand canvases without dominating UI
+    camera.position.set(12.2, 10.8, 12.2)
     camera.lookAt(0, 0.35, 0)
 
     const renderer = new THREE.WebGLRenderer({
@@ -85,15 +86,15 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     renderer.domElement.style.touchAction = "none"
     host.appendChild(renderer.domElement)
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.55)
+    const ambient = new THREE.AmbientLight(0xffffff, 0.42)
     scene.add(ambient)
-    const key = new THREE.DirectionalLight(0xffffff, 1.2)
+    const key = new THREE.DirectionalLight(0xffffff, 0.85)
     key.position.set(8, 14, 6)
     scene.add(key)
-    const fill = new THREE.DirectionalLight(0x88aaff, 0.38)
+    const fill = new THREE.DirectionalLight(0x88aaff, 0.28)
     fill.position.set(-6, 4, -4)
     scene.add(fill)
-    const rim = new THREE.DirectionalLight(0xffffff, 0.28)
+    const rim = new THREE.DirectionalLight(0xffffff, 0.18)
     rim.position.set(-2, 6, 10)
     scene.add(rim)
 
@@ -106,7 +107,7 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       metalness: 0.4,
       roughness: 0.82,
       transparent: true,
-      opacity: 0.62,
+      opacity: 0.38,
     })
     const floor = new THREE.Mesh(floorGeo, floorMat)
     floor.rotation.x = -Math.PI / 2
@@ -122,14 +123,14 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     const gridMats = Array.isArray(grid.material) ? grid.material : [grid.material]
     for (const m of gridMats) {
       m.transparent = true
-      m.opacity = 0.4
+      m.opacity = 0.22
     }
 
     const geometry = new THREE.BoxGeometry(CUBE, CUBE, CUBE)
     const material = new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
-      metalness: 0.32,
-      roughness: 0.34,
+      metalness: 0.28,
+      roughness: 0.48,
       emissive: 0x000000,
       emissiveIntensity: 0,
     })
@@ -143,8 +144,8 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
 
     const dummy = new THREE.Object3D()
     const litColor = new THREE.Color()
-    const emptyColor = new THREE.Color("#2a3140")
-    const availableColor = new THREE.Color("#3d4a5c")
+    const emptyColor = new THREE.Color("#1e2430")
+    const availableColor = new THREE.Color("#2c3544")
     const rise = new Float32Array(THREE_PIP_COUNT)
     const targetRise = new Float32Array(THREE_PIP_COUNT)
     const posX = new Float32Array(THREE_PIP_COUNT)
@@ -191,8 +192,8 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       const h = el.clientHeight || 1
       renderer.setSize(w, h, false)
       const aspect = w / h
-      // Tight frustum = zoomed in so the tank dominates the canvas
-      const frustum = mobile ? 8.2 : 7.6
+      // Wider frustum — tank as soft background across tall expand canvases
+      const frustum = mobile ? 9.4 : 8.8
       if (aspect >= 1) {
         camera.left = -frustum * aspect
         camera.right = frustum * aspect
@@ -237,7 +238,7 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       }
       mesh.instanceColor!.needsUpdate = true
       material.emissive.copy(litColor)
-      material.emissiveIntensity = mobile ? 0.18 : 0.28
+      material.emissiveIntensity = mobile ? 0.06 : 0.1
       dirty = true
       return true
     }
