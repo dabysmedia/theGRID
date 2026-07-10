@@ -32,8 +32,8 @@ export default function LogPage() {
       <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-4 lg:gap-3">
         {QUICK_LOG_CATEGORIES.map((key, idx) => {
           const cat = CATEGORY_THEME[key]
-          const calPaused = cat.href === "/calories" && vacationBlocksBody
-          const weightPaused = cat.href === "/weight" && vacationBlocksBody
+          const calPaused = cat.key === "calories" && vacationBlocksBody
+          const weightPaused = cat.key === "weight" && vacationBlocksBody
           const tilePaused = calPaused || weightPaused
           const Icon = cat.icon
           const tile = (
@@ -71,7 +71,7 @@ export default function LogPage() {
           if (tilePaused) {
             return (
               <div
-                key={cat.href}
+                key={cat.key}
                 className="group"
                 title={`${cat.label} paused during vacation mode`}
               >
@@ -81,7 +81,7 @@ export default function LogPage() {
           }
 
           return (
-            <Link key={cat.href} href={cat.href} className="group">
+            <Link key={cat.key} href={cat.href} className="group">
               {tile}
             </Link>
           )

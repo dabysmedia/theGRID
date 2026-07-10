@@ -127,7 +127,7 @@ function SectionChart({
   title: string
   icon: React.ElementType
   color: string
-  href: string
+  href?: string
   children: React.ReactNode
   summaryCards: React.ReactNode
   stagger?: number
@@ -147,12 +147,14 @@ function SectionChart({
           </div>
           <h2 className="type-hud-rail text-foreground">{title}</h2>
         </div>
-        <Link
-          href={href}
-          className="press-scale type-hud-chip rounded-lg px-2 py-1.5 text-primary/70 transition-colors hover:text-primary"
-        >
-          View all &rarr;
-        </Link>
+        {href ? (
+          <Link
+            href={href}
+            className="press-scale type-hud-chip rounded-lg px-2 py-1.5 text-primary/70 transition-colors hover:text-primary"
+          >
+            View all &rarr;
+          </Link>
+        ) : null}
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{summaryCards}</div>
       <div className="animate-chart-wipe min-h-[8rem] min-w-0">{children}</div>
@@ -419,7 +421,7 @@ export default function StatsPage() {
           {/* â”€â”€ WEIGHT â”€â”€ */}
           {(s.weight.daysLogged > 0) && (
             <SectionChart
-              title="Weight" icon={Weight} color={CATEGORY_THEME.weight.color} href="/weight" stagger={2}
+              title="Weight" icon={Weight} color={CATEGORY_THEME.weight.color} stagger={2}
               summaryCards={<>
                 <StatCard label="First Log" value={s.weight.start != null ? `${s.weight.start}` : "--"} sub="lbs" color={CATEGORY_THEME.weight.color} />
                 <StatCard label="Last Log" value={s.weight.end != null ? `${s.weight.end}` : "--"} sub="lbs" />
@@ -524,7 +526,7 @@ export default function StatsPage() {
 
           {/* â”€â”€ WORKOUTS â”€â”€ */}
           <SectionChart
-            title="Workouts" icon={Dumbbell} color={CATEGORY_THEME.workouts.color} href="/workouts" stagger={5}
+            title="Workouts" icon={Dumbbell} color={CATEGORY_THEME.workouts.color} stagger={5}
             summaryCards={<>
               <StatCard label="Total Sessions" value={`${s.workouts.total}`} color={CATEGORY_THEME.workouts.color} />
               <StatCard label="Days Active" value={`${s.workouts.daysActive}`} sub={daysLabel} />

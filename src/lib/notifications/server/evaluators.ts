@@ -225,7 +225,7 @@ const evaluators: Record<NotificationKey, Evaluator> = {
       payload: {
         title: "Morning weigh-in",
         body: "Step on the scale and log today's weight.",
-        url: "/weight",
+        url: "/",
         type: "log_weight",
         tag: "log_weight",
       },
@@ -412,7 +412,7 @@ const evaluators: Record<NotificationKey, Evaluator> = {
       payload: {
         title: "Workout streak at risk",
         body: `It's been ${days} days since your last workout. 20 minutes is enough.`,
-        url: "/workouts",
+        url: "/",
         type: "workout_streak_at_risk",
         tag: "workout_streak_at_risk",
       },

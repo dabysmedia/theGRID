@@ -339,19 +339,7 @@ export function DailyWeighIn({
         ) : (
           <span className="hidden sm:block" />
         )}
-        {logged ? (
-          <Link
-            href="/weight"
-            className={cn(
-              buttonVariants({ variant: "ghost", size: "sm" }),
-              "inline-flex w-full gap-1 text-muted-foreground hover:bg-muted/15 hover:text-foreground sm:ml-auto sm:w-auto sm:shrink-0",
-              embedded && "type-hud-micro h-8 px-2.5",
-            )}
-          >
-            Weight
-            <ChevronRight className="size-3.5 opacity-60" />
-          </Link>
-        ) : (
+        {logged ? null : (
           <Button
             type="submit"
             variant={embedded ? "ghost" : "glass"}
