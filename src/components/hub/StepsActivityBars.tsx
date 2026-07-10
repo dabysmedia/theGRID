@@ -53,8 +53,12 @@ type Props = {
   /** When set, readiness/HRV row toggles vitals expand instead of navigating away. */
   onReadinessClick?: () => void
   readinessSelected?: boolean
+  /** Hide readiness while the steps panel is expanded. */
+  hideReadiness?: boolean
   /** Hide the steps chart (keep readiness) — used when vitals panel is open. */
   hideSteps?: boolean
+  /** Whether the chart is currently exposed in the hub stack. */
+  chartVisible?: boolean
   /** Collapsed hub: use viewport-scaled bar area (`--hub-bar-area`) instead of fixed px. */
   scaleToFit?: boolean
   className?: string
@@ -78,7 +82,9 @@ export function StepsActivityBars({
   onStepsClick,
   onReadinessClick,
   readinessSelected = false,
+  hideReadiness = false,
   hideSteps = false,
+  chartVisible: _chartVisible = true,
   scaleToFit = false,
   className,
 }: Props) {
@@ -150,6 +156,7 @@ export function StepsActivityBars({
       />
 
       {/* Readiness — text inset; gradient full-bleed to card edges */}
+      {!hideReadiness ? (
       <button
         type="button"
         onClick={onReadinessClick}
@@ -301,9 +308,10 @@ export function StepsActivityBars({
           ) : null}
         </div>
       </button>
+      ) : null}
 
       {/* Soft seam only — no opaque cut between readiness and steps */}
-      {!hideSteps ? (
+      {!hideSteps && !hideReadiness ? (
         <div
           className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/5 to-transparent"
           aria-hidden
