@@ -3079,7 +3079,7 @@ function ActiveWorkout({
               <DialogDescription>
                 {confirmEndAction === "discard"
                   ? "This session will be removed from your log. You can’t undo this."
-                  : "Save this session as completed and return to the workouts screen."}
+                  : "Save this session as completed and return to the hub."}
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -3359,6 +3359,7 @@ function HubRoutineEditorFromQuery({
    ────────────────────────────────────────────────────────── */
 
 export default function WorkoutsPage() {
+  const router = useRouter()
   const [sessions, setSessions] = useState<WorkoutSession[]>([])
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([])
   const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set())
@@ -3379,6 +3380,8 @@ export default function WorkoutsPage() {
     activeId: string
     overId: string | null
   } | null>(null)
+  /** When true, closing the routine editor returns to the hub instead of the legacy browse page. */
+  const returnToHubAfterEditorRef = useRef(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [startingWorkout, setStartingWorkout] = useState(false)
   /** Template the current active session was started from (for remembering swaps). */
@@ -3664,6 +3667,7 @@ export default function WorkoutsPage() {
       }
       setProgressionRefresh((n) => n + 1)
       setActiveTemplateId(null)
+      router.push("/")
     }
   }
 
@@ -3676,6 +3680,7 @@ export default function WorkoutsPage() {
     if (res.ok) {
       setSessions((prev) => prev.filter((s) => s.id !== activeSession.id))
       setActiveTemplateId(null)
+      router.push("/")
     }
   }
 
@@ -3932,6 +3937,10 @@ export default function WorkoutsPage() {
     setEditingTemplate(null)
     setRoutineEditorKey("new")
     setRoutineImportAsNew(false)
+    if (returnToHubAfterEditorRef.current) {
+      returnToHubAfterEditorRef.current = false
+      router.push("/")
+    }
   }
 
   function WorkoutJournalDayCard({
@@ -4588,8 +4597,14 @@ export default function WorkoutsPage() {
         <HubRoutineEditorFromQuery
           templatesLoaded={templatesLoaded}
           templates={templates}
-          onNew={openNewRoutineEditor}
-          onEdit={openEditRoutineEditor}
+          onNew={() => {
+            returnToHubAfterEditorRef.current = true
+            openNewRoutineEditor()
+          }}
+          onEdit={(tmpl) => {
+            returnToHubAfterEditorRef.current = true
+            openEditRoutineEditor(tmpl)
+          }}
         />
       </Suspense>
 
