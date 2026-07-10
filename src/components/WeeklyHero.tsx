@@ -133,7 +133,7 @@ function ProgressRing({
     <>
       <div
         className={cn(
-          "relative h-[112px] w-[112px] motion-safe:animate-ring-pop motion-reduce:animate-none lg:h-[124px] lg:w-[124px]",
+          "relative size-[var(--hub-ring-size)] motion-safe:animate-ring-pop motion-reduce:animate-none lg:h-[124px] lg:w-[124px]",
           staggerClass,
           selected && "scale-[1.06]",
         )}
@@ -287,6 +287,11 @@ interface WeeklyHeroProps {
   /** Controlled expansion from HubDashboard (fades SYSTEMS when set). */
   expanded?: HubExpandedPanel | null
   onExpandedChange?: (panel: HubExpandedPanel | null) => void
+  /**
+   * Collapsed overview: fill remaining hub column height on mobile and
+   * distribute instrument sections (no default page scroll).
+   */
+  fillViewport?: boolean
   /** Peptides / workouts summary for the protocol/training instrument rail + expand panels. */
   peptideSummary?: {
     lastDoseMg: number | null
@@ -341,6 +346,7 @@ export function WeeklyHero({
   vacationBlocksCalories = false,
   expanded: expandedProp,
   onExpandedChange,
+  fillViewport = false,
   peptideSummary,
   workoutSummary,
 }: WeeklyHeroProps) {
@@ -440,7 +446,8 @@ export function WeeklyHero({
     <div
       className={cn(
         glassPanelClass,
-        "p-4 transition-opacity duration-500 lg:p-5",
+        "flex flex-col p-4 transition-opacity duration-500 lg:p-5",
+        fillViewport && "max-lg:h-full max-lg:min-h-0 max-lg:p-3",
         // glass-panel CSS sets overflow:hidden; sticky back bar needs visible
         expanded != null && "!overflow-visible",
         loading ? "opacity-50" : "opacity-100",
@@ -472,13 +479,18 @@ export function WeeklyHero({
 
       {/* Header — when expanded, flush sticky back rail replaces overview chrome */}
       {expanded != null ? (
-        <div className="relative z-20 -mx-4 mb-3 sticky top-0 lg:-mx-5">
+        <div className="relative z-20 -mx-4 mb-3 shrink-0 sticky top-0 lg:-mx-5">
           <div className="border-b border-white/[0.06] bg-[oklch(0.12_0.008_250_/0.88)] px-4 backdrop-blur-md lg:px-5">
             <HubBackToOverview onBack={() => setExpanded(null)} />
           </div>
         </div>
       ) : (
-        <div className="relative z-10 mb-4 flex items-center justify-between">
+        <div
+          className={cn(
+            "relative z-10 flex shrink-0 items-center justify-between",
+            fillViewport ? "mb-[var(--hub-section-gap)]" : "mb-4",
+          )}
+        >
           <div className="flex items-center gap-2">
             <div className="status-dot" />
             <h2
@@ -515,11 +527,16 @@ export function WeeklyHero({
 
       <div
         key={viewMode}
-        className="relative z-10 space-y-4 motion-safe:animate-fade-up motion-reduce:animate-none"
+        className={cn(
+          "relative z-10 motion-safe:animate-fade-up motion-reduce:animate-none",
+          fillViewport && expanded == null
+            ? "max-lg:flex max-lg:min-h-0 max-lg:flex-1 max-lg:flex-col max-lg:justify-between max-lg:gap-[var(--hub-section-gap)] space-y-4 max-lg:space-y-0"
+            : "space-y-4",
+        )}
       >
         {/* Rings — open instrument bay (no nested frame) */}
-        <FadeSection show={showRings}>
-          <div className="relative px-0.5 py-1 sm:px-1">
+        <FadeSection show={showRings} className={fillViewport ? "shrink-0" : undefined}>
+          <div className="relative px-0.5 py-0.5 sm:px-1 sm:py-1">
             <div className="relative z-10 flex justify-around">
               <div
                 className={cn(
@@ -613,7 +630,10 @@ export function WeeklyHero({
           </>
         ) : null}
 
-        <FadeSection show={showStepsBars}>
+        <FadeSection
+          show={showStepsBars}
+          className={cn(fillViewport && expanded == null && "min-h-0 shrink")}
+        >
           {expanded == null ? (
             <div
               className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
@@ -635,6 +655,7 @@ export function WeeklyHero({
             onReadinessClick={() => toggleExpand("vitals")}
             readinessSelected={expanded === "vitals"}
             hideSteps={expanded === "vitals"}
+            scaleToFit={fillViewport && expanded == null}
             className="animate-fade-up stagger-3 motion-safe:animate-fade-up motion-reduce:animate-none"
           />
         </FadeSection>
@@ -654,7 +675,7 @@ export function WeeklyHero({
         ) : null}
 
         {/* Protocol / training instrument rail — open HUD band above weigh-in coda */}
-        <FadeSection show={showProtocolRail}>
+        <FadeSection show={showProtocolRail} className={fillViewport ? "shrink-0" : undefined}>
           {expanded === "peptides" ? (
             <HubPeptidesExpand
               lastDoseMg={peptideSummary?.lastDoseMg ?? null}
@@ -674,7 +695,7 @@ export function WeeklyHero({
             />
           ) : (
             <div
-              className="relative z-10 px-0.5 py-1 sm:px-1"
+              className="relative z-10 px-0.5 py-0.5 sm:px-1 sm:py-1"
               role="group"
               aria-label="Protocol and training"
             >
@@ -685,7 +706,7 @@ export function WeeklyHero({
                   onClick={() => toggleExpand("peptides")}
                   aria-label="Expand peptides"
                   aria-expanded={false}
-                  className="group relative flex min-h-[5.5rem] min-w-0 items-center py-3.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem]"
+                  className="group relative flex min-h-[var(--hub-protocol-min-h)] min-w-0 items-center py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem] sm:py-3.5"
                 >
                   <span className="pointer-events-none absolute left-2/3 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
                     <PeptideVialGraphic
@@ -724,7 +745,7 @@ export function WeeklyHero({
                   onClick={() => toggleExpand("workouts")}
                   aria-label="Expand workouts"
                   aria-expanded={false}
-                  className="group relative flex min-h-[5.5rem] min-w-0 items-center py-3.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem]"
+                  className="group relative flex min-h-[var(--hub-protocol-min-h)] min-w-0 items-center py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem] sm:py-3.5"
                 >
                   <span className="pointer-events-none absolute left-1/3 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
                     <WeekWorkoutGoalRing
@@ -757,7 +778,7 @@ export function WeeklyHero({
         </FadeSection>
 
         {/* Weigh-in stays the coda — always last in the overview stack */}
-        <FadeSection show={showWeighIn}>
+        <FadeSection show={showWeighIn} className={fillViewport ? "shrink-0" : undefined}>
           <div className="relative z-10 space-y-3 px-0.5 py-0.5">
             <DailyWeighIn
               embedded

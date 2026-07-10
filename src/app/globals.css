@@ -98,6 +98,18 @@
   /* Semantic trend colors — "good" movement vs "bad" movement on stats */
   --positive: oklch(0.62 0.17 150);
   --negative: oklch(0.58 0.19 25);
+
+  /* App chrome / hub viewport layout (mobile full-height overview) */
+  --app-chrome-top: calc(env(safe-area-inset-top, 0px) + 2rem);
+  /* Matches PageFooter dock spacer: dock h-16 + mb-2 + breathing room + safe area */
+  --bottom-dock-clearance: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+  /* Hub instrument sizes — scale down on short phones, cap on tall ones */
+  --hub-ring-size: clamp(5.25rem, 16svh, 7rem);
+  --hub-bar-area: clamp(2.5rem, 7.5svh, 3.625rem);
+  --hub-protocol-min-h: clamp(4rem, 10.5svh, 5.5rem);
+  --hub-protocol-glyph: clamp(4rem, 10.5svh, 5.5rem);
+  --hub-section-gap: clamp(0.25rem, 1.1svh, 1rem);
+  --hub-fasting-ring: clamp(7.5rem, 22svh, 12.5rem);
 }
 
 /* ═══════════════════════════════════════════════════════════

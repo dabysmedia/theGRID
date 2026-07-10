@@ -95,12 +95,15 @@ function FastingRing({
   elapsed,
   remaining,
   inactive,
+  compact,
 }: {
   progress: number
   phase: FastingPhase
   elapsed: string
   remaining: string
   inactive?: boolean
+  /** Hub overview: scale ring with `--hub-fasting-ring` on mobile. */
+  compact?: boolean
 }) {
   const size = 200
   const stroke = 4
@@ -122,8 +125,19 @@ function FastingRing({
   const displayElapsed = inactive ? "—" : elapsed
 
   return (
-    <div className="mx-auto flex shrink-0 justify-center py-2 sm:py-3 sm:pl-1 sm:pr-4">
-      <div className="relative" style={{ width: size, height: size }}>
+    <div
+      className={cn(
+        "mx-auto flex shrink-0 justify-center py-2 sm:py-3 sm:pl-1 sm:pr-4",
+        compact && "max-lg:py-0.5",
+      )}
+    >
+      <div
+        className={cn(
+          "relative",
+          compact && "size-[var(--hub-fasting-ring)] lg:size-[200px]",
+        )}
+        style={compact ? undefined : { width: size, height: size }}
+      >
         <svg className="h-full w-full -rotate-90" viewBox={`0 0 ${size} ${size}`}>
           <circle
             cx={center}
@@ -396,7 +410,7 @@ function FastingStatsStrip({
   )
 }
 
-export function FastingTimer() {
+export function FastingTimer({ hubCompact = false }: { hubCompact?: boolean }) {
   const { user } = useUser()
   const { activeDate } = useActiveDate()
   const userId = user?.id ?? null
@@ -587,7 +601,12 @@ export function FastingTimer() {
 
   if (!mounted) {
     return (
-      <div className={`${FASTING_CARD_SHEEN} p-5 sm:p-6`}>
+      <div
+        className={cn(
+          FASTING_CARD_SHEEN,
+          hubCompact ? "p-3 sm:p-6 max-lg:p-3" : "p-5 sm:p-6",
+        )}
+      >
         <div
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]"
           aria-hidden
@@ -601,8 +620,15 @@ export function FastingTimer() {
             <Timer className="h-3.5 w-3.5 text-muted-foreground/50" />
             <span className="type-hud-title text-muted-foreground/50">Fasting</span>
           </div>
-          <div className="flex justify-center py-8">
-            <div className="h-[200px] w-[200px] rounded-full bg-muted/10 animate-pulse" />
+          <div className={cn("flex justify-center", hubCompact ? "max-lg:py-3 py-8" : "py-8")}>
+            <div
+              className={cn(
+                "rounded-full bg-muted/10 animate-pulse",
+                hubCompact
+                  ? "size-[var(--hub-fasting-ring)] lg:h-[200px] lg:w-[200px]"
+                  : "h-[200px] w-[200px]",
+              )}
+            />
           </div>
         </div>
       </div>
@@ -613,7 +639,11 @@ export function FastingTimer() {
     <div
       className={cn(
         FASTING_CARD_SHEEN,
-        showExpanded ? "p-5 sm:p-6" : "px-4 py-3 sm:px-5 sm:py-3.5",
+        showExpanded
+          ? hubCompact
+            ? "p-3 sm:p-6 max-lg:p-3"
+            : "p-5 sm:p-6"
+          : "px-4 py-3 sm:px-5 sm:py-3.5",
         timerDisabled && FASTING_CARD_INACTIVE,
       )}
     >
@@ -681,20 +711,27 @@ export function FastingTimer() {
       </div>
 
       {showExpanded && (
-      <div className="relative z-10 flex flex-col items-stretch gap-5 sm:flex-row sm:items-center sm:gap-8 lg:gap-10">
+      <div
+        className={cn(
+          "relative z-10 flex flex-col items-stretch gap-5 sm:flex-row sm:items-center sm:gap-8 lg:gap-10",
+          hubCompact && "max-lg:flex-row max-lg:items-center max-lg:gap-3",
+        )}
+      >
         <FastingRing
           progress={snapshot.progress}
           phase={snapshot.phase}
           elapsed={formatDuration(snapshot.elapsedMs)}
           remaining={formatDuration(snapshot.remainingMs)}
           inactive={timerDisabled}
+          compact={hubCompact}
         />
 
-        <div className="min-w-0 flex-1 sm:py-1">
+        <div className={cn("min-w-0 flex-1 sm:py-1", hubCompact && "max-lg:py-0")}>
           <div
             className={cn(
               "grid grid-cols-2 gap-2 sm:gap-3",
               timerDisabled && "opacity-75",
+              hubCompact && "max-lg:gap-1.5",
             )}
           >
             <div
@@ -757,7 +794,12 @@ export function FastingTimer() {
             </div>
           </div>
 
-          <div className="relative z-[2] mt-4 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+          <div
+            className={cn(
+              "relative z-[2] mt-4 flex flex-wrap items-center justify-center gap-2 sm:justify-start",
+              hubCompact && "max-lg:mt-2",
+            )}
+          >
             {timerDisabled ? (
               <Dialog open={startFastingOpen} onOpenChange={handleStartFastingOpenChange}>
                 <DialogTrigger

@@ -7,7 +7,7 @@ import type { HubExpandedPanel } from "./hub/HubExpandPanels"
 import { FastingTimer } from "./FastingTimer"
 import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
-import { parseLocalDate } from "@/lib/utils"
+import { cn, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { isVacationBlockingCalendarDay, vacationCalorieDayMask } from "@/lib/vacation-mode"
 import {
@@ -192,17 +192,36 @@ export function HubDashboard() {
     [lastPeptide?.injectedAt, injectionIntervalDays, activeDate]
   )
 
-  return (
-    <div className="space-y-8">
-      <PageHeader title="THEGRID" />
+  const overview = hubExpanded == null
 
-      <div className="animate-fade-up stagger-2">
+  return (
+    <div
+      className={cn(
+        "flex min-h-0 flex-col",
+        // Collapsed hub: fill main (above dock clearance) and lock overflow on
+        // mobile so the overview fits one screen. Expanded panels grow downward.
+        overview
+          ? "max-lg:flex-1 max-lg:overflow-hidden lg:gap-8"
+          : "gap-8",
+      )}
+    >
+      <div className="shrink-0">
+        <PageHeader title="THEGRID" />
+      </div>
+
+      <div
+        className={cn(
+          "animate-fade-up stagger-2 min-h-0",
+          overview && "max-lg:flex max-lg:min-h-0 max-lg:flex-1 max-lg:flex-col",
+        )}
+      >
         <WeeklyHero
           data={dashboardForHero}
           loading={loading}
           vacationBlocksCalories={vacationBlocksCalLog}
           expanded={hubExpanded}
           onExpandedChange={setHubExpanded}
+          fillViewport={overview}
           peptideSummary={{
             lastDoseMg: lastPeptide?.doseMg ?? null,
             lastInjectedAt: lastPeptide?.injectedAt ?? null,
@@ -222,11 +241,9 @@ export function HubDashboard() {
 
       {/* Unmount fasting while a hub panel is expanded so mobile isn't paying
           for the timer UI during expand-in-place views. */}
-      {hubExpanded == null ? (
-        <div className="animate-fade-up stagger-3">
-          <div className="min-h-0">
-            <FastingTimer />
-          </div>
+      {overview ? (
+        <div className="animate-fade-up stagger-3 shrink-0 max-lg:mt-[var(--hub-section-gap)]">
+          <FastingTimer hubCompact />
         </div>
       ) : null}
     </div>
