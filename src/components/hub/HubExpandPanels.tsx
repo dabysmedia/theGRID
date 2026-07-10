@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { addDays, format, startOfWeek } from "date-fns"
@@ -15,7 +14,6 @@ import {
   Plus,
   RefreshCw,
   Syringe,
-  Trash2,
   Waves,
 } from "lucide-react"
 import { HubCollapse, HUB_MOTION_MS } from "@/components/hub/HubMotion"
@@ -31,8 +29,6 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts"
-import { CaloriePipTracker } from "@/components/calories/CaloriePipTracker"
-import { LogFoodDialog } from "@/components/calories/LogFoodDialog"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { PeptideHalfLifeMeter } from "@/components/PeptideHalfLifeMeter"
 import { PeptideHungerMeter } from "@/components/PeptideHungerMeter"
@@ -87,8 +83,6 @@ import {
   muscleStatsToSegmentScores,
   type WorkoutSessionLike,
 } from "@/lib/workouts/muscle-volume"
-import type { CalorieEntry, DraftMealItem } from "@/lib/calories/log-food"
-import { mealTypes } from "@/lib/calories/log-food"
 import { cn, formatDate, parseLocalDate } from "@/lib/utils"
 
 export type HubExpandedPanel =
@@ -124,543 +118,9 @@ export function HubBackToOverview({ onBack }: { onBack: () => void }) {
   )
 }
 
-/** Steel-HUD meal accents — coral calorie family + cool steel, no purple. */
-const MEAL_ACCENT: Record<
-  string,
-  { bar: string; wash: string; label: string; cal: string }
-> = {
-  breakfast: {
-    bar: "#f59e0b",
-    wash: "oklch(0.72 0.14 75 / 10%)",
-    label: "#fbbf24",
-    cal: "#fcd34d",
-  },
-  lunch: {
-    bar: "#38bdf8",
-    wash: "oklch(0.72 0.1 230 / 10%)",
-    label: "#7dd3fc",
-    cal: "#bae6fd",
-  },
-  dinner: {
-    bar: "#f87171",
-    wash: "oklch(0.68 0.16 25 / 11%)",
-    label: "#fca5a5",
-    cal: "#fecaca",
-  },
-  snack: {
-    bar: "#94a3b8",
-    wash: "oklch(0.7 0.02 250 / 10%)",
-    label: "#cbd5e1",
-    cal: "#e2e8f0",
-  },
-}
-
-const DEFAULT_MEAL_ACCENT = {
-  bar: "#ef4444",
-  wash: "oklch(0.65 0.18 25 / 10%)",
-  label: "#fca5a5",
-  cal: "#fecaca",
-} as const
-
-function mealAccent(meal: string) {
-  return MEAL_ACCENT[meal.toLowerCase().trim()] ?? DEFAULT_MEAL_ACCENT
-}
-
 /* ─── Calories ───────────────────────────────────────────── */
 
-export function HubCaloriesExpand({
-  consumed,
-  target,
-  vacationBlocked,
-}: {
-  consumed: number
-  target: number
-  vacationBlocked?: boolean
-}) {
-  const { activeDate } = useActiveDate()
-  const remaining = Math.max(0, target - consumed)
-  const pct = target > 0 ? Math.round((consumed / target) * 100) : 0
-
-  const [entries, setEntries] = useState<CalorieEntry[]>([])
-  const [entriesStatus, setEntriesStatus] = useState<"loading" | "ready" | "error">("loading")
-  const [logFoodOpen, setLogFoodOpen] = useState(false)
-  const [editingEntry, setEditingEntry] = useState<CalorieEntry | null>(null)
-  const [draftMealItems, setDraftMealItems] = useState<DraftMealItem[]>([])
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; label: string } | null>(null)
-  const [pendingDeleteBusy, setPendingDeleteBusy] = useState(false)
-  const [reloadKey, setReloadKey] = useState(0)
-
-  useEffect(() => {
-    let cancelled = false
-    setEntriesStatus("loading")
-    void apiFetch(`/api/calories?date=${activeDate}&_=${Date.now()}`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
-      .then((rows: unknown) => {
-        if (cancelled) return
-        setEntries(Array.isArray(rows) ? (rows as CalorieEntry[]) : [])
-        setEntriesStatus("ready")
-      })
-      .catch(() => {
-        if (cancelled) return
-        setEntries([])
-        setEntriesStatus("error")
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [activeDate, reloadKey])
-
-  useEffect(() => {
-    if (!pendingDelete) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !pendingDeleteBusy) setPendingDelete(null)
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [pendingDelete, pendingDeleteBusy])
-
-  const mealGroups = useMemo(() => {
-    const map = new Map<string, CalorieEntry[]>()
-    for (const entry of entries) {
-      const key = entry.mealType.toLowerCase().trim() || "other"
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(entry)
-    }
-    const order = mealTypes as readonly string[]
-    const ordered: { meal: string; items: CalorieEntry[]; total: number }[] = order
-      .filter((m) => map.has(m))
-      .map((meal) => {
-        const items = map.get(meal)!
-        return {
-          meal,
-          items,
-          total: items.reduce((s, e) => s + e.calories, 0),
-        }
-      })
-    for (const [meal, mealItems] of map) {
-      if (!order.includes(meal)) {
-        ordered.push({
-          meal,
-          items: mealItems,
-          total: mealItems.reduce((s, e) => s + e.calories, 0),
-        })
-      }
-    }
-    return ordered
-  }, [entries])
-
-  function bumpHub() {
-    window.dispatchEvent(new CustomEvent("grid:log-saved"))
-  }
-
-  function openAddFood() {
-    setEditingEntry(null)
-    setLogFoodOpen(true)
-  }
-
-  function startEdit(entry: CalorieEntry) {
-    setEditingEntry(entry)
-    setLogFoodOpen(true)
-  }
-
-  function requestDelete(id: string, summary?: string) {
-    const detail =
-      summary && summary.trim().length > 0
-        ? summary.trim().length > 90
-          ? `${summary.trim().slice(0, 90)}…`
-          : summary.trim()
-        : null
-    setPendingDelete({ id, label: detail ?? "this log entry" })
-  }
-
-  async function executePendingDelete() {
-    if (!pendingDelete || pendingDeleteBusy) return
-    setPendingDeleteBusy(true)
-    try {
-      const id = pendingDelete.id
-      const res = await apiFetch(`/api/calories?id=${id}`, { method: "DELETE" })
-      if (res.ok) {
-        setEntries((prev) => prev.filter((e) => e.id !== id))
-        setEditingEntry((cur) => (cur?.id === id ? null : cur))
-        if (logFoodOpen) setLogFoodOpen(false)
-        bumpHub()
-      }
-      setPendingDelete(null)
-    } finally {
-      setPendingDeleteBusy(false)
-    }
-  }
-
-  return (
-    <div className="hub-panel-enter px-0.5">
-      {vacationBlocked ? (
-        <div className="space-y-3">
-          <div className="min-w-0">
-            <p className="type-hud-subsection">Calories</p>
-            <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-              Vacation mode — intake tracking paused.
-            </p>
-          </div>
-          <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-3 text-[12px] leading-relaxed text-amber-100/90">
-            Food logging is paused until vacation ends.
-          </p>
-        </div>
-      ) : (
-        <>
-          {/*
-            Two-layer calories expand:
-            LEFT / full-bleed — subtle pip tank + dial (sibling rings hidden) +
-            status + Add food in the freed left field.
-            RIGHT — floating Today's food rail (PR #84 placement, flatter list).
-          */}
-          <div
-            className={cn(
-              "relative -mx-1 w-[calc(100%+0.5rem)] overflow-hidden sm:-mx-2 sm:w-[calc(100%+1rem)]",
-              // Bleed under the ring row so pips wrap the left-aligned dial
-              "-mt-[calc(var(--hub-ring-size)+var(--hub-section-gap)+1.75rem)]",
-              "min-h-[calc(var(--hub-ring-size)+var(--hub-section-gap)+min(58vh,28rem))]",
-              "sm:min-h-[calc(var(--hub-ring-size)+var(--hub-section-gap)+min(54vh,30rem))]",
-            )}
-          >
-            <div className="pointer-events-none absolute inset-0 z-0" aria-hidden>
-              <CaloriePipTracker
-                consumed={consumed}
-                target={target}
-                size="default"
-                fillHeight
-                hideMeta
-              />
-            </div>
-            {/* Light atmosphere — keep left pips readable; soft scrim into the rail */}
-            <div
-              className="pointer-events-none absolute inset-0 z-[1]"
-              aria-hidden
-              style={{
-                background:
-                  "radial-gradient(ellipse 70% 55% at 28% 32%, oklch(0.1 0.01 250 / 28%) 0%, transparent 58%)",
-              }}
-            />
-            <div
-              className="pointer-events-none absolute inset-0 z-[1]"
-              aria-hidden
-              style={{
-                background:
-                  "linear-gradient(90deg, transparent 0%, transparent 42%, oklch(0.09 0.01 250 / 35%) 68%, oklch(0.08 0.012 250 / 55%) 100%)",
-              }}
-            />
-            <div
-              className="pointer-events-none absolute inset-0 z-[1]"
-              aria-hidden
-              style={{
-                background:
-                  "linear-gradient(180deg, oklch(0.09 0.01 250 / 22%) 0%, transparent 18%, transparent 72%, oklch(0.07 0.012 250 / 48%) 100%)",
-              }}
-            />
-
-            <div
-              className={cn(
-                "relative z-10 flex min-h-[calc(var(--hub-ring-size)+var(--hub-section-gap)+min(58vh,28rem))] items-stretch",
-                "sm:min-h-[calc(var(--hub-ring-size)+var(--hub-section-gap)+min(54vh,30rem))]",
-              )}
-            >
-              {/* Left field — ring clearance + status + Add food */}
-              <div className="flex min-w-0 flex-1 flex-col pl-2.5 pr-2 pt-1 sm:pl-3 sm:pr-3">
-                <div
-                  className="shrink-0"
-                  style={{
-                    height:
-                      "calc(var(--hub-ring-size) + var(--hub-section-gap) + 0.35rem)",
-                  }}
-                  aria-hidden
-                />
-                <div
-                  className={cn(
-                    "pointer-events-auto max-w-[16rem] space-y-3",
-                    "motion-safe:animate-fade-up motion-reduce:animate-none",
-                  )}
-                  style={{ animationDuration: `${HUB_MOTION_MS}ms` }}
-                >
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/80 drop-shadow-[0_1px_8px_oklch(0.08_0.01_250/70%)]">
-                      Intake
-                    </p>
-                    <p className="mt-1 text-[15px] font-semibold tabular-nums leading-snug tracking-tight text-foreground/92 drop-shadow-[0_1px_8px_oklch(0.08_0.01_250/75%)] sm:text-[16px]">
-                      <span className="text-red-200/95">{consumed.toLocaleString()}</span>
-                      <span className="font-medium text-muted-foreground/55">
-                        {` of ${target.toLocaleString()}`}
-                      </span>
-                    </p>
-                    <p className="mt-0.5 text-[12px] tabular-nums text-muted-foreground/65 drop-shadow-[0_1px_6px_oklch(0.08_0.01_250/65%)]">
-                      {`${remaining.toLocaleString()} left`}
-                      <span className="mx-1.5 text-muted-foreground/35">·</span>
-                      <span className="font-semibold text-red-300/85">{pct}%</span>
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={openAddFood}
-                    className={cn(
-                      "inline-flex h-11 w-full max-w-[12.5rem] items-center justify-center gap-2",
-                      "rounded-xl border border-red-400/40 bg-[oklch(0.16_0.03_25/72%)] px-4",
-                      "type-hud-micro font-semibold tracking-wide text-red-50",
-                      "shadow-[0_6px_22px_oklch(0.05_0.01_250/40%)] backdrop-blur-md",
-                      "transition-[border-color,background-color,transform] duration-200",
-                      "hover:border-red-400/60 hover:bg-red-400/[0.18] active:scale-[0.98]",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/35",
-                      "sm:h-10",
-                    )}
-                  >
-                    <Plus className="h-4 w-4" aria-hidden />
-                    Add food
-                  </button>
-                </div>
-              </div>
-
-              {/* Right rail — Today's food */}
-              <aside
-                className={cn(
-                  "pointer-events-auto flex min-h-0 w-[min(68%,19.5rem)] shrink-0 flex-col sm:w-[min(46%,22.5rem)] md:w-[min(42%,24rem)]",
-                  "border-l border-white/[0.1] bg-[oklch(0.11_0.012_250/82%)]",
-                  "shadow-[-14px_0_32px_oklch(0.06_0.01_250/40%)] backdrop-blur-[16px]",
-                  "motion-safe:animate-fade-up motion-reduce:animate-none",
-                )}
-                style={{ animationDuration: `${HUB_MOTION_MS}ms` }}
-                aria-label="Today's food"
-              >
-                <div className="flex shrink-0 items-baseline justify-between gap-2 border-b border-white/[0.08] px-3 py-2.5 sm:px-3.5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/90">
-                    Today&apos;s food
-                  </p>
-                  {entriesStatus === "ready" && entries.length > 0 ? (
-                    <span className="text-[12px] font-semibold tabular-nums text-red-300/85">
-                      {entries.reduce((s, e) => s + e.calories, 0).toLocaleString()}
-                      <span className="ml-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/50">
-                        cal
-                      </span>
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2.5 [-webkit-overflow-scrolling:touch] sm:px-3.5">
-                  {entriesStatus === "loading" ? (
-                    <p className="text-[12px] leading-relaxed text-muted-foreground/65">
-                      Loading food log…
-                    </p>
-                  ) : null}
-                  {entriesStatus === "error" ? (
-                    <p className="text-[12px] leading-relaxed text-muted-foreground/65">
-                      Couldn&apos;t load food log.{" "}
-                      <button
-                        type="button"
-                        onClick={() => setReloadKey((k) => k + 1)}
-                        className="font-medium text-foreground/85 underline-offset-2 hover:underline hover:text-red-200/90"
-                      >
-                        Retry
-                      </button>
-                    </p>
-                  ) : null}
-                  {entriesStatus === "ready" && entries.length === 0 ? (
-                    <p className="text-[12px] leading-relaxed text-muted-foreground/65">
-                      Nothing logged yet — tap Add food.
-                    </p>
-                  ) : null}
-
-                  {entriesStatus === "ready" && mealGroups.length > 0 ? (
-                    <div className="space-y-3.5 pb-1">
-                      {mealGroups.map(({ meal, items, total }) => {
-                        const accent = mealAccent(meal)
-                        return (
-                          <div key={meal} className="min-w-0">
-                            <div className="mb-1 flex items-center gap-2">
-                              <span
-                                className="h-3 w-0.5 shrink-0 rounded-full"
-                                style={{ background: accent.bar }}
-                                aria-hidden
-                              />
-                              <p
-                                className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
-                                style={{ color: accent.label }}
-                              >
-                                {meal}
-                              </p>
-                              <span
-                                className="shrink-0 text-[11px] font-bold tabular-nums"
-                                style={{ color: accent.cal }}
-                              >
-                                {total.toLocaleString()}
-                              </span>
-                            </div>
-                            <ul className="space-y-0">
-                              {items.map((entry) => (
-                                <li
-                                  key={entry.id}
-                                  className="group/row flex items-stretch gap-1 border-t border-white/[0.06] py-2 first:border-t-0 first:pt-0.5"
-                                >
-                                  <div className="min-w-0 flex-1">
-                                    {entry.description?.trim() ? (
-                                      <p className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground/92">
-                                        {entry.description}
-                                      </p>
-                                    ) : (
-                                      <p className="text-[13px] font-medium text-foreground/75">
-                                        Logged entry
-                                      </p>
-                                    )}
-                                    <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                                      <span className="text-[12px] font-semibold tabular-nums text-red-200/90">
-                                        {entry.calories.toLocaleString()}
-                                        <span className="ml-0.5 text-[10px] font-medium text-muted-foreground/50">
-                                          cal
-                                        </span>
-                                      </span>
-                                      {(entry.protein != null ||
-                                        entry.carbs != null ||
-                                        entry.fat != null) && (
-                                        <span className="text-[10px] tabular-nums text-muted-foreground/50">
-                                          {[
-                                            entry.protein != null
-                                              ? `P ${entry.protein}g`
-                                              : null,
-                                            entry.carbs != null
-                                              ? `C ${entry.carbs}g`
-                                              : null,
-                                            entry.fat != null
-                                              ? `F ${entry.fat}g`
-                                              : null,
-                                          ]
-                                            .filter(Boolean)
-                                            .join(" · ")}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="flex shrink-0 items-center gap-0.5 self-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => startEdit(entry)}
-                                      className="history-row-edit !min-h-9 !min-w-9 !m-0"
-                                      title="Edit"
-                                      aria-label={`Edit ${entry.description?.trim() || entry.calories + " cal"}`}
-                                    >
-                                      <Pencil />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        requestDelete(
-                                          entry.id,
-                                          entry.description?.trim() ||
-                                            `${entry.calories} cal · ${entry.mealType}`,
-                                        )
-                                      }
-                                      className="history-row-delete-row !min-h-9 !min-w-9 !m-0"
-                                      aria-label={`Delete ${entry.description?.trim() || entry.calories + " cal"}`}
-                                    >
-                                      <Trash2 />
-                                    </button>
-                                  </div>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              </aside>
-            </div>
-          </div>
-
-          <LogFoodDialog
-            open={logFoodOpen}
-            onOpenChange={(open) => {
-              setLogFoodOpen(open)
-              if (!open) setEditingEntry(null)
-            }}
-            editingEntry={editingEntry}
-            onEditingEntryChange={setEditingEntry}
-            draftMealItems={draftMealItems}
-            onDraftMealItemsChange={setDraftMealItems}
-            onPosted={(created) => {
-              setEntries((prev) => [...created.reverse(), ...prev])
-              bumpHub()
-            }}
-            onUpdated={(updated) => {
-              setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
-              setEditingEntry(null)
-              bumpHub()
-            }}
-          />
-
-          {pendingDelete
-            ? createPortal(
-                <div
-                  className="fixed inset-0 z-[300] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[3px]"
-                  role="alertdialog"
-                  aria-modal="true"
-                  aria-labelledby="hub-cal-delete-title"
-                  aria-describedby="hub-cal-delete-desc"
-                  onClick={() => {
-                    if (!pendingDeleteBusy) setPendingDelete(null)
-                  }}
-                >
-                  <div
-                    className="w-full max-w-sm rounded-2xl border border-border/35 bg-popover p-5 shadow-2xl ring-1 ring-foreground/5"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <h2
-                      id="hub-cal-delete-title"
-                      className="font-heading text-base font-semibold text-foreground"
-                    >
-                      Delete log entry?
-                    </h2>
-                    <p
-                      id="hub-cal-delete-desc"
-                      className="mt-2 text-sm leading-relaxed text-muted-foreground"
-                    >
-                      {pendingDelete.label === "this log entry" ? (
-                        <>This will remove the entry from your history. This cannot be undone.</>
-                      ) : (
-                        <>
-                          This will remove{" "}
-                          <span className="font-medium text-foreground">
-                            &quot;{pendingDelete.label}&quot;
-                          </span>{" "}
-                          from your history. This cannot be undone.
-                        </>
-                      )}
-                    </p>
-                    <div className="mt-5 flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-11 flex-1"
-                        disabled={pendingDeleteBusy}
-                        onClick={() => setPendingDelete(null)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        className="h-11 flex-1"
-                        disabled={pendingDeleteBusy}
-                        onClick={() => void executePendingDelete()}
-                      >
-                        {pendingDeleteBusy ? "Deleting…" : "Delete"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>,
-                document.body,
-              )
-            : null}
-        </>
-      )}
-    </div>
-  )
-}
+export { CaloriesExpandShell as HubCaloriesExpand } from "@/components/calories/CaloriesExpandShell"
 
 /* ─── Sleep ──────────────────────────────────────────────── */
 
@@ -1476,6 +936,7 @@ export function HubPeptidesExpand({
   lastSiteUsed = null,
   dosedWeekCount = 0,
   hungerLogs = [],
+  hideHero = false,
 }: {
   lastDoseMg: number | null
   lastInjectedAt: string | null
@@ -1488,6 +949,8 @@ export function HubPeptidesExpand({
   dosedWeekCount?: number
   /** Recent daily appetite logs for the hunger meter. */
   hungerLogs?: HubPeptideHungerLog[]
+  /** When true, omit vial/title hero — overview rail owns that morph. */
+  hideHero?: boolean
 }) {
   const { user } = useUser()
   const [injectionOpen, setInjectionOpen] = useState(false)
@@ -1564,57 +1027,62 @@ export function HubPeptidesExpand({
     return entry.id ?? `${entry.injectedAt}-${i}`
   }
 
-  return (
-    <div className="space-y-4 px-0.5">
-      <div className="min-w-0">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="type-hud-subsection">Peptides</p>
-          {weekLabel ? (
-            <p className="type-hud-micro tabular-nums text-slate-300/75">{weekLabel}</p>
-          ) : null}
-        </div>
-        <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-          {untilLabel}
-          {lastDoseMg != null ? ` · last ${lastDoseMg} mg` : ""}
-          {weekLabel ? ` · ${weekLabel}` : ""}
+  const statsGrid = (
+    <div className="grid grid-cols-3 gap-2">
+      <div className="px-0.5 py-1">
+        <p className="type-hud-micro text-muted-foreground/55">Today</p>
+        <p className="type-hud-stat-sm tabular-nums text-foreground/90">
+          {todayMg > 0 ? `${todayMg} mg` : "—"}
         </p>
       </div>
+      <div className="px-0.5 py-1">
+        <p className="type-hud-micro text-muted-foreground/55">Protocol</p>
+        <p className="type-hud-stat-sm tabular-nums text-foreground/90">
+          {weekLabel ?? "—"}
+        </p>
+      </div>
+      <div className="px-0.5 py-1">
+        <p className="type-hud-micro text-muted-foreground/55">Last shot</p>
+        <p className="truncate text-[12px] font-medium tabular-nums text-foreground/85">
+          {lastLabel ?? "—"}
+        </p>
+      </div>
+    </div>
+  )
 
-      <div className="flex items-center gap-4">
-        <PeptideVialGraphic color={PEPTIDE_COLOR} doseMg={lastDoseMg} size="md" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="grid grid-cols-3 gap-2">
-            <div className="px-0.5 py-1">
-              <p className="type-hud-micro text-muted-foreground/55">Today</p>
-              <p className="type-hud-stat-sm tabular-nums text-foreground/90">
-                {todayMg > 0 ? `${todayMg} mg` : "—"}
-              </p>
+  return (
+    <div className="space-y-4 px-0.5">
+      {!hideHero ? (
+        <>
+          <div className="min-w-0">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="type-hud-subsection">Peptides</p>
+              {weekLabel ? (
+                <p className="type-hud-micro tabular-nums text-slate-300/75">{weekLabel}</p>
+              ) : null}
             </div>
-            <div className="px-0.5 py-1">
-              <p className="type-hud-micro text-muted-foreground/55">Protocol</p>
-              <p className="type-hud-stat-sm tabular-nums text-foreground/90">
-                {weekLabel ?? "—"}
-              </p>
-            </div>
-            <div className="px-0.5 py-1">
-              <p className="type-hud-micro text-muted-foreground/55">Last shot</p>
-              <p className="truncate text-[12px] font-medium tabular-nums text-foreground/85">
-                {lastLabel ?? "—"}
+          </div>
+
+          <div className="flex items-center gap-4">
+            <PeptideVialGraphic color={PEPTIDE_COLOR} doseMg={lastDoseMg} size="md" />
+            <div className="min-w-0 flex-1 space-y-2">
+              {statsGrid}
+              <p
+                className={cn(
+                  "text-[12px] font-semibold tracking-wide",
+                  nextInjection?.overdue && "text-negative",
+                  nextInjection?.dueToday && "text-primary",
+                  !nextInjection?.overdue && !nextInjection?.dueToday && "text-slate-300/85",
+                )}
+              >
+                {untilLabel}
               </p>
             </div>
           </div>
-          <p
-            className={cn(
-              "text-[12px] font-semibold tracking-wide",
-              nextInjection?.overdue && "text-negative",
-              nextInjection?.dueToday && "text-primary",
-              !nextInjection?.overdue && !nextInjection?.dueToday && "text-slate-300/85",
-            )}
-          >
-            {untilLabel}
-          </p>
-        </div>
-      </div>
+        </>
+      ) : (
+        statsGrid
+      )}
 
       <div className="flex flex-wrap gap-2">
         <button
@@ -1993,12 +1461,15 @@ export function HubWorkoutsExpand({
   last7,
   dayLabels,
   recoveryScore,
+  hideHero = false,
 }: {
   weekCount: number
   todayCount: number
   last7: number[]
   dayLabels: string[]
   recoveryScore: number | null
+  /** When true, omit ring/title hero — overview rail owns that morph. */
+  hideHero?: boolean
 }) {
   const router = useRouter()
   const [templates, setTemplates] = useState<HubRoutineTemplate[]>([])
@@ -2073,47 +1544,57 @@ export function HubWorkoutsExpand({
     router.push("/workouts?start=free")
   }
 
-  return (
-    <div className="space-y-4 px-0.5">
-      <div className="min-w-0">
-          <p className="type-hud-subsection">Workouts</p>
-          <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-            {met
-              ? `Goal met · ${weekCount} this week`
-              : `${weekCount}/${WEEKLY_WORKOUT_GOAL} this week`}
-            {todayCount > 0 ? ` · ${todayCount} today` : ""}
+  const workoutStats = (
+    <div className="min-w-0 space-y-2">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+        <div className="min-w-0">
+          <p className="type-hud-micro text-muted-foreground/55">Week</p>
+          <p
+            className="type-hud-stat-sm tabular-nums"
+            style={met ? { color: "#c4d632" } : undefined}
+          >
+            {weekCount}/{WEEKLY_WORKOUT_GOAL}
           </p>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <WeekWorkoutGoalRing count={weekCount} size="lg" color="#c4d632" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-            <div className="min-w-0">
-              <p className="type-hud-micro text-muted-foreground/55">Week</p>
-              <p
-                className="type-hud-stat-sm tabular-nums"
-                style={met ? { color: "#c4d632" } : undefined}
-              >
-                {weekCount}/{WEEKLY_WORKOUT_GOAL}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="type-hud-micro text-muted-foreground/55">Recovery</p>
-              <p className="type-hud-stat-sm tabular-nums text-foreground/85">
-                {recoveryScore != null ? `${recoveryScore}/10` : "—"}
-              </p>
-            </div>
-          </div>
-          <p className="type-hud-caption normal-case tracking-normal text-foreground/80">
-            {lastCue}
-          </p>
-          <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/55">
-            {recoveryCue}
-            {!met && remaining > 0 ? ` · ${remaining} more to goal` : ""}
+        </div>
+        <div className="min-w-0">
+          <p className="type-hud-micro text-muted-foreground/55">Recovery</p>
+          <p className="type-hud-stat-sm tabular-nums text-foreground/85">
+            {recoveryScore != null ? `${recoveryScore}/10` : "—"}
           </p>
         </div>
       </div>
+      <p className="type-hud-caption normal-case tracking-normal text-foreground/80">
+        {lastCue}
+      </p>
+      <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/55">
+        {recoveryCue}
+        {!met && remaining > 0 ? ` · ${remaining} more to goal` : ""}
+      </p>
+    </div>
+  )
+
+  return (
+    <div className="space-y-4 px-0.5">
+      {!hideHero ? (
+        <>
+          <div className="min-w-0">
+            <p className="type-hud-subsection">Workouts</p>
+            <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
+              {met
+                ? `Goal met · ${weekCount} this week`
+                : `${weekCount}/${WEEKLY_WORKOUT_GOAL} this week`}
+              {todayCount > 0 ? ` · ${todayCount} today` : ""}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <WeekWorkoutGoalRing count={weekCount} size="lg" color="#c4d632" />
+            <div className="min-w-0 flex-1">{workoutStats}</div>
+          </div>
+        </>
+      ) : (
+        workoutStats
+      )}
 
       <div
         className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/8 to-transparent"
