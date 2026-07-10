@@ -452,7 +452,7 @@ export function StepsActivityBars({
                 pct * barFillRatio * 100,
               )
               const isToday = i === todayIdx
-              const delay = 280 + i * 70
+              const delay = 60 + i * 95
               const hitGoal = goalValue != null && val >= goalValue
 
               return (
@@ -496,17 +496,24 @@ export function StepsActivityBars({
                     </span>
                   </div>
 
+                  {/* Outer keeps isometric pose; inner owns scaleY grow (must not share transform). */}
                   <div
-                    className="absolute bottom-0 origin-bottom animate-bar-grow transition-[height] duration-500 ease-out motion-reduce:transition-none"
+                    className="absolute bottom-0 transition-[height,max-width] duration-500 ease-out motion-reduce:transition-none"
                     style={{
                       width: "78%",
                       maxWidth: expanded ? 34 : 30,
                       height: useScaledBars ? `${heightPct}%` : heightPx,
-                      animationDelay: `${delay}ms`,
                       transformStyle: "preserve-3d",
                       transform: "rotateX(12deg) rotateY(-18deg)",
                     }}
                   >
+                    <div
+                      className="absolute inset-0 origin-bottom animate-bar-grow motion-reduce:animate-none"
+                      style={{
+                        animationDelay: `${delay}ms`,
+                        transformStyle: "preserve-3d",
+                      }}
+                    >
                     <div
                       className="absolute left-0 right-0 top-0"
                       style={{
@@ -561,6 +568,7 @@ export function StepsActivityBars({
                           }}
                         />
                       ) : null}
+                    </div>
                     </div>
                   </div>
                 </div>
