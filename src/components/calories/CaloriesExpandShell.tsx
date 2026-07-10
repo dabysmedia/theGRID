@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { Pencil, Plus, Trash2 } from "lucide-react"
 import { CaloriesPipField } from "@/components/calories/CaloriesPipField"
@@ -56,23 +56,23 @@ function mealAccent(meal: string) {
 }
 
 /**
- * Calories expand — single composition (not dial-above + panel-below).
+ * Calories expand chrome around the overview rings-row dial.
  *
- * ┌──────────┬────────┬────────────────┐
- * │ stats    │  dial  │ Today's food   │
- * │ + Add    │        │ (full height)  │
- * ├──────────┴────────┤                │
- * │ pip field         │                │
- * └───────────────────┴────────────────┘
+ * The ProgressRing stays in WeeklyHero (same Y) and slides horizontally;
+ * this shell paints intake (upper-left under Overview), a flat food rail,
+ * and the pip field — no nested dial cell, no double-boxed food panel.
+ *
+ * Layout contract with WeeklyHero:
+ * - Parent is `relative` and includes the rings band + this shell.
+ * - Intake/food are absolutely positioned from the parent top (rings Y).
+ * - Pips sit in normal flow below the rings band and grow the parent so
+ *   the food rail can span full height.
  */
 export function CaloriesExpandShell({
-  dial,
   consumed,
   target,
   vacationBlocked,
 }: {
-  /** Active calorie ProgressRing — lives in the center top cell, not a void row. */
-  dial: ReactNode
   consumed: number
   target: number
   vacationBlocked?: boolean
@@ -215,230 +215,222 @@ export function CaloriesExpandShell({
   }
 
   return (
-    <div className="px-0.5">
+    <>
+      {/* UPPER LEFT — intake + Add food, under Overview back (rings-row top) */}
       <div
         className={cn(
-          "grid min-h-[min(62vh,32rem)] items-stretch gap-x-2 gap-y-2 sm:min-h-[min(58vh,34rem)] sm:gap-x-3",
-          // Mobile: food ~52% readable; desktop: food ~42–46%
-          "grid-cols-[minmax(0,1fr)_auto_minmax(45%,52%)]",
-          "sm:grid-cols-[minmax(0,1fr)_auto_minmax(16rem,42%)]",
-          "grid-rows-[auto_minmax(0,1fr)]",
+          "pointer-events-auto absolute left-0 top-0 z-20 w-[min(32%,11.5rem)] max-w-[11.5rem] pl-1 pt-1",
+          "motion-safe:animate-fade-up motion-reduce:animate-none",
         )}
+        style={{ animationDuration: `${HUB_MOTION_MS}ms` }}
       >
-        {/* UPPER LEFT — intake stats + Add food (fills red zone left of dial) */}
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
+          Intake
+        </p>
+        <p className="mt-0.5 text-[14px] font-semibold tabular-nums leading-snug tracking-tight sm:text-[15px]">
+          <span className="text-red-200/95">{consumed.toLocaleString()}</span>
+          <span className="font-medium text-muted-foreground/55">
+            {` of ${target.toLocaleString()}`}
+          </span>
+        </p>
+        <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground/65">
+          {`${remaining.toLocaleString()} left`}
+          <span className="mx-1.5 text-muted-foreground/35">·</span>
+          <span className="font-semibold text-red-300/85">{pct}%</span>
+        </p>
+        <button
+          type="button"
+          onClick={openAddFood}
+          className={cn(
+            "mt-2.5 inline-flex h-9 w-full items-center justify-center gap-1.5",
+            "rounded-xl border border-red-400/40 bg-[oklch(0.16_0.03_25/72%)] px-3",
+            "type-hud-micro font-semibold tracking-wide text-red-50",
+            "shadow-[0_6px_22px_oklch(0.05_0.01_250/40%)] backdrop-blur-md",
+            "transition-[border-color,background-color,transform] duration-200",
+            "hover:border-red-400/60 hover:bg-red-400/[0.18] active:scale-[0.98]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/35",
+          )}
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden />
+          Add food
+        </button>
+      </div>
+
+      {/* RIGHT — flat Today's food (hairline only, no nested card).
+          left edge clears the centered dial (50% + half ring). */}
+      <aside
+        className={cn(
+          "pointer-events-auto absolute bottom-0 right-0 top-0 z-20 flex min-w-0 flex-col",
+          "left-[calc(50%+3.6rem)] border-l border-white/[0.08] pl-3 sm:left-[calc(50%+4rem)] sm:pl-3.5",
+          "motion-safe:animate-fade-up motion-reduce:animate-none",
+        )}
+        style={{ animationDuration: `${HUB_MOTION_MS}ms` }}
+        aria-label="Today's food"
+      >
+        <div className="flex shrink-0 items-baseline justify-between gap-2 pb-2 pt-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/90">
+            Today&apos;s food
+          </p>
+          {entriesStatus === "ready" && entries.length > 0 ? (
+            <span className="text-[12px] font-semibold tabular-nums text-red-300/85">
+              {entries.reduce((s, e) => s + e.calories, 0).toLocaleString()}
+              <span className="ml-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/50">
+                cal
+              </span>
+            </span>
+          ) : null}
+        </div>
         <div
-          className={cn(
-            "col-start-1 row-start-1 flex min-w-0 flex-col justify-center gap-2.5 self-stretch py-0.5 pl-0.5",
-            "motion-safe:animate-fade-up motion-reduce:animate-none",
-          )}
-          style={{ animationDuration: `${HUB_MOTION_MS}ms` }}
-        >
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
-              Intake
-            </p>
-            <p className="mt-0.5 text-[14px] font-semibold tabular-nums leading-snug tracking-tight sm:text-[15px]">
-              <span className="text-red-200/95">{consumed.toLocaleString()}</span>
-              <span className="font-medium text-muted-foreground/55">
-                {` of ${target.toLocaleString()}`}
-              </span>
-            </p>
-            <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground/65">
-              {`${remaining.toLocaleString()} left`}
-              <span className="mx-1.5 text-muted-foreground/35">·</span>
-              <span className="font-semibold text-red-300/85">{pct}%</span>
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={openAddFood}
-            className={cn(
-              "inline-flex h-10 w-full max-w-[11.5rem] items-center justify-center gap-1.5",
-              "rounded-xl border border-red-400/40 bg-[oklch(0.16_0.03_25/72%)] px-3",
-              "type-hud-micro font-semibold tracking-wide text-red-50",
-              "shadow-[0_6px_22px_oklch(0.05_0.01_250/40%)] backdrop-blur-md",
-              "transition-[border-color,background-color,transform] duration-200",
-              "hover:border-red-400/60 hover:bg-red-400/[0.18] active:scale-[0.98]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/35",
-              "sm:h-9 sm:max-w-[12.5rem]",
-            )}
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden />
-            Add food
-          </button>
-        </div>
+          className="pointer-events-none h-px shrink-0 bg-gradient-to-r from-white/12 via-white/8 to-transparent"
+          aria-hidden
+        />
 
-        {/* CENTER TOP — calorie dial (active ring, not alone in a void) */}
-        <div className="col-start-2 row-start-1 flex items-start justify-center self-start pt-0.5">
-          {dial}
-        </div>
-
-        {/* RIGHT — Today's food, full height from dial-row top */}
-        <aside
-          className={cn(
-            "col-start-3 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col",
-            "rounded-xl border border-white/[0.08] bg-[oklch(0.12_0.012_250/78%)]",
-            "shadow-[-10px_0_28px_oklch(0.06_0.01_250/35%)] backdrop-blur-[14px]",
-            "motion-safe:animate-fade-up motion-reduce:animate-none",
-          )}
-          style={{ animationDuration: `${HUB_MOTION_MS}ms` }}
-          aria-label="Today's food"
-        >
-          <div className="flex shrink-0 items-baseline justify-between gap-2 border-b border-white/[0.08] px-3 py-2.5 sm:px-3.5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/90">
-              Today&apos;s food
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2.5 pr-0.5 [-webkit-overflow-scrolling:touch]">
+          {entriesStatus === "loading" ? (
+            <p className="text-[12px] leading-relaxed text-muted-foreground/65">
+              Loading food log…
             </p>
-            {entriesStatus === "ready" && entries.length > 0 ? (
-              <span className="text-[12px] font-semibold tabular-nums text-red-300/85">
-                {entries.reduce((s, e) => s + e.calories, 0).toLocaleString()}
-                <span className="ml-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/50">
-                  cal
-                </span>
-              </span>
-            ) : null}
-          </div>
+          ) : null}
+          {entriesStatus === "error" ? (
+            <p className="text-[12px] leading-relaxed text-muted-foreground/65">
+              Couldn&apos;t load food log.{" "}
+              <button
+                type="button"
+                onClick={() => setReloadKey((k) => k + 1)}
+                className="font-medium text-foreground/85 underline-offset-2 hover:underline hover:text-red-200/90"
+              >
+                Retry
+              </button>
+            </p>
+          ) : null}
+          {entriesStatus === "ready" && entries.length === 0 ? (
+            <p className="text-[12px] leading-relaxed text-muted-foreground/65">
+              Nothing logged yet — tap Add food.
+            </p>
+          ) : null}
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2.5 [-webkit-overflow-scrolling:touch] sm:px-3.5">
-            {entriesStatus === "loading" ? (
-              <p className="text-[12px] leading-relaxed text-muted-foreground/65">
-                Loading food log…
-              </p>
-            ) : null}
-            {entriesStatus === "error" ? (
-              <p className="text-[12px] leading-relaxed text-muted-foreground/65">
-                Couldn&apos;t load food log.{" "}
-                <button
-                  type="button"
-                  onClick={() => setReloadKey((k) => k + 1)}
-                  className="font-medium text-foreground/85 underline-offset-2 hover:underline hover:text-red-200/90"
-                >
-                  Retry
-                </button>
-              </p>
-            ) : null}
-            {entriesStatus === "ready" && entries.length === 0 ? (
-              <p className="text-[12px] leading-relaxed text-muted-foreground/65">
-                Nothing logged yet — tap Add food.
-              </p>
-            ) : null}
-
-            {entriesStatus === "ready" && mealGroups.length > 0 ? (
-              <div className="space-y-3.5 pb-1">
-                {mealGroups.map(({ meal, items, total }) => {
-                  const accent = mealAccent(meal)
-                  return (
-                    <div
-                      key={meal}
-                      className="min-w-0 motion-safe:animate-fade-up motion-reduce:animate-none"
-                      style={{ animationDuration: `${HUB_MOTION_MS}ms` }}
-                    >
-                      <div className="mb-1 flex items-center gap-2">
-                        <span
-                          className="h-3 w-0.5 shrink-0 rounded-full"
-                          style={{ background: accent.bar }}
-                          aria-hidden
-                        />
-                        <p
-                          className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
-                          style={{ color: accent.label }}
-                        >
-                          {meal}
-                        </p>
-                        <span
-                          className="shrink-0 text-[11px] font-bold tabular-nums"
-                          style={{ color: accent.cal }}
-                        >
-                          {total.toLocaleString()}
-                        </span>
-                      </div>
-                      <ul className="space-y-0">
-                        {items.map((entry) => (
-                          <li
-                            key={entry.id}
-                            className="group/row flex items-stretch gap-1 border-t border-white/[0.06] py-2 first:border-t-0 first:pt-0.5"
-                          >
-                            <div className="min-w-0 flex-1">
-                              {entry.description?.trim() ? (
-                                <p className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground/92">
-                                  {entry.description}
-                                </p>
-                              ) : (
-                                <p className="text-[13px] font-medium text-foreground/75">
-                                  Logged entry
-                                </p>
-                              )}
-                              <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                                <span className="text-[12px] font-semibold tabular-nums text-red-200/90">
-                                  {entry.calories.toLocaleString()}
-                                  <span className="ml-0.5 text-[10px] font-medium text-muted-foreground/50">
-                                    cal
-                                  </span>
-                                </span>
-                                {(entry.protein != null ||
-                                  entry.carbs != null ||
-                                  entry.fat != null) && (
-                                  <span className="text-[10px] tabular-nums text-muted-foreground/50">
-                                    {[
-                                      entry.protein != null
-                                        ? `P ${entry.protein}g`
-                                        : null,
-                                      entry.carbs != null
-                                        ? `C ${entry.carbs}g`
-                                        : null,
-                                      entry.fat != null ? `F ${entry.fat}g` : null,
-                                    ]
-                                      .filter(Boolean)
-                                      .join(" · ")}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-0.5 self-center">
-                              <button
-                                type="button"
-                                onClick={() => startEdit(entry)}
-                                className="history-row-edit !m-0 !min-h-9 !min-w-9"
-                                title="Edit"
-                                aria-label={`Edit ${entry.description?.trim() || entry.calories + " cal"}`}
-                              >
-                                <Pencil />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  requestDelete(
-                                    entry.id,
-                                    entry.description?.trim() ||
-                                      `${entry.calories} cal · ${entry.mealType}`,
-                                  )
-                                }
-                                className="history-row-delete-row !m-0 !min-h-9 !min-w-9"
-                                aria-label={`Delete ${entry.description?.trim() || entry.calories + " cal"}`}
-                              >
-                                <Trash2 />
-                              </button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
+          {entriesStatus === "ready" && mealGroups.length > 0 ? (
+            <div className="space-y-3.5 pb-1">
+              {mealGroups.map(({ meal, items, total }) => {
+                const accent = mealAccent(meal)
+                return (
+                  <div
+                    key={meal}
+                    className="min-w-0 motion-safe:animate-fade-up motion-reduce:animate-none"
+                    style={{ animationDuration: `${HUB_MOTION_MS}ms` }}
+                  >
+                    <div className="mb-1 flex items-center gap-2">
+                      <span
+                        className="h-3 w-0.5 shrink-0 rounded-full"
+                        style={{ background: accent.bar }}
+                        aria-hidden
+                      />
+                      <p
+                        className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                        style={{ color: accent.label }}
+                      >
+                        {meal}
+                      </p>
+                      <span
+                        className="shrink-0 text-[11px] font-bold tabular-nums"
+                        style={{ color: accent.cal }}
+                      >
+                        {total.toLocaleString()}
+                      </span>
                     </div>
-                  )
-                })}
-              </div>
-            ) : null}
-          </div>
-        </aside>
+                    <ul className="space-y-0">
+                      {items.map((entry) => (
+                        <li
+                          key={entry.id}
+                          className="group/row flex items-stretch gap-1 border-t border-white/[0.06] py-2 first:border-t-0 first:pt-0.5"
+                        >
+                          <div className="min-w-0 flex-1">
+                            {entry.description?.trim() ? (
+                              <p className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground/92">
+                                {entry.description}
+                              </p>
+                            ) : (
+                              <p className="text-[13px] font-medium text-foreground/75">
+                                Logged entry
+                              </p>
+                            )}
+                            <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                              <span className="text-[12px] font-semibold tabular-nums text-red-200/90">
+                                {entry.calories.toLocaleString()}
+                                <span className="ml-0.5 text-[10px] font-medium text-muted-foreground/50">
+                                  cal
+                                </span>
+                              </span>
+                              {(entry.protein != null ||
+                                entry.carbs != null ||
+                                entry.fat != null) && (
+                                <span className="text-[10px] tabular-nums text-muted-foreground/50">
+                                  {[
+                                    entry.protein != null
+                                      ? `P ${entry.protein}g`
+                                      : null,
+                                    entry.carbs != null
+                                      ? `C ${entry.carbs}g`
+                                      : null,
+                                    entry.fat != null ? `F ${entry.fat}g` : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-0.5 self-center">
+                            <button
+                              type="button"
+                              onClick={() => startEdit(entry)}
+                              className="history-row-edit !m-0 !min-h-9 !min-w-9"
+                              title="Edit"
+                              aria-label={`Edit ${entry.description?.trim() || entry.calories + " cal"}`}
+                            >
+                              <Pencil />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                requestDelete(
+                                  entry.id,
+                                  entry.description?.trim() ||
+                                    `${entry.calories} cal · ${entry.mealType}`,
+                                )
+                              }
+                              className="history-row-delete-row !m-0 !min-h-9 !min-w-9"
+                              aria-label={`Delete ${entry.description?.trim() || entry.calories + " cal"}`}
+                            >
+                              <Trash2 />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })}
+            </div>
+          ) : null}
+        </div>
+      </aside>
 
-        {/* LOWER LEFT — pip visualization under stats+dial */}
-        <div
-          className={cn(
-            "col-span-2 col-start-1 row-start-2 min-h-0 overflow-hidden rounded-xl",
-            "border border-white/[0.05] bg-[oklch(0.1_0.012_250/40%)]",
-            "motion-safe:animate-fade-up motion-reduce:animate-none",
-          )}
-          style={{ animationDuration: `${HUB_MOTION_MS + 80}ms` }}
-        >
-          <CaloriesPipField consumed={consumed} target={target} className="h-full min-h-[10rem]" />
+      {/* Flow block below rings — grows parent height for the food rail */}
+      <div
+        className={cn(
+          "pointer-events-auto min-h-[min(42vh,18rem)] pt-2 sm:min-h-[min(38vh,20rem)]",
+          "pr-[max(0px,calc(50%-3.6rem))] sm:pr-[max(0px,calc(50%-4rem))]",
+          "motion-safe:animate-fade-up motion-reduce:animate-none",
+        )}
+        style={{ animationDuration: `${HUB_MOTION_MS + 80}ms` }}
+      >
+        <div className="h-full min-h-[11rem] overflow-hidden rounded-xl border border-white/[0.05] bg-[oklch(0.1_0.012_250/35%)]">
+          <CaloriesPipField
+            consumed={consumed}
+            target={target}
+            className="h-full min-h-[11rem]"
+          />
         </div>
       </div>
 
@@ -526,6 +518,6 @@ export function CaloriesExpandShell({
             document.body,
           )
         : null}
-    </div>
+    </>
   )
 }

@@ -133,19 +133,19 @@ export function CaloriesPipField({
         }}
         aria-hidden
       />
-      <div className="relative flex min-h-0 flex-1 flex-col justify-end px-1 pb-1 pt-2 sm:px-2">
+      <div className="relative flex min-h-0 flex-1 flex-col justify-end px-1.5 pb-1.5 pt-2.5 sm:px-2.5">
         <div
-          className="relative mx-auto w-full max-w-[22rem] sm:max-w-[26rem]"
+          className="relative mx-auto w-full max-w-[20rem] sm:max-w-[24rem]"
           style={{ aspectRatio: `${COLS} / ${ROWS}` }}
         >
           <div
             className="grid h-full w-full"
             style={{
-              gap: "4px",
+              gap: "5px",
               gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`,
               gridTemplateRows: `repeat(${ROWS}, minmax(0, 1fr))`,
-              paddingRight: "4%",
-              paddingTop: "5%",
+              paddingRight: "5%",
+              paddingTop: "6%",
             }}
           >
             {visualIndices.map((dataIndex, visualOrder) => {
