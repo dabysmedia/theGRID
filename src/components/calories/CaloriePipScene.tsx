@@ -60,13 +60,13 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     const mobile = isCoarsePointer()
 
     const scene = new THREE.Scene()
-    // Deeper fog so the tank reads as atmosphere, not a foreground prop
-    scene.fog = new THREE.FogExp2(0x05070c, 0.042)
+    // Soft atmospheric fog — tank reads as depth, not a loud foreground prop
+    scene.fog = new THREE.FogExp2(0x06080e, 0.058)
 
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 80)
-    // Slightly pulled back — fills tall expand canvases without dominating UI
-    camera.position.set(12.2, 10.8, 12.2)
-    camera.lookAt(0, 0.35, 0)
+    // Pulled back + slight left bias so the tank sits behind the left dial zone
+    camera.position.set(13.4, 11.6, 13.4)
+    camera.lookAt(-0.6, 0.2, 0)
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -86,15 +86,15 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     renderer.domElement.style.touchAction = "none"
     host.appendChild(renderer.domElement)
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.42)
+    const ambient = new THREE.AmbientLight(0xffffff, 0.32)
     scene.add(ambient)
-    const key = new THREE.DirectionalLight(0xffffff, 0.85)
+    const key = new THREE.DirectionalLight(0xffffff, 0.48)
     key.position.set(8, 14, 6)
     scene.add(key)
-    const fill = new THREE.DirectionalLight(0x88aaff, 0.28)
+    const fill = new THREE.DirectionalLight(0x7a90b8, 0.16)
     fill.position.set(-6, 4, -4)
     scene.add(fill)
-    const rim = new THREE.DirectionalLight(0xffffff, 0.18)
+    const rim = new THREE.DirectionalLight(0xffffff, 0.1)
     rim.position.set(-2, 6, 10)
     scene.add(rim)
 
@@ -103,11 +103,11 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       ROWS * STEP + GAP * 2.4,
     )
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x12161f,
-      metalness: 0.4,
-      roughness: 0.82,
+      color: 0x0e1218,
+      metalness: 0.22,
+      roughness: 0.9,
       transparent: true,
-      opacity: 0.38,
+      opacity: 0.22,
     })
     const floor = new THREE.Mesh(floorGeo, floorMat)
     floor.rotation.x = -Math.PI / 2
@@ -116,21 +116,21 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     const grid = new THREE.GridHelper(
       Math.max(COLS, ROWS) * STEP,
       Math.max(COLS, ROWS),
-      0x3a4558,
-      0x222833,
+      0x2a3344,
+      0x181e28,
     )
     grid.position.y = -CUBE * 0.5 + 0.01
     const gridMats = Array.isArray(grid.material) ? grid.material : [grid.material]
     for (const m of gridMats) {
       m.transparent = true
-      m.opacity = 0.22
+      m.opacity = 0.12
     }
 
     const geometry = new THREE.BoxGeometry(CUBE, CUBE, CUBE)
     const material = new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
-      metalness: 0.28,
-      roughness: 0.48,
+      metalness: 0.18,
+      roughness: 0.62,
       emissive: 0x000000,
       emissiveIntensity: 0,
     })
@@ -144,8 +144,8 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
 
     const dummy = new THREE.Object3D()
     const litColor = new THREE.Color()
-    const emptyColor = new THREE.Color("#1e2430")
-    const availableColor = new THREE.Color("#2c3544")
+    const emptyColor = new THREE.Color("#151a22")
+    const availableColor = new THREE.Color("#1f2632")
     const rise = new Float32Array(THREE_PIP_COUNT)
     const targetRise = new Float32Array(THREE_PIP_COUNT)
     const posX = new Float32Array(THREE_PIP_COUNT)
@@ -173,6 +173,8 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     mesh.instanceColor!.needsUpdate = true
 
     const group = new THREE.Group()
+    // Nudge tank left so it breathes under the dial, not under the food rail
+    group.position.set(-1.15, -0.15, 0)
     group.add(floor, grid, mesh)
     scene.add(group)
 
@@ -192,8 +194,8 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       const h = el.clientHeight || 1
       renderer.setSize(w, h, false)
       const aspect = w / h
-      // Wider frustum — tank as soft background across tall expand canvases
-      const frustum = mobile ? 9.4 : 8.8
+      // Wider frustum — smaller tank as soft atmosphere behind UI
+      const frustum = mobile ? 10.6 : 10.0
       if (aspect >= 1) {
         camera.left = -frustum * aspect
         camera.right = frustum * aspect
@@ -237,8 +239,9 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
         }
       }
       mesh.instanceColor!.needsUpdate = true
+      // Near-zero emissive — lit pips read as soft steel, not neon
       material.emissive.copy(litColor)
-      material.emissiveIntensity = mobile ? 0.06 : 0.1
+      material.emissiveIntensity = mobile ? 0.02 : 0.035
       dirty = true
       return true
     }
@@ -305,13 +308,13 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
         mesh.instanceMatrix.needsUpdate = true
       }
 
-      // Continuous gentle sway while visible (skipped for reduced motion)
+      // Very gentle sway — presence without visual noise
       if (swayAllowed) {
         const t = now / 1000
-        const ampY = mobile ? 0.028 : 0.045
-        const ampX = mobile ? 0.006 : 0.01
-        group.rotation.y = Math.sin(t * 0.55) * ampY
-        group.rotation.x = Math.sin(t * 0.37 + 0.8) * ampX
+        const ampY = mobile ? 0.014 : 0.022
+        const ampX = mobile ? 0.003 : 0.005
+        group.rotation.y = Math.sin(t * 0.42) * ampY
+        group.rotation.x = Math.sin(t * 0.31 + 0.8) * ampX
       } else if (group.rotation.y !== 0 || group.rotation.x !== 0) {
         group.rotation.y = 0
         group.rotation.x = 0
