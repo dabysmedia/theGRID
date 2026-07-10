@@ -295,7 +295,7 @@ export function HubCaloriesExpand({
         </div>
       ) : (
         <>
-          {/* Pips = full-bleed stylistic background; food floats as foreground */}
+          {/* Pips = full-bleed background; Today's food = right-side floating rail */}
           <div className="relative -mx-1 min-h-[min(62vh,30rem)] w-[calc(100%+0.5rem)] overflow-hidden sm:-mx-2 sm:min-h-[min(58vh,32rem)] sm:w-[calc(100%+1rem)]">
             <div className="pointer-events-none absolute inset-0 z-0" aria-hidden>
               <CaloriePipTracker
@@ -308,236 +308,240 @@ export function HubCaloriesExpand({
             </div>
 
             <div className="relative z-10 flex min-h-[min(62vh,30rem)] flex-col sm:min-h-[min(58vh,32rem)]">
-              <div className="shrink-0 px-2.5 pt-1 sm:px-3">
-                <p className="type-hud-subsection text-foreground/70 drop-shadow-[0_1px_8px_oklch(0.08_0.01_250/80%)]">
-                  Calories
-                </p>
-                <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/75 drop-shadow-[0_1px_6px_oklch(0.08_0.01_250/70%)]">
-                  {`${consumed.toLocaleString()} of ${target.toLocaleString()} · ${remaining.toLocaleString()} left · ${pct}%`}
-                </p>
+              <div className="flex shrink-0 flex-col gap-2.5 px-2.5 pt-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3 sm:px-3">
+                <div className="min-w-0">
+                  <p className="type-hud-subsection text-foreground/80 drop-shadow-[0_1px_8px_oklch(0.08_0.01_250/80%)]">
+                    Calories
+                  </p>
+                  <p className="mt-1 text-[12px] font-medium tabular-nums leading-snug text-foreground/75 drop-shadow-[0_1px_6px_oklch(0.08_0.01_250/70%)] sm:text-[13px]">
+                    {`${consumed.toLocaleString()} of ${target.toLocaleString()}`}
+                    <span className="text-muted-foreground/70">
+                      {` · ${remaining.toLocaleString()} left · ${pct}%`}
+                    </span>
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 sm:shrink-0">
+                  <button
+                    type="button"
+                    onClick={openAddFood}
+                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/14 bg-[oklch(0.14_0.01_250/70%)] px-3 type-hud-micro text-foreground/85 backdrop-blur-md transition-colors duration-200 hover:border-red-400/35 hover:bg-red-400/[0.1] hover:text-red-100/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:h-10 sm:flex-none sm:px-4"
+                  >
+                    <Plus className="h-3.5 w-3.5" aria-hidden />
+                    Add food
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openQuickLog("calories")}
+                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/14 bg-[oklch(0.14_0.01_250/70%)] px-3 type-hud-micro text-foreground/85 backdrop-blur-md transition-colors duration-200 hover:border-red-400/35 hover:bg-red-400/[0.1] hover:text-red-100/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:h-10 sm:flex-none sm:px-4"
+                  >
+                    Quick log
+                  </button>
+                </div>
               </div>
 
-              <div className="min-h-[4.5rem] flex-1" aria-hidden />
+              <div className="relative mt-2 flex min-h-0 flex-1">
+                {/* Left: pips breathe through; soft fade into the rail */}
+                <div className="pointer-events-none relative min-w-0 flex-1" aria-hidden>
+                  <div className="absolute inset-y-0 right-0 w-10 bg-gradient-to-r from-transparent to-[oklch(0.11_0.01_250/55%)] sm:w-14" />
+                </div>
 
-              <div className="pointer-events-none flex max-h-[min(58%,22rem)] flex-col sm:max-h-[min(54%,24rem)]">
-                <div
-                  className="pointer-events-none h-14 shrink-0 bg-gradient-to-t from-[oklch(0.12_0.01_250/75%)] via-[oklch(0.12_0.01_250/35%)] to-transparent sm:h-16"
-                  aria-hidden
-                />
-                <div
+                <aside
                   className={cn(
-                    "pointer-events-auto flex min-h-0 flex-1 flex-col px-2.5 pb-2.5 pt-0 sm:px-3 sm:pb-3",
-                    "bg-[oklch(0.13_0.01_250/55%)] backdrop-blur-[10px]",
+                    "pointer-events-auto flex min-h-0 w-[min(72%,20rem)] shrink-0 flex-col sm:w-[min(46%,22.5rem)] md:w-[min(40%,24rem)]",
+                    "border-l border-white/[0.1] bg-[oklch(0.11_0.012_250/78%)] shadow-[-12px_0_28px_oklch(0.08_0.01_250/35%)] backdrop-blur-[14px]",
                     "motion-safe:animate-fade-up motion-reduce:animate-none",
                   )}
                   style={{ animationDuration: `${HUB_MOTION_MS}ms` }}
+                  aria-label="Today's food"
                 >
-                  <div className="mb-2.5 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={openAddFood}
-                      className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.06] px-3 type-hud-micro text-muted-foreground/90 transition-colors duration-200 hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:h-10 sm:flex-none sm:px-4"
-                    >
-                      <Plus className="h-3.5 w-3.5" aria-hidden />
-                      Add food
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openQuickLog("calories")}
-                      className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.06] px-3 type-hud-micro text-muted-foreground/90 transition-colors duration-200 hover:border-red-400/30 hover:bg-red-400/[0.08] hover:text-red-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/30 sm:h-10 sm:flex-none sm:px-4"
-                    >
-                      Quick log
-                    </button>
+                  <div className="flex shrink-0 items-baseline justify-between gap-2 border-b border-white/[0.08] px-3 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/90">
+                      Today&apos;s food
+                    </p>
+                    {entriesStatus === "ready" && entries.length > 0 ? (
+                      <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/65">
+                        {entries.length}
+                      </span>
+                    ) : null}
                   </div>
 
-                  <div className="flex min-h-0 flex-1 flex-col space-y-2">
-                    <div className="flex shrink-0 items-baseline justify-between gap-2">
-                      <p className="type-hud-caption">Today&apos;s food</p>
-                      {entriesStatus === "ready" && entries.length > 0 ? (
-                        <span className="type-hud-micro tabular-nums text-muted-foreground/50">
-                          {entries.length}
-                        </span>
-                      ) : null}
-                    </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 py-2.5 [-webkit-overflow-scrolling:touch]">
+                    {entriesStatus === "loading" ? (
+                      <p className="px-0.5 text-[12px] leading-relaxed text-muted-foreground/65">
+                        Loading food log…
+                      </p>
+                    ) : null}
+                    {entriesStatus === "error" ? (
+                      <p className="px-0.5 text-[12px] leading-relaxed text-muted-foreground/65">
+                        Couldn&apos;t load food log.{" "}
+                        <button
+                          type="button"
+                          onClick={() => setReloadKey((k) => k + 1)}
+                          className="font-medium text-foreground/85 underline-offset-2 hover:underline hover:text-red-200/90"
+                        >
+                          Retry
+                        </button>
+                      </p>
+                    ) : null}
+                    {entriesStatus === "ready" && entries.length === 0 ? (
+                      <p className="px-0.5 text-[12px] leading-relaxed text-muted-foreground/65">
+                        Nothing logged yet — tap Add food.
+                      </p>
+                    ) : null}
 
-                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-                      {entriesStatus === "loading" ? (
-                        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-                          Loading food log…
-                        </p>
-                      ) : null}
-                      {entriesStatus === "error" ? (
-                        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-                          Couldn&apos;t load food log.{" "}
-                          <button
-                            type="button"
-                            onClick={() => setReloadKey((k) => k + 1)}
-                            className="text-foreground/75 underline-offset-2 hover:underline hover:text-red-200/90"
-                          >
-                            Retry
-                          </button>
-                        </p>
-                      ) : null}
-                      {entriesStatus === "ready" && entries.length === 0 ? (
-                        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-                          Nothing logged yet — tap Add food.
-                        </p>
-                      ) : null}
-
-                      {entriesStatus === "ready" && mealGroups.length > 0 ? (
-                        <div className="space-y-1.5 pb-0.5">
-                          {mealGroups.map(({ meal, items, total }) => {
-                            const mealOpen = openMeals.has(meal)
-                            const revealAll = showAllItems.has(meal)
-                            const visibleItems = revealAll
-                              ? items
-                              : items.slice(0, MEAL_PREVIEW_LIMIT)
-                            const hiddenCount = items.length - visibleItems.length
-                            return (
-                              <div
-                                key={meal}
-                                className="rounded-xl border border-white/[0.06] bg-white/[0.03]"
+                    {entriesStatus === "ready" && mealGroups.length > 0 ? (
+                      <div className="space-y-2 pb-0.5">
+                        {mealGroups.map(({ meal, items, total }) => {
+                          const mealOpen = openMeals.has(meal)
+                          const revealAll = showAllItems.has(meal)
+                          const visibleItems = revealAll
+                            ? items
+                            : items.slice(0, MEAL_PREVIEW_LIMIT)
+                          const hiddenCount = items.length - visibleItems.length
+                          return (
+                            <div
+                              key={meal}
+                              className="overflow-hidden rounded-xl border border-white/[0.09] bg-white/[0.045]"
+                            >
+                              <button
+                                type="button"
+                                aria-expanded={mealOpen}
+                                onClick={() => toggleMealOpen(meal)}
+                                className="flex w-full items-center justify-between gap-2.5 px-2.5 py-2.5 text-left transition-colors duration-200 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-400/25"
                               >
-                                <button
-                                  type="button"
-                                  aria-expanded={mealOpen}
-                                  onClick={() => toggleMealOpen(meal)}
-                                  className="flex w-full items-center justify-between gap-3 px-2.5 py-2.5 text-left transition-colors duration-200 hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-400/25"
-                                >
-                                  <div className="min-w-0">
-                                    <p className="type-hud-micro capitalize text-muted-foreground/55">
-                                      {meal}
-                                    </p>
-                                    <p className="mt-0.5 type-hud-micro normal-case tracking-normal text-muted-foreground/45">
-                                      {items.length} item{items.length === 1 ? "" : "s"}
-                                    </p>
-                                  </div>
-                                  <div className="flex shrink-0 items-center gap-2">
-                                    <span className="type-hud-stat-sm tabular-nums text-foreground/90">
-                                      {total.toLocaleString()}
-                                      <span className="ml-1 type-hud-unit text-muted-foreground/50">
-                                        cal
-                                      </span>
+                                <div className="min-w-0">
+                                  <p className="text-[12px] font-semibold capitalize tracking-wide text-foreground/95">
+                                    {meal}
+                                  </p>
+                                  <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground/60">
+                                    {items.length} item{items.length === 1 ? "" : "s"}
+                                  </p>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-1.5">
+                                  <span className="text-[13px] font-bold tabular-nums text-foreground">
+                                    {total.toLocaleString()}
+                                    <span className="ml-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/55">
+                                      cal
                                     </span>
-                                    <ChevronDown
-                                      className={cn(
-                                        "h-3.5 w-3.5 text-muted-foreground/40 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                                        mealOpen && "rotate-180 text-red-200/70",
-                                      )}
-                                      aria-hidden
-                                    />
-                                  </div>
-                                </button>
+                                  </span>
+                                  <ChevronDown
+                                    className={cn(
+                                      "h-3.5 w-3.5 text-muted-foreground/45 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                                      mealOpen && "rotate-180 text-red-200/75",
+                                    )}
+                                    aria-hidden
+                                  />
+                                </div>
+                              </button>
 
-                                <HubCollapse open={mealOpen}>
-                                  <ul className="divide-y divide-white/[0.05] border-t border-white/[0.05] px-2.5">
-                                    {visibleItems.map((entry) => (
-                                      <li
-                                        key={entry.id}
-                                        className="group/row flex items-stretch gap-2 py-2"
-                                      >
-                                        <div className="min-w-0 flex-1">
-                                          {entry.description?.trim() ? (
-                                            <p className="line-clamp-2 text-[12px] font-medium leading-snug text-foreground/85">
-                                              {entry.description}
-                                            </p>
-                                          ) : (
-                                            <p className="text-[12px] font-medium text-foreground/70">
-                                              Logged entry
-                                            </p>
-                                          )}
-                                          <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                                            <span className="type-hud-stat-xs tabular-nums text-foreground/80">
-                                              {entry.calories.toLocaleString()} cal
+                              <HubCollapse open={mealOpen}>
+                                <ul className="divide-y divide-white/[0.06] border-t border-white/[0.07] px-2.5">
+                                  {visibleItems.map((entry) => (
+                                    <li
+                                      key={entry.id}
+                                      className="group/row flex items-stretch gap-1.5 py-2.5"
+                                    >
+                                      <div className="min-w-0 flex-1">
+                                        {entry.description?.trim() ? (
+                                          <p className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground/92">
+                                            {entry.description}
+                                          </p>
+                                        ) : (
+                                          <p className="text-[13px] font-medium text-foreground/75">
+                                            Logged entry
+                                          </p>
+                                        )}
+                                        <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                          <span className="text-[12px] font-semibold tabular-nums text-foreground/88">
+                                            {entry.calories.toLocaleString()} cal
+                                          </span>
+                                          {(entry.protein != null ||
+                                            entry.carbs != null ||
+                                            entry.fat != null) && (
+                                            <span className="text-[10px] tabular-nums text-muted-foreground/55">
+                                              {[
+                                                entry.protein != null
+                                                  ? `P ${entry.protein}g`
+                                                  : null,
+                                                entry.carbs != null
+                                                  ? `C ${entry.carbs}g`
+                                                  : null,
+                                                entry.fat != null
+                                                  ? `F ${entry.fat}g`
+                                                  : null,
+                                              ]
+                                                .filter(Boolean)
+                                                .join(" · ")}
                                             </span>
-                                            {(entry.protein != null ||
-                                              entry.carbs != null ||
-                                              entry.fat != null) && (
-                                              <span className="type-hud-micro normal-case tracking-normal tabular-nums text-muted-foreground/45">
-                                                {[
-                                                  entry.protein != null
-                                                    ? `P ${entry.protein}g`
-                                                    : null,
-                                                  entry.carbs != null
-                                                    ? `C ${entry.carbs}g`
-                                                    : null,
-                                                  entry.fat != null
-                                                    ? `F ${entry.fat}g`
-                                                    : null,
-                                                ]
-                                                  .filter(Boolean)
-                                                  .join(" · ")}
-                                              </span>
-                                            )}
-                                          </div>
+                                          )}
                                         </div>
-                                        <div className="flex shrink-0 items-center gap-1 self-center">
-                                          <button
-                                            type="button"
-                                            onClick={() => startEdit(entry)}
-                                            className="history-row-edit !min-h-9 !min-w-9 !m-0"
-                                            title="Edit"
-                                            aria-label={`Edit ${entry.description?.trim() || entry.calories + " cal"}`}
-                                          >
-                                            <Pencil />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              requestDelete(
-                                                entry.id,
-                                                entry.description?.trim() ||
-                                                  `${entry.calories} cal · ${entry.mealType}`,
-                                              )
-                                            }
-                                            className="history-row-delete-row !min-h-9 !min-w-9 !m-0"
-                                            aria-label={`Delete ${entry.description?.trim() || entry.calories + " cal"}`}
-                                          >
-                                            <Trash2 />
-                                          </button>
-                                        </div>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                  {hiddenCount > 0 ? (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setShowAllItems((prev) => {
-                                          const next = new Set(prev)
-                                          next.add(meal)
-                                          return next
-                                        })
-                                      }
-                                      className="w-full px-2.5 py-2 text-left type-hud-micro text-muted-foreground/55 transition-colors hover:text-red-200/80"
-                                    >
-                                      +{hiddenCount} more
-                                    </button>
-                                  ) : null}
-                                  {revealAll && items.length > MEAL_PREVIEW_LIMIT ? (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setShowAllItems((prev) => {
-                                          const next = new Set(prev)
-                                          next.delete(meal)
-                                          return next
-                                        })
-                                      }
-                                      className="w-full px-2.5 py-2 text-left type-hud-micro text-muted-foreground/55 transition-colors hover:text-red-200/80"
-                                    >
-                                      Show less
-                                    </button>
-                                  ) : null}
-                                </HubCollapse>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
+                                      </div>
+                                      <div className="flex shrink-0 items-center gap-0.5 self-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => startEdit(entry)}
+                                          className="history-row-edit !min-h-9 !min-w-9 !m-0"
+                                          title="Edit"
+                                          aria-label={`Edit ${entry.description?.trim() || entry.calories + " cal"}`}
+                                        >
+                                          <Pencil />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            requestDelete(
+                                              entry.id,
+                                              entry.description?.trim() ||
+                                                `${entry.calories} cal · ${entry.mealType}`,
+                                            )
+                                          }
+                                          className="history-row-delete-row !min-h-9 !min-w-9 !m-0"
+                                          aria-label={`Delete ${entry.description?.trim() || entry.calories + " cal"}`}
+                                        >
+                                          <Trash2 />
+                                        </button>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                                {hiddenCount > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setShowAllItems((prev) => {
+                                        const next = new Set(prev)
+                                        next.add(meal)
+                                        return next
+                                      })
+                                    }
+                                    className="w-full px-2.5 py-2 text-left text-[11px] font-medium text-muted-foreground/60 transition-colors hover:text-red-200/85"
+                                  >
+                                    +{hiddenCount} more
+                                  </button>
+                                ) : null}
+                                {revealAll && items.length > MEAL_PREVIEW_LIMIT ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setShowAllItems((prev) => {
+                                        const next = new Set(prev)
+                                        next.delete(meal)
+                                        return next
+                                      })
+                                    }
+                                    className="w-full px-2.5 py-2 text-left text-[11px] font-medium text-muted-foreground/60 transition-colors hover:text-red-200/85"
+                                  >
+                                    Show less
+                                  </button>
+                                ) : null}
+                              </HubCollapse>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : null}
                   </div>
-                </div>
+                </aside>
               </div>
             </div>
           </div>
