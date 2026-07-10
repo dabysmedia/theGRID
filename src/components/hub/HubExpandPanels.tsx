@@ -94,14 +94,14 @@ export type HubExpandedPanel =
   | "peptides"
   | "workouts"
 
-/** Flush HUD back rail — text + chevron, no nested card/chip. ~44px touch target. */
+/** HUD back control — fits the overview header slot (h-7) without adding net height. */
 export function HubBackToOverview({ onBack }: { onBack: () => void }) {
   return (
     <button
       type="button"
       onClick={onBack}
       aria-label="Back to overview"
-      className="group flex min-h-11 w-full touch-manipulation items-center gap-1.5 text-left transition-colors hover:bg-white/[0.03] active:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25"
+      className="group flex h-7 w-full touch-manipulation items-center gap-1.5 text-left transition-colors hover:bg-white/[0.03] active:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25"
     >
       <ArrowLeft
         className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70 transition-colors group-hover:text-foreground/85"

@@ -200,12 +200,12 @@ export function HubDashboard() {
   return (
     <div
       className={cn(
-        "flex min-h-0 flex-col",
+        // Keep header↔hub gap identical in overview and expand (lg:gap-8 only —
+        // never introduce a mobile gap on expand that shoves the hub down).
+        "flex min-h-0 flex-col lg:gap-8",
         // Collapsed hub: fill main (above dock clearance) and lock overflow on
-        // mobile so the overview fits one screen. Expanded panels grow downward.
-        overview
-          ? "max-lg:flex-1 max-lg:overflow-hidden lg:gap-8"
-          : "gap-8",
+        // mobile so the overview fits one screen. Expanded panels grow in place.
+        overview && "max-lg:flex-1 max-lg:overflow-hidden",
       )}
     >
       <div className="shrink-0">

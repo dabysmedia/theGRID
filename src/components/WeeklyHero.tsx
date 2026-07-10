@@ -454,9 +454,11 @@ export function WeeklyHero({
     <div
       className={cn(
         glassPanelClass,
-        "flex flex-col p-4 transition-opacity duration-500 lg:p-5",
-        fillViewport && "max-lg:h-full max-lg:min-h-0 max-lg:p-3",
-        // glass-panel CSS sets overflow:hidden; sticky back bar needs visible
+        // Keep mobile padding stable across overview/expand so the card top
+        // does not shift when fillViewport turns off.
+        "flex flex-col p-4 transition-opacity duration-500 max-lg:p-3 lg:p-5",
+        fillViewport && expanded == null && "max-lg:h-full max-lg:min-h-0",
+        // glass-panel CSS sets overflow:hidden; sticky back control needs visible
         expanded != null && "!overflow-visible",
         loading ? "opacity-50" : "opacity-100",
       )}
@@ -485,53 +487,53 @@ export function WeeklyHero({
         aria-hidden
       />
 
-      {/* Header — when expanded, flush sticky back rail replaces overview chrome */}
-      {expanded != null ? (
-        <div className="relative z-20 -mx-4 mb-3 shrink-0 sticky top-0 lg:-mx-5">
-          <div className="border-b border-white/[0.06] bg-[oklch(0.12_0.008_250_/0.88)] px-4 backdrop-blur-md lg:px-5">
-            <HubBackToOverview onBack={() => setExpanded(null)} />
-          </div>
-        </div>
-      ) : (
-        <div
-          className={cn(
-            "relative z-10 flex shrink-0 items-center justify-between",
-            fillViewport ? "mb-[var(--hub-section-gap)]" : "mb-4",
-          )}
-        >
-          <div className="flex items-center gap-2">
-            <div className="status-dot" />
-            <h2
-              key={viewMode}
-              className="type-hud-title motion-safe:animate-fade-up motion-reduce:animate-none"
-            >
-              {isWeekView ? "Weekly Overview" : "Daily Overview"}
-            </h2>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span
-              key={`${viewMode}-eyebrow`}
-              className="type-hud-eyebrow motion-safe:animate-fade-up motion-reduce:animate-none"
-            >
-              {isWeekView ? dateRange : dayLabel}
-            </span>
-            <button
-              type="button"
-              onClick={() => setViewMode((mode) => (mode === "today" ? "week" : "today"))}
-              aria-label={isWeekView ? "Show today's values" : "Show weekly values"}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
-            >
-              <ChevronRight
-                className={cn(
-                  "h-3.5 w-3.5 transition-transform duration-300 ease-out",
-                  isWeekView && "rotate-180",
-                )}
-                aria-hidden
-              />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Header — expand swaps back control into the same slot (same height/margin) */}
+      <div
+        className={cn(
+          "relative flex h-7 shrink-0 items-center mb-[var(--hub-section-gap)]",
+          expanded != null
+            ? "z-20 sticky top-0 -mx-3 px-3 bg-[oklch(0.12_0.008_250_/0.88)] backdrop-blur-md lg:-mx-5 lg:px-5"
+            : "z-10 justify-between",
+        )}
+      >
+        {expanded != null ? (
+          <HubBackToOverview onBack={() => setExpanded(null)} />
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <div className="status-dot" />
+              <h2
+                key={viewMode}
+                className="type-hud-title motion-safe:animate-fade-up motion-reduce:animate-none"
+              >
+                {isWeekView ? "Weekly Overview" : "Daily Overview"}
+              </h2>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span
+                key={`${viewMode}-eyebrow`}
+                className="type-hud-eyebrow motion-safe:animate-fade-up motion-reduce:animate-none"
+              >
+                {isWeekView ? dateRange : dayLabel}
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewMode((mode) => (mode === "today" ? "week" : "today"))}
+                aria-label={isWeekView ? "Show today's values" : "Show weekly values"}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
+              >
+                <ChevronRight
+                  className={cn(
+                    "h-3.5 w-3.5 transition-transform duration-300 ease-out",
+                    isWeekView && "rotate-180",
+                  )}
+                  aria-hidden
+                />
+              </button>
+            </div>
+          </>
+        )}
+      </div>
 
       <div
         key={viewMode}
