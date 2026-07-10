@@ -1,0 +1,26 @@
+---
+description: Protect Daily Overview ring center-morph and protocol rail expand behavior
+globs: src/components/WeeklyHero.tsx,src/components/hub/HubRingBay.tsx,src/components/hub/HubExpandPanels.tsx,src/components/calories/**
+alwaysApply: false
+---
+
+# Hub expand motion — do not regress
+
+## Top circular rings (Calories / Steps / Sleep)
+
+- Live in `HubRingBay` (`src/components/hub/HubRingBay.tsx`). Prefer editing that file for ring layout/motion.
+- On expand of any ring: **siblings fade/scale away** (`opacity-0`, `scale-90`); the **active ring slides to horizontal center** via absolute `left` + transform (not `justify-content`, which cannot animate).
+- On collapse: reverse the same transition (~760ms).
+- Do **not** replace this with `flex justify-around` + opacity dimming only.
+- Do **not** remount a second ProgressRing as the “centered” copy for steps/sleep; one instance per ring must morph in place.
+- Calories expand chrome (`CaloriesExpandShell`) must **not** nest a duplicate dial that replaces this bay behavior.
+
+## Protocol / Training rail
+
+- Collapsed: classic **2-column** rail with vial + **Protocol text** on the left and workout ring + **Training text** on the right. Text must remain visible when collapsed.
+- Expanded: the **compact rail collapses away** (HubCollapse); the expand panel appears at its **previous destination** with its own vial/ring hero (do **not** `hideHero`, do **not** slide rail glyphs to center).
+- Animate with HubCollapse / HubPresence — do not invent a center-morph for protocol/training.
+
+## Shared-element morph (steps bars, etc.)
+
+- Steps chart / readiness: keep mounted and use `HubCollapse` — do not `return null` to hide siblings (that remounts and respawns animations).
