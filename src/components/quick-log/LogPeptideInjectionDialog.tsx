@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { format } from "date-fns"
 import { Syringe } from "lucide-react"
 import {
@@ -9,8 +9,6 @@ import {
 } from "@/components/trackers/CategoryLogDialog"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { GlassChip } from "@/components/GlassChip"
-import { SectionRail } from "@/components/SectionRail"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
 import { formatDisplayDate, parseLocalDate } from "@/lib/utils"
@@ -18,11 +16,11 @@ import { apiFetch } from "@/lib/api-fetch"
 import {
   COMPOUNDS,
   DOSE_PRESETS_MG,
-  INJECTION_SITE_REGIONS,
   INJECTION_SITES,
   PEPTIDE_COLOR,
-  SIDE_EFFECTS,
+  coerceInjectionSite,
   injectionSiteLabel,
+  type InjectionSiteId,
 } from "@/lib/peptides"
 
 export interface LogPeptideInjectionDialogProps {
@@ -42,9 +40,7 @@ export function LogPeptideInjectionDialog({
   const [compound, setCompound] = useState("retatrutide")
   const [doseMg, setDoseMg] = useState(4)
   const [customDose, setCustomDose] = useState("")
-  const [injectionSite, setInjectionSite] = useState("abdomen_upper_right")
-  const [siteRegion, setSiteRegion] = useState("abdomen")
-  const [injectionSideEffects, setInjectionSideEffects] = useState<string[]>([])
+  const [injectionSite, setInjectionSite] = useState<InjectionSiteId>("abd")
   const [injectionTime, setInjectionTime] = useState(() => format(new Date(), "HH:mm"))
   const [injectionNotes, setInjectionNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -54,40 +50,28 @@ export function LogPeptideInjectionDialog({
       setCompound("retatrutide")
       setDoseMg(4)
       setCustomDose("")
-      setInjectionSite("abdomen_upper_right")
-      setSiteRegion("abdomen")
-      setInjectionSideEffects([])
       setInjectionTime(format(new Date(), "HH:mm"))
       setInjectionNotes("")
       setSubmitting(false)
+      return
     }
-  }, [open])
-
-  const sitesInRegion = useMemo(
-    () => INJECTION_SITES.filter((s) => s.region === siteRegion),
-    [siteRegion],
-  )
+    if (lastSiteUsed) {
+      const last = coerceInjectionSite(lastSiteUsed)
+      const order = INJECTION_SITES.map((s) => s.id)
+      const idx = order.indexOf(last)
+      setInjectionSite(order[(idx + 1) % order.length] ?? "abd")
+    } else {
+      setInjectionSite("abd")
+    }
+  }, [open, lastSiteUsed])
 
   const effectiveDose = customDose.trim() ? Number(customDose) : doseMg
   const valid = Number.isFinite(effectiveDose) && effectiveDose > 0
   const previewDoseMg = valid ? effectiveDose : null
-  const effectiveDoseLabel = customDose.trim() ? customDose : String(doseMg)
-
-  function toggleInjectionSideEffect(id: string) {
-    setInjectionSideEffects((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    )
-  }
 
   function selectDosePreset(mg: number) {
     setDoseMg(mg)
     setCustomDose("")
-  }
-
-  function selectSiteRegion(region: string) {
-    setSiteRegion(region)
-    const first = INJECTION_SITES.find((s) => s.region === region)
-    if (first) setInjectionSite(first.id)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -109,7 +93,7 @@ export function LogPeptideInjectionDialog({
           compound,
           doseMg: effectiveDose,
           injectionSite,
-          sideEffects: injectionSideEffects,
+          sideEffects: [],
           notes: injectionNotes || null,
         }),
       })
@@ -129,7 +113,7 @@ export function LogPeptideInjectionDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Log injection"
-      description={`Retatrutide · typically every 5–7 days · ${formatDisplayDate(parseLocalDate(activeDate))}`}
+      description={`Retatrutide · ${formatDisplayDate(parseLocalDate(activeDate))}`}
       icon={Syringe}
       accentColor={PEPTIDE_COLOR}
       footer={
@@ -137,144 +121,111 @@ export function LogPeptideInjectionDialog({
           {submitting
             ? "Saving…"
             : valid
-              ? `Log ${effectiveDose} mg injection`
+              ? `Log ${effectiveDose} mg · ${injectionSiteLabel(injectionSite)}`
               : "Log injection"}
         </CategoryLogSubmitButton>
       }
     >
       <form id="log-peptide-injection-form" onSubmit={handleSubmit} className="space-y-5">
-        <div className="flex justify-center py-1">
-          <PeptideVialGraphic color={PEPTIDE_COLOR} doseMg={previewDoseMg} size="lg" />
-        </div>
-
-        {lastSiteUsed && (
-          <p className="type-hud-caption -mt-1 normal-case">
-            Last site:{" "}
-            <span className="text-foreground/90">{injectionSiteLabel(lastSiteUsed)}</span>
-            {" — rotate for next shot"}
+        <div
+          className="relative overflow-hidden rounded-2xl border border-border/25 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-[#94a3b8]/[0.08] px-4 py-5 text-center"
+        >
+          <div className="mb-3 flex justify-center">
+            <PeptideVialGraphic color={PEPTIDE_COLOR} doseMg={previewDoseMg} size="md" />
+          </div>
+          <p className="type-hud-label-soft mb-1">Dose</p>
+          <p className="font-heading text-5xl font-semibold tabular-nums tracking-tight text-foreground">
+            {valid ? effectiveDose : "—"}
           </p>
-        )}
+          <p className="type-hud-unit mt-1">mg</p>
+          {lastSiteUsed ? (
+            <p className="mt-3 type-hud-caption normal-case tracking-normal text-muted-foreground/65">
+              Last site · {injectionSiteLabel(lastSiteUsed)} — rotate suggested
+            </p>
+          ) : null}
+        </div>
 
-        <div className="space-y-3">
-          <SectionRail label="Dose & time" />
-          <div className="glass-subtle space-y-3 rounded-xl p-3.5">
-            <div className="space-y-1.5">
-              <Label className="type-hud-label">Compound</Label>
-              <div className="flex flex-wrap gap-2">
-                {COMPOUNDS.map((c) => (
-                  <GlassChip
-                    key={c.id}
-                    selected={compound === c.id}
-                    onClick={() => setCompound(c.id)}
-                  >
-                    {c.label}
-                  </GlassChip>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="type-hud-label">Dose · {effectiveDoseLabel} mg</Label>
-              <div className="flex flex-wrap gap-2">
-                {DOSE_PRESETS_MG.map((mg) => (
-                  <GlassChip
-                    key={mg}
-                    selected={doseMg === mg && !customDose}
-                    onClick={() => selectDosePreset(mg)}
-                  >
-                    {mg} mg
-                  </GlassChip>
-                ))}
-              </div>
-              <Input
-                type="number"
-                step="0.1"
-                min="0.1"
-                placeholder="Custom dose (mg)..."
-                value={customDose}
-                onChange={(e) => setCustomDose(e.target.value)}
-                className="bg-background/40 border-glass-border"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="log-peptide-injection-time"
-                className="type-hud-label flex items-center gap-1.5"
+        <div className="space-y-2">
+          <Label className="type-hud-label-soft">Compound</Label>
+          <div className="flex flex-wrap gap-2">
+            {COMPOUNDS.map((c) => (
+              <GlassChip
+                key={c.id}
+                selected={compound === c.id}
+                onClick={() => setCompound(c.id)}
               >
-                <span className="status-dot" style={{ width: 4, height: 4 }} />
-                Injection time
-              </Label>
-              <Input
-                id="log-peptide-injection-time"
-                type="time"
-                value={injectionTime}
-                onChange={(e) => setInjectionTime(e.target.value)}
-                className="tabular-nums text-lg tracking-widest bg-background/40 border-primary/15 focus-visible:border-primary/40 focus-visible:ring-primary/15"
-              />
-            </div>
+                {c.label}
+              </GlassChip>
+            ))}
           </div>
         </div>
 
-        <div className="space-y-3">
-          <SectionRail label="Injection site" />
-          <div className="glass-subtle space-y-3 rounded-xl p-3.5">
-            <div className="flex flex-wrap gap-2">
-              {INJECTION_SITE_REGIONS.map((region) => (
-                <GlassChip
-                  key={region.id}
-                  selected={siteRegion === region.id}
-                  onClick={() => selectSiteRegion(region.id)}
-                >
-                  {region.label}
-                </GlassChip>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {sitesInRegion.map((site) => (
-                <GlassChip
-                  key={site.id}
-                  selected={injectionSite === site.id}
-                  onClick={() => setInjectionSite(site.id)}
-                >
-                  {site.shortLabel}
-                </GlassChip>
-              ))}
-            </div>
+        <div className="space-y-2">
+          <Label className="type-hud-label-soft">Dose presets</Label>
+          <div className="flex flex-wrap gap-2">
+            {DOSE_PRESETS_MG.map((mg) => (
+              <GlassChip
+                key={mg}
+                selected={doseMg === mg && !customDose}
+                onClick={() => selectDosePreset(mg)}
+              >
+                {mg} mg
+              </GlassChip>
+            ))}
+          </div>
+          <input
+            type="number"
+            step="0.1"
+            min="0.1"
+            inputMode="decimal"
+            placeholder="Custom dose (mg)"
+            value={customDose}
+            onChange={(e) => setCustomDose(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border/40 bg-glass-highlight/20 px-3 text-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="type-hud-label-soft">Injection site</Label>
+          <div className="flex flex-wrap gap-2">
+            {INJECTION_SITES.map((site) => (
+              <GlassChip
+                key={site.id}
+                selected={injectionSite === site.id}
+                onClick={() => setInjectionSite(site.id)}
+                className="min-w-[4.5rem]"
+              >
+                {site.shortLabel}
+              </GlassChip>
+            ))}
           </div>
         </div>
 
-        <div className="space-y-3">
-          <SectionRail label="Shot day" />
-          <div className="glass-subtle space-y-3 rounded-xl p-3.5">
-            <div className="space-y-1.5">
-              <Label className="type-hud-label">Side effects</Label>
-              <div className="flex flex-wrap gap-2">
-                {SIDE_EFFECTS.map((fx) => (
-                  <GlassChip
-                    key={fx.id}
-                    selected={injectionSideEffects.includes(fx.id)}
-                    onClick={() => toggleInjectionSideEffect(fx.id)}
-                  >
-                    {fx.label}
-                  </GlassChip>
-                ))}
-              </div>
-            </div>
+        <div className="space-y-2">
+          <Label htmlFor="log-peptide-injection-time" className="type-hud-label-soft">
+            Injection time
+          </Label>
+          <input
+            id="log-peptide-injection-time"
+            type="time"
+            value={injectionTime}
+            onChange={(e) => setInjectionTime(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border/40 bg-glass-highlight/20 px-3 text-lg tabular-nums tracking-widest outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+          />
+        </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="log-peptide-injection-notes" className="type-hud-label">
-                Injection notes
-              </Label>
-              <Input
-                id="log-peptide-injection-notes"
-                placeholder="Optional — titration, vial, etc."
-                value={injectionNotes}
-                onChange={(e) => setInjectionNotes(e.target.value)}
-                className="bg-background/40 border-glass-border"
-              />
-            </div>
-          </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="log-peptide-injection-notes" className="type-hud-label-soft">
+            Notes
+          </Label>
+          <input
+            id="log-peptide-injection-notes"
+            type="text"
+            placeholder="Optional — titration, vial, etc."
+            value={injectionNotes}
+            onChange={(e) => setInjectionNotes(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border/40 bg-glass-highlight/20 px-3 text-sm outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+          />
         </div>
       </form>
     </CategoryLogDialog>

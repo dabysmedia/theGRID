@@ -298,7 +298,15 @@ interface WeeklyHeroProps {
     lastInjectedAt: string | null
     nextInjection: NextInjectionInfo | null
     todayMg: number
-    last7: number[]
+    intervalDays: number
+    recentEntries: Array<{
+      id?: string
+      injectedAt: string
+      doseMg: number
+      injectionSite?: string
+      compound?: string
+    }>
+    lastSiteUsed?: string | null
   }
   workoutSummary?: {
     weekCount: number
@@ -682,8 +690,9 @@ export function WeeklyHero({
               lastInjectedAt={peptideSummary?.lastInjectedAt ?? null}
               nextInjection={peptideNext}
               todayMg={peptideSummary?.todayMg ?? 0}
-              last7={peptideSummary?.last7 ?? data.peptides?.last7 ?? Array.from({ length: 7 }, () => 0)}
-              dayLabels={dayLabels}
+              intervalDays={peptideSummary?.intervalDays ?? 7}
+              recentEntries={peptideSummary?.recentEntries ?? []}
+              lastSiteUsed={peptideSummary?.lastSiteUsed ?? null}
             />
           ) : expanded === "workouts" ? (
             <HubWorkoutsExpand

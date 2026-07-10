@@ -40,6 +40,7 @@ import { CategoryGoal, type GoalPreset } from "@/components/CategoryGoal"
 import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
 import { partitionHistoryDayGroups } from "@/lib/history-display"
 import {
+  INJECTION_INTERVAL_PRESETS,
   PEPTIDE_COLOR,
   compoundLabel,
   daysSinceLastInjection,
@@ -57,9 +58,7 @@ const peptideGoalPresets: GoalPreset[] = [
   { type: "weekly", label: "Weekly Injections", unit: "doses", placeholder: "1" },
 ]
 
-const INJECTION_INTERVAL_PRESETS = [5, 7, 14] as const
-
-const PURPLE = PEPTIDE_COLOR
+const STEEL = PEPTIDE_COLOR
 
 const tooltipStyle = {
   background: "oklch(0.19 0.012 250 / 98%)",
@@ -123,7 +122,7 @@ function PeptideHistoryDayGroup({
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <PeptideVialGraphic
-                  color={PURPLE}
+                  color={STEEL}
                   doseMg={entry.doseMg}
                   size="sm"
                   className="shrink-0"
@@ -175,16 +174,32 @@ export default function PeptidesPage() {
   const [entries, setEntries] = useState<PeptideEntry[]>([])
   const [dailyEntries, setDailyEntries] = useState<PeptideDailyEntry[]>([])
   const [injectionIntervalDays, setInjectionIntervalDays] = useState(7)
+  const [customInterval, setCustomInterval] = useState("")
   const [injectionOpen, setInjectionOpen] = useState(false)
   const [dailyOpen, setDailyOpen] = useState(false)
 
   const { activeDate } = useActiveDate()
   const { user } = useUser()
   const today = activeDate
+  const isPreset = (INJECTION_INTERVAL_PRESETS as readonly number[]).includes(
+    injectionIntervalDays,
+  )
 
   useEffect(() => {
     if (user?.id) setInjectionIntervalDays(readInjectionIntervalDays(user.id))
   }, [user?.id])
+
+  function applyInterval(days: number) {
+    setInjectionIntervalDays(days)
+    setCustomInterval("")
+    if (user?.id) writeInjectionIntervalDays(user.id, days)
+  }
+
+  function commitCustomInterval() {
+    const n = Math.round(Number(customInterval))
+    if (!Number.isFinite(n) || n < 1 || n > 30) return
+    applyInterval(n)
+  }
 
   const chartFrom = formatDate(subDays(parseLocalDate(activeDate), 29))
 
@@ -321,10 +336,10 @@ export default function PeptidesPage() {
       <PageHeader title="Peptides" />
 
       <PageHeroStrip
-        color={PURPLE}
+        color={STEEL}
         iconSlot={
           <PeptideVialGraphic
-            color={PURPLE}
+            color={STEEL}
             doseMg={lastInjection?.doseMg ?? null}
             size="md"
           />
@@ -350,7 +365,7 @@ export default function PeptidesPage() {
 
       <div className="glass-panel animate-fade-up stagger-1 flex flex-col items-center gap-2 p-4 sm:p-5">
         <PeptideVialGraphic
-          color={PURPLE}
+          color={STEEL}
           doseMg={lastInjection?.doseMg ?? null}
           size="lg"
         />
@@ -377,16 +392,43 @@ export default function PeptidesPage() {
           {INJECTION_INTERVAL_PRESETS.map((days) => (
             <GlassChip
               key={days}
-              selected={injectionIntervalDays === days}
-              onClick={() => {
-                setInjectionIntervalDays(days)
-                if (user?.id) writeInjectionIntervalDays(user.id, days)
-              }}
+              selected={injectionIntervalDays === days && customInterval === ""}
+              onClick={() => applyInterval(days)}
             >
               Every {days} days
             </GlassChip>
           ))}
+          <GlassChip
+            selected={!isPreset || customInterval !== ""}
+            onClick={() => setCustomInterval(String(injectionIntervalDays))}
+          >
+            Custom
+          </GlassChip>
         </div>
+        {(!isPreset || customInterval !== "") && (
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              max={30}
+              inputMode="numeric"
+              value={customInterval || String(injectionIntervalDays)}
+              onChange={(e) => setCustomInterval(e.target.value)}
+              onBlur={commitCustomInterval}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  commitCustomInterval()
+                }
+              }}
+              className="h-9 w-20 rounded-lg border border-border/40 bg-glass-highlight/20 px-2 text-sm tabular-nums outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+              aria-label="Custom interval days"
+            />
+            <span className="type-hud-caption normal-case tracking-normal text-muted-foreground/60">
+              days between shots
+            </span>
+          </div>
+        )}
         {nextInjection && (
           <p className="type-hud-caption normal-case">
             Next due{" "}
@@ -413,11 +455,11 @@ export default function PeptidesPage() {
 
       <div
         className={cn(glassPanelClass, glassPanelAccentClass, "animate-fade-up stagger-1 p-4 lg:p-5")}
-        style={glassPanelAccentStyle(PURPLE)}
+        style={glassPanelAccentStyle(STEEL)}
       >
         <div
           className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[0.07]"
-          style={{ backgroundColor: PURPLE }}
+          style={{ backgroundColor: STEEL }}
           aria-hidden
         />
         <div className="relative space-y-4">
@@ -460,12 +502,12 @@ export default function PeptidesPage() {
         category="peptides"
         values={{ weekly: weekDoses }}
         presets={peptideGoalPresets}
-        color={PURPLE}
+        color={STEEL}
       />
 
       <div className={cn("glass-panel min-w-0 animate-fade-up stagger-1 p-4 lg:p-5")}>
         <div className="mb-3 flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 shrink-0" style={{ color: PURPLE }} />
+          <TrendingUp className="h-4 w-4 shrink-0" style={{ color: STEEL }} />
           <span className="type-hud-title">Trends</span>
           <div className="hud-divider flex-1" />
           <span className="type-hud-caption">Last 7 days</span>
@@ -500,7 +542,7 @@ export default function PeptidesPage() {
                           return p?.dateKey ? format(parseLocalDate(p.dateKey), "EEE, MMM d") : ""
                         }}
                       />
-                      <Bar dataKey="dose" fill={PURPLE} radius={[4, 4, 0, 0]} maxBarSize={36} />
+                      <Bar dataKey="dose" fill={STEEL} radius={[4, 4, 0, 0]} maxBarSize={36} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -542,9 +584,9 @@ export default function PeptidesPage() {
                       <Line
                         type="monotone"
                         dataKey="hunger"
-                        stroke={PURPLE}
+                        stroke={STEEL}
                         strokeWidth={2}
-                        dot={{ r: 2.5, fill: PURPLE }}
+                        dot={{ r: 2.5, fill: STEEL }}
                         activeDot={{ r: 4 }}
                         connectNulls
                       />
@@ -635,7 +677,6 @@ export default function PeptidesPage() {
         editing={activeDateSaved}
         initialHunger={activeDayDaily?.hungerLevel ?? 5}
         initialNotes={activeDayDaily?.notes ?? ""}
-        initialSideEffects={activeDayEffects}
         onSaved={(entry) => {
           if (entry && typeof entry === "object" && "id" in entry) {
             const saved = entry as PeptideDailyEntry

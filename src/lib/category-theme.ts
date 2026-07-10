@@ -63,7 +63,7 @@ export const CATEGORY_THEME: Record<CategoryKey, CategoryTheme> = {
   workouts: { key: "workouts", label: "Workouts", href: "/workouts", icon: Dumbbell, color: "#c4d632", unit: "sessions", description: "Log your sessions" },
   sleep: { key: "sleep", label: "Sleep", href: "/sleep", icon: Moon, color: "#6366f1", unit: "hrs", description: "Track rest & quality" },
   vitals: { key: "vitals", label: "Vitals", href: "/vitals", icon: HeartPulse, color: "#f43f5e", unit: "bpm", description: "Heart rate, HRV & zones" },
-  peptides: { key: "peptides", label: "Peptides", href: "/peptides", icon: Syringe, color: "#a855f7", unit: "mg", description: "Reta doses & effects" },
+  peptides: { key: "peptides", label: "Peptides", href: "/peptides", icon: Syringe, color: "#94a3b8", unit: "mg", description: "Reta doses & appetite" },
   bowel: { key: "bowel", label: "Bowel", href: "/bowel", icon: CircleDot, color: "#92400e", unit: "", description: "Bristol scale tracking" },
   recovery: { key: "recovery", label: "Recovery", href: "/workouts#recovery", icon: Activity, color: "#2dd4bf", unit: "/10", description: "Muscle load from training" },
   alcohol: { key: "alcohol", label: "Alcohol", href: "/alcohol", icon: Beer, color: "#f59e0b", unit: "units", description: "Log drinks & units" },

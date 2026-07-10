@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { useActiveDate } from "@/context/DateContext"
 import { formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
-import { PEPTIDE_COLOR, SIDE_EFFECTS } from "@/lib/peptides"
+import { PEPTIDE_COLOR } from "@/lib/peptides"
 
 export interface LogPeptideDailyDialogProps {
   open: boolean
@@ -19,7 +19,6 @@ export interface LogPeptideDailyDialogProps {
   onSaved?: (entry?: unknown) => void
   initialHunger?: number
   initialNotes?: string
-  initialSideEffects?: string[]
   editing?: boolean
 }
 
@@ -29,31 +28,22 @@ export function LogPeptideDailyDialog({
   onSaved,
   initialHunger = 5,
   initialNotes = "",
-  initialSideEffects = [],
   editing = false,
 }: LogPeptideDailyDialogProps) {
   const { activeDate } = useActiveDate()
   const [hungerLevel, setHungerLevel] = useState(initialHunger)
   const [dailyNotes, setDailyNotes] = useState(initialNotes)
-  const [dailySideEffects, setDailySideEffects] = useState<string[]>(initialSideEffects)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (open) {
       setHungerLevel(initialHunger)
       setDailyNotes(initialNotes)
-      setDailySideEffects([...initialSideEffects])
       setSubmitting(false)
     }
     // Sync form when dialog opens; ignore prop identity churn while open.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional open-only sync
   }, [open])
-
-  function toggleDailySideEffect(id: string) {
-    setDailySideEffects((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    )
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -67,7 +57,7 @@ export function LogPeptideDailyDialog({
         body: JSON.stringify({
           date: activeDate,
           hungerLevel,
-          sideEffects: dailySideEffects,
+          sideEffects: [],
           notes: dailyNotes || null,
         }),
       })
@@ -86,7 +76,7 @@ export function LogPeptideDailyDialog({
     <CategoryLogDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={editing ? "Edit daily appetite" : "Log daily appetite"}
+      title={editing ? "Edit appetite" : "Log appetite"}
       description={formatDisplayDate(parseLocalDate(activeDate))}
       icon={Syringe}
       accentColor={PEPTIDE_COLOR}
@@ -102,7 +92,7 @@ export function LogPeptideDailyDialog({
     >
       <form id="log-peptide-daily-form" onSubmit={handleSubmit} className="space-y-5">
         <div
-          className="relative overflow-hidden rounded-2xl border border-border/25 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-[#a855f7]/[0.08] px-4 py-6 text-center"
+          className="relative overflow-hidden rounded-2xl border border-border/25 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-[#94a3b8]/[0.08] px-4 py-6 text-center"
         >
           <p className="type-hud-label-soft mb-2">Hunger</p>
           <p className="font-heading text-5xl font-semibold tabular-nums tracking-tight text-foreground">
@@ -122,21 +112,6 @@ export function LogPeptideDailyDialog({
                 className="min-w-10 px-0"
               >
                 {n}
-              </GlassChip>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="type-hud-label-soft">Side effects today</Label>
-          <div className="flex flex-wrap gap-2">
-            {SIDE_EFFECTS.map((fx) => (
-              <GlassChip
-                key={fx.id}
-                selected={dailySideEffects.includes(fx.id)}
-                onClick={() => toggleDailySideEffect(fx.id)}
-              >
-                {fx.label}
               </GlassChip>
             ))}
           </div>
