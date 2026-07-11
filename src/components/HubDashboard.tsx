@@ -289,7 +289,7 @@ export function HubDashboard() {
       </Suspense>
       <div
         className={cn(
-          "animate-fade-up stagger-2 min-h-0 max-lg:min-h-full",
+          "route-enter min-h-0 max-lg:min-h-full",
           overview && "max-lg:flex max-lg:min-h-0 max-lg:flex-1 max-lg:flex-col",
         )}
       >

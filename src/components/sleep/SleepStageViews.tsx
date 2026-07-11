@@ -1,6 +1,6 @@
 "use client"
 
-import { useId } from "react"
+import { useId, useState, type PointerEvent as ReactPointerEvent } from "react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 
@@ -37,6 +37,12 @@ function asStageKey(value: string): SleepStageKey | null {
   return STAGE_ORDER.includes(key as SleepStageKey) ? (key as SleepStageKey) : null
 }
 
+function pointerRatio(event: ReactPointerEvent<SVGSVGElement>): number {
+  const rect = event.currentTarget.getBoundingClientRect()
+  if (rect.width <= 0) return 0
+  return Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+}
+
 export function parseStages(json: string | null | undefined): SleepStageSegment[] {
   if (!json) return []
   try {
@@ -63,6 +69,7 @@ export function StageTimeline({
   className?: string
 }) {
   const gradientId = useId().replace(/:/g, "")
+  const [activeStageIndex, setActiveStageIndex] = useState<number | null>(null)
   const normalized = stages
     .map((stage) => ({
       ...stage,
@@ -91,9 +98,17 @@ export function StageTimeline({
     trace += ` H ${x2}`
   })
   const area = `${trace} V 121 H 0 Z`
+  const activeStage = activeStageIndex != null ? normalized[activeStageIndex] : null
+  const activeStageX = activeStage ? ((activeStage.start + activeStage.end) / 2 - start) / total : 0
+
+  const updateActiveStage = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const time = start + pointerRatio(event) * total
+    const index = normalized.findIndex((stage) => time >= stage.start && time <= stage.end)
+    if (index >= 0) setActiveStageIndex(index)
+  }
 
   return (
-    <div className={cn("rounded-2xl border border-white/[0.07] bg-black/10 px-3 py-3 sm:px-4", className)}>
+    <div className={cn("select-none rounded-2xl border border-white/[0.07] bg-black/10 px-4 py-4 [-webkit-touch-callout:none] sm:px-5", className)}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="type-hud-subsection">Sleep architecture</p>
@@ -104,12 +119,12 @@ export function StageTimeline({
         <span className="type-hud-micro text-indigo-200/65">Layered timeline</span>
       </div>
 
-      <div className="grid grid-cols-[2.75rem_1fr] gap-2">
-        <div className="relative h-[132px]">
+      <div className="grid grid-cols-[3.25rem_1fr] gap-2.5">
+        <div className="relative h-[190px] sm:h-[210px]">
           {STAGE_ORDER.map((key) => (
             <span
               key={key}
-              className="absolute right-0 -translate-y-1/2 text-[8px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/45"
+              className="absolute right-0 -translate-y-1/2 text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/55"
               style={{ top: `${(STAGE_Y[key] / 121) * 100}%` }}
             >
               {STAGE_STYLE[key].label}
@@ -117,13 +132,36 @@ export function StageTimeline({
           ))}
         </div>
 
-        <div className="min-w-0">
+        <div className="relative min-w-0">
+          {activeStage ? (
+            <div
+              className="pointer-events-none absolute top-1 z-30 min-w-[7.5rem] -translate-x-1/2 rounded-lg border border-white/10 bg-[#10151d]/95 px-2.5 py-2 text-center shadow-xl backdrop-blur-md"
+              style={{ left: `${Math.max(13, Math.min(87, activeStageX * 100))}%` }}
+            >
+              <p className="type-hud-micro" style={{ color: STAGE_STYLE[activeStage.key].color }}>{STAGE_STYLE[activeStage.key].label}</p>
+              <p className="mt-1 text-[11px] font-semibold tabular-nums text-foreground/90">
+                {format(new Date(activeStage.start), "h:mm a")} – {format(new Date(activeStage.end), "h:mm a")}
+              </p>
+              <p className="mt-0.5 text-[9px] text-muted-foreground/50">
+                {formatSleepMinutes((activeStage.end - activeStage.start) / 60000)}
+              </p>
+            </div>
+          ) : null}
           <svg
             viewBox="0 0 1000 121"
-            className="h-[132px] w-full overflow-visible"
+            className="h-[190px] w-full cursor-crosshair touch-pan-y overflow-visible sm:h-[210px]"
             role="img"
             aria-label="Layered sleep stages from bedtime to wake time"
             preserveAspectRatio="none"
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId)
+              updateActiveStage(event)
+            }}
+            onPointerMove={updateActiveStage}
+            onPointerLeave={(event) => {
+              if (event.pointerType === "mouse") setActiveStageIndex(null)
+            }}
+            onContextMenu={(event) => event.preventDefault()}
           >
             <defs>
               <linearGradient id={`${gradientId}-area`} x1="0" y1="0" x2="0" y2="1">
@@ -178,8 +216,20 @@ export function StageTimeline({
                 )
               })}
             </g>
+            {activeStage ? (
+              <line
+                x1={activeStageX * 1000}
+                x2={activeStageX * 1000}
+                y1="0"
+                y2="121"
+                stroke="rgba(255,255,255,0.55)"
+                strokeWidth="1"
+                strokeDasharray="3 3"
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : null}
           </svg>
-          <div className="mt-1 flex items-center justify-between type-hud-micro normal-case text-muted-foreground/50">
+          <div className="mt-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">
             <span>{format(new Date(start), "h:mm a")}</span>
             <span>{format(new Date(start + total / 2), "h:mm a")}</span>
             <span>{format(new Date(end), "h:mm a")}</span>
@@ -210,7 +260,7 @@ export function StageMinuteBars({
   if (total <= 0) return null
 
   return (
-    <div className={cn("grid gap-2.5 sm:grid-cols-2", className)}>
+    <div className={cn("grid gap-3 sm:grid-cols-2", className)}>
       {rows.map((row, index) => {
         const style = STAGE_STYLE[row.key]
         const pct = (row.minutes / total) * 100
@@ -218,24 +268,24 @@ export function StageMinuteBars({
         return (
           <div
             key={row.key}
-            className="sleep-focus-reveal rounded-xl border border-white/[0.065] bg-white/[0.025] p-3"
+            className="sleep-focus-reveal rounded-2xl border border-white/[0.075] bg-white/[0.03] p-4"
             style={{ animationDelay: `${260 + index * 90}ms` }}
           >
             <div className="flex items-baseline justify-between gap-3">
               <div className="flex min-w-0 items-baseline gap-2">
-                <p className="type-hud-caption-tight truncate text-foreground/80">{style.label}</p>
-                <span className="text-[11px] font-semibold tabular-nums" style={{ color: style.color }}>
+                <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-foreground/85">{style.label}</p>
+                <span className="text-sm font-semibold tabular-nums" style={{ color: style.color }}>
                   {Math.round(pct)}%
                 </span>
               </div>
-              <span className="text-sm font-semibold tabular-nums text-foreground/85">
+              <span className="text-lg font-semibold tabular-nums text-foreground/90">
                 {formatSleepMinutes(row.minutes)}
               </span>
             </div>
-            <div className="relative mt-2.5 h-2 overflow-hidden rounded-full bg-white/[0.055]">
+            <div className="relative mt-3 h-3 overflow-hidden rounded-full bg-white/[0.065] ring-1 ring-inset ring-white/[0.035]">
               {typical ? (
                 <span
-                  className="absolute inset-y-0 z-10 border-x border-dashed border-white/45 bg-white/[0.09]"
+                  className="absolute inset-y-0 z-20 border-x-2 border-dashed border-white/70 bg-white/[0.13] shadow-[0_0_12px_rgba(255,255,255,0.08)]"
                   style={{ left: `${typical[0]}%`, width: `${Math.max(2, typical[1] - typical[0])}%` }}
                   title={`Typical ${Math.round(typical[0])}–${Math.round(typical[1])}%`}
                 />
@@ -245,8 +295,8 @@ export function StageMinuteBars({
                 style={{ width: `${Math.max(2, pct)}%`, backgroundColor: style.color, animationDelay: `${380 + index * 90}ms` }}
               />
             </div>
-            <p className="mt-1.5 text-[9px] uppercase tracking-[0.14em] text-muted-foreground/40">
-              {typical ? `Typical ${Math.round(typical[0])}–${Math.round(typical[1])}%` : "Building personal range"}
+            <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/55">
+              {typical ? `Your typical range ${Math.round(typical[0])}–${Math.round(typical[1])}%` : "Building your personal range"}
             </p>
           </div>
         )
@@ -268,6 +318,7 @@ export function SleepHeartRateChart({
   className?: string
 }) {
   const gradientId = useId().replace(/:/g, "")
+  const [activePointIndex, setActivePointIndex] = useState<number | null>(null)
   const start = new Date(bedtime).getTime()
   const end = new Date(wakeTime).getTime()
   const points = samples
@@ -285,9 +336,24 @@ export function SleepHeartRateChart({
   const line = points.map((point, index) => `${index === 0 ? "M" : "L"} ${xFor(point.time)} ${yFor(point.bpm)}`).join(" ")
   const area = `${line} L ${xFor(points[points.length - 1].time)} 188 L ${xFor(points[0].time)} 188 Z`
   const avg = Math.round(bpms.reduce((sum, value) => sum + value, 0) / bpms.length)
+  const activePoint = activePointIndex != null ? points[activePointIndex] : null
+
+  const updateActivePoint = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const targetTime = start + pointerRatio(event) * (end - start)
+    let nearestIndex = 0
+    let nearestDistance = Number.POSITIVE_INFINITY
+    points.forEach((point, index) => {
+      const distance = Math.abs(point.time - targetTime)
+      if (distance < nearestDistance) {
+        nearestIndex = index
+        nearestDistance = distance
+      }
+    })
+    setActivePointIndex(nearestIndex)
+  }
 
   return (
-    <div className={cn("sleep-focus-reveal rounded-2xl border border-white/[0.07] bg-black/10 p-3 sm:p-4", className)} style={{ animationDelay: "120ms" }}>
+    <div className={cn("sleep-focus-reveal rounded-2xl border border-white/[0.07] bg-black/10 p-4 sm:p-5", className)} style={{ animationDelay: "120ms" }}>
       <div className="mb-2 flex items-end justify-between gap-3">
         <div>
           <p className="type-hud-subsection">Heart rate during sleep</p>
@@ -296,33 +362,78 @@ export function SleepHeartRateChart({
           </p>
         </div>
         <div className="text-right">
-          <p className="text-xl font-semibold tabular-nums text-sky-100/90">{avg}</p>
+          <p className="text-2xl font-semibold tabular-nums text-sky-100/90">{avg}</p>
           <p className="type-hud-micro text-muted-foreground/45">avg bpm</p>
         </div>
       </div>
-      <svg viewBox="0 0 1000 210" className="h-[170px] w-full overflow-visible" role="img" aria-label={`Sleep heart rate averaged ${avg} beats per minute`} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id={`${gradientId}-hr`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#7dd3fc" stopOpacity="0.28" />
-            <stop offset="1" stopColor="#7dd3fc" stopOpacity="0" />
-          </linearGradient>
-          <filter id={`${gradientId}-hr-glow`} x="-10%" y="-30%" width="120%" height="160%">
-            <feGaussianBlur stdDeviation="2.5" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-        </defs>
-        {[low, low + span / 2, high].map((value) => (
-          <g key={value}>
-            <line x1="0" x2="1000" y1={yFor(value)} y2={yFor(value)} stroke="rgba(255,255,255,0.055)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-            <text x="4" y={yFor(value) - 5} fill="rgba(255,255,255,0.25)" fontSize="18">{Math.round(value)}</text>
-          </g>
-        ))}
-        <path className="sleep-chart-area" d={area} fill={`url(#${gradientId}-hr)`} />
-        <path className="sleep-trace-draw" d={line} pathLength="1" fill="none" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" filter={`url(#${gradientId}-hr-glow)`} />
-        <line x1="0" x2="0" y1="20" y2="194" stroke="rgba(255,255,255,0.28)" strokeDasharray="5 5" vectorEffect="non-scaling-stroke" />
-        <line x1="1000" x2="1000" y1="20" y2="194" stroke="rgba(255,255,255,0.28)" strokeDasharray="5 5" vectorEffect="non-scaling-stroke" />
-      </svg>
-      <div className="flex items-center justify-between type-hud-micro normal-case text-muted-foreground/50">
+      <div className="grid grid-cols-[2.5rem_1fr] gap-2.5">
+        <div className="relative h-[230px] sm:h-[260px]">
+          {[high, low + span / 2, low].map((value) => (
+            <span
+              key={value}
+              className="absolute right-0 -translate-y-1/2 text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/55"
+              style={{ top: `${(yFor(value) / 210) * 100}%` }}
+            >
+              {Math.round(value)}
+            </span>
+          ))}
+        </div>
+        <div className="relative min-w-0 select-none [-webkit-touch-callout:none]">
+          {activePoint ? (
+            <div
+              className="pointer-events-none absolute top-1 z-30 min-w-[6.5rem] -translate-x-1/2 rounded-lg border border-sky-200/15 bg-[#10151d]/95 px-2.5 py-2 text-center shadow-xl backdrop-blur-md"
+              style={{ left: `${Math.max(12, Math.min(88, (xFor(activePoint.time) / 1000) * 100))}%` }}
+            >
+              <p className="text-lg font-semibold tabular-nums text-sky-100">{activePoint.bpm}</p>
+              <p className="type-hud-micro text-sky-200/60">bpm</p>
+              <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/55">
+                {format(new Date(activePoint.time), "h:mm a")}
+              </p>
+            </div>
+          ) : null}
+          <svg
+            viewBox="0 0 1000 210"
+            className="h-[230px] w-full cursor-crosshair touch-pan-y overflow-visible sm:h-[260px]"
+            role="img"
+            aria-label={`Sleep heart rate averaged ${avg} beats per minute`}
+            preserveAspectRatio="none"
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId)
+              updateActivePoint(event)
+            }}
+            onPointerMove={updateActivePoint}
+            onPointerLeave={(event) => {
+              if (event.pointerType === "mouse") setActivePointIndex(null)
+            }}
+            onContextMenu={(event) => event.preventDefault()}
+          >
+            <defs>
+              <linearGradient id={`${gradientId}-hr`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#7dd3fc" stopOpacity="0.28" />
+                <stop offset="1" stopColor="#7dd3fc" stopOpacity="0" />
+              </linearGradient>
+              <filter id={`${gradientId}-hr-glow`} x="-10%" y="-30%" width="120%" height="160%">
+                <feGaussianBlur stdDeviation="2.5" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
+            {[low, low + span / 2, high].map((value) => (
+              <line key={value} x1="0" x2="1000" y1={yFor(value)} y2={yFor(value)} stroke="rgba(255,255,255,0.055)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+            ))}
+            <path className="sleep-chart-area" d={area} fill={`url(#${gradientId}-hr)`} />
+            <path className="sleep-trace-draw" d={line} pathLength="1" fill="none" stroke="#93c5fd" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" filter={`url(#${gradientId}-hr-glow)`} />
+            <line x1="0" x2="0" y1="20" y2="194" stroke="rgba(255,255,255,0.28)" strokeDasharray="5 5" vectorEffect="non-scaling-stroke" />
+            <line x1="1000" x2="1000" y1="20" y2="194" stroke="rgba(255,255,255,0.28)" strokeDasharray="5 5" vectorEffect="non-scaling-stroke" />
+            {activePoint ? (
+              <g>
+                <line x1={xFor(activePoint.time)} x2={xFor(activePoint.time)} y1="18" y2="194" stroke="rgba(255,255,255,0.55)" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+                <circle cx={xFor(activePoint.time)} cy={yFor(activePoint.bpm)} r="5" fill="#bae6fd" stroke="#0f172a" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+              </g>
+            ) : null}
+          </svg>
+        </div>
+      </div>
+      <div className="mt-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">
         <span>{format(new Date(start), "h:mm a")}</span>
         <span>{Math.min(...bpms)}–{Math.max(...bpms)} bpm range</span>
         <span>{format(new Date(end), "h:mm a")}</span>

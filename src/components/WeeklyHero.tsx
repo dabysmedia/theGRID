@@ -520,7 +520,7 @@ export function WeeklyHero({
         aria-hidden
         style={{
           background:
-            "linear-gradient(180deg, oklch(0.20 0.01 250 / 10%) 0%, oklch(0.14 0.008 250 / 14%) 34%, oklch(0.08 0.005 250 / 22%) 68%, oklch(0.04 0.004 250 / 32%) 100%)",
+            "linear-gradient(180deg, oklch(0.20 0.01 250 / 10%) 0rem, oklch(0.14 0.008 250 / 14%) 20rem, oklch(0.08 0.005 250 / 22%) 38rem, oklch(0.08 0.005 250 / 22%) 100%)",
         }}
       />
       <div

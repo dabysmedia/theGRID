@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
-import { Activity, Gauge, Moon, Plus, Sparkles } from "lucide-react"
+import { Activity, Bed, Gauge, Moon, Plus, Sparkles, TimerReset } from "lucide-react"
 import {
   SleepHeartRateChart,
   StageMinuteBars,
   StageTimeline,
+  formatSleepMinutes,
   parseStages,
   type SleepHeartRateSample,
   type SleepStageKey,
@@ -30,6 +31,12 @@ type SleepEntryRow = {
   lightMinutes: number | null
   deepMinutes: number | null
   awakeMinutes: number | null
+  minutesAsleep: number | null
+  minutesInSleepPeriod: number | null
+  minutesToFallAsleep: number | null
+  minutesAfterWakeUp: number | null
+  restlessMinutes: number | null
+  interruptionCount: number | null
   efficiency: number | null
   stagesJson: string | null
   source: string | null
@@ -83,13 +90,27 @@ function sleepEntryCompleteness(entry: SleepEntryRow): number {
   return (
     (parseStages(entry.stagesJson).length > 0 ? 1000 : 0) +
     (stageMinutes > 0 ? 500 : 0) +
+    (entry.minutesAsleep != null || entry.minutesToFallAsleep != null ? 300 : 0) +
     (entry.efficiency != null ? 100 : 0) +
     (entry.source === "google-health" ? 50 : 0)
   )
 }
 
+function resolvedMinutesAsleep(entry: SleepEntryRow): number | null {
+  if (entry.minutesAsleep != null) return entry.minutesAsleep
+  const stageTotal =
+    (entry.remMinutes ?? 0) + (entry.lightMinutes ?? 0) + (entry.deepMinutes ?? 0)
+  return stageTotal > 0 ? stageTotal : null
+}
+
 function formatRange(range: [number, number] | null, suffix = ""): string {
   return range ? `${Math.round(range[0])}–${Math.round(range[1])}${suffix}` : "Building range"
+}
+
+function formatMinuteRange(range: [number, number] | null): string {
+  return range
+    ? `${formatSleepMinutes(range[0])}–${formatSleepMinutes(range[1])}`
+    : "Personal range forming"
 }
 
 function MetricCard({
@@ -119,10 +140,10 @@ function MetricCard({
         <p className="type-hud-micro truncate">{label}</p>
       </div>
       <div className="mt-2 flex items-baseline gap-1.5">
-        <span className="text-2xl font-semibold tabular-nums tracking-tight text-foreground/90">{value}</span>
+        <span className="text-[1.65rem] font-semibold tabular-nums tracking-tight text-foreground/90">{value}</span>
         {unit ? <span className="type-hud-caption-tight text-muted-foreground/50">{unit}</span> : null}
       </div>
-      <p className="mt-1 truncate text-[10px] text-muted-foreground/48">{detail}</p>
+      <p className="mt-1 min-h-7 text-[11px] leading-relaxed text-muted-foreground/52">{detail}</p>
     </div>
   )
 }
@@ -234,6 +255,22 @@ export function HubSleepFocus({
     () => personalRange(history.map((row) => row.efficiency ?? 0).filter((value) => value > 0)),
     [history],
   )
+  const soundSleepRange = useMemo(
+    () => personalRange(history.map(resolvedMinutesAsleep).filter((value): value is number => value != null)),
+    [history],
+  )
+  const latencyRange = useMemo(
+    () => personalRange(history.map((row) => row.minutesToFallAsleep).filter((value): value is number => value != null)),
+    [history],
+  )
+  const restlessnessRange = useMemo(
+    () => personalRange(history.map((row) => row.restlessMinutes).filter((value): value is number => value != null)),
+    [history],
+  )
+  const interruptionRange = useMemo(
+    () => personalRange(history.map((row) => row.interruptionCount).filter((value): value is number => value != null)),
+    [history],
+  )
 
   const duration = entry ? sleepDurationHours(entry.bedtime, entry.wakeTime) : hours
   const score = entry ? entry.score ?? qualityToScore(entry.quality) : null
@@ -246,6 +283,18 @@ export function HubSleepFocus({
     return index === 0 || stages[index - 1]?.type.toUpperCase() !== "AWAKE"
   }).length
   const wakeEventsPerHour = duration > 0 ? wakeEvents / duration : 0
+  const firstSoundSleep = stages.find((stage) => {
+    const type = stage.type.toUpperCase()
+    return type !== "AWAKE" && type !== "RESTLESS" && type !== "OUT_OF_BED"
+  })
+  const derivedLatency =
+    entry && firstSoundSleep
+      ? Math.max(0, Math.round((new Date(firstSoundSleep.startTime).getTime() - new Date(entry.bedtime).getTime()) / 60000))
+      : null
+  const timeToSoundSleep = entry?.minutesToFallAsleep ?? derivedLatency
+  const soundSleepMinutes = entry ? resolvedMinutesAsleep(entry) : null
+  const restlessnessMinutes = entry?.restlessMinutes ?? null
+  const interruptions = entry?.interruptionCount ?? (stages.length > 0 ? wakeEvents : null)
 
   const sleepHeartSamples = useMemo(() => {
     if (!entry) return []
@@ -324,9 +373,9 @@ export function HubSleepFocus({
           <div className="sleep-focus-reveal flex items-center justify-between gap-3" style={{ animationDelay: "240ms" }}>
             <div>
               <p className="type-hud-subsection">Stage balance</p>
-              <p className="mt-0.5 type-hud-caption normal-case tracking-normal text-muted-foreground/50">Dashed bands show your middle 50% across the last 30 nights</p>
+              <p className="mt-0.5 type-hud-caption normal-case tracking-normal text-muted-foreground/50">Dashed bands show your personal middle 50% across the last 30 nights</p>
             </div>
-            <span className="type-hud-micro text-indigo-200/60">Typical range</span>
+            <span className="type-hud-micro text-indigo-200/60">Your typical range</span>
           </div>
           <StageMinuteBars entry={entry} typicalRanges={stageRange} />
         </section>
@@ -341,15 +390,63 @@ export function HubSleepFocus({
       ) : null}
 
       <section className="space-y-2.5">
-        <div className="sleep-focus-reveal flex items-center justify-between" style={{ animationDelay: "520ms" }}>
+        <div className="sleep-focus-reveal flex items-center justify-between gap-3" style={{ animationDelay: "500ms" }}>
+          <div>
+            <p className="type-hud-subsection">Sleep quality</p>
+            <p className="mt-0.5 type-hud-caption normal-case tracking-normal text-muted-foreground/50">
+              Google summary values when available
+            </p>
+          </div>
+          <p className="type-hud-micro text-muted-foreground/45">Your 30-night range</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            label="Time to sound sleep"
+            value={timeToSoundSleep?.toString() ?? "—"}
+            unit={timeToSoundSleep != null ? "min" : undefined}
+            detail={timeToSoundSleep != null ? `${entry?.minutesToFallAsleep != null ? "Google" : "From first sleep stage"} · ${formatMinuteRange(latencyRange)}` : "Not reported for this night"}
+            icon={<TimerReset className="h-4 w-4" />}
+            delay={560}
+            accent="#a5b4fc"
+          />
+          <MetricCard
+            label="Sound sleep"
+            value={soundSleepMinutes != null ? formatSleepMinutes(soundSleepMinutes) : "—"}
+            detail={soundSleepMinutes != null ? `${entry?.minutesAsleep != null ? "Google minutes asleep" : "Light + REM + deep"} · ${formatMinuteRange(soundSleepRange)}` : "Not reported for this night"}
+            icon={<Bed className="h-4 w-4" />}
+            delay={640}
+            accent="#818cf8"
+          />
+          <MetricCard
+            label="Restlessness"
+            value={restlessnessMinutes?.toString() ?? "—"}
+            unit={restlessnessMinutes != null ? "min" : undefined}
+            detail={restlessnessMinutes != null ? `Google classic sleep · ${formatMinuteRange(restlessnessRange)}` : "Google reports this for classic sleep"}
+            icon={<Sparkles className="h-4 w-4" />}
+            delay={720}
+            accent="#67e8f9"
+          />
+          <MetricCard
+            label="Interruptions"
+            value={interruptions?.toString() ?? "—"}
+            detail={interruptions != null ? `${entry?.interruptionCount != null ? "Google awake segments" : "From awake transitions"}${interruptionRange ? ` · typical ${formatRange(interruptionRange)}` : ""}` : "No stage summary"}
+            icon={<Activity className="h-4 w-4" />}
+            delay={800}
+            accent="#e2e8f0"
+          />
+        </div>
+      </section>
+
+      <section className="space-y-2.5">
+        <div className="sleep-focus-reveal flex items-center justify-between" style={{ animationDelay: "860ms" }}>
           <p className="type-hud-subsection">Sleep metrics</p>
           <p className="type-hud-micro text-muted-foreground/45">vs. personal range</p>
         </div>
-        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-          <MetricCard label="Efficiency" value={efficiency != null ? Math.round(efficiency).toString() : "—"} unit={efficiency != null ? "%" : undefined} detail={efficiencyRange ? `Typical ${formatRange(efficiencyRange, "%")}` : "Time asleep ÷ time in bed"} icon={<Gauge className="h-3.5 w-3.5" />} delay={580} accent="#a5b4fc" />
-          <MetricCard label="Wake events" value={stages.length > 0 ? wakeEventsPerHour.toFixed(1) : "—"} unit={stages.length > 0 ? "/ hr" : undefined} detail={stages.length > 0 ? `${wakeEvents} transitions awake` : "Needs stage timeline"} icon={<Sparkles className="h-3.5 w-3.5" />} delay={660} accent="#e2e8f0" />
-          <MetricCard label="Sleep HR" value={averageSleepHeartRate?.toString() ?? "—"} unit={averageSleepHeartRate != null ? "bpm" : undefined} detail={sleepHeartSamples.length > 0 ? `${Math.min(...sleepHeartSamples.map((sample) => sample.bpm))}–${Math.max(...sleepHeartSamples.map((sample) => sample.bpm))} bpm overnight` : "No samples in window"} icon={<Activity className="h-3.5 w-3.5" />} delay={740} accent="#7dd3fc" />
-          <MetricCard label="Resting HR" value={restingHeartRate?.toString() ?? "—"} unit={restingHeartRate != null ? "bpm" : undefined} detail="Google daily resting value" icon={<Activity className="h-3.5 w-3.5" />} delay={820} accent="#67e8f9" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard label="Efficiency" value={efficiency != null ? Math.round(efficiency).toString() : "—"} unit={efficiency != null ? "%" : undefined} detail={efficiencyRange ? `Your typical ${formatRange(efficiencyRange, "%")}` : "Time asleep ÷ time in bed"} icon={<Gauge className="h-4 w-4" />} delay={920} accent="#a5b4fc" />
+          <MetricCard label="Wake events" value={stages.length > 0 ? wakeEventsPerHour.toFixed(1) : "—"} unit={stages.length > 0 ? "/ hr" : undefined} detail={stages.length > 0 ? `${wakeEvents} transitions awake` : "Needs stage timeline"} icon={<Sparkles className="h-4 w-4" />} delay={1000} accent="#e2e8f0" />
+          <MetricCard label="Sleep HR" value={averageSleepHeartRate?.toString() ?? "—"} unit={averageSleepHeartRate != null ? "bpm" : undefined} detail={sleepHeartSamples.length > 0 ? `${Math.min(...sleepHeartSamples.map((sample) => sample.bpm))}–${Math.max(...sleepHeartSamples.map((sample) => sample.bpm))} bpm overnight` : "No samples in window"} icon={<Activity className="h-4 w-4" />} delay={1080} accent="#7dd3fc" />
+          <MetricCard label="Resting HR" value={restingHeartRate?.toString() ?? "—"} unit={restingHeartRate != null ? "bpm" : undefined} detail="Google daily resting value" icon={<Activity className="h-4 w-4" />} delay={1160} accent="#67e8f9" />
         </div>
       </section>
 

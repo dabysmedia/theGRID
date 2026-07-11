@@ -211,6 +211,13 @@ model SleepEntry {
   lightMinutes  Int?
   deepMinutes   Int?
   awakeMinutes  Int?
+  /// Google Health sleep-summary values; null for manual or older synced rows.
+  minutesAsleep          Int?
+  minutesInSleepPeriod   Int?
+  minutesToFallAsleep    Int?
+  minutesAfterWakeUp     Int?
+  restlessMinutes        Int?
+  interruptionCount     Int?
   /// Time asleep ÷ time in bed × 100.
   efficiency Float?
   /// JSON array of { type: "AWAKE"|"LIGHT"|"DEEP"|"REM", startTime, endTime } stage segments.

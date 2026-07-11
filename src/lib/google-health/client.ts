@@ -190,6 +190,10 @@ export type SleepSession = {
   minutesAsleep?: number
   minutesAwake?: number
   minutesInSleepPeriod?: number
+  minutesToFallAsleep?: number
+  minutesAfterWakeUp?: number
+  restlessMinutes?: number
+  interruptionCount?: number
   remMinutes?: number
   lightMinutes?: number
   deepMinutes?: number
@@ -212,6 +216,8 @@ type SleepDataPoint = {
       minutesInSleepPeriod?: number
       minutesAsleep?: number
       minutesAwake?: number
+      minutesToFallAsleep?: number
+      minutesAfterWakeUp?: number
       stagesSummary?: SleepStagesSummaryRow[]
     }
   }
@@ -222,6 +228,13 @@ function stageMinutes(rows: SleepStagesSummaryRow[] | undefined, type: string): 
   return rows
     .filter((r) => (r.type ?? "").toUpperCase() === type)
     .reduce((s, r) => s + Number(r.minutes ?? 0), 0)
+}
+
+function stageCount(rows: SleepStagesSummaryRow[] | undefined, type: string): number {
+  if (!rows) return 0
+  return rows
+    .filter((row) => (row.type ?? "").toUpperCase() === type)
+    .reduce((sum, row) => sum + Number(row.count ?? 0), 0)
 }
 
 export async function fetchSleepSessions(
@@ -274,6 +287,10 @@ export async function fetchSleepSessions(
         minutesAsleep: summary?.minutesAsleep,
         minutesAwake: summary?.minutesAwake,
         minutesInSleepPeriod: summary?.minutesInSleepPeriod,
+        minutesToFallAsleep: summary?.minutesToFallAsleep,
+        minutesAfterWakeUp: summary?.minutesAfterWakeUp,
+        restlessMinutes: stagesSummary ? stageMinutes(stagesSummary, "RESTLESS") : undefined,
+        interruptionCount: stagesSummary ? stageCount(stagesSummary, "AWAKE") : undefined,
         remMinutes: stagesSummary ? stageMinutes(stagesSummary, "REM") : undefined,
         lightMinutes: stagesSummary ? stageMinutes(stagesSummary, "LIGHT") : undefined,
         deepMinutes: stagesSummary ? stageMinutes(stagesSummary, "DEEP") : undefined,
