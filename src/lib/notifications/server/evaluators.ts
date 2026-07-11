@@ -175,7 +175,7 @@ const evaluators: Record<NotificationKey, Evaluator> = {
       payload: {
         title: "Log breakfast",
         body: "Track your first meal of the day to stay on target.",
-        url: "/calories?log=1",
+        url: "/?expand=calories&logFood=1",
         type: "log_breakfast",
         tag: "log_breakfast",
       },
@@ -192,7 +192,7 @@ const evaluators: Record<NotificationKey, Evaluator> = {
       payload: {
         title: "Time to log lunch",
         body: "Tap to log what you ate while it's fresh.",
-        url: "/calories?log=1",
+        url: "/?expand=calories&logFood=1",
         type: "log_lunch",
         tag: "log_lunch",
       },
@@ -209,7 +209,7 @@ const evaluators: Record<NotificationKey, Evaluator> = {
       payload: {
         title: "Log dinner",
         body: "Close out today's calorie log.",
-        url: "/calories?log=1",
+        url: "/?expand=calories&logFood=1",
         type: "log_dinner",
         tag: "log_dinner",
       },
@@ -226,7 +226,7 @@ const evaluators: Record<NotificationKey, Evaluator> = {
       payload: {
         title: "Morning weigh-in",
         body: "Step on the scale and log today's weight.",
-        url: "/",
+        url: "/?expand=weight",
         type: "log_weight",
         tag: "log_weight",
       },
@@ -243,7 +243,7 @@ const evaluators: Record<NotificationKey, Evaluator> = {
       payload: {
         title: "How did you sleep?",
         body: "Log last night's bedtime, wake time, and quality.",
-        url: "/sleep",
+        url: "/?expand=sleep",
         type: "log_sleep",
         tag: "log_sleep",
       },
@@ -257,7 +257,7 @@ const evaluators: Record<NotificationKey, Evaluator> = {
       payload: {
         title: "Bedtime",
         body: "Wind down — screens off, lights low.",
-        url: "/sleep",
+        url: "/?expand=sleep",
         type: "bedtime",
         tag: "bedtime",
       },
@@ -294,7 +294,7 @@ const evaluators: Record<NotificationKey, Evaluator> = {
       payload: {
         title: "Step check-in",
         body: `${count.toLocaleString()} / ${goal.toLocaleString()} — ${remaining.toLocaleString()} to go.`,
-        url: "/steps",
+        url: "/?expand=steps",
         type: "steps_check_in",
         tag: "steps_check_in",
       },
@@ -311,7 +311,7 @@ const evaluators: Record<NotificationKey, Evaluator> = {
       payload: {
         title: "Recovery check-in",
         body: "Rate pain, energy, sleep, and soreness for today.",
-        url: "/workouts#recovery",
+        url: "/?expand=vitals",
         type: "recovery_check_in",
         tag: "recovery_check_in",
       },

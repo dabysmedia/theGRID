@@ -24,7 +24,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
+import { hubExpandHref } from "@/lib/hub-expand-deep-link"
 import { HUB_RESET_OVERVIEW_EVENT } from "@/lib/hub-tile-prefs"
 import { useUser } from "@/context/UserContext"
 import { useActiveDate } from "@/context/DateContext"
@@ -51,11 +51,11 @@ const navItems = [
 const quickActions: QuickActionItem[] = [
   { href: "/coach", label: "Coach", icon: Sparkles, avatarSrc: COACH_AVATAR_SRC },
   {
-    href: `/calories?${CALORIES_LOG_FOOD_QUERY}=1`,
+    href: hubExpandHref("calories", { logFood: true }),
     label: "Log Meal",
     icon: Utensils,
   },
-  { href: "/steps", label: "Steps", icon: Footprints },
+  { href: hubExpandHref("steps"), label: "Steps", icon: Footprints },
 ]
 
 const DOCK_EASE = "cubic-bezier(0.22, 1, 0.36, 1)"
@@ -138,9 +138,12 @@ export function BottomNav() {
               >
                 {quickActions.map((item, idx) => {
                   const pathPrefix = item.href.split("?")[0] ?? item.href
-                  const isActive = pathname.startsWith(pathPrefix)
+                  const isActive =
+                    pathPrefix === "/"
+                      ? pathname === "/"
+                      : pathname.startsWith(pathPrefix)
                   const logMealVacation =
-                    pathPrefix === "/calories" && vacationBlocksCaloriesQuick
+                    item.label === "Log Meal" && vacationBlocksCaloriesQuick
                   return (
                     <Link
                       key={item.href}

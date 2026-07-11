@@ -6,6 +6,7 @@ import { FullscreenOverlayProvider } from "@/context/FullscreenOverlayContext"
 import { ProfileDialogProvider } from "@/context/ProfileDialogContext"
 import { QuickLogProvider } from "@/context/QuickLogContext"
 import { UserProvider } from "@/context/UserContext"
+import { ActiveWorkoutGuard } from "@/components/ActiveWorkoutGuard"
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -14,7 +15,9 @@ export function Providers({ children }: { children: ReactNode }) {
         <ProfileDialogProvider>
           <DateProvider>
             <QuickLogProvider>
-              <FullscreenOverlayProvider>{children}</FullscreenOverlayProvider>
+              <FullscreenOverlayProvider>
+                <ActiveWorkoutGuard>{children}</ActiveWorkoutGuard>
+              </FullscreenOverlayProvider>
             </QuickLogProvider>
           </DateProvider>
         </ProfileDialogProvider>
