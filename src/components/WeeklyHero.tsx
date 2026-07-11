@@ -477,10 +477,11 @@ export function WeeklyHero({
       ? expanded
       : null
   const protocolFocused = expanded === "peptides" || expanded === "workouts"
+  const weightFocused = expanded === "weight"
   const showRings = expanded == null || expandedRing != null || protocolFocused
   const showStepsBars =
     expanded == null || expanded === "steps" || expanded === "vitals"
-  const showWeighIn = expanded == null || expanded === "weight"
+  const showWeighIn = expanded == null || weightFocused
   const showProtocolRail = expanded == null
 
   const peptideNext = peptideSummary?.nextInjection ?? null
@@ -627,7 +628,7 @@ export function WeeklyHero({
         key={viewMode}
         className={cn(
           "relative z-10 motion-safe:animate-fade-up motion-reduce:animate-none",
-          protocolFocused
+          protocolFocused || weightFocused
             ? "space-y-0"
             : fillViewport && expanded == null
             ? "max-lg:flex max-lg:min-h-0 max-lg:flex-1 max-lg:flex-col max-lg:justify-between max-lg:gap-[var(--hub-section-gap)] space-y-4 max-lg:space-y-0"
