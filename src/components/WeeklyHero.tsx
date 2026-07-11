@@ -20,6 +20,7 @@ import {
   type HubExpandedPanel,
 } from "@/components/hub/HubExpandPanels"
 import { HubCollapse, HubPresence, HUB_MOTION_MS, HUB_SECTION_MOTION_MS } from "@/components/hub/HubMotion"
+import { HubRingBay } from "@/components/hub/HubRingBay"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { WeekWorkoutGoalRing, WEEKLY_WORKOUT_GOAL } from "@/components/WeekWorkoutGoalRing"
 import { useActiveDate } from "@/context/DateContext"
@@ -427,16 +428,17 @@ export function WeeklyHero({
     : refDate
   const stepsDayLabels = lastNWeekdayLabels(stepsLabelRef, data.steps.last7.length)
 
-  // Calories dial lives inside CaloriesExpandShell — not a lonely rings-row void.
-  const showRings =
-    expanded == null || expanded === "steps" || expanded === "sleep"
+  // Ring bay owns center-morph for calories/steps/sleep (see HubRingBay + hub-expand-motion rule).
+  const expandedRing =
+    expanded === "calories" || expanded === "steps" || expanded === "sleep"
+      ? expanded
+      : null
+  const showRings = expanded == null || expandedRing != null
   const showStepsBars =
     expanded == null || expanded === "steps" || expanded === "vitals"
   const showWeighIn = showWeighInPrompt && (expanded == null || expanded === "weight")
   const showProtocolRail =
     expanded == null || expanded === "peptides" || expanded === "workouts"
-  const dimUnrelatedRings =
-    expanded === "steps" || expanded === "sleep"
 
   const peptideNext = peptideSummary?.nextInjection ?? null
   let peptideCue = "Log first shot"
@@ -564,16 +566,13 @@ export function WeeklyHero({
             : "space-y-4",
         )}
       >
-        {/* Rings — open instrument bay (hidden when calories expand owns the dial) */}
-        <FadeSection show={showRings} className={fillViewport ? "shrink-0" : undefined}>
-          <div className="relative px-0.5 py-0.5 sm:px-1 sm:py-1">
-            <div className="relative z-10 flex justify-around">
-              <div
-                className={cn(
-                  "transition-opacity duration-500 ease-out",
-                  dimUnrelatedRings && "pointer-events-none opacity-25",
-                )}
-              >
+        {/* Rings — HubRingBay owns center-morph (see hub-expand-motion rule).
+            Relative wrapper kept so CaloriesExpandShell can absolute-position chrome. */}
+        <div className={cn("relative", fillViewport && "max-lg:shrink-0")}>
+          <FadeSection show={showRings} className={fillViewport ? "shrink-0" : undefined}>
+            <HubRingBay
+              expanded={expandedRing}
+              calories={
                 <ProgressRing
                   value={calValue}
                   max={calGoal}
@@ -584,19 +583,14 @@ export function WeeklyHero({
                   disabled={vacationBlocksCalories}
                   centerLabel="—"
                   onClick={() => toggleExpand("calories")}
-                  ariaLabel="Expand calories"
+                  ariaLabel={
+                    expanded === "calories" ? "Collapse calories" : "Expand calories"
+                  }
                   animationIndex={0}
-                  selected={false}
+                  selected={expanded === "calories"}
                 />
-              </div>
-              <div
-                className={cn(
-                  "max-w-[11rem] flex-none",
-                  dimUnrelatedRings &&
-                    expanded !== "steps" &&
-                    "pointer-events-none opacity-25",
-                )}
-              >
+              }
+              steps={
                 <ProgressRing
                   value={stepsValue}
                   max={stepsGoal}
@@ -609,15 +603,8 @@ export function WeeklyHero({
                   animationIndex={1}
                   selected={expanded === "steps"}
                 />
-              </div>
-              <div
-                className={cn(
-                  "max-w-[11rem] flex-none",
-                  dimUnrelatedRings &&
-                    expanded !== "sleep" &&
-                    "pointer-events-none opacity-25",
-                )}
-              >
+              }
+              sleep={
                 <ProgressRing
                   value={sleepValue}
                   max={sleepGoal}
@@ -630,10 +617,20 @@ export function WeeklyHero({
                   animationIndex={2}
                   selected={expanded === "sleep"}
                 />
-              </div>
-            </div>
-          </div>
-        </FadeSection>
+              }
+            />
+          </FadeSection>
+
+          {/* Expand chrome outside HubCollapse — absolute intake/food must not be clipped.
+              Positions from this relative top (= rings-row Y under Overview). */}
+          {expanded === "calories" ? (
+            <HubCaloriesExpand
+              consumed={data.calories.todayValue}
+              target={calGoal}
+              vacationBlocked={vacationBlocksCalories}
+            />
+          ) : null}
+        </div>
 
         <HubCollapse
           open={
@@ -646,30 +643,6 @@ export function WeeklyHero({
             aria-hidden
           />
         </HubCollapse>
-
-        <HubPresence open={expanded === "calories"} durationMs={HUB_MOTION_MS}>
-          <HubCaloriesExpand
-            dial={
-              <ProgressRing
-                value={calValue}
-                max={calGoal}
-                label="Calories"
-                unit={isWeekView ? "avg" : "cal"}
-                color="#ef4444"
-                icon={<Flame className="h-4 w-4 text-[#ef4444]" />}
-                disabled={vacationBlocksCalories}
-                centerLabel="—"
-                onClick={() => toggleExpand("calories")}
-                ariaLabel="Collapse calories"
-                animationIndex={0}
-                selected
-              />
-            }
-            consumed={data.calories.todayValue}
-            target={calGoal}
-            vacationBlocked={vacationBlocksCalories}
-          />
-        </HubPresence>
 
         <HubPresence open={expanded === "sleep"} durationMs={HUB_MOTION_MS}>
           <HubSleepExpand
@@ -707,7 +680,6 @@ export function WeeklyHero({
             onReadinessClick={() => toggleExpand("vitals")}
             readinessSelected={expanded === "vitals"}
             hideSteps={expanded === "vitals"}
-            hideReadiness={expanded === "steps"}
             scaleToFit={fillViewport && expanded == null}
             className="animate-fade-up stagger-3 motion-safe:animate-fade-up motion-reduce:animate-none"
           />
@@ -721,11 +693,11 @@ export function WeeklyHero({
           />
         </HubPresence>
 
-        {/* Protocol / training — classic 2-col rail (text must not sit in nested HubCollapse) */}
+        {/* Protocol / training — classic 2-col rail (no nested HubCollapse around text) */}
         <FadeSection show={showProtocolRail} className={fillViewport ? "shrink-0" : undefined}>
           <HubCollapse
             open={expanded !== "peptides" && expanded !== "workouts"}
-            durationMs={680}
+            durationMs={HUB_SECTION_MOTION_MS}
           >
             <div
               className="relative z-10 px-0.5 py-0.5 sm:px-1 sm:py-1"
