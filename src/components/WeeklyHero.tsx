@@ -628,7 +628,7 @@ export function WeeklyHero({
         key={viewMode}
         className={cn(
           "relative z-10 motion-safe:animate-fade-up motion-reduce:animate-none",
-          protocolFocused || weightFocused
+          protocolFocused || weightFocused || expanded === "vitals"
             ? "space-y-0"
             : fillViewport && expanded == null
             ? "max-lg:flex max-lg:min-h-0 max-lg:flex-1 max-lg:flex-col max-lg:justify-between max-lg:gap-[var(--hub-section-gap)] space-y-4 max-lg:space-y-0"
@@ -935,7 +935,11 @@ export function WeeklyHero({
           />
         </FadeSection>
 
-        <HubPresence open={expanded === "vitals"} durationMs={HUB_MOTION_MS}>
+        <HubPresence
+          open={expanded === "vitals"}
+          durationMs={HUB_MOTION_MS}
+          className={expanded === "vitals" ? "mt-4" : undefined}
+        >
           <HubVitalsExpand
             readiness={readinessValue}
             fallbackHrvMs={hrvMs}

@@ -707,7 +707,7 @@ export function WeightCorrelationPanel({
         </div>
       </div>
 
-      <div className="h-56 sm:h-64 lg:h-72 w-full min-w-0 -mx-0.5 sm:mx-0 shrink-0">
+      <div className="chart-touch-safe h-56 w-full min-w-0 -mx-0.5 shrink-0 sm:mx-0 sm:h-64 lg:h-72">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={daily} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
             <defs>

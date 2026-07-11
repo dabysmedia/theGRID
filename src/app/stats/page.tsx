@@ -157,7 +157,7 @@ function SectionChart({
         ) : null}
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{summaryCards}</div>
-      <div className="animate-chart-wipe min-h-[8rem] min-w-0">{children}</div>
+      <div className="chart-touch-safe animate-chart-wipe min-h-[8rem] min-w-0">{children}</div>
     </div>
   )
 }

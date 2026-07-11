@@ -132,7 +132,7 @@ function MetricCard({
 }) {
   return (
     <div
-      className="sleep-focus-reveal min-w-0 rounded-xl border border-white/[0.065] bg-white/[0.025] p-3"
+      className="sleep-focus-reveal flex aspect-[1.15/1] min-w-0 flex-col rounded-2xl border border-white/[0.065] bg-white/[0.025] p-3.5 lg:aspect-auto"
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="flex items-center gap-2 text-muted-foreground/55">
@@ -143,7 +143,7 @@ function MetricCard({
         <span className="text-[1.65rem] font-semibold tabular-nums tracking-tight text-foreground/90">{value}</span>
         {unit ? <span className="type-hud-caption-tight text-muted-foreground/50">{unit}</span> : null}
       </div>
-      <p className="mt-1 min-h-7 text-[11px] leading-relaxed text-muted-foreground/52">{detail}</p>
+      <p className="mt-auto pt-2 text-[10px] leading-relaxed text-muted-foreground/52 sm:text-[11px]">{detail}</p>
     </div>
   )
 }
@@ -399,7 +399,7 @@ export function HubSleepFocus({
           </div>
           <p className="type-hud-micro text-muted-foreground/45">Your 30-night range</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricCard
             label="Time to sound sleep"
             value={timeToSoundSleep?.toString() ?? "—"}
@@ -442,7 +442,7 @@ export function HubSleepFocus({
           <p className="type-hud-subsection">Sleep metrics</p>
           <p className="type-hud-micro text-muted-foreground/45">vs. personal range</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricCard label="Efficiency" value={efficiency != null ? Math.round(efficiency).toString() : "—"} unit={efficiency != null ? "%" : undefined} detail={efficiencyRange ? `Your typical ${formatRange(efficiencyRange, "%")}` : "Time asleep ÷ time in bed"} icon={<Gauge className="h-4 w-4" />} delay={920} accent="#a5b4fc" />
           <MetricCard label="Wake events" value={stages.length > 0 ? wakeEventsPerHour.toFixed(1) : "—"} unit={stages.length > 0 ? "/ hr" : undefined} detail={stages.length > 0 ? `${wakeEvents} transitions awake` : "Needs stage timeline"} icon={<Sparkles className="h-4 w-4" />} delay={1000} accent="#e2e8f0" />
           <MetricCard label="Sleep HR" value={averageSleepHeartRate?.toString() ?? "—"} unit={averageSleepHeartRate != null ? "bpm" : undefined} detail={sleepHeartSamples.length > 0 ? `${Math.min(...sleepHeartSamples.map((sample) => sample.bpm))}–${Math.max(...sleepHeartSamples.map((sample) => sample.bpm))} bpm overnight` : "No samples in window"} icon={<Activity className="h-4 w-4" />} delay={1080} accent="#7dd3fc" />

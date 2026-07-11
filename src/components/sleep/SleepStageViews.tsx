@@ -108,7 +108,7 @@ export function StageTimeline({
   }
 
   return (
-    <div className={cn("select-none rounded-2xl border border-white/[0.07] bg-black/10 px-4 py-4 [-webkit-touch-callout:none] sm:px-5", className)}>
+    <div className={cn("chart-touch-safe select-none rounded-2xl border border-white/[0.07] bg-black/10 px-4 py-4 [-webkit-touch-callout:none] sm:px-5", className)}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="type-hud-subsection">Sleep architecture</p>
@@ -353,7 +353,7 @@ export function SleepHeartRateChart({
   }
 
   return (
-    <div className={cn("sleep-focus-reveal rounded-2xl border border-white/[0.07] bg-black/10 p-4 sm:p-5", className)} style={{ animationDelay: "120ms" }}>
+    <div className={cn("chart-touch-safe sleep-focus-reveal rounded-2xl border border-white/[0.07] bg-black/10 p-4 sm:p-5", className)} style={{ animationDelay: "120ms" }}>
       <div className="mb-2 flex items-end justify-between gap-3">
         <div>
           <p className="type-hud-subsection">Heart rate during sleep</p>

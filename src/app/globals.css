@@ -983,6 +983,28 @@ html {
 }
 
 @layer utilities {
+  .chart-touch-safe,
+  .chart-touch-safe * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .chart-touch-safe svg,
+  .chart-touch-safe .recharts-wrapper,
+  .chart-touch-safe .recharts-surface {
+    outline: none;
+  }
+
+  .chart-touch-safe {
+    touch-action: pan-y;
+  }
+
+  .chart-touch-safe ::selection {
+    background: transparent;
+  }
+
   .sleep-focus-reveal {
     opacity: 0;
     animation: sleep-focus-reveal 0.9s cubic-bezier(0.4, 0, 0.2, 1) both;

@@ -1035,21 +1035,21 @@ export function HubPeptidesExpand({
 
   const statsGrid = (
     <div className="grid grid-cols-3 gap-2">
-      <div className="px-0.5 py-1">
+      <div className="flex min-h-[5.5rem] min-w-0 flex-col justify-between rounded-xl border border-white/[0.065] bg-white/[0.025] p-3">
         <p className="type-hud-micro text-muted-foreground/55">Today</p>
-        <p className="type-hud-stat-sm tabular-nums text-foreground/90">
+        <p className="text-base font-semibold tabular-nums text-foreground/90">
           {todayMg > 0 ? `${todayMg} mg` : "—"}
         </p>
       </div>
-      <div className="px-0.5 py-1">
+      <div className="flex min-h-[5.5rem] min-w-0 flex-col justify-between rounded-xl border border-white/[0.065] bg-white/[0.025] p-3">
         <p className="type-hud-micro text-muted-foreground/55">Protocol</p>
-        <p className="type-hud-stat-sm tabular-nums text-foreground/90">
+        <p className="text-base font-semibold tabular-nums text-foreground/90">
           {weekLabel ?? "—"}
         </p>
       </div>
-      <div className="px-0.5 py-1">
+      <div className="flex min-h-[5.5rem] min-w-0 flex-col justify-between rounded-xl border border-white/[0.065] bg-white/[0.025] p-3">
         <p className="type-hud-micro text-muted-foreground/55">Last shot</p>
-        <p className="truncate text-[12px] font-medium tabular-nums text-foreground/85">
+        <p className="text-[13px] font-semibold leading-snug tabular-nums text-foreground/85">
           {lastLabel ?? "—"}
         </p>
       </div>
@@ -1109,7 +1109,7 @@ export function HubPeptidesExpand({
         </button>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
         <p className="type-hud-caption">Injection frequency</p>
         <div className="flex flex-wrap gap-2">
           {INJECTION_INTERVAL_PRESETS.map((days) => (
@@ -1156,11 +1156,11 @@ export function HubPeptidesExpand({
         )}
       </div>
 
-      <div className="space-y-2.5">
+      <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
         <p className="type-hud-caption">Schedule</p>
         {lastInjectedAt && nextInjection ? (
           <div className="space-y-2">
-            <div className="relative h-2 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="relative h-3 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-inset ring-white/[0.035]">
               <div
                 className={cn(
                   "absolute inset-y-0 left-0 rounded-full transition-[width] duration-500",
@@ -1186,7 +1186,7 @@ export function HubPeptidesExpand({
                   })
                 : null}
             </div>
-            <div className="flex items-start justify-between gap-2 text-[11px] tabular-nums">
+            <div className="flex items-start justify-between gap-3 text-[12px] tabular-nums">
               <div className="min-w-0">
                 <p className="text-muted-foreground/50">Last</p>
                 <p className="font-medium text-foreground/85">
@@ -1228,6 +1228,7 @@ export function HubPeptidesExpand({
         entries={recentEntries}
         lastDoseMg={lastDoseMg}
         lastInjectedAt={lastInjectedAt}
+        className="rounded-2xl border border-white/[0.07] bg-black/10 p-4"
         compact
       />
 
@@ -1235,10 +1236,11 @@ export function HubPeptidesExpand({
         hungerLogs={hungerLogs}
         doseEntries={recentEntries}
         lastDoseMg={lastDoseMg}
+        className="rounded-2xl border border-white/[0.07] bg-black/10 p-4"
         compact
       />
 
-      <div className="space-y-2">
+      <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
         <div className="flex items-baseline justify-between gap-2">
           <p className="type-hud-caption">Recent injections</p>
         </div>
@@ -1249,10 +1251,10 @@ export function HubPeptidesExpand({
         ) : (
           <ul className="space-y-0 divide-y divide-white/[0.05]">
             {latestEntry ? (
-              <li className="py-2 first:pt-0">
+              <li className="py-3 first:pt-0">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold tabular-nums text-foreground/95">
+                    <p className="truncate text-[15px] font-semibold tabular-nums text-foreground/95">
                       {latestEntry.doseMg} mg
                       {latestEntry.injectionSite
                         ? ` · ${injectionSiteLabel(latestEntry.injectionSite)}`

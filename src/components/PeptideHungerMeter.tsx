@@ -53,9 +53,9 @@ export function PeptideHungerMeter({
     })
 
     // Sparkline: prefer last ~10 logged days; else estimate from circulating over lookback.
-    const w = 120
-    const h = 36
-    const padY = 3
+    const w = compact ? 320 : 240
+    const h = compact ? 92 : 64
+    const padY = compact ? 8 : 5
     let path = ""
     let nowX = w
     let nowY = h / 2
@@ -113,7 +113,7 @@ export function PeptideHungerMeter({
       logCount: sortedLogs.length,
       circulating,
     }
-  }, [hungerLogs, doseEntries, lastDoseMg])
+  }, [hungerLogs, doseEntries, lastDoseMg, compact])
 
   if (model.source === "none") {
     return (
@@ -142,12 +142,12 @@ export function PeptideHungerMeter({
         </p>
       </div>
 
-      <div className="flex items-end justify-between gap-3">
+      <div className="space-y-3">
         <div className="min-w-0">
           <p
             className={cn(
               "font-semibold tabular-nums tracking-tight",
-              compact ? "text-2xl" : "text-[1.75rem] leading-none",
+              compact ? "text-3xl" : "text-[1.75rem] leading-none",
             )}
             style={{ color: PEPTIDE_COLOR }}
           >
@@ -171,7 +171,7 @@ export function PeptideHungerMeter({
         {model.path ? (
           <svg
             viewBox={`0 0 ${model.w} ${model.h}`}
-            className="h-9 w-[7.5rem] shrink-0 overflow-visible"
+            className="chart-touch-safe h-24 w-full select-none overflow-visible [-webkit-touch-callout:none] sm:h-28"
             aria-hidden
           >
             <path
@@ -196,7 +196,7 @@ export function PeptideHungerMeter({
         ) : null}
       </div>
 
-      <div className="relative h-2 overflow-hidden rounded-full bg-white/[0.06]">
+      <div className="relative h-3 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-inset ring-white/[0.035]">
         <div
           className="absolute inset-y-0 left-0 rounded-full bg-slate-400/75 transition-[width] duration-500"
           style={{ width: `${Math.round(model.fillPct)}%` }}

@@ -68,8 +68,8 @@ export function PeptideHalfLifeMeter({
     if (!cycle) return null
 
     const maxCurve = Math.max(...cycle.points.map((p) => p.mg), scaleMg, 0.01)
-    const w = compact ? 280 : 320
-    const h = compact ? 52 : 64
+    const w = compact ? 320 : 340
+    const h = compact ? 92 : 76
     const padX = 4
     const padY = 6
     const span = Math.max(0.001, cycle.spanDays)
@@ -154,7 +154,7 @@ export function PeptideHalfLifeMeter({
           <p
             className={cn(
               "font-semibold tabular-nums tracking-tight text-slate-100/95",
-              compact ? "text-2xl" : "text-[1.75rem] leading-none",
+              compact ? "text-3xl" : "text-[1.75rem] leading-none",
             )}
             style={{ color: PEPTIDE_COLOR }}
           >
@@ -172,7 +172,7 @@ export function PeptideHalfLifeMeter({
         </div>
       </div>
 
-      <div className="relative h-2 overflow-hidden rounded-full bg-white/[0.06]">
+      <div className="relative h-3 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-inset ring-white/[0.035]">
         <div
           className="absolute inset-y-0 left-0 rounded-full bg-slate-400/75 transition-[width] duration-500"
           style={{ width: `${Math.round(model.fillPct)}%` }}
@@ -191,7 +191,7 @@ export function PeptideHalfLifeMeter({
         </div>
         <svg
           viewBox={`0 0 ${model.w} ${model.h}`}
-          className="h-14 w-full overflow-visible sm:h-16"
+          className="chart-touch-safe h-28 w-full select-none overflow-visible [-webkit-touch-callout:none] sm:h-32"
           role="img"
           aria-label="Estimated circulating dose over the full injection cycle"
         >
