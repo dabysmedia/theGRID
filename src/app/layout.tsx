@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google"
 import { AppChrome } from "@/components/AppChrome"
 import { Providers } from "@/components/Providers"
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister"
+import { MotionOrchestrator } from "@/components/MotionOrchestrator"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -69,7 +70,9 @@ export default function RootLayout({
 
         <div className="relative z-0 flex min-h-0 flex-1 flex-col">
           <Providers>
-            <AppChrome>{children}</AppChrome>
+            <MotionOrchestrator>
+              <AppChrome>{children}</AppChrome>
+            </MotionOrchestrator>
           </Providers>
         </div>
         <ServiceWorkerRegister />

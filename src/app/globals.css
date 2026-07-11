@@ -782,13 +782,18 @@ html {
 /* Transform-only entrances: avoid opacity in keyframes + animation-fill-mode: both,
    which leaves content invisible on iOS Safari if the animation never completes. */
 @keyframes fade-up {
-  from { transform: translateY(12px); }
-  to   { transform: translateY(0); }
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fade-in {
-  from { opacity: 1; }
+  from { opacity: 0; }
   to   { opacity: 1; }
+}
+
+@keyframes route-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slide-up {
@@ -917,6 +922,26 @@ html {
   }
 }
 
+@keyframes readiness-bar-in {
+  from { opacity: 0; transform: scaleX(0); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+@keyframes readiness-marker-slide {
+  0% {
+    left: 0;
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 6px)) scale(0.65);
+  }
+  18% { opacity: 1; }
+  72% { transform: translate(-50%, calc(-50% + 6px)) scale(1.15); }
+  100% {
+    left: var(--readiness-position);
+    opacity: 1;
+    transform: translate(-50%, calc(-50% + 6px)) scale(1);
+  }
+}
+
 @keyframes chart-wipe {
   from { clip-path: inset(0 100% 0 0); }
   to   { clip-path: inset(0 0 0 0); }
@@ -929,7 +954,11 @@ html {
 
 @layer utilities {
   .animate-fade-up {
-    animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+    opacity: 0;
+    transform: translateY(14px);
+    transition:
+      opacity 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.72s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .animate-fade-in {
@@ -937,7 +966,11 @@ html {
   }
 
   .animate-scale-in {
-    animation: scale-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+    opacity: 0;
+    transform: scale(0.96);
+    transition:
+      opacity 0.68s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.68s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .animate-slide-up {
@@ -945,8 +978,25 @@ html {
   }
 
   .animate-bar-grow {
-    animation: bar-grow 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    transform: scaleY(0);
+    transition: transform 0.82s cubic-bezier(0.16, 1, 0.3, 1);
     transform-origin: bottom;
+  }
+
+  [data-motion-visible].animate-fade-up,
+  [data-motion-visible].animate-scale-in,
+  [data-motion-visible].animate-bar-grow,
+  [data-motion-visible][class*="motion-safe:animate-fade-up"] {
+    opacity: 1;
+    transform: none;
+  }
+
+  [data-motion-visible].animate-chart-wipe {
+    clip-path: inset(0 0 0 0);
+  }
+
+  .route-enter {
+    animation: route-enter 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .animate-count-up {
@@ -992,8 +1042,34 @@ html {
     animation: nav-dock-item 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
+  .animate-readiness-bar {
+    animation: readiness-bar-in 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-readiness-marker {
+    animation: readiness-marker-slide 1.15s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    .animate-fade-up,
+    .animate-scale-in,
+    .animate-bar-grow,
+    [class*="motion-safe:animate-fade-up"] {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+
+    .route-enter {
+      animation: none;
+    }
+
     .animate-nav-dock-item {
+      animation: none;
+    }
+
+    .animate-readiness-bar,
+    .animate-readiness-marker {
       animation: none;
     }
 
@@ -1009,13 +1085,13 @@ html {
   }
 
   /* Stagger delay utilities */
-  .stagger-1 { animation-delay: 50ms; }
-  .stagger-2 { animation-delay: 100ms; }
-  .stagger-3 { animation-delay: 150ms; }
-  .stagger-4 { animation-delay: 200ms; }
-  .stagger-5 { animation-delay: 250ms; }
-  .stagger-6 { animation-delay: 300ms; }
-  .stagger-7 { animation-delay: 350ms; }
+  .stagger-1 { animation-delay: 60ms; transition-delay: 60ms; }
+  .stagger-2 { animation-delay: 120ms; transition-delay: 120ms; }
+  .stagger-3 { animation-delay: 180ms; transition-delay: 180ms; }
+  .stagger-4 { animation-delay: 240ms; transition-delay: 240ms; }
+  .stagger-5 { animation-delay: 300ms; transition-delay: 300ms; }
+  .stagger-6 { animation-delay: 360ms; transition-delay: 360ms; }
+  .stagger-7 { animation-delay: 420ms; transition-delay: 420ms; }
 
   /* Smooth interactive feedback */
   .press-scale {
@@ -1029,12 +1105,14 @@ html {
 
   /* Charts wipe in left → right once data lands */
   .animate-chart-wipe {
-    animation: chart-wipe 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path 0.95s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   @media (prefers-reduced-motion: reduce) {
     .animate-chart-wipe {
-      animation: none;
+      clip-path: none;
+      transition: none;
     }
   }
 

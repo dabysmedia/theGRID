@@ -13,6 +13,7 @@ import { useUser } from "@/context/UserContext"
 import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 import { format } from "date-fns"
 import { parseLocalDate } from "@/lib/utils"
+import { useCountUp } from "@/components/useCountUp"
 
 type Status = "loading" | "ready"
 
@@ -83,6 +84,7 @@ export function DailyWeighIn({
   const [previousWeight, setPreviousWeight] = useState<number | null>(null)
   const [unit, setUnit] = useState(DEFAULT_WEIGHT_UNIT)
   const [submitting, setSubmitting] = useState(false)
+  const [weightEditing, setWeightEditing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const vacationBlocksLog = useMemo(
@@ -97,6 +99,7 @@ export function DailyWeighIn({
 
   const load = useCallback(async () => {
     setStatus("loading")
+    setWeightEditing(false)
     const res = await apiFetch(`/api/weigh-in?d=${activeDate}`)
     const data = await res.json()
     if (!res.ok) {
@@ -136,6 +139,15 @@ export function DailyWeighIn({
     !logged &&
     latestWeight != null &&
     sameNumber(value, latestWeight)
+  const numericWeight = value.trim() === "" ? null : Number(value)
+  const animatedWeight = useCountUp(
+    numericWeight != null && Number.isFinite(numericWeight) ? numericWeight : null,
+    { durationMs: 1150, enabled: !weightEditing && !submitting },
+  )
+  const displayedWeight =
+    !weightEditing && animatedWeight != null
+      ? animatedWeight.toFixed(value.includes(".") ? 1 : 0)
+      : value
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -258,7 +270,7 @@ export function DailyWeighIn({
     ) : null
 
   const formInner = (
-    <div className={cn(embedded ? "space-y-2.5" : "space-y-3.5")}>
+    <div className={cn(embedded ? "space-y-1.5" : "space-y-3.5")}>
       {onActivate ? (
         <button
           type="button"
@@ -293,7 +305,8 @@ export function DailyWeighIn({
       <div className="space-y-2">
         <div
           className={cn(
-            "flex flex-wrap items-end gap-x-3 gap-y-1 pb-1.5",
+            "flex flex-wrap items-end gap-x-3 gap-y-1",
+            "pb-1.5",
             embedded ? "border-b border-white/[0.06]" : "border-b border-white/10",
           )}
         >
@@ -302,8 +315,11 @@ export function DailyWeighIn({
             type="number"
             step="0.1"
             placeholder={latestWeight != null ? `${latestWeight}` : "—"}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
+            value={displayedWeight}
+            onChange={(e) => {
+              setWeightEditing(true)
+              setValue(e.target.value)
+            }}
             readOnly={logged}
             className={cn(
               "h-auto min-h-0 w-[min(100%,12rem)] flex-1 border-0 rounded-none bg-transparent px-0 py-0 font-extralight tracking-tight tabular-nums shadow-none backdrop-blur-none",
@@ -326,7 +342,7 @@ export function DailyWeighIn({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className={cn("flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-4", embedded ? "gap-1" : "gap-2")}>
         {logged && delta != null && delta !== 0 ? (
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
             {delta > 0 ? (

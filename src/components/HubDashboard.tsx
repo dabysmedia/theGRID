@@ -3,11 +3,8 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { subDays } from "date-fns"
-import { PageHeader } from "./PageHeader"
 import { WeeklyHero } from "./WeeklyHero"
 import type { HubExpandedPanel } from "./hub/HubExpandPanels"
-import { HubPresence, HUB_SECTION_MOTION_MS } from "./hub/HubMotion"
-import { FastingTimer } from "./FastingTimer"
 import { useActiveDate } from "@/context/DateContext"
 import { useQuickLog } from "@/context/QuickLogContext"
 import { useUser } from "@/context/UserContext"
@@ -279,19 +276,16 @@ export function HubDashboard() {
       className={cn(
         // Keep header↔hub gap identical in overview and expand (lg:gap-8 only —
         // never introduce a mobile gap on expand that shoves the hub down).
-        "flex min-h-0 flex-col lg:gap-8",
+        "flex h-full min-h-0 flex-col overflow-hidden",
         // Collapsed hub: fill main (above dock clearance) and lock overflow on
         // mobile so the overview fits one screen. Expanded panels grow in place.
         overview && "max-lg:flex-1 max-lg:overflow-hidden",
+        !overview && "overflow-y-auto overscroll-contain",
       )}
     >
       <Suspense fallback={null}>
         <HubExpandFromQuery onExpand={setHubExpanded} />
       </Suspense>
-      <div className="shrink-0">
-        <PageHeader title="THEGRID" />
-      </div>
-
       <div
         className={cn(
           "animate-fade-up stagger-2 min-h-0",
@@ -325,11 +319,6 @@ export function HubDashboard() {
           }}
         />
       </div>
-
-      {/* Animate fasting out with hub expand so the layout morphs instead of snapping. */}
-      <HubPresence open={overview} durationMs={HUB_SECTION_MOTION_MS}>
-        <FastingTimer hubCompact />
-      </HubPresence>
     </div>
   )
 }
