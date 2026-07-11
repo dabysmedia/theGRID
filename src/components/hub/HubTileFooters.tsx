@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import type { NextInjectionInfo } from "@/lib/hub-tile-prefs"
 import { computeTargetBedtimeParts } from "@/lib/hub-tile-prefs"
 import {
+  READINESS_BAND_ACCENT,
   READINESS_BAND_LABEL,
   readinessBand,
 } from "@/lib/readiness-score"
@@ -228,6 +229,7 @@ export function HubVitalsFooter({
 }) {
   const band = readinessBand(readiness ?? null)
   const accent = color
+  const bandAccent = band ? READINESS_BAND_ACCENT[band] : accent
   const hrvLabel =
     hrvMs != null && Number.isFinite(hrvMs) ? String(Math.round(hrvMs)) : "—"
 
@@ -257,7 +259,7 @@ export function HubVitalsFooter({
         <p className="type-hud-caption-tight text-[8px]">HRV</p>
         <p
           className="text-[11px] font-semibold tabular-nums leading-tight tracking-wide"
-          style={hrvMs != null || band ? { color: accent } : undefined}
+          style={hrvMs != null || band ? { color: bandAccent } : undefined}
         >
           {band
             ? READINESS_BAND_LABEL[band]

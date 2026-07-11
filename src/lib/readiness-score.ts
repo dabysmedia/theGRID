@@ -95,3 +95,12 @@ export const READINESS_BAND_LABEL: Record<ReadinessBand, string> = {
   low: "Low",
   very_low: "Recover",
 }
+
+/** Good → caution → recover. Balanced is neutral steel, not alarm red. */
+export const READINESS_BAND_ACCENT: Record<ReadinessBand, string> = {
+  peak: "#34d399",
+  high: "#22d3ee",
+  balanced: "#94a3b8",
+  low: "#f59e0b",
+  very_low: "#f43f5e",
+}

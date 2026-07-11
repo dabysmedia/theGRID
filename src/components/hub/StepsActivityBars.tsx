@@ -7,18 +7,10 @@ import { cn } from "@/lib/utils"
 import { useCountUp } from "@/components/useCountUp"
 import type { CSSProperties } from "react"
 import {
+  READINESS_BAND_ACCENT,
   READINESS_BAND_LABEL,
   readinessBand,
-  type ReadinessBand,
 } from "@/lib/readiness-score"
-
-const BAND_ACCENT: Record<ReadinessBand, string> = {
-  peak: "#34d399",
-  high: "#22d3ee",
-  balanced: "#f43f5e",
-  low: "#f59e0b",
-  very_low: "#fb7185",
-}
 
 /** Collapsed fallback when not using `--hub-bar-area` (matches CSS clamp max). */
 const BAR_AREA_PX = 76
@@ -105,7 +97,7 @@ export function StepsActivityBars({
     ? ({ height: "var(--hub-bar-area)" } as const)
     : ({ height: barAreaPx } as const)
   const band = readinessBand(readiness)
-  const accent = band ? BAND_ACCENT[band] : "#64748b"
+  const accent = band ? READINESS_BAND_ACCENT[band] : "#64748b"
   const readinessScore =
     readiness != null && Number.isFinite(readiness)
       ? Math.max(0, Math.min(100, Math.round(readiness)))

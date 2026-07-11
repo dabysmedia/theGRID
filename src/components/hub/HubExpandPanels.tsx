@@ -71,6 +71,7 @@ import {
   injectionSiteLabel,
 } from "@/lib/peptides"
 import {
+  READINESS_BAND_ACCENT,
   READINESS_BAND_LABEL,
   readinessBand,
 } from "@/lib/readiness-score"
@@ -555,17 +556,7 @@ export function HubVitalsExpand({
   const hrvMs = data?.hrvMs ?? fallbackHrvMs ?? null
   const rhr = data?.restingHeartRate ?? fallbackRhr ?? null
   const band = readinessBand(readiness ?? null)
-  const accent = band
-    ? band === "peak"
-      ? "#34d399"
-      : band === "high"
-        ? "#22d3ee"
-        : band === "balanced"
-          ? VITALS_COLOR
-          : band === "low"
-            ? "#f59e0b"
-            : "#fb7185"
-    : VITALS_COLOR
+  const accent = band ? READINESS_BAND_ACCENT[band] : VITALS_COLOR
 
   const hrChartData = useMemo(
     () =>
