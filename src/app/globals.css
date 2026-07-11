@@ -791,6 +791,36 @@ html {
   to   { opacity: 1; }
 }
 
+@keyframes sleep-focus-reveal {
+  from { opacity: 0; transform: translateY(12px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes sleep-trace-draw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes sleep-chart-area-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sleep-timeline-draw {
+  from { opacity: 0; transform: scaleX(0); }
+  to   { opacity: 1; transform: scaleX(1); }
+}
+
+@keyframes sleep-stage-bar-fill {
+  from { transform: scaleX(0); filter: brightness(1.6); }
+  to   { transform: scaleX(1); filter: brightness(1); }
+}
+
+@keyframes sleep-night-bar-grow {
+  from { opacity: 0; transform: scaleY(0); filter: brightness(1.5); }
+  to   { opacity: 1; transform: scaleY(1); filter: brightness(1); }
+}
+
 @keyframes route-enter {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -953,6 +983,39 @@ html {
 }
 
 @layer utilities {
+  .sleep-focus-reveal {
+    opacity: 0;
+    animation: sleep-focus-reveal 0.9s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  .sleep-trace-draw {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: sleep-trace-draw 1.8s cubic-bezier(0.22, 0.7, 0.18, 1) 0.28s both;
+  }
+
+  .sleep-chart-area {
+    transform-box: fill-box;
+    transform-origin: center bottom;
+    animation: sleep-chart-area-in 1.3s ease-out 0.45s both;
+  }
+
+  .sleep-timeline-draw {
+    transform-box: fill-box;
+    transform-origin: left center;
+    animation: sleep-timeline-draw 1.7s cubic-bezier(0.22, 0.7, 0.18, 1) 0.22s both;
+  }
+
+  .sleep-stage-bar-fill {
+    transform-origin: left center;
+    animation: sleep-stage-bar-fill 1.15s cubic-bezier(0.22, 0.7, 0.18, 1) both;
+  }
+
+  .sleep-night-bar {
+    transform-origin: center bottom;
+    animation: sleep-night-bar-grow 1.05s cubic-bezier(0.22, 0.7, 0.18, 1) both;
+  }
+
   .animate-fade-up {
     opacity: 0;
     transform: translateY(14px);
@@ -1071,6 +1134,18 @@ html {
     .animate-readiness-bar,
     .animate-readiness-marker {
       animation: none;
+    }
+
+    .sleep-focus-reveal,
+    .sleep-trace-draw,
+    .sleep-chart-area,
+    .sleep-timeline-draw,
+    .sleep-stage-bar-fill,
+    .sleep-night-bar {
+      opacity: 1;
+      transform: none;
+      animation: none;
+      stroke-dashoffset: 0;
     }
 
     .animate-ring-pop,

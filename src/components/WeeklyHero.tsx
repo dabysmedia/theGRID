@@ -13,13 +13,13 @@ import { StepsActivityBars } from "@/components/hub/StepsActivityBars"
 import {
   HubCaloriesExpand,
   HubPeptidesExpand,
-  HubSleepExpand,
   HubVitalsExpand,
   HubWeightExpand,
   HubWorkoutsExpand,
   HubBackToOverview,
   type HubExpandedPanel,
 } from "@/components/hub/HubExpandPanels"
+import { HubSleepFocus } from "@/components/sleep/HubSleepFocus"
 import { HubCollapse, HubPresence, HUB_MOTION_MS, HUB_SECTION_MOTION_MS } from "@/components/hub/HubMotion"
 import { HubRingBay } from "@/components/hub/HubRingBay"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
@@ -894,7 +894,7 @@ export function WeeklyHero({
         </HubCollapse>
 
         <HubPresence open={expanded === "sleep"} durationMs={HUB_MOTION_MS}>
-          <HubSleepExpand
+          <HubSleepFocus
             hours={data.sleep.todayValue}
             goal={sleepGoal}
             last7={data.sleep.last7}

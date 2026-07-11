@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
+import { subDays } from "date-fns"
 import { prisma } from "@/lib/prisma"
-import { parseYyyyMmDdToStoredDate, utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
+import {
+  parseYyyyMmDdToStoredDate,
+  utcCalendarDayRangeInclusive,
+  utcRangeWhereForCalendarDay,
+} from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
 import {
   computeSleepEfficiency,
@@ -9,16 +14,27 @@ import {
   scoreToLegacyQuality,
 } from "@/lib/sleep-score"
 import { sleepDurationHours } from "@/lib/sleepDuration"
+import { formatDate, parseLocalDate } from "@/lib/utils"
 
 export async function GET(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
     const { searchParams } = new URL(req.url)
     const dateParam = searchParams.get("date")
+    const rawDays = Number(searchParams.get("days") ?? 1)
+    const requestedDays = Number.isFinite(rawDays)
+      ? Math.max(1, Math.min(45, Math.floor(rawDays)))
+      : 1
 
     const where: Record<string, unknown> = { userId }
     if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
-      where.date = utcRangeWhereForCalendarDay(dateParam)
+      where.date =
+        requestedDays > 1
+          ? utcCalendarDayRangeInclusive(
+              formatDate(subDays(parseLocalDate(dateParam), requestedDays - 1)),
+              dateParam,
+            )
+          : utcRangeWhereForCalendarDay(dateParam)
     }
 
     const entries = await prisma.sleepEntry.findMany({
