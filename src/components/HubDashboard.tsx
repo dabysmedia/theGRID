@@ -276,7 +276,7 @@ export function HubDashboard() {
       className={cn(
         // Keep header↔hub gap identical in overview and expand (lg:gap-8 only —
         // never introduce a mobile gap on expand that shoves the hub down).
-        "flex h-full min-h-0 flex-col overflow-hidden",
+        "flex h-full min-h-0 flex-col overflow-hidden [scrollbar-gutter:stable]",
         // Collapsed hub: fill main (above dock clearance) and lock overflow on
         // mobile so the overview fits one screen. Expanded panels grow in place.
         overview && "max-lg:flex-1 max-lg:overflow-hidden",
@@ -288,7 +288,7 @@ export function HubDashboard() {
       </Suspense>
       <div
         className={cn(
-          "animate-fade-up stagger-2 min-h-0",
+          "animate-fade-up stagger-2 min-h-0 max-lg:min-h-full",
           overview && "max-lg:flex max-lg:min-h-0 max-lg:flex-1 max-lg:flex-col",
         )}
       >
@@ -298,7 +298,7 @@ export function HubDashboard() {
           vacationBlocksCalories={vacationBlocksCalLog}
           expanded={hubExpanded}
           onExpandedChange={setHubExpanded}
-          fillViewport={overview}
+          fillViewport
           peptideSummary={{
             lastDoseMg: lastPeptide?.doseMg ?? null,
             lastInjectedAt: lastPeptide?.injectedAt ?? null,

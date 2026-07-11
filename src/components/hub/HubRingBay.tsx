@@ -52,7 +52,7 @@ export function HubRingBay({
             <div
               key={id}
               className={cn(
-                "absolute top-0 -translate-x-1/2 transition-[left,opacity,transform] duration-[760ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+                "absolute top-0 -translate-x-1/2 transition-[left,opacity,transform] duration-[900ms] ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none",
                 active ? "left-1/2" : IDLE_LEFT[id],
                 isActive && "z-30",
                 hide && "pointer-events-none scale-90 opacity-0",

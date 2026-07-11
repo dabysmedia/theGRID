@@ -4,10 +4,13 @@ import { useLayoutEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 
 /** Default hub UI morph — short enough to feel snappy, long enough to read. */
-export const HUB_MOTION_MS = 300
+export const HUB_MOTION_MS = 720
 
 /** Larger overview section morphs (rings / protocol rail / weigh-in). */
-export const HUB_SECTION_MOTION_MS = 420
+export const HUB_SECTION_MOTION_MS = 900
+
+/** Balanced curve: no abrupt launch, with a soft settled finish. */
+export const HUB_MOTION_EASING = "cubic-bezier(0.4, 0, 0.2, 1)"
 
 /**
  * Height + opacity collapse used across hub expand/collapse and accordions.
@@ -37,7 +40,7 @@ export function HubCollapse({
       style={{
         transitionProperty: "grid-template-rows, opacity, margin",
         transitionDuration: `${durationMs}ms`,
-        transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+        transitionTimingFunction: HUB_MOTION_EASING,
       }}
       aria-hidden={!open}
     >
