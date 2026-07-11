@@ -18,8 +18,9 @@ const BAND_ACCENT: Record<ReadinessBand, string> = {
   very_low: "#fb7185",
 }
 
-const BAR_AREA_PX = 58
-const BAR_MAX_PX = 56
+/** Collapsed fallback when not using `--hub-bar-area` (matches CSS clamp max). */
+const BAR_AREA_PX = 76
+const BAR_MAX_PX = 72
 /** Expanded chart: room for per-day value labels above taller bars. */
 const BAR_AREA_EXPANDED_PX = 128
 const BAR_MAX_EXPANDED_PX = 100
@@ -501,7 +502,7 @@ export function StepsActivityBars({
                     className="absolute bottom-0 transition-[height,max-width] duration-500 ease-out motion-reduce:transition-none"
                     style={{
                       width: "78%",
-                      maxWidth: expanded ? 34 : 30,
+                      maxWidth: expanded ? 38 : 34,
                       height: useScaledBars ? `${heightPct}%` : heightPx,
                       transformStyle: "preserve-3d",
                       transform: "rotateX(12deg) rotateY(-18deg)",

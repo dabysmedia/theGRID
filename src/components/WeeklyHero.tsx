@@ -682,7 +682,9 @@ export function WeeklyHero({
 
         <FadeSection
           show={showStepsBars}
-          className={cn(fillViewport && expanded == null && "min-h-0 shrink")}
+          /* Never flex-shrink the steps chart — HubCollapse clips with overflow:hidden,
+             so min-h-0 shrink made the bars disappear on short phones. */
+          className={fillViewport && expanded == null ? "shrink-0" : undefined}
         >
           {expanded == null ? (
             <div
