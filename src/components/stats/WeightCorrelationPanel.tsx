@@ -221,9 +221,9 @@ const CORR_VOICE: Record<
   },
   bowel: {
     lagPos:
-      "More bowel logs and a heavier next weigh-in moved together this month â€” a weaker fit for the â€œemptying lightens the scaleâ€ story; sodium, carbs, and training still drive a lot of short noise.",
+      "More bowel logs and a heavier next weigh-in moved together this month — a weaker fit for the “emptying lightens the scale” story; sodium, carbs, and training still drive a lot of short noise.",
     lagNeg:
-      "More logged bowel days tended to come before a lighter next weigh-in â€” that matches food volume and GI contents nudging the scale, not necessarily fat change overnight.",
+      "More logged bowel days tended to come before a lighter next weigh-in — that matches food volume and GI contents nudging the scale, not necessarily fat change overnight.",
     sleepPos: "",
     sleepNeg: "",
   },
@@ -237,8 +237,8 @@ function correlationCardCopy(
 ): { title: string; sub: string } {
   if (pairCount < 3) {
     return {
-      title: "Hang tight â€” we need a few more days here.",
-      sub: `${pairCount} paired so far Â· 3+ to read the signal`,
+      title: "Hang tight — we need a few more days here.",
+      sub: `${pairCount} paired so far · 3+ to read the signal`,
     }
   }
   if (r == null) {
@@ -251,7 +251,7 @@ function correlationCardCopy(
   if (a < 0.15) {
     return {
       title: "No real pattern jumped out this month.",
-      sub: `Noise level Â· r ${formatR(r)}`,
+      sub: `Noise level · r ${formatR(r)}`,
     }
   }
 
@@ -265,9 +265,9 @@ function correlationCardCopy(
         ? v.lagPos
         : v.lagNeg
 
-  let sub = `${strengthShort(r)} signal Â· r ${formatR(r)}`
+  let sub = `${strengthShort(r)} signal · r ${formatR(r)}`
   if (metricKey === "bowel" && mode === "lagged1to2" && r < -0.15) {
-    sub = `${sub} Â· negative r here supports transit/volume showing up on the scale`
+    sub = `${sub} · negative r here supports transit/volume showing up on the scale`
   }
 
   return { title, sub }
@@ -340,11 +340,11 @@ function buildScaleCues(
       const gap = Math.round((hi - lo) * 10) / 10
       if (gap >= 0.4) {
         lines.push(
-          `After your bigger intake days, the next weigh-in ran about ${gap} lb higher on average than after lighter days â€” thatâ€™s often fluid and glycogen, not â€œrealâ€ fat that fast.`
+          `After your bigger intake days, the next weigh-in ran about ${gap} lb higher on average than after lighter days — that’s often fluid and glycogen, not “real” fat that fast.`
         )
       } else if (gap <= -0.2) {
         lines.push(
-          "Big eating days didnâ€™t consistently show a higher next weigh-in â€” calmer scale behavior this month."
+          "Big eating days didn’t consistently show a higher next weigh-in — calmer scale behavior this month."
         )
       }
     }
@@ -358,7 +358,7 @@ function buildScaleCues(
       }
     }
     if (lines.length === 0) {
-      lines.push("No big intake-vs-next-weigh-in swing stood out â€” your scale looked fairly steady around calories.")
+      lines.push("No big intake-vs-next-weigh-in swing stood out — your scale looked fairly steady around calories.")
     }
     return lines.slice(0, 3)
   }
@@ -388,16 +388,16 @@ function buildScaleCues(
       const gap = Math.round((lo - hi) * 10) / 10
       if (gap >= 0.35) {
         lines.push(
-          `Low-step days averaged about ${gap} lb heavier on the next weigh-in than your highest-step days â€” could be water, food timing, or rest, not steps alone.`
+          `Low-step days averaged about ${gap} lb heavier on the next weigh-in than your highest-step days — could be water, food timing, or rest, not steps alone.`
         )
       } else if (gap <= -0.35) {
         lines.push(
-          "Your busiest movement days tended to precede a slightly heavier next weigh-in â€” worth eyeing fueling and sodium if thatâ€™s not what you expected."
+          "Your busiest movement days tended to precede a slightly heavier next weigh-in — worth eyeing fueling and sodium if that’s not what you expected."
         )
       }
     }
     if (lines.length === 0) {
-      lines.push("Steps and the next weigh-in didnâ€™t show a strong split between high and low movement this month.")
+      lines.push("Steps and the next weigh-in didn’t show a strong split between high and low movement this month.")
     }
     return lines.slice(0, 3)
   }
@@ -422,13 +422,13 @@ function buildScaleCues(
       if (Math.abs(gap) >= 0.35) {
         lines.push(
           gap > 0
-            ? `Mornings after 8h+ sleep averaged about ${gap} lb heavier than after 6.5h or less â€” same-day weight catches salt, late meals, and how you slept, not just time in bed.`
-            : `Mornings after longer sleep averaged about ${Math.abs(gap)} lb lighter than short-sleep nights â€” a soft signal, but itâ€™s there this month.`
+            ? `Mornings after 8h+ sleep averaged about ${gap} lb heavier than after 6.5h or less — same-day weight catches salt, late meals, and how you slept, not just time in bed.`
+            : `Mornings after longer sleep averaged about ${Math.abs(gap)} lb lighter than short-sleep nights — a soft signal, but it’s there this month.`
         )
       }
     }
     if (lines.length === 0) {
-      lines.push("Short vs longer sleep didnâ€™t split your scale much this month â€” recovery still matters beyond the number.")
+      lines.push("Short vs longer sleep didn’t split your scale much this month — recovery still matters beyond the number.")
     }
     return lines.slice(0, 3)
   }
@@ -454,11 +454,11 @@ function buildScaleCues(
     const gap = Math.round((meanAfterNone - meanAfterLog) * 10) / 10
     if (gap >= 0.35) {
       lines.push(
-        `Days with no bowel log averaged about ${gap} lb heavier on the next weigh-in than days with at least one â€” consistent with food volume and contents still sitting in the pipeline when you step on the scale.`
+        `Days with no bowel log averaged about ${gap} lb heavier on the next weigh-in than days with at least one — consistent with food volume and contents still sitting in the pipeline when you step on the scale.`
       )
     } else if (gap <= -0.35) {
       lines.push(
-        "No-log days didnâ€™t reliably run heavier before the next weigh-in â€” other drivers may be louder than transit this month."
+        "No-log days didn’t reliably run heavier before the next weigh-in — other drivers may be louder than transit this month."
       )
     }
   }
@@ -466,12 +466,12 @@ function buildScaleCues(
   if (spikesNoBowel.length) {
     const worst = spikesNoBowel.reduce((a, b) => (b.delta > a.delta ? b : a))
     lines.push(
-      `After at least one day with no bowel entry, the next weigh-in jumped up to +${worst.delta} lb (day ${worst.label}) â€” a pattern that often lines up with meal volume and GI load, not a sudden fat gain.`
+      `After at least one day with no bowel entry, the next weigh-in jumped up to +${worst.delta} lb (day ${worst.label}) — a pattern that often lines up with meal volume and GI load, not a sudden fat gain.`
     )
   }
   if (lines.length === 0) {
     lines.push(
-      "Bowel logging vs the next weigh-in stayed fairly flat â€” when the scale jumps, still cross-check calories, sodium, and sleep alongside gut rhythm."
+      "Bowel logging vs the next weigh-in stayed fairly flat — when the scale jumps, still cross-check calories, sodium, and sleep alongside gut rhythm."
     )
   }
   return lines.slice(0, 3)
@@ -527,11 +527,14 @@ const WEIGHT_Y_AXIS = 1
 export function WeightCorrelationPanel({
   daily,
   embedded = false,
+  showTitle = true,
   className,
 }: {
   daily: WeightCorrelationDayData[]
   /** Hub overview: open composition without nested glass-panel chrome. */
   embedded?: boolean
+  /** Hub focus already supplies the section title above the shared graph bay. */
+  showTitle?: boolean
   className?: string
 }) {
   const { user } = useUser()
@@ -652,18 +655,25 @@ export function WeightCorrelationPanel({
         className,
       )}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-            style={{ backgroundColor: `${WEIGHT_COLOR}26` }}
-          >
-            <Activity className="h-4 w-4" style={{ color: WEIGHT_COLOR }} />
+      <div
+        className={cn(
+          "flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4",
+          showTitle ? "sm:justify-between" : "sm:justify-end",
+        )}
+      >
+        {showTitle && (
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+              style={{ backgroundColor: `${WEIGHT_COLOR}26` }}
+            >
+              <Activity className="h-4 w-4" style={{ color: WEIGHT_COLOR }} />
+            </div>
+            <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-foreground/95">
+              Weight Correlation
+            </h2>
           </div>
-          <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-foreground/95">
-            Weight Correlation
-          </h2>
-        </div>
+        )}
         <div className="flex flex-wrap gap-1.5 sm:justify-end sm:max-w-[min(100%,28rem)]">
           {METRIC_KEYS.map((k) => {
             const m = METRIC_META[k]

@@ -16,7 +16,7 @@ import {
   Syringe,
   Waves,
 } from "lucide-react"
-import { HubCollapse, HUB_MOTION_MS } from "@/components/hub/HubMotion"
+import { HubCollapse } from "@/components/hub/HubMotion"
 import {
   ResponsiveContainer,
   AreaChart,
@@ -32,7 +32,6 @@ import {
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { PeptideHalfLifeMeter } from "@/components/PeptideHalfLifeMeter"
 import { PeptideHungerMeter } from "@/components/PeptideHungerMeter"
-import { Button } from "@/components/ui/button"
 import { WeekWorkoutGoalRing, WEEKLY_WORKOUT_GOAL } from "@/components/WeekWorkoutGoalRing"
 import {
   StageMinuteBars,
@@ -156,7 +155,6 @@ export function HubSleepExpand({
 
   useEffect(() => {
     let cancelled = false
-    setStatus("loading")
     void (async () => {
       try {
         const res = await apiFetch(`/api/sleep?date=${activeDate}`)
@@ -301,7 +299,11 @@ export function HubWeightExpand() {
         const data = await res.json()
         if (cancelled) return
         const rows = Array.isArray(data?.daily) ? (data.daily as WeightCorrelationDayData[]) : []
-        setDaily(rows)
+        const daysElapsed =
+          typeof data?.daysElapsed === "number" && Number.isFinite(data.daysElapsed)
+            ? Math.max(0, Math.floor(data.daysElapsed))
+            : rows.length
+        setDaily(data?.isCurrentMonth === true ? rows.slice(0, daysElapsed) : rows)
         setStatus("ready")
       } catch {
         if (!cancelled) {
@@ -314,6 +316,15 @@ export function HubWeightExpand() {
       cancelled = true
     }
   }, [month, reloadKey])
+
+  useEffect(() => {
+    const refresh = () => {
+      setStatus("loading")
+      setReloadKey((key) => key + 1)
+    }
+    window.addEventListener("grid:log-saved", refresh)
+    return () => window.removeEventListener("grid:log-saved", refresh)
+  }, [])
 
   const hasWeight = daily?.some((d) => d.weight != null || d.weightForward != null) ?? false
   const todayRow = daily?.find((d) => d.date === activeDate)
@@ -329,7 +340,7 @@ export function HubWeightExpand() {
       <div className="min-w-0">
           <p className="type-hud-subsection">Weight correlation</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-            {month} · vs steps, calories, sleep
+            {month} · vs steps, calories, sleep, bowel
           </p>
       </div>
 
@@ -353,7 +364,12 @@ export function HubWeightExpand() {
           Log a few weigh-ins this month to unlock weight vs activity correlations.
         </p>
       ) : (
-        <WeightCorrelationPanel daily={daily!} embedded className="min-w-0" />
+        <WeightCorrelationPanel
+          daily={daily!}
+          embedded
+          showTitle={false}
+          className="min-w-0"
+        />
       )}
 
       <LogWeightDialog
@@ -363,7 +379,6 @@ export function HubWeightExpand() {
         editing={todayRow?.weight != null}
         onSaved={() => {
           setLogOpen(false)
-          setReloadKey((k) => k + 1)
           window.dispatchEvent(new CustomEvent("grid:log-saved"))
         }}
       />

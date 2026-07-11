@@ -15,7 +15,6 @@ import {
   fetchDailyHeartRateVariability,
   fetchDailyHeartRateZones,
   fetchDailyRestingHeartRate,
-  fetchDailySteps,
   fetchDailyWeight,
   fetchHeartRateDailyRollup,
   fetchHeartRateSamplesBucketed,
@@ -95,26 +94,20 @@ async function fetchStepsForStepsDays(
 ): Promise<DailyStepsRollup[]> {
   const { start } = getStepsDayRange(startStepsKey, timeZone)
   const { end } = getStepsDayRange(endStepsKey, timeZone)
-  try {
-    const hourly = await fetchHourlySteps(userId, start.toISOString(), end.toISOString())
-    const bucketed = bucketStepsByStepsDay(
-      hourly.map((h) => ({
-        startTime: new Date(h.startTime),
-        count: h.count,
-      })),
-      timeZone,
-    )
-    const out: DailyStepsRollup[] = []
-    for (const [date, count] of bucketed) {
-      if (date < startStepsKey || date > endStepsKey) continue
-      if (count > 0) out.push({ date, count: Math.round(count) })
-    }
-    return out
-  } catch {
-    // Fallback: civil midnight dailyRollUp (cannot apply 7am boundary without hourly data).
-    const endExclusive = addDaysYmd(endStepsKey, 1)
-    return fetchDailySteps(userId, startStepsKey, endExclusive)
+  const hourly = await fetchHourlySteps(userId, start.toISOString(), end.toISOString())
+  const bucketed = bucketStepsByStepsDay(
+    hourly.map((h) => ({
+      startTime: new Date(h.startTime),
+      count: h.count,
+    })),
+    timeZone,
+  )
+  const out: DailyStepsRollup[] = []
+  for (const [date, count] of bucketed) {
+    if (date < startStepsKey || date > endStepsKey) continue
+    if (count > 0) out.push({ date, count: Math.round(count) })
   }
+  return out
 }
 
 export async function syncGoogleHealthForUser(
@@ -223,7 +216,7 @@ export async function syncGoogleHealthForUser(
   }
 
   // Drop stale google-health rows in the sync window (e.g. early-morning steps
-  // that moved to the previous steps-day after 7am re-bucketing).
+  // that moved to the previous tracking day after 5am re-bucketing).
   if (metrics.steps) {
     const stepsRange = utcCalendarDayRangeInclusive(startStepsKey, endStepsKey)
     const existingGh = await prisma.stepEntry.findMany({

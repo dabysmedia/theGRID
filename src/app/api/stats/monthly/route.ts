@@ -4,6 +4,7 @@ import { startOfMonth, endOfMonth, eachDayOfInterval, format, addDays } from "da
 import { kmToMiles, runKmToStepsFromRun } from "@/lib/units"
 import { sleepDurationHours } from "@/lib/sleepDuration"
 import { resolveUserId, UserError } from "@/lib/current-user"
+import { resolveStepsTimezone, stepsDayKey } from "@/lib/steps-day"
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
 
     const weightRange = { gte: start, lte: addDays(end, 2) }
 
-    const [calories, steps, runs, workouts, sleeps, alcohols, bowels, weightData] =
+    const [calories, steps, runs, workouts, sleeps, alcohols, bowels, weightData, profile] =
       await Promise.all([
         prisma.calorieEntry.findMany({ where: { date: dateRange, userId } }),
         prisma.stepEntry.findMany({ where: { date: dateRange, userId } }),
@@ -34,6 +35,10 @@ export async function GET(req: NextRequest) {
         prisma.longGoalEntry.findMany({
           where: { date: weightRange, goal: { userId } },
           include: { goal: { select: { category: true } } },
+        }),
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: { timeZone: true },
         }),
       ])
 
@@ -180,7 +185,7 @@ export async function GET(req: NextRequest) {
 
     // Mid-month views should rate consistency against days that have actually
     // happened, not days that haven't occurred yet.
-    const todayKey = format(new Date(), "yyyy-MM-dd")
+    const todayKey = stepsDayKey(new Date(), resolveStepsTimezone(profile?.timeZone))
     const elapsedKeys = dayKeys.filter((k) => k <= todayKey)
     const daysElapsed = Math.max(1, Math.min(dayKeys.length, elapsedKeys.length))
 
@@ -189,7 +194,7 @@ export async function GET(req: NextRequest) {
       monthLabel: format(start, "MMMM yyyy"),
       daysInMonth: dayKeys.length,
       daysElapsed,
-      isCurrentMonth: format(new Date(), "yyyy-MM") === format(start, "yyyy-MM"),
+      isCurrentMonth: todayKey.slice(0, 7) === format(start, "yyyy-MM"),
       daily,
       summary,
     })

@@ -27,6 +27,7 @@ interface WeighInPayload {
   todayEntry?: { value: number } | null
   latestEntry?: { value: number } | null
   previousEntry?: { value: number } | null
+  recentValues?: number[]
   unit?: string
 }
 
@@ -38,6 +39,7 @@ function applyPayload(
     setDayWeight: (n: number | null) => void
     setLatestWeight: (n: number | null) => void
     setPreviousWeight: (n: number | null) => void
+    setRecentValues: (v: number[]) => void
   }
 ) {
   const dayVal = data.todayEntry?.value ?? null
@@ -46,6 +48,11 @@ function applyPayload(
   setters.setDayWeight(dayVal)
   setters.setLatestWeight(latestVal)
   setters.setPreviousWeight(prevVal)
+  setters.setRecentValues(
+    Array.isArray(data.recentValues)
+      ? data.recentValues.filter((n) => typeof n === "number" && Number.isFinite(n))
+      : [],
+  )
   setters.setUnit(typeof data.unit === "string" ? data.unit : DEFAULT_WEIGHT_UNIT)
 
   if (dayVal != null) {
@@ -60,6 +67,47 @@ function applyPayload(
 interface WeightTrendSummary {
   baselineTrend: "losing" | "maintaining" | "gaining"
   vsBaselineLb: number
+  /** Oldest→newest recent weigh-in values (up to 7 logs). */
+  last7?: (number | null)[]
+}
+
+const SPARK_W = 88
+const SPARK_H = 24
+
+function weightWeekSpark(
+  values: (number | null)[] | undefined,
+): { line: string; area: string; lastX: number; lastY: number; dots: { x: number; y: number }[] } | null {
+  if (!values?.length) return null
+  const nums = values.filter((v): v is number => v != null && Number.isFinite(v))
+  if (nums.length < 2) return null
+
+  const min = Math.min(...nums)
+  const max = Math.max(...nums)
+  const range = max - min
+  // Give flat / near-flat weeks a little vertical room so the line still reads.
+  const padY = 3.5
+  const visualRange = Math.max(range, 0.8)
+  const mid = (min + max) / 2
+  const yMin = mid - visualRange / 2
+  const n = nums.length
+
+  const yFor = (v: number) =>
+    SPARK_H - padY - ((v - yMin) / visualRange) * (SPARK_H - padY * 2)
+
+  const dots = nums.map((v, i) => ({
+    x: n === 1 ? SPARK_W / 2 : (i / (n - 1)) * SPARK_W,
+    y: yFor(v),
+  }))
+
+  const line = dots
+    .map((p, idx) => `${idx === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+    .join(" ")
+
+  const last = dots[dots.length - 1]!
+  const first = dots[0]!
+  const area = `${line} L${last.x.toFixed(1)},${SPARK_H} L${first.x.toFixed(1)},${SPARK_H} Z`
+
+  return { line, area, lastX: last.x, lastY: last.y, dots }
 }
 
 interface DailyWeighInProps {
@@ -68,12 +116,15 @@ interface DailyWeighInProps {
   weightTrend?: WeightTrendSummary | null
   /** Hub: tap the weigh-in header row to expand correlations (does not fire on form controls). */
   onActivate?: () => void
+  /** Hub shared-element state: widen and fade the sparkline into the correlation graph bay. */
+  graphFocused?: boolean
 }
 
 export function DailyWeighIn({
   embedded = false,
   weightTrend = null,
   onActivate,
+  graphFocused = false,
 }: DailyWeighInProps) {
   const { activeDate } = useActiveDate()
   const { user } = useUser()
@@ -82,6 +133,7 @@ export function DailyWeighIn({
   const [dayWeight, setDayWeight] = useState<number | null>(null)
   const [latestWeight, setLatestWeight] = useState<number | null>(null)
   const [previousWeight, setPreviousWeight] = useState<number | null>(null)
+  const [recentValues, setRecentValues] = useState<number[]>([])
   const [unit, setUnit] = useState(DEFAULT_WEIGHT_UNIT)
   const [submitting, setSubmitting] = useState(false)
   const [weightEditing, setWeightEditing] = useState(false)
@@ -97,8 +149,8 @@ export function DailyWeighIn({
       ? format(parseLocalDate(user.vacationResumeDate), "MMM d, yyyy")
       : null
 
-  const load = useCallback(async () => {
-    setStatus("loading")
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) setStatus("loading")
     setWeightEditing(false)
     const res = await apiFetch(`/api/weigh-in?d=${activeDate}`)
     const data = await res.json()
@@ -112,6 +164,7 @@ export function DailyWeighIn({
       setDayWeight,
       setLatestWeight,
       setPreviousWeight,
+      setRecentValues,
     })
     setStatus("ready")
   }, [activeDate])
@@ -121,11 +174,21 @@ export function DailyWeighIn({
       setDayWeight(null)
       setLatestWeight(null)
       setPreviousWeight(null)
+      setRecentValues([])
       setValue("")
       setStatus("ready")
       return
     }
     load().catch(() => setStatus("ready"))
+  }, [load, vacationBlocksLog])
+
+  useEffect(() => {
+    if (vacationBlocksLog) return
+    const refresh = () => {
+      load(false).catch(() => setStatus("ready"))
+    }
+    window.addEventListener("grid:log-saved", refresh)
+    return () => window.removeEventListener("grid:log-saved", refresh)
   }, [load, vacationBlocksLog])
 
   useEffect(() => {
@@ -172,8 +235,10 @@ export function DailyWeighIn({
             setDayWeight,
             setLatestWeight,
             setPreviousWeight,
+            setRecentValues,
           })
         }
+        window.dispatchEvent(new CustomEvent("grid:log-saved"))
       }
     } finally {
       setSubmitting(false)
@@ -224,6 +289,17 @@ export function DailyWeighIn({
 
   const trend = weightTrend?.baselineTrend ?? null
   const trendDelta = weightTrend?.vsBaselineLb ?? 0
+  const sparkSeries =
+    recentValues.length >= 2
+      ? recentValues
+      : weightTrend?.last7?.filter((v): v is number => v != null) ?? []
+  const spark = weightWeekSpark(sparkSeries)
+  const sparkColor =
+    trend === "losing"
+      ? "#22c55e"
+      : trend === "gaining"
+        ? "#ef4444"
+        : "#14b8a6"
   const trendIcon =
     trend === "losing" ? (
       <TrendingDown className="h-3.5 w-3.5 shrink-0" style={{ color: "#22c55e" }} aria-hidden />
@@ -269,6 +345,62 @@ export function DailyWeighIn({
       </p>
     ) : null
 
+  const weekSparkline = spark ? (
+    <span
+      className={cn(
+        "relative mx-1 block min-w-[4.5rem] flex-1 origin-center overflow-visible motion-reduce:transition-none",
+        graphFocused
+          ? "h-10 max-w-none scale-x-110 opacity-0"
+          : "h-6 w-[5.5rem] max-w-[6.5rem] scale-x-100 opacity-100",
+      )}
+      style={{
+        transitionProperty: "width, max-width, height, opacity, transform",
+        transitionDuration: "720ms",
+        transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+      }}
+    >
+      <svg
+        viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+        className="h-full w-full overflow-visible"
+        aria-hidden
+      >
+        <defs>
+          <linearGradient id="weighSparkFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={sparkColor} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={sparkColor} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={spark.area} fill="url(#weighSparkFill)" stroke="none" />
+        <path
+          d={spark.line}
+          fill="none"
+          stroke={sparkColor}
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {spark.dots.slice(0, -1).map((d, i) => (
+          <circle
+            key={i}
+            cx={d.x}
+            cy={d.y}
+            r="1.15"
+            fill={sparkColor}
+            opacity={0.55}
+          />
+        ))}
+        <circle
+          cx={spark.lastX}
+          cy={spark.lastY}
+          r="2.35"
+          fill={sparkColor}
+          stroke="oklch(0.16 0.01 250)"
+          strokeWidth="1.15"
+        />
+      </svg>
+    </span>
+  ) : null
+
   const formInner = (
     <div className={cn(embedded ? "space-y-1.5" : "space-y-3.5")}>
       {onActivate ? (
@@ -278,12 +410,13 @@ export function DailyWeighIn({
           aria-label="Expand weight correlations"
           className="group -mx-0.5 flex min-h-11 w-[calc(100%+0.25rem)] touch-manipulation items-center justify-between gap-2 rounded-sm px-0.5 text-left transition-colors hover:bg-white/[0.03] active:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25"
         >
-          <div className="min-w-0 space-y-0.5">
+          <div className="min-w-0 shrink-0 space-y-0.5">
             <p className={cn(titleClass, "transition-colors group-hover:text-foreground/90")}>
               {titleText}
             </p>
             {lastHint}
           </div>
+          {weekSparkline}
           <div className="flex shrink-0 items-center gap-1.5">
             {trendChip}
             <ChevronRight
@@ -294,10 +427,11 @@ export function DailyWeighIn({
         </button>
       ) : (
         <div className="flex items-end justify-between gap-2">
-          <div className="min-w-0 space-y-0.5">
+          <div className="min-w-0 shrink-0 space-y-0.5">
             <p className={titleClass}>{titleText}</p>
             {lastHint}
           </div>
+          {weekSparkline}
           {trendChip}
         </div>
       )}

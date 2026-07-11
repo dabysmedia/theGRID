@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { kmToMiles, runKmToStepsFromRun } from "@/lib/units"
 import { formatDate, parseLocalDate } from "@/lib/utils"
-import { format } from "date-fns"
 import { subDays } from "date-fns"
 import { startOfISOWeek } from "date-fns"
 import {
@@ -16,6 +15,7 @@ import { deriveSleepScore, qualityToScore } from "@/lib/sleep-score"
 import {
   addDaysYmd,
   resolveStepsTimezone,
+  stepsDayKey,
   stepsRefDayKey,
 } from "@/lib/steps-day"
 
@@ -37,10 +37,13 @@ type WeightBaselineTrend = "losing" | "maintaining" | "gaining"
 const WEEKLY_WEIGHT_MAINTAIN_LB = 0.45
 
 function computeWeeklyWeightTrend(
-  entries: { date: Date; value: number }[]
+  entries: { date: Date; value: number }[],
+  refDayStr: string,
 ): {
   baselineTrend: WeightBaselineTrend
   vsBaselineLb: number
+  /** Oldest→newest recent weigh-in values (up to 7 logs on/before ref day). */
+  last7: (number | null)[]
 } | null {
   const byWeekStart = new Map<number, number[]>()
   for (const entry of entries) {
@@ -63,7 +66,16 @@ function computeWeeklyWeightTrend(
   if (vsBaselineLb < -WEEKLY_WEIGHT_MAINTAIN_LB) baselineTrend = "losing"
   else if (vsBaselineLb > WEEKLY_WEIGHT_MAINTAIN_LB) baselineTrend = "gaining"
 
-  return { baselineTrend, vsBaselineLb }
+  // Sparkline: last up to 7 weigh-ins on/before ref day (actual logs, not calendar fill).
+  const sparkEntries = [...entries]
+    .filter((e) => utcCalendarDayKeyFromIso(e.date) <= refDayStr)
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .slice(-7)
+  const last7: (number | null)[] = sparkEntries.map(
+    (e) => Math.round(e.value * 10) / 10,
+  )
+
+  return { baselineTrend, vsBaselineLb, last7 }
 }
 
 function recoveryCompositeFromEntry(e: {
@@ -154,28 +166,26 @@ export async function GET(req: NextRequest) {
     const userId = await resolveUserId(req)
 
     const dateParam = req.nextUrl.searchParams.get("d")
-    const refDate =
-      dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
-        ? parseLocalDate(dateParam)
-        : new Date()
-    const refDayStr = formatDate(refDate)
-    const weekStartStr = formatDate(subDays(refDate, 6))
-    const vitalsBaselineStartStr = formatDate(subDays(refDate, 29))
-    const weightRangeStartStr = formatDate(subDays(refDate, 55))
-
+    const now = new Date()
     const profile = await prisma.user.findUnique({
       where: { id: userId },
       select: { timeZone: true },
     })
-    const stepsTz = resolveStepsTimezone(profile?.timeZone)
-    // When viewing "today", steps use the 7am→7am day (pre-7am still counts as yesterday).
-    const stepsRefDayStr = stepsRefDayKey(refDayStr, new Date(), stepsTz)
-    const stepsWeekStartStr = addDaysYmd(stepsRefDayStr, -6)
+    const trackingTz = resolveStepsTimezone(profile?.timeZone)
+    const requestedRefDayStr =
+      dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+        ? dateParam
+        : stepsDayKey(now, trackingTz)
+    // A tracking day runs 5am→5am. This also remaps calendar "today" sent by
+    // older clients to the previous key during the early-morning window.
+    const refDayStr = stepsRefDayKey(requestedRefDayStr, now, trackingTz)
+    const refDate = parseLocalDate(refDayStr)
+    const weekStartStr = formatDate(subDays(refDate, 6))
+    const vitalsBaselineStartStr = formatDate(subDays(refDate, 29))
+    const weightRangeStartStr = formatDate(subDays(refDate, 55))
+    const stepsRefDayStr = refDayStr
 
-    const rangeFirst =
-      weekStartStr <= stepsWeekStartStr ? weekStartStr : stepsWeekStartStr
-    const rangeLast = refDayStr >= stepsRefDayStr ? refDayStr : stepsRefDayStr
-    const dateInRange = utcCalendarDayRangeInclusive(rangeFirst, rangeLast)
+    const dateInRange = utcCalendarDayRangeInclusive(weekStartStr, refDayStr)
     const vitalsBaselineRange = utcCalendarDayRangeInclusive(
       vitalsBaselineStartStr,
       refDayStr,
@@ -266,8 +276,7 @@ export async function GET(req: NextRequest) {
     ): number[] {
       const result: number[] = []
       for (let i = 0; i <= 6; i++) {
-        const day = subDays(refDate, 6 - i)
-        const dayKey = format(day, "yyyy-MM-dd")
+        const dayKey = addDaysYmd(refDayStr, -(6 - i))
         const dayEntries = entries.filter(
           (e) => utcCalendarDayKeyFromIso(e.date) === dayKey
         )
@@ -356,8 +365,7 @@ export async function GET(req: NextRequest) {
     let todayHrvMs: number | null = null
     let todayRhr: number | null = null
     for (let i = 0; i <= 6; i++) {
-      const day = subDays(refDate, 6 - i)
-      const dayKey = format(day, "yyyy-MM-dd")
+      const dayKey = addDaysYmd(refDayStr, -(6 - i))
       const dayVitals = vitalEntries.filter(
         (e) => utcCalendarDayKeyFromIso(e.date) === dayKey,
       )
@@ -416,7 +424,7 @@ export async function GET(req: NextRequest) {
     const bowelGoal = bowelG ? dashboardGoalValue(bowelG) : null
     const recoveryGoal = recoveryG ? dashboardGoalValue(recoveryG) : null
 
-    const weightTrend = computeWeeklyWeightTrend(weightEntries)
+    const weightTrend = computeWeeklyWeightTrend(weightEntries, refDayStr)
 
     const body = {
       calories: {
@@ -432,7 +440,7 @@ export async function GET(req: NextRequest) {
         direction: stepsG?.direction ?? "up",
         unit: "steps",
         last7: stepsLast7,
-        /** yyyy-MM-dd key for the 7am→7am steps day ending the last7 window */
+        /** yyyy-MM-dd key for the 5am→5am tracking day ending the last7 window */
         refDay: stepsRefDayStr,
       },
       running: {

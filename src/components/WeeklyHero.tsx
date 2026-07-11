@@ -29,9 +29,6 @@ import { ProfileHeaderTrigger } from "@/context/ProfileDialogContext"
 import type { NextInjectionInfo } from "@/lib/hub-tile-prefs"
 import { cn, glassPanelClass, parseLocalDate } from "@/lib/utils"
 
-/** Show today’s weigh-in prompt on the hub only from this local hour onward (inclusive). */
-const WEIGH_IN_PROMPT_FROM_HOUR = 4
-
 /** Single-letter weekday labels indexed by `Date#getDay()` (Sun–Sat). */
 const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"] as const
 
@@ -49,7 +46,7 @@ interface CategorySummary {
   goal: number | null
   unit: string
   last7: number[]
-  /** Present for steps: 7am→7am day key for the last7 window end */
+  /** Present for steps: 5am→5am tracking-day key for the last7 window end */
   refDay?: string
 }
 
@@ -72,6 +69,7 @@ interface DashboardData {
   weightTrend: {
     baselineTrend: "losing" | "maintaining" | "gaining"
     vsBaselineLb: number
+    last7: (number | null)[]
   } | null
 }
 
@@ -365,7 +363,7 @@ function FocusDialReadouts({
   return (
     <div
       key={panel}
-      className="pointer-events-none absolute inset-x-0 top-0 z-20 grid h-[calc(var(--hub-ring-size)+3rem)] grid-cols-[1fr_var(--hub-ring-size)_1fr] gap-2 lg:grid-cols-[1fr_124px_1fr]"
+      className="pointer-events-none absolute inset-x-0 top-0 z-20 grid h-[var(--hub-ring-size)] grid-cols-[1fr_var(--hub-ring-size)_1fr] gap-2 lg:h-[124px] lg:grid-cols-[1fr_124px_1fr]"
       aria-hidden
     >
       <div className="flex min-w-0 items-center justify-end pr-1.5 text-right motion-safe:animate-fade-up motion-reduce:animate-none sm:pr-3">
@@ -406,7 +404,6 @@ export function WeeklyHero({
   workoutSummary,
 }: WeeklyHeroProps) {
   const { activeDate, isToday } = useActiveDate()
-  const [showWeighInPrompt, setShowWeighInPrompt] = useState(false)
   const [viewMode, setViewMode] = useState<OverviewView>("today")
   const [expandedLocal, setExpandedLocal] = useState<HubExpandedPanel | null>(null)
   const expanded = expandedProp !== undefined ? expandedProp : expandedLocal
@@ -425,18 +422,6 @@ export function WeeklyHero({
   weekStart.setDate(refDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekStart.getDate() + 6)
-
-  useLayoutEffect(() => {
-    if (!isToday) {
-      setShowWeighInPrompt(true)
-      return
-    }
-    const apply = () =>
-      setShowWeighInPrompt(new Date().getHours() >= WEIGH_IN_PROMPT_FROM_HOUR)
-    apply()
-    const id = setInterval(apply, 60_000)
-    return () => clearInterval(id)
-  }, [isToday])
 
   // Collapse when the active day changes
   useLayoutEffect(() => {
@@ -495,7 +480,7 @@ export function WeeklyHero({
   const showRings = expanded == null || expandedRing != null || protocolFocused
   const showStepsBars =
     expanded == null || expanded === "steps" || expanded === "vitals"
-  const showWeighIn = showWeighInPrompt && (expanded == null || expanded === "weight")
+  const showWeighIn = expanded == null || expanded === "weight"
   const showProtocolRail = expanded == null
 
   const peptideNext = peptideSummary?.nextInjection ?? null
@@ -762,35 +747,39 @@ export function WeeklyHero({
               aria-hidden={!protocolFocused}
               tabIndex={protocolFocused ? undefined : -1}
               className={cn(
-                "absolute inset-x-0 top-0 z-20 grid h-[calc(var(--hub-ring-size)+3rem)] grid-cols-[1fr_auto_1fr] items-center gap-2 px-1 transition-[opacity,transform] duration-[900ms] ease-[cubic-bezier(0.4,0,0.2,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/20 sm:px-2",
+                // Top-align like HubRingBay rings (not items-center) so the dial
+                // sits under Overview with the same gap as calories/steps/sleep.
+                "absolute inset-x-0 top-0 z-20 grid h-[calc(var(--hub-ring-size)+3rem)] grid-cols-[1fr_var(--hub-ring-size)_1fr] items-start gap-2 px-1 transition-[opacity,transform] duration-[900ms] ease-[cubic-bezier(0.4,0,0.2,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/20 sm:px-2 lg:grid-cols-[1fr_124px_1fr]",
                 protocolFocused
                   ? "translate-y-0 scale-100 opacity-100"
                   : "pointer-events-none -translate-y-1 scale-[0.985] opacity-0",
               )}
             >
-              <div className="min-w-0 border-r border-white/[0.07] pr-2 text-right sm:pr-4">
-                <p className="type-hud-micro">
-                  {expanded === "peptides" ? "Last dose" : "This week"}
-                </p>
-                <p className="mt-1 truncate text-base font-semibold tabular-nums text-foreground/90 sm:text-lg">
-                  {expanded === "peptides"
-                    ? peptideSummary?.lastDoseMg != null
-                      ? `${peptideSummary.lastDoseMg} mg`
-                      : "—"
-                    : `${weekWo}/${WEEKLY_WORKOUT_GOAL}`}
-                </p>
-                <p className="mt-0.5 truncate text-[9px] text-muted-foreground/45 sm:text-[10px]">
-                  {expanded === "peptides"
-                    ? peptideSummary?.todayMg
-                      ? `${peptideSummary.todayMg} mg today`
-                      : "No dose today"
-                    : workoutSummary?.todayCount
-                      ? `${workoutSummary.todayCount} today`
-                      : "No session today"}
-                </p>
+              <div className="flex min-w-0 items-start justify-end pt-1 pr-1.5 text-right sm:pt-1.5 sm:pr-3">
+                <div className="min-w-0 border-r border-white/[0.07] pr-2.5 sm:pr-4">
+                  <p className="type-hud-micro">
+                    {expanded === "peptides" ? "Last dose" : "This week"}
+                  </p>
+                  <p className="mt-1 truncate text-base font-semibold tabular-nums text-foreground/90 sm:text-lg">
+                    {expanded === "peptides"
+                      ? peptideSummary?.lastDoseMg != null
+                        ? `${peptideSummary.lastDoseMg} mg`
+                        : "—"
+                      : `${weekWo}/${WEEKLY_WORKOUT_GOAL}`}
+                  </p>
+                  <p className="mt-0.5 truncate text-[9px] text-muted-foreground/45 sm:text-[10px]">
+                    {expanded === "peptides"
+                      ? peptideSummary?.todayMg
+                        ? `${peptideSummary.todayMg} mg today`
+                        : "No dose today"
+                      : workoutSummary?.todayCount
+                        ? `${workoutSummary.todayCount} today`
+                        : "No session today"}
+                  </p>
+                </div>
               </div>
 
-              <div className="flex min-w-[var(--hub-protocol-glyph)] items-center justify-center">
+              <div className="flex size-[var(--hub-ring-size)] items-center justify-center lg:h-[124px] lg:w-[124px]">
                 {expanded === "peptides" ? (
                   <PeptideVialGraphic
                     color="#94a3b8"
@@ -808,35 +797,37 @@ export function WeeklyHero({
                 )}
               </div>
 
-              <div className="min-w-0 border-l border-white/[0.07] pl-2 text-left sm:pl-4">
-                <p className="type-hud-micro">
-                  {expanded === "peptides" ? "Next" : "Recovery"}
-                </p>
-                <p
-                  className={cn(
-                    "mt-1 truncate text-base font-semibold tabular-nums text-foreground/90 sm:text-lg",
-                    expanded === "peptides" && peptideNext?.overdue && "text-negative",
-                  )}
-                >
-                  {expanded === "peptides"
-                    ? peptideNext?.overdue
-                      ? `${Math.abs(peptideNext.daysUntil)}d late`
-                      : peptideNext?.dueToday
-                        ? "Today"
-                        : peptideNext
-                          ? `${peptideNext.daysUntil}d`
-                          : "—"
-                    : workoutSummary?.recoveryScore != null
-                      ? `${workoutSummary.recoveryScore}/10`
-                      : "—"}
-                </p>
-                <p className="mt-0.5 truncate text-[9px] text-muted-foreground/45 sm:text-[10px]">
-                  {expanded === "peptides"
-                    ? `Every ${peptideSummary?.intervalDays ?? 7} days`
-                    : woMet
-                      ? "Weekly goal met"
-                      : `${Math.max(0, WEEKLY_WORKOUT_GOAL - weekWo)} to goal`}
-                </p>
+              <div className="flex min-w-0 items-start justify-start pt-1 pl-1.5 text-left sm:pt-1.5 sm:pl-3">
+                <div className="min-w-0 border-l border-white/[0.07] pl-2.5 sm:pl-4">
+                  <p className="type-hud-micro">
+                    {expanded === "peptides" ? "Next" : "Recovery"}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-1 truncate text-base font-semibold tabular-nums text-foreground/90 sm:text-lg",
+                      expanded === "peptides" && peptideNext?.overdue && "text-negative",
+                    )}
+                  >
+                    {expanded === "peptides"
+                      ? peptideNext?.overdue
+                        ? `${Math.abs(peptideNext.daysUntil)}d late`
+                        : peptideNext?.dueToday
+                          ? "Today"
+                          : peptideNext
+                            ? `${peptideNext.daysUntil}d`
+                            : "—"
+                      : workoutSummary?.recoveryScore != null
+                        ? `${workoutSummary.recoveryScore}/10`
+                        : "—"}
+                  </p>
+                  <p className="mt-0.5 truncate text-[9px] text-muted-foreground/45 sm:text-[10px]">
+                    {expanded === "peptides"
+                      ? `Every ${peptideSummary?.intervalDays ?? 7} days`
+                      : woMet
+                        ? "Weekly goal met"
+                        : `${Math.max(0, WEEKLY_WORKOUT_GOAL - weekWo)} to goal`}
+                  </p>
+                </div>
               </div>
               </button>
             </div>
@@ -1036,10 +1027,23 @@ export function WeeklyHero({
 
         {/* Weigh-in stays the coda — always last in the overview stack */}
         <FadeSection show={showWeighIn} className={fillViewport ? "shrink-0" : undefined}>
-          <div className="relative z-10 space-y-3 px-0.5 py-0.5">
+          <div
+            className={cn(
+              "relative z-10 space-y-3 rounded-2xl border px-0.5 py-0.5 motion-reduce:transition-none",
+              expanded === "weight"
+                ? "border-white/[0.08] bg-white/[0.02] p-2.5 sm:p-3"
+                : "border-transparent bg-transparent",
+            )}
+            style={{
+              transitionProperty: "background-color, border-color, padding",
+              transitionDuration: `${HUB_MOTION_MS}ms`,
+              transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+            }}
+          >
             <DailyWeighIn
               embedded
               weightTrend={data.weightTrend}
+              graphFocused={expanded === "weight"}
               onActivate={expanded === "weight" ? undefined : () => toggleExpand("weight")}
             />
             <HubPresence open={expanded === "weight"} durationMs={HUB_MOTION_MS}>

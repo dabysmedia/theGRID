@@ -5,11 +5,13 @@ import {
   useContext,
   useCallback,
   useMemo,
+  useRef,
   useState,
   useEffect,
   type ReactNode,
 } from "react"
 import { formatDate } from "@/lib/utils"
+import { stepsDayKey } from "@/lib/steps-day"
 
 const STORAGE_KEY = "theGRID_activeDate"
 
@@ -34,7 +36,10 @@ function readStoredDate(): string | null {
 }
 
 export function DateProvider({ children }: { children: ReactNode }) {
-  const todayStr = formatDate(new Date())
+  // Use a server/client-stable calendar key for hydration, then switch to the
+  // browser's local 5am tracking day immediately after mount.
+  const [todayStr, setTodayStr] = useState(() => formatDate(new Date()))
+  const todayRef = useRef(todayStr)
 
   const [activeDate, setActiveDateRaw] = useState(() => {
     const stored = readStoredDate()
@@ -42,6 +47,28 @@ export function DateProvider({ children }: { children: ReactNode }) {
   })
 
   const isToday = activeDate === todayStr
+
+  useEffect(() => {
+    const refreshTrackingDay = () => {
+      const nextToday = stepsDayKey()
+      const previousToday = todayRef.current
+      if (nextToday === previousToday) return
+      todayRef.current = nextToday
+      setTodayStr(nextToday)
+      setActiveDateRaw((current) => (current === previousToday ? nextToday : current))
+    }
+
+    const initialRefresh = window.setTimeout(refreshTrackingDay, 0)
+    const interval = window.setInterval(refreshTrackingDay, 30_000)
+    window.addEventListener("focus", refreshTrackingDay)
+    document.addEventListener("visibilitychange", refreshTrackingDay)
+    return () => {
+      window.clearTimeout(initialRefresh)
+      window.clearInterval(interval)
+      window.removeEventListener("focus", refreshTrackingDay)
+      document.removeEventListener("visibilitychange", refreshTrackingDay)
+    }
+  }, [])
 
   useEffect(() => {
     try {
@@ -58,7 +85,7 @@ export function DateProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const goToday = useCallback(() => {
-    setActiveDateRaw(formatDate(new Date()))
+    setActiveDateRaw(stepsDayKey())
   }, [])
 
   const goPrev = useCallback(() => {

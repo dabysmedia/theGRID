@@ -55,6 +55,16 @@ export async function GET(req: NextRequest) {
       take: 2,
     })
 
+    const recentEntries = await prisma.longGoalEntry.findMany({
+      where: {
+        goalId: goal.id,
+        date: { lte: targetDay },
+      },
+      orderBy: { date: "desc" },
+      take: 7,
+      select: { date: true, value: true },
+    })
+
     const latestEntry = lastTwo[0] ?? null
     const previousEntry =
       dayEntry && lastTwo[0]?.id === dayEntry.id
@@ -66,6 +76,11 @@ export async function GET(req: NextRequest) {
       todayEntry: dayEntry,
       latestEntry,
       previousEntry,
+      /** Oldest→newest weigh-ins on/before the requested day (up to 7). */
+      recentValues: recentEntries
+        .slice()
+        .reverse()
+        .map((e) => Math.round(e.value * 10) / 10),
       goalId: goal.id,
       unit: goal.unit,
     })
@@ -76,6 +91,7 @@ export async function GET(req: NextRequest) {
       todayEntry: null,
       latestEntry: null,
       previousEntry: null,
+      recentValues: [],
     })
   }
 }

@@ -93,6 +93,7 @@ interface DashboardData {
   weightTrend: {
     baselineTrend: "losing" | "maintaining" | "gaining"
     vsBaselineLb: number
+    last7: (number | null)[]
   } | null
 }
 

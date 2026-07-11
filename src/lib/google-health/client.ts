@@ -89,7 +89,7 @@ export async function fetchDailySteps(
 }
 
 /**
- * Hourly step totals over a physical UTC range (for 7am→7am re-bucketing).
+ * Hourly step totals over a physical UTC range (for 5am→5am re-bucketing).
  * Google Health caps steps rollUp ranges at 90 days.
  */
 export async function fetchHourlySteps(

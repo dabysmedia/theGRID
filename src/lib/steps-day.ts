@@ -1,16 +1,16 @@
 /**
- * Steps day = local 07:00 → next local 07:00.
- * Early-morning steps (before 7am) belong to the previous day's total
+ * Tracking day = local 05:00 → next local 05:00.
+ * Early-morning activity (before 5am) belongs to the previous day's total
  * (the day the user was still "up").
  *
  * Stored StepEntry.date uses the steps-day key as UTC noon (same as other
- * calendar-day fields) — e.g. Mon 7am–Tue 7am → "YYYY-MM-DD" for Monday.
+ * calendar-day fields) — e.g. Mon 5am–Tue 5am → "YYYY-MM-DD" for Monday.
  *
  * Pure helpers (no server-only) so hub/client and sync can share one definition.
  */
 
-/** Local hour when a new steps day begins. */
-export const STEPS_DAY_BOUNDARY_HOUR = 7
+/** Local hour when a new tracking day begins. */
+export const STEPS_DAY_BOUNDARY_HOUR = 5
 /** @deprecated use STEPS_DAY_BOUNDARY_HOUR */
 export const STEPS_DAY_START_HOUR = STEPS_DAY_BOUNDARY_HOUR
 
@@ -118,7 +118,7 @@ export function localTimeToUtc(
 
 /**
  * Steps-day key (YYYY-MM-DD) for an instant.
- * Before local 07:00, returns the previous calendar date.
+ * Before local 05:00, returns the previous calendar date.
  */
 export function stepsDayKey(date: Date = new Date(), timeZone?: string | null): string {
   const tz = resolveStepsTimezone(timeZone)
@@ -132,13 +132,13 @@ export function stepsDayKey(date: Date = new Date(), timeZone?: string | null): 
 export type StepsDayRange = {
   /** Steps-day key this range represents */
   dayKey: string
-  /** Inclusive start: local 07:00 on dayKey */
+  /** Inclusive start: local 05:00 on dayKey */
   start: Date
-  /** Exclusive end: local 07:00 on the next calendar day */
+  /** Exclusive end: local 05:00 on the next calendar day */
   end: Date
 }
 
-/** Physical-time half-open range [07:00, next 07:00) for a steps-day key. */
+/** Physical-time half-open range [05:00, next 05:00) for a steps-day key. */
 export function getStepsDayRange(dayKey: string, timeZone?: string | null): StepsDayRange {
   const tz = resolveStepsTimezone(timeZone)
   const start = localTimeToUtc(dayKey, STEPS_DAY_BOUNDARY_HOUR * 60, tz)
@@ -170,7 +170,7 @@ export function stepsDayKeysEndingAt(endDayKey: string, count: number): string[]
 
 /**
  * Sum step samples into steps-day buckets using each sample's start time
- * (hourly rollups: 06:00–07:00 starts at 6 → previous steps day).
+ * (hourly rollups: 04:00–05:00 starts at 4 → previous tracking day).
  */
 export function bucketStepsByStepsDay(
   samples: Array<{ startTime: Date | string; count: number; endTime?: Date | string }>,
