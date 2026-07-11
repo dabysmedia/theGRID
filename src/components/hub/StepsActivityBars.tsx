@@ -18,8 +18,9 @@ const BAND_ACCENT: Record<ReadinessBand, string> = {
   very_low: "#fb7185",
 }
 
-const BAR_AREA_PX = 58
-const BAR_MAX_PX = 56
+/** Collapsed fallback when not using `--hub-bar-area` (matches CSS clamp max). */
+const BAR_AREA_PX = 76
+const BAR_MAX_PX = 72
 /** Expanded chart: room for per-day value labels above taller bars. */
 const BAR_AREA_EXPANDED_PX = 128
 const BAR_MAX_EXPANDED_PX = 100
@@ -53,8 +54,12 @@ type Props = {
   /** When set, readiness/HRV row toggles vitals expand instead of navigating away. */
   onReadinessClick?: () => void
   readinessSelected?: boolean
+  /** Hide readiness while the steps panel is expanded. */
+  hideReadiness?: boolean
   /** Hide the steps chart (keep readiness) — used when vitals panel is open. */
   hideSteps?: boolean
+  /** Whether the chart is currently exposed in the hub stack. */
+  chartVisible?: boolean
   /** Collapsed hub: use viewport-scaled bar area (`--hub-bar-area`) instead of fixed px. */
   scaleToFit?: boolean
   className?: string
@@ -78,7 +83,9 @@ export function StepsActivityBars({
   onStepsClick,
   onReadinessClick,
   readinessSelected = false,
+  hideReadiness = false,
   hideSteps = false,
+  chartVisible: _chartVisible = true,
   scaleToFit = false,
   className,
 }: Props) {
@@ -150,6 +157,7 @@ export function StepsActivityBars({
       />
 
       {/* Readiness — text inset; gradient full-bleed to card edges */}
+      {!hideReadiness ? (
       <button
         type="button"
         onClick={onReadinessClick}
@@ -301,9 +309,10 @@ export function StepsActivityBars({
           ) : null}
         </div>
       </button>
+      ) : null}
 
       {/* Soft seam only — no opaque cut between readiness and steps */}
-      {!hideSteps ? (
+      {!hideSteps && !hideReadiness ? (
         <div
           className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/5 to-transparent"
           aria-hidden
@@ -444,7 +453,7 @@ export function StepsActivityBars({
                 pct * barFillRatio * 100,
               )
               const isToday = i === todayIdx
-              const delay = 280 + i * 70
+              const delay = 60 + i * 95
               const hitGoal = goalValue != null && val >= goalValue
 
               return (
@@ -488,17 +497,24 @@ export function StepsActivityBars({
                     </span>
                   </div>
 
+                  {/* Outer keeps isometric pose; inner owns scaleY grow (must not share transform). */}
                   <div
-                    className="absolute bottom-0 origin-bottom animate-bar-grow transition-[height] duration-500 ease-out motion-reduce:transition-none"
+                    className="absolute bottom-0 transition-[height,max-width] duration-500 ease-out motion-reduce:transition-none"
                     style={{
                       width: "78%",
-                      maxWidth: expanded ? 34 : 30,
+                      maxWidth: expanded ? 38 : 34,
                       height: useScaledBars ? `${heightPct}%` : heightPx,
-                      animationDelay: `${delay}ms`,
                       transformStyle: "preserve-3d",
                       transform: "rotateX(12deg) rotateY(-18deg)",
                     }}
                   >
+                    <div
+                      className="absolute inset-0 origin-bottom animate-bar-grow motion-reduce:animate-none"
+                      style={{
+                        animationDelay: `${delay}ms`,
+                        transformStyle: "preserve-3d",
+                      }}
+                    >
                     <div
                       className="absolute left-0 right-0 top-0"
                       style={{
@@ -553,6 +569,7 @@ export function StepsActivityBars({
                           }}
                         />
                       ) : null}
+                    </div>
                     </div>
                   </div>
                 </div>

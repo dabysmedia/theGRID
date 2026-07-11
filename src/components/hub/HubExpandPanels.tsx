@@ -714,7 +714,7 @@ export function HubVitalsExpand({
         <p className="type-hud-caption text-muted-foreground/55">Loading vitals…</p>
       ) : status === "error" ? (
         <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-[12px] text-muted-foreground/70">
-          Couldn’t load vitals. Sync Google Health above, or open the Vitals page.
+          Couldn’t load vitals. Sync Google Health above, then try again.
         </p>
       ) : (
         <>
@@ -1235,12 +1235,6 @@ export function HubPeptidesExpand({
       <div className="space-y-2">
         <div className="flex items-baseline justify-between gap-2">
           <p className="type-hud-caption">Recent injections</p>
-          <Link
-            href="/peptides"
-            className="type-hud-micro text-muted-foreground/55 transition-colors hover:text-foreground/80"
-          >
-            Full history
-          </Link>
         </div>
         {history.length === 0 ? (
           <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
@@ -1349,14 +1343,6 @@ export function HubPeptidesExpand({
                         </ul>
                       </div>
                     ))}
-                    <div className="px-0.5 pt-1">
-                      <Link
-                        href="/peptides"
-                        className="type-hud-micro text-muted-foreground/55 transition-colors hover:text-foreground/80"
-                      >
-                        Full history →
-                      </Link>
-                    </div>
                   </div>
                 </HubCollapse>
               </li>

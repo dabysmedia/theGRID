@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useMemo, useState, useRef, Suspense } from "react"
 import {
@@ -12,7 +12,6 @@ import {
   ImagePlus,
   MoreHorizontal,
   Pencil,
-  Play,
   Plus,
   Search,
   SkipForward,
@@ -20,12 +19,8 @@ import {
   Trash2,
   X,
 } from "lucide-react"
-import { addDays, format, startOfWeek, subDays } from "date-fns"
+import { addDays, startOfWeek, subDays } from "date-fns"
 import { useRouter, useSearchParams } from "next/navigation"
-import { PageHeader } from "@/components/PageHeader"
-import { PageHeroStrip } from "@/components/PageHeroStrip"
-import { HistoryArchivedNote, HistoryEarlierSection } from "@/components/HistoryEarlierSection"
-import { partitionHistoryDayGroups } from "@/lib/history-display"
 import { apiFetch } from "@/lib/api-fetch"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,16 +39,14 @@ import {
   saveWorkoutRestConfig,
   type WorkoutRestConfig,
 } from "@/lib/workout-rest-config"
-import { cn, formatDate, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import { cn, formatDate, parseLocalDate } from "@/lib/utils"
 import { PlateCalculatorDialog } from "@/components/workouts/PlateCalculatorDialog"
-import { WorkoutRecoverySection } from "@/components/workouts/WorkoutRecoverySection"
 import { FALLBACK_EXERCISES, type ApiExercise } from "@/lib/workouts/exercise-library"
 import {
   ProgressiveOverloadCoach,
   type SetEffortPatch,
 } from "@/components/workouts/ProgressiveOverloadCoach"
 import { MovementCompleteOverview } from "@/components/workouts/MovementCompleteOverview"
-import { ProgressionSummaryHero } from "@/components/workouts/ProgressionSummaryHero"
 import { summarizeWorkoutProgression } from "@/lib/workouts/progressive-overload"
 import {
   getPreferredSubstitute,
@@ -71,9 +64,9 @@ import {
 } from "@/lib/workouts/free-form-recommender"
 import { normalizeExerciseKey } from "@/lib/workouts/progressive-overload"
 
-/* ──────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Types
-   ────────────────────────────────────────────────────────── */
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 interface ExerciseSet {
   id: string
@@ -126,7 +119,7 @@ interface TemplateExercise {
   notes: string
   primaryMuscles?: MuscleTag[]
   setRows: TemplateSetRow[]
-  /** Legacy templates only — migrated to `setRows` on load */
+  /** Legacy templates only â€” migrated to `setRows` on load */
   targetSets?: number
   targetReps?: string
   /** Last preferred substitute for this slot (persisted on the template). */
@@ -164,7 +157,7 @@ interface WorkoutSession {
   status: string
   exercises: string | SessionExercise[]
   bodyWeightLb?: number | null
-  /** Routine cover when started from a template with art (`/uploads/routine-covers/…`). */
+  /** Routine cover when started from a template with art (`/uploads/routine-covers/â€¦`). */
   coverImageUrl?: string | null
 }
 
@@ -289,7 +282,7 @@ function parseTemplateWeightToNumber(s: string): number | null {
 function parseTemplateRepsToNumber(s: string): number | null {
   const t = String(s ?? "").trim()
   if (!t) return null
-  if (/[-–—]/.test(t)) return null
+  if (/[-â€“â€”]/.test(t)) return null
   const n = parseInt(t, 10)
   return Number.isFinite(n) ? n : null
 }
@@ -303,30 +296,6 @@ function sessionSetsFromTemplate(m: TemplateExercise): ExerciseSet[] {
     type: "working" as const,
     completed: false,
   }))
-}
-
-function sessionToTemplateExercises(session: WorkoutSession): TemplateExercise[] {
-  const exs = parseExercises<SessionExercise>(session.exercises)
-  return exs.map((ex) => {
-    const completedSets = ex.sets.filter((s) => s.completed)
-    const sourceSets = completedSets.length > 0 ? completedSets : ex.sets
-    const setRows: TemplateSetRow[] =
-      sourceSets.length > 0
-        ? sourceSets.map((s) => ({
-            id: uid(),
-            weight:
-              s.weight != null && Number.isFinite(s.weight) ? String(s.weight) : "",
-            reps: s.reps != null && Number.isFinite(s.reps) ? String(s.reps) : "",
-          }))
-        : [{ id: uid(), weight: "", reps: "" }]
-    return {
-      id: uid(),
-      name: ex.name,
-      notes: ex.notes ?? "",
-      primaryMuscles: ex.primaryMuscles,
-      setRows,
-    }
-  })
 }
 
 function applyPrefillFromPrevious(
@@ -366,10 +335,6 @@ let exerciseListCache: ApiExercise[] | null = null
    Helpers
    ────────────────────────────────────────────────────────── */
 
-function normalizeDateKey(d: string): string {
-  return d.split("T")[0]
-}
-
 /** Weigh-in / bodyweight goal values may be stored in kg or lb. */
 function goalWeightToLb(value: number, unit: string | undefined): number {
   const u = (unit ?? "lbs").toLowerCase()
@@ -389,54 +354,6 @@ function muscleSwatchStyles(hex: string | undefined): { soft: string; dot: strin
     soft: "color-mix(in oklch, var(--primary) 14%, transparent)",
     dot: "var(--primary)",
   }
-}
-
-/** Column headers for a Monday-start calendar week (matches `startOfWeek(..., { weekStartsOn: 1 })`). */
-const CAL_WEEKDAY_LABELS_MON = ["M", "T", "W", "T", "F", "S", "S"] as const
-
-/** Completed sessions required in the week before the summary shows a check (otherwise a progress ring). */
-const WEEK_WORKOUT_CHECK_THRESHOLD = 3
-
-/** Ring fill0–100% from `count / WEEK_WORKOUT_CHECK_THRESHOLD` (capped); check replaces it at threshold+. */
-function WeekWorkoutGoalRing({ count }: { count: number }) {
-  const stroke = 2.35
-  const vb = 24
-  const r = (vb - stroke) / 2
-  const cx = vb / 2
-  const cy = vb / 2
-  const circumference = 2 * Math.PI * r
-  const pct =
-    Math.min(Math.max(count, 0), WEEK_WORKOUT_CHECK_THRESHOLD) /
-    WEEK_WORKOUT_CHECK_THRESHOLD
-  const dash = circumference * pct
-  return (
-    <svg
-      viewBox={`0 0 ${vb} ${vb}`}
-      className="size-[1.35rem] shrink-0 -rotate-90 sm:size-6"
-      aria-hidden
-    >
-      <circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={stroke}
-        className="text-muted-foreground/25"
-      />
-      <circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={`${dash} ${circumference}`}
-        className="text-emerald-500"
-      />
-    </svg>
-  )
 }
 
 function normalizeSessionStatus(s: WorkoutSession): WorkoutSession {
@@ -559,9 +476,9 @@ const SET_TYPE_LABELS: Record<string, { short: string; color: string }> = {
   failure: { short: "F", color: "text-rose-500" },
 }
 
-/* ──────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Exercise Picker Dialog
-   ────────────────────────────────────────────────────────── */
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function ExercisePicker({
   open,
@@ -807,12 +724,12 @@ function ExercisePicker({
             ))}
             {sessions > 0 && (
               <span className="text-[9px] text-muted-foreground/45">
-                · {sessions}× logged
+                Â· {sessions}Ã— logged
               </span>
             )}
             {ex.categories[0]?.name && sessions === 0 && (
               <span className="text-[9px] text-muted-foreground/45">
-                · {ex.categories[0].name}
+                Â· {ex.categories[0].name}
               </span>
             )}
           </div>
@@ -853,7 +770,7 @@ function ExercisePicker({
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/50" />
             <Input
               ref={inputRef}
-              placeholder="Search exercises…"
+              placeholder="Search exercisesâ€¦"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-11 border-primary/15 bg-background/40 pl-9 text-base sm:text-sm"
@@ -909,7 +826,7 @@ function ExercisePicker({
 
           {!loading && usingFallback && (
             <p className="px-4 pb-0 pt-2 text-center text-[10px] text-amber-400/70">
-              Offline — using built-in list
+              Offline â€” using built-in list
             </p>
           )}
 
@@ -1027,9 +944,9 @@ function ExercisePicker({
   )
 }
 
-/* ──────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Routine Editor Dialog
-   ────────────────────────────────────────────────────────── */
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function RoutineEditor({
   open,
@@ -1042,9 +959,9 @@ function RoutineEditor({
   open: boolean
   onClose: () => void
   initial?: WorkoutTemplate | null
-  /** Changes when opening a different template or journal import — drives form reset. */
+  /** Changes when opening a different template or journal import â€” drives form reset. */
   hydrationKey?: string
-  /** Pre-fill from `initial` but POST a new template (journal → routine). */
+  /** Pre-fill from `initial` but POST a new template (journal â†’ routine). */
   importAsNew?: boolean
   onSave: (
     name: string,
@@ -1064,7 +981,7 @@ function RoutineEditor({
   const [saveError, setSaveError] = useState<string | null>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
-  /** Only re-hydrate from `initial` when the dialog opens or the template id changes — not when `initial` is a new object reference for the same row (that was wiping tag edits). */
+  /** Only re-hydrate from `initial` when the dialog opens or the template id changes â€” not when `initial` is a new object reference for the same row (that was wiping tag edits). */
   const hydratedTemplateIdRef = useRef<string | null>(null)
   const isEdit = Boolean(initial?.id && !importAsNew)
 
@@ -1297,7 +1214,7 @@ function RoutineEditor({
             </div>
             <div className="flex gap-2">
               <Input
-                placeholder="Add tag…"
+                placeholder="Add tagâ€¦"
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -1387,12 +1304,12 @@ function RoutineEditor({
                   className="flex size-full min-h-[104px] w-full flex-col items-center justify-center gap-1.5 px-4 text-muted-foreground/70 transition-colors hover:bg-muted/25 hover:text-muted-foreground disabled:opacity-50 touch-manipulation"
                 >
                   {coverUploading ? (
-                    <span className="text-xs">Uploading…</span>
+                    <span className="text-xs">Uploadingâ€¦</span>
                   ) : (
                     <>
                       <ImagePlus className="size-7 opacity-60" />
                       <span className="text-xs font-medium">Add cover image</span>
-                      <span className="text-[10px] text-muted-foreground/50">JPEG, PNG, or WebP · up to 8 MB</span>
+                      <span className="text-[10px] text-muted-foreground/50">JPEG, PNG, or WebP Â· up to 8 MB</span>
                     </>
                   )}
                 </button>
@@ -1472,7 +1389,7 @@ function RoutineEditor({
                           <Input
                             className="h-8 border-primary/15 bg-background/40 px-1.5 text-center text-xs tabular-nums"
                             inputMode="decimal"
-                            placeholder="—"
+                            placeholder="â€”"
                             value={row.weight}
                             onChange={(e) =>
                               updateTemplateSetRow(ex.id, row.id, "weight", e.target.value)
@@ -1574,9 +1491,9 @@ function RoutineEditor({
   )
 }
 
-/* ──────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Active Workout Component
-   ────────────────────────────────────────────────────────── */
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function ActiveWorkout({
   session,
@@ -1623,11 +1540,11 @@ function ActiveWorkout({
   const [restConfig, setRestConfig] =
     useState<WorkoutRestConfig>(DEFAULT_WORKOUT_REST)
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null)
-  /** Total seconds for the current rest (config at start, +15s bumps this) — drives progress bar. */
+  /** Total seconds for the current rest (config at start, +15s bumps this) â€” drives progress bar. */
   const [restTotalSec, setRestTotalSec] = useState(DEFAULT_WORKOUT_REST.seconds)
   const [, setRestTick] = useState(0)
   const [restSettingsOpen, setRestSettingsOpen] = useState(false)
-  /** Survives dialog close racing React state — see swap picker `onClose` / `onSelect`. */
+  /** Survives dialog close racing React state â€” see swap picker `onClose` / `onSelect`. */
   const swapTargetRef = useRef<string | null>(null)
   const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
@@ -1685,6 +1602,25 @@ function ActiveWorkout({
     setFullscreen(true)
     return () => setFullscreen(false)
   }, [setFullscreen])
+
+  /** Trap browser Back so the user cannot leave until finish/discard. */
+  useEffect(() => {
+    const sentinel = { theGRIDActiveWorkout: true }
+    window.history.pushState(sentinel, "")
+    const onPopState = () => {
+      window.history.pushState(sentinel, "")
+    }
+    window.addEventListener("popstate", onPopState)
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => {
+      window.removeEventListener("popstate", onPopState)
+      window.removeEventListener("beforeunload", onBeforeUnload)
+    }
+  }, [])
 
   useEffect(() => {
     setRestConfig(loadWorkoutRestConfig())
@@ -1779,7 +1715,7 @@ function ActiveWorkout({
     return map
   }, [previousSessions, session.id])
 
-  /** Pre-filled from last session — muted until user edits weight/reps. */
+  /** Pre-filled from last session â€” muted until user edits weight/reps. */
   const [ghostSetIds, setGhostSetIds] = useState<Set<string>>(() => new Set())
   const touchedSetIdsRef = useRef<Set<string>>(new Set())
 
@@ -1862,7 +1798,7 @@ function ActiveWorkout({
         count: 5,
       })
       if (recs.length === 0) {
-        setFreeFormError("Couldn’t build a session from your library — add exercises manually.")
+        setFreeFormError("Couldnâ€™t build a session from your library â€” add exercises manually.")
         return
       }
       const next: SessionExercise[] = recs.map((r) => ({
@@ -2287,7 +2223,7 @@ function ActiveWorkout({
       cardTransitionTimerRef.current = null
     }
 
-    /* Hold on a completed movement until its overview is acknowledged — never auto-advance. */
+    /* Hold on a completed movement until its overview is acknowledged â€” never auto-advance. */
     if (displayedExerciseId != null) {
       const displayed =
         exercisesRef.current.find((e) => e.id === displayedExerciseId) ?? null
@@ -2408,10 +2344,10 @@ function ActiveWorkout({
                       ? "All sets complete"
                       : queue.current
                         ? queue.movementTotal > 1
-                          ? `Mov ${queue.movementIndex}/${queue.movementTotal} · Set ${Math.min(queue.currentDone + 1, queue.currentTotal)}/${queue.currentTotal}`
+                          ? `Mov ${queue.movementIndex}/${queue.movementTotal} Â· Set ${Math.min(queue.currentDone + 1, queue.currentTotal)}/${queue.currentTotal}`
                           : `Set ${Math.min(queue.currentDone + 1, queue.currentTotal)}/${queue.currentTotal}`
                         : `${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`}
-                  {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
+                  {loggedVol > 0 ? ` Â· ${formatVolumeLb(loggedVol)} lb` : ""}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5 tabular-nums">
@@ -2536,7 +2472,7 @@ function ActiveWorkout({
             ) : null}
           </div>
 
-          {/* One movement at a time — edge-to-edge on mobile */}
+          {/* One movement at a time â€” edge-to-edge on mobile */}
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-1 sm:px-5 sm:py-2">
             {exercises.length === 0 ? (
               <div className="my-auto flex flex-col gap-4 px-1 py-6 sm:px-2">
@@ -2546,7 +2482,7 @@ function ActiveWorkout({
                     Free-form workout
                   </p>
                   <p className="mx-auto mt-1.5 max-w-[20rem] text-sm leading-relaxed text-muted-foreground/70">
-                    Pick upper or lower — we&apos;ll fill a session from your favorites and
+                    Pick upper or lower â€” we&apos;ll fill a session from your favorites and
                     the muscle groups that still need volume this week.
                   </p>
                 </div>
@@ -2557,12 +2493,12 @@ function ActiveWorkout({
                       {
                         id: "upper" as const,
                         label: "Upper",
-                        hint: "Push · pull · arms",
+                        hint: "Push Â· pull Â· arms",
                       },
                       {
                         id: "lower" as const,
                         label: "Lower",
-                        hint: "Squat · hinge · glutes",
+                        hint: "Squat Â· hinge Â· glutes",
                       },
                     ] as const
                   ).map((opt) => (
@@ -2583,7 +2519,7 @@ function ActiveWorkout({
                       <p className="mt-1 text-[11px] text-muted-foreground/60">{opt.hint}</p>
                       {freeFormBusy && freeFormSplit === opt.id ? (
                         <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-primary">
-                          Building…
+                          Buildingâ€¦
                         </p>
                       ) : null}
                     </button>
@@ -2675,7 +2611,7 @@ function ActiveWorkout({
                               ))}
                               {isDeferred ? (
                                 <span className="text-[10px] font-medium text-amber-400/90">
-                                  Skipped · back now
+                                  Skipped Â· back now
                                 </span>
                               ) : null}
                               {queue.next && !queue.allSetsComplete ? (
@@ -2810,8 +2746,8 @@ function ActiveWorkout({
 
                                 <span className="truncate px-0.5 text-xs tabular-nums text-muted-foreground/55">
                                   {prevSet
-                                    ? `${prevSet.weight ?? "–"}×${prevSet.reps ?? "–"}`
-                                    : "–"}
+                                    ? `${prevSet.weight ?? "â€“"}Ã—${prevSet.reps ?? "â€“"}`
+                                    : "â€“"}
                                 </span>
 
                                 <button
@@ -2837,7 +2773,7 @@ function ActiveWorkout({
                                     setInputClass,
                                     ghostSetIds.has(set.id) && setInputGhostClass,
                                   )}
-                                  placeholder="—"
+                                  placeholder="â€”"
                                   value={set.weight ?? ""}
                                   onFocus={() => clearGhostForSet(set.id)}
                                   onChange={(e) =>
@@ -2856,7 +2792,7 @@ function ActiveWorkout({
                                     setInputClass,
                                     ghostSetIds.has(set.id) && setInputGhostClass,
                                   )}
-                                  placeholder="—"
+                                  placeholder="â€”"
                                   value={set.reps ?? ""}
                                   onFocus={() => clearGhostForSet(set.id)}
                                   onChange={(e) =>
@@ -2914,7 +2850,7 @@ function ActiveWorkout({
                             className="mt-2 flex min-h-10 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border border-primary/25 px-3 text-xs font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 touch-manipulation"
                           >
                             <Check className="size-3.5" aria-hidden />
-                            Done editing — view summary
+                            Done editing â€” view summary
                           </button>
                         ) : (
                           <ProgressiveOverloadCoach
@@ -2950,7 +2886,7 @@ function ActiveWorkout({
                   All movements complete
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground/65">
-                  Nice work — wrap it up when you&apos;re ready.
+                  Nice work â€” wrap it up when you&apos;re ready.
                 </p>
                 <Button
                   type="button"
@@ -2966,7 +2902,7 @@ function ActiveWorkout({
             ) : null}
           </div>
 
-          {/* Thin action bar — More menu holds Add / Finish / Discard */}
+          {/* Thin action bar â€” More menu holds Add / Finish / Discard */}
           <div className="relative shrink-0 border-t border-glass-border/20 px-3 py-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))] sm:px-5">
             {queue.allSetsComplete ? (
               <div className="flex items-stretch gap-2">
@@ -2989,7 +2925,7 @@ function ActiveWorkout({
                 >
                   <Check className="size-3.5 shrink-0" />
                   Finish
-                  {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
+                  {loggedVol > 0 ? ` Â· ${formatVolumeLb(loggedVol)} lb` : ""}
                 </Button>
               </div>
             ) : (
@@ -2997,8 +2933,8 @@ function ActiveWorkout({
                 <p className="min-w-0 truncate text-[11px] tabular-nums text-muted-foreground/55">
                   {queue.current
                     ? `${queue.completedSets}/${queue.totalSets}`
-                    : "Logging…"}
-                  {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
+                    : "Loggingâ€¦"}
+                  {loggedVol > 0 ? ` Â· ${formatVolumeLb(loggedVol)} lb` : ""}
                 </p>
                 <button
                   type="button"
@@ -3078,7 +3014,7 @@ function ActiveWorkout({
               </DialogTitle>
               <DialogDescription>
                 {confirmEndAction === "discard"
-                  ? "This session will be removed from your log. You can’t undo this."
+                  ? "This session will be removed from your log. You canâ€™t undo this."
                   : "Save this session as completed and return to the hub."}
               </DialogDescription>
             </DialogHeader>
@@ -3137,7 +3073,7 @@ function ActiveWorkout({
           setShowPicker(false)
           setSwapExerciseId(null)
           setEndMenuOpen(false)
-          /* Let a library row’s onSelect run in the same gesture before clearing swap target. */
+          /* Let a library rowâ€™s onSelect run in the same gesture before clearing swap target. */
           queueMicrotask(() => {
             swapTargetRef.current = null
           })
@@ -3183,32 +3119,6 @@ function ActiveWorkout({
       />
     </>
   )
-}
-
-function reorderRoutineIds(
-  ids: readonly string[],
-  dragId: string,
-  insertBeforeId: string,
-): string[] {
-  if (dragId === insertBeforeId) return [...ids]
-  const without = ids.filter((id) => id !== dragId)
-  const at = without.indexOf(insertBeforeId)
-  if (at < 0) return [...ids]
-  return [...without.slice(0, at), dragId, ...without.slice(at)]
-}
-
-function moveRoutineIdToEnd(ids: readonly string[], dragId: string): string[] {
-  return [...ids.filter((id) => id !== dragId), dragId]
-}
-
-const ROUTINE_REORDER_DROP_END = "__routine_drop_end__"
-
-function hitTestRoutineReorderTarget(clientX: number, clientY: number): string | null {
-  const under = document.elementFromPoint(clientX, clientY)
-  if (!under) return null
-  if (under.closest("[data-routine-drop-end]")) return ROUTINE_REORDER_DROP_END
-  const tile = under.closest("[data-routine-tile]") as HTMLElement | null
-  return tile?.dataset.routineTile ?? null
 }
 
 /** Safari can cache GET /api/workout-sessions and serve a stale list after POST — breaks active workout. */
@@ -3281,6 +3191,7 @@ function HubStartFromQuery({
       if (fromQuery) router.replace("/workouts", { scroll: false })
     }
 
+    // Resume existing active session instead of starting another.
     if (hasActiveSession) {
       finish()
       return
@@ -3355,39 +3266,33 @@ function HubRoutineEditorFromQuery({
 }
 
 /* ──────────────────────────────────────────────────────────
-   Main Page
+   Main Page — session + routine editor only (hub owns browse)
    ────────────────────────────────────────────────────────── */
 
 export default function WorkoutsPage() {
+  return (
+    <Suspense fallback={null}>
+      <WorkoutsPageInner />
+    </Suspense>
+  )
+}
+
+function WorkoutsPageInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [sessions, setSessions] = useState<WorkoutSession[]>([])
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([])
-  const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set())
-  const [expandedSessionIds, setExpandedSessionIds] = useState<Set<string>>(
-    () => new Set(),
-  )
   const [showRoutineEditor, setShowRoutineEditor] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<WorkoutTemplate | null>(null)
   const [routineEditorKey, setRoutineEditorKey] = useState("new")
   const [routineImportAsNew, setRoutineImportAsNew] = useState(false)
-  const [templateMenuId, setTemplateMenuId] = useState<string | null>(null)
-  const [routineRearrangeMode, setRoutineRearrangeMode] = useState(false)
-  const [routinePointerDrag, setRoutinePointerDrag] = useState<string | null>(null)
-  const [routineDragOverId, setRoutineDragOverId] = useState<string | null>(null)
   const templatesRef = useRef<WorkoutTemplate[]>([])
-  const routineDragSessionRef = useRef<{
-    pointerId: number
-    activeId: string
-    overId: string | null
-  } | null>(null)
-  /** When true, closing the routine editor returns to the hub instead of the legacy browse page. */
+  /** When true, closing the routine editor returns to the hub. */
   const returnToHubAfterEditorRef = useRef(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [startingWorkout, setStartingWorkout] = useState(false)
   /** Template the current active session was started from (for remembering swaps). */
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null)
-  /** Bumped after a workout is finished so the progression hero re-fetches. */
-  const [progressionRefresh, setProgressionRefresh] = useState(0)
   /** Hub deep-link: wait until templates load before honoring `?start=`. */
   const [templatesLoaded, setTemplatesLoaded] = useState(false)
 
@@ -3395,9 +3300,7 @@ export default function WorkoutsPage() {
 
   const { activeDate } = useActiveDate()
   const today = activeDate
-  const yesterday = formatDate(subDays(parseLocalDate(activeDate), 1))
 
-  // Fetch data
   useEffect(() => {
     Promise.all([
       apiFetch(sessionsListUrl(), noStore).then((r) => r.json()),
@@ -3421,26 +3324,12 @@ export default function WorkoutsPage() {
     return sessions.find((s) => norm(s) === "active") ?? null
   }, [sessions])
 
-  useEffect(() => {
-    if (activeSession) return
-    if (typeof window === "undefined" || window.location.hash !== "#recovery") return
-    requestAnimationFrame(() => {
-      document.getElementById("recovery")?.scrollIntoView({ behavior: "smooth", block: "start" })
-    })
-  }, [activeSession])
-
-  const { weekStart, weekEnd, weekDayKeys } = useMemo(() => {
+  const { weekStart, weekEnd } = useMemo(() => {
     const ref = parseLocalDate(activeDate)
     const start = startOfWeek(ref, { weekStartsOn: 1 })
-    const weekStartStr = formatDate(start)
-    const weekEndStr = formatDate(addDays(start, 6))
-    const keys = Array.from({ length: 7 }, (_, i) =>
-      formatDate(addDays(start, i)),
-    )
     return {
-      weekStart: weekStartStr,
-      weekEnd: weekEndStr,
-      weekDayKeys: keys,
+      weekStart: formatDate(start),
+      weekEnd: formatDate(addDays(start, 6)),
     }
   }, [activeDate])
 
@@ -3450,53 +3339,25 @@ export default function WorkoutsPage() {
     return sessions.filter((s) => norm(s) === "completed")
   }, [sessions])
 
-  const byDay = useMemo(() => {
-    const m = new Map<string, WorkoutSession[]>()
-    for (const s of completedSessions) {
-      const k = normalizeDateKey(s.date)
-      if (!m.has(k)) m.set(k, [])
-      m.get(k)!.push(s)
-    }
-    return m
-  }, [completedSessions])
+  const pendingStart =
+    Boolean(searchParams.get("start")?.trim()) ||
+    Boolean(readHubStartIntent()) ||
+    Boolean(searchParams.get("newRoutine")) ||
+    Boolean(searchParams.get("editRoutine")?.trim())
 
-  const stats = useMemo(() => {
-    const weekSessions = completedSessions.filter((s) => {
-      const k = normalizeDateKey(s.date)
-      return k >= weekStart && k <= weekEnd
-    })
-    const weekCount = weekSessions.length
-    const weekVolume = weekSessions.reduce((sum, s) => {
-      const exs = parseExercises<SessionExercise>(s.exercises)
-      return sum + totalVolume(exs)
-    }, 0)
-    const weekSets = weekSessions.reduce((sum, s) => {
-      const exs = parseExercises<SessionExercise>(s.exercises)
-      return sum + totalSetsCompleted(exs)
-    }, 0)
-
-    let streakDays = 0
-    const ref = parseLocalDate(activeDate)
-    for (let i = 0; i < 365; i++) {
-      const k = formatDate(subDays(ref, i))
-      if (byDay.has(k)) streakDays++
-      else break
-    }
-
-    return { weekCount, weekVolume, weekSets, streakDays }
-  }, [completedSessions, weekStart, weekEnd, byDay, activeDate])
-
-  const historyByDate = useMemo(() => {
-    const keys = Array.from(byDay.keys()).sort((a, b) => b.localeCompare(a))
-    return keys.map((k) => [k, byDay.get(k)!] as const)
-  }, [byDay])
-
-  const journalHistoryDisplay = useMemo(
-    () => partitionHistoryDayGroups(historyByDate, (tuple) => tuple[0], today),
-    [historyByDate, today]
-  )
-
-  // ── Actions ───────────────────────────
+  // Idle visits (no session, no editor, no hub deep-link) return to hub.
+  useEffect(() => {
+    if (!templatesLoaded || startingWorkout) return
+    if (activeSession || showRoutineEditor || pendingStart) return
+    router.replace("/")
+  }, [
+    templatesLoaded,
+    startingWorkout,
+    activeSession,
+    showRoutineEditor,
+    pendingStart,
+    router,
+  ])
 
   async function startSession(
     name: string,
@@ -3653,7 +3514,6 @@ export default function WorkoutsPage() {
       setSessions((prev) =>
         prev.map((s) => (s.id === activeSession.id ? updated : s)),
       )
-      /* Persist the progressive-overload report so the hero survives reloads. */
       try {
         const summary = summarizeWorkoutProgression(updated, completedSessions)
         await apiFetch("/api/workout-progression", {
@@ -3665,7 +3525,6 @@ export default function WorkoutsPage() {
       } catch {
         /* Summary is best-effort; never block finishing the workout. */
       }
-      setProgressionRefresh((n) => n + 1)
       setActiveTemplateId(null)
       router.push("/")
     }
@@ -3714,14 +3573,6 @@ export default function WorkoutsPage() {
       tmpl.coverImageUrl ?? null,
       parseTemplateTags(tmpl.tags),
     )
-  }
-
-  async function deleteSession(id: string) {
-    const res = await apiFetch(`/api/workout-sessions/${id}`, {
-      ...noStore,
-      method: "DELETE",
-    })
-    if (res.ok) setSessions((prev) => prev.filter((s) => s.id !== id))
   }
 
   async function saveTemplate(
@@ -3776,133 +3627,6 @@ export default function WorkoutsPage() {
     }
   }
 
-  async function deleteTemplate(id: string) {
-    const res = await apiFetch(`/api/workout-templates?id=${id}`, {
-      method: "DELETE",
-    })
-    if (res.ok) setTemplates((prev) => prev.filter((t) => t.id !== id))
-    setTemplateMenuId(null)
-  }
-
-  async function persistRoutineOrder(orderedIds: string[]) {
-    setTemplates((prev) => {
-      const m = new Map(prev.map((t) => [t.id, t]))
-      return orderedIds.map((id) => m.get(id)).filter((t): t is WorkoutTemplate => t != null)
-    })
-    try {
-      const res = await apiFetch("/api/workout-templates", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderedIds }),
-      })
-      if (res.ok) {
-        const refreshed = await res.json()
-        if (Array.isArray(refreshed)) setTemplates(refreshed)
-      } else {
-        const r = await apiFetch(`/api/workout-templates?_=${Date.now()}`, noStore)
-        if (r.ok) {
-          const t = await r.json()
-          if (Array.isArray(t)) setTemplates(t)
-        }
-      }
-    } catch {
-      const r = await apiFetch(`/api/workout-templates?_=${Date.now()}`, noStore)
-      if (r.ok) {
-        const t = await r.json()
-        if (Array.isArray(t)) setTemplates(t)
-      }
-    }
-  }
-
-  useEffect(() => {
-    if (templates.length >= 2) return
-    setRoutineRearrangeMode(false)
-    routineDragSessionRef.current = null
-    setRoutinePointerDrag(null)
-    setRoutineDragOverId(null)
-  }, [templates.length])
-
-  useEffect(() => {
-    if (routineRearrangeMode) return
-    routineDragSessionRef.current = null
-    setRoutinePointerDrag(null)
-    setRoutineDragOverId(null)
-  }, [routineRearrangeMode])
-
-  function handleRoutineTilePointerDown(tmplId: string, e: React.PointerEvent<HTMLDivElement>) {
-    if (!routineRearrangeMode) return
-    if (e.button !== 0) return
-    e.preventDefault()
-    const el = e.currentTarget
-    routineDragSessionRef.current = {
-      pointerId: e.pointerId,
-      activeId: tmplId,
-      overId: tmplId,
-    }
-    setRoutinePointerDrag(tmplId)
-    setRoutineDragOverId(tmplId)
-    el.setPointerCapture(e.pointerId)
-  }
-
-  function handleRoutineTilePointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    const s = routineDragSessionRef.current
-    if (!s || e.pointerId !== s.pointerId) return
-    const over = hitTestRoutineReorderTarget(e.clientX, e.clientY)
-    if (over !== s.overId) {
-      s.overId = over
-      setRoutineDragOverId(over)
-    }
-  }
-
-  function handleRoutineTilePointerEnd(e: React.PointerEvent<HTMLDivElement>) {
-    const s = routineDragSessionRef.current
-    if (!s || e.pointerId !== s.pointerId) return
-    const el = e.currentTarget
-    if (el.hasPointerCapture(e.pointerId)) {
-      try {
-        el.releasePointerCapture(e.pointerId)
-      } catch {
-        /* ignore */
-      }
-    }
-    const { activeId, overId } = s
-    routineDragSessionRef.current = null
-    setRoutinePointerDrag(null)
-    setRoutineDragOverId(null)
-
-    if (overId == null || overId === activeId) return
-    const ids = templatesRef.current.map((t) => t.id)
-    if (overId === ROUTINE_REORDER_DROP_END) {
-      void persistRoutineOrder(moveRoutineIdToEnd(ids, activeId))
-      return
-    }
-    void persistRoutineOrder(reorderRoutineIds(ids, activeId, overId))
-  }
-
-  function toggleDay(key: string) {
-    setExpandedDays((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-
-  function toggleSessionExpand(id: string) {
-    setExpandedSessionIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  function sectionDateLabel(dateKey: string): string {
-    if (dateKey === today) return "Today"
-    if (dateKey === yesterday) return "Yesterday"
-    return format(new Date(dateKey + "T12:00:00"), "EEEE, MMM d")
-  }
-
   function openNewRoutineEditor() {
     setRoutineEditorKey("new")
     setRoutineImportAsNew(false)
@@ -3917,21 +3641,6 @@ export default function WorkoutsPage() {
     setShowRoutineEditor(true)
   }
 
-  function openRoutineFromSession(sess: WorkoutSession) {
-    const exercises = sessionToTemplateExercises(sess)
-    if (exercises.length === 0) return
-    setRoutineEditorKey(`session-${sess.id}`)
-    setRoutineImportAsNew(true)
-    setEditingTemplate({
-      id: "",
-      name: sess.name.trim() || "Workout routine",
-      exercises,
-      coverImageUrl: sess.coverImageUrl?.trim() ?? null,
-      createdAt: sess.finishedAt ?? sess.startedAt,
-    })
-    setShowRoutineEditor(true)
-  }
-
   function closeRoutineEditor() {
     setShowRoutineEditor(false)
     setEditingTemplate(null)
@@ -3941,200 +3650,6 @@ export default function WorkoutsPage() {
       returnToHubAfterEditorRef.current = false
       router.push("/")
     }
-  }
-
-  function WorkoutJournalDayCard({
-    dateKey,
-    daySessions,
-    alwaysExpanded,
-  }: {
-    dateKey: string
-    daySessions: WorkoutSession[]
-    alwaysExpanded: boolean
-  }) {
-    const isOpen = alwaysExpanded || expandedDays.has(dateKey)
-    const dayVolume = daySessions.reduce((s, sess) => {
-      const exs = parseExercises<SessionExercise>(sess.exercises)
-      return s + totalVolume(exs)
-    }, 0)
-    const dayDuration = daySessions.reduce((s, sess) => s + (sess.duration ?? 0), 0)
-
-    return (
-      <div className="glass-panel overflow-hidden">
-        <button
-          type="button"
-          onClick={() => {
-            if (!alwaysExpanded) toggleDay(dateKey)
-          }}
-          className="flex w-full items-center gap-3 px-4 py-3.5 text-left touch-manipulation transition-colors hover:bg-glass-highlight/20"
-        >
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-            <span className="text-sm font-bold tabular-nums text-primary">{daySessions.length}</span>
-          </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
-              {sectionDateLabel(dateKey)}
-            </span>
-            <div className="flex items-center gap-3 mt-0.5">
-              {dayDuration > 0 && (
-                <span className="flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground/50">
-                  <Clock className="size-2.5" />
-                  {dayDuration} min
-                </span>
-              )}
-              {dayVolume > 0 && (
-                <span className="text-[10px] tabular-nums text-muted-foreground/50">
-                  {dayVolume >= 1000 ? `${(dayVolume / 1000).toFixed(1)}k lb` : `${dayVolume} lb`}
-                </span>
-              )}
-            </div>
-          </div>
-          <ChevronDown
-            className={cn(
-              "size-4 shrink-0 text-muted-foreground/40 transition-transform duration-200",
-              isOpen && "rotate-180",
-            )}
-          />
-        </button>
-
-        {isOpen && (
-          <div className="border-t border-border/20 px-3 pb-3 pt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
-            {[...daySessions]
-              .sort(
-                (a, b) =>
-                  new Date(b.finishedAt ?? b.startedAt).getTime() -
-                  new Date(a.finishedAt ?? a.startedAt).getTime(),
-              )
-              .map((sess) => {
-                const exs = parseExercises<SessionExercise>(sess.exercises)
-                const sessVol = totalVolume(exs)
-                const sessExpanded = expandedSessionIds.has(sess.id)
-                return (
-                  <div
-                    key={sess.id}
-                    className="rounded-xl border border-border/15 bg-muted/[0.06] overflow-hidden"
-                  >
-                    <div className="flex items-stretch gap-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleSessionExpand(sess.id)}
-                        className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-3 text-left touch-manipulation transition-colors hover:bg-glass-highlight/15"
-                      >
-                        <ChevronDown
-                          className={cn(
-                            "size-4 shrink-0 text-muted-foreground/45 transition-transform duration-200",
-                            sessExpanded && "rotate-180",
-                          )}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">{sess.name}</p>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                            {sess.duration != null && (
-                              <span className="text-[10px] tabular-nums text-muted-foreground/50">
-                                {sess.duration} min
-                              </span>
-                            )}
-                            {sess.bodyWeightLb != null && Number.isFinite(sess.bodyWeightLb) && (
-                              <span className="text-[10px] tabular-nums text-muted-foreground/50">
-                                BW {sess.bodyWeightLb} lb
-                              </span>
-                            )}
-                            <span className="text-[10px] text-muted-foreground/40">
-                              {exs.length} exercise{exs.length !== 1 ? "s" : ""}
-                            </span>
-                            {sessVol > 0 && (
-                              <span className="text-[10px] tabular-nums text-muted-foreground/45">
-                                {sessVol >= 1000
-                                  ? `${(sessVol / 1000).toFixed(1)}k lb vol`
-                                  : `${sessVol} lb vol`}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={exs.length === 0}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openRoutineFromSession(sess)
-                        }}
-                        className="flex size-10 shrink-0 items-center justify-center self-center rounded-lg text-muted-foreground/45 transition-colors hover:bg-glass-highlight/25 hover:text-foreground disabled:pointer-events-none disabled:opacity-30 touch-manipulation"
-                        aria-label="Save workout as routine"
-                        title="Save as routine"
-                      >
-                        <Copy className="size-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          deleteSession(sess.id)
-                        }}
-                        className="history-row-delete shrink-0 self-center mr-2"
-                        aria-label="Delete session"
-                      >
-                        <Trash2 />
-                      </button>
-                    </div>
-
-                    {sessExpanded && (
-                      <div className="border-t border-border/15 px-2.5 pb-2.5 pt-1 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
-                        {exs.map((ex) => (
-                          <div
-                            key={ex.id}
-                            className="rounded-lg border border-border/12 bg-background/30 px-2.5 py-2"
-                          >
-                            <p className="mb-1.5 text-[11px] font-semibold text-primary">{ex.name}</p>
-                            {ex.sets.length === 0 ? (
-                              <p className="text-[10px] text-muted-foreground/45">No sets logged</p>
-                            ) : (
-                              <>
-                                <div className="grid grid-cols-[2rem_1fr_1fr_1.75rem] gap-x-1.5 gap-y-1 text-[9px] uppercase tracking-wide text-muted-foreground/40">
-                                  <span className="text-center">#</span>
-                                  <span className="text-center">lb</span>
-                                  <span className="text-center">reps</span>
-                                  <span className="text-center" title="Logged">
-                                    ✓
-                                  </span>
-                                </div>
-                                {ex.sets.map((set) => (
-                                  <div
-                                    key={set.id}
-                                    className={cn(
-                                      "grid grid-cols-[2rem_1fr_1fr_1.75rem] items-center gap-x-1.5 gap-y-0.5 rounded-md py-1 text-[10px] tabular-nums",
-                                      set.completed
-                                        ? "text-muted-foreground/80"
-                                        : "text-muted-foreground/45",
-                                    )}
-                                  >
-                                    <span className="text-center font-medium text-muted-foreground/50">
-                                      {set.setNumber}
-                                    </span>
-                                    <span className="text-center">{set.weight ?? "–"}</span>
-                                    <span className="text-center">{set.reps ?? "–"}</span>
-                                    <span className="text-center text-[9px]">
-                                      {set.completed ? (
-                                        <Check className="mx-auto size-3 text-emerald-500/90" />
-                                      ) : (
-                                        <span className="text-muted-foreground/25">—</span>
-                                      )}
-                                    </span>
-                                  </div>
-                                ))}
-                              </>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-          </div>
-        )}
-      </div>
-    )
   }
 
   return (
@@ -4153,428 +3668,21 @@ export default function WorkoutsPage() {
           weekStart={weekStart}
           weekEnd={weekEnd}
         />
-      ) : (
-        <div className="space-y-6">
-          <PageHeader title="Workouts" />
-
-          <PageHeroStrip
-            color="#c4d632"
-            icon={Dumbbell}
-            eyebrow={`This week · ${formatDisplayDate(parseLocalDate(activeDate))}`}
-            value={
-              stats.weekVolume > 0
-                ? stats.weekVolume >= 1000
-                  ? `${(stats.weekVolume / 1000).toFixed(1)}k`
-                  : String(stats.weekVolume)
-                : "—"
-            }
-            unit="lb volume"
-            metrics={[
-              { label: "Sessions", value: String(stats.weekCount), sub: "this week" },
-              { label: "Sets", value: stats.weekSets ? String(stats.weekSets) : "—", sub: "completed" },
-              {
-                label: "Streak",
-                value: String(stats.streakDays),
-                sub: `day${stats.streakDays === 1 ? "" : "s"}`,
-              },
-            ]}
-          />
-
-          {/* Week activity dots */}
-          <div className="glass-panel bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-primary/[0.03] px-5 py-4 animate-fade-up dark:from-glass-highlight/[0.1] dark:to-primary/[0.05]">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/14%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/10%),transparent_55%)]" aria-hidden />
-            <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-glass-highlight/45 to-transparent dark:via-white/12" aria-hidden />
-            <div className="relative z-10">
-              <div className="mb-3 flex items-center gap-2.5">
-                <span className="sr-only">
-                  {stats.weekCount >= WEEK_WORKOUT_CHECK_THRESHOLD
-                    ? `${stats.weekCount} completed workout${stats.weekCount === 1 ? "" : "s"} this week, weekly goal met (${WEEK_WORKOUT_CHECK_THRESHOLD}+ workouts)`
-                    : `${stats.weekCount} of ${WEEK_WORKOUT_CHECK_THRESHOLD} weekly workouts completed`}
-                </span>
-                {stats.weekCount >= WEEK_WORKOUT_CHECK_THRESHOLD ? (
-                  <Check
-                    className="size-[1.35rem] shrink-0 text-emerald-500 sm:size-6"
-                    strokeWidth={2.75}
-                    aria-hidden
-                  />
-                ) : (
-                  <WeekWorkoutGoalRing count={stats.weekCount} />
-                )}
-                <div className="min-w-0">
-                  <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/70">
-                    This week
-                  </p>
-                  <p className="text-[10px] text-muted-foreground/60">
-                    {stats.weekCount >= WEEK_WORKOUT_CHECK_THRESHOLD
-                      ? "Goal met"
-                      : stats.weekCount === 0
-                        ? "Not yet"
-                        : `${stats.weekCount}/${WEEK_WORKOUT_CHECK_THRESHOLD} workouts`}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-1">
-                {weekDayKeys.map((key, i) => {
-                  const count = byDay.get(key)?.length ?? 0
-                  const isActive = key === today
-                  const has = count > 0
-                  const dayDate = parseLocalDate(key)
-                  const dayOfMonth = dayDate.getDate()
-                  const weekdayLong = format(dayDate, "EEEE")
-                  return (
-                    <div key={key} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                      <span
-                        className={cn(
-                          "whitespace-nowrap text-[10px] font-semibold tracking-wider sm:text-[11px]",
-                          isActive ? "text-foreground" : "text-muted-foreground/50",
-                        )}
-                      >
-                        {CAL_WEEKDAY_LABELS_MON[i]}
-                      </span>
-                      <div
-                        role="img"
-                        aria-label={
-                          count > 0
-                            ? `${weekdayLong} ${dayOfMonth}, ${count} workout${count === 1 ? "" : "s"}`
-                            : `${weekdayLong} ${dayOfMonth}, no workouts`
-                        }
-                        className={cn(
-                          "flex size-9 items-center justify-center rounded-xl transition-all duration-200 sm:size-10",
-                          has && isActive && "bg-primary text-primary-foreground shadow-md shadow-primary/30",
-                          has && !isActive && "bg-primary/20 text-primary",
-                          !has && isActive && "ring-2 ring-primary/40 bg-muted/15 text-muted-foreground/40",
-                          !has && !isActive && "bg-muted/10 text-muted-foreground/20",
-                        )}
-                      >
-                        <span className="text-xs font-bold tabular-nums">{dayOfMonth}</span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Progressive overload hero (persisted) ── */}
-          <ProgressionSummaryHero
-            className="animate-fade-up stagger-1"
-            refreshToken={progressionRefresh}
-          />
-
-          {/* ── My Routines ──────────────────────── */}
-          <div className="animate-fade-up stagger-2 space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground/70">
-                My Routines
-              </h2>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 gap-1 text-xs touch-manipulation"
-                onClick={() => openNewRoutineEditor()}
-              >
-                <Plus className="size-3" />
-                New
-              </Button>
-            </div>
-
-            {templates.length === 0 && (
-              <div className="glass-panel p-6 text-center">
-                <Copy className="mx-auto size-7 text-muted-foreground/20 mb-2" />
-                <p className="text-sm text-muted-foreground/60">
-                  No routines yet
-                </p>
-                <p className="text-[11px] text-muted-foreground/40 mt-1">
-                  Create a routine to start workouts faster
-                </p>
-              </div>
-            )}
-
-            {templates.length > 0 && (
-              <>
-              {routineRearrangeMode ? (
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/8 px-3 py-2.5">
-                  <p className="min-w-0 text-xs font-medium text-muted-foreground">
-                    Drag tiles to reorder. Drop on the strip below to move to the end.
-                  </p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 shrink-0 touch-manipulation text-xs"
-                    onClick={() => setRoutineRearrangeMode(false)}
-                  >
-                    Done
-                  </Button>
-                </div>
-              ) : null}
-              <div
-                className={cn(
-                  "grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 sm:gap-3.5",
-                  routineRearrangeMode && "touch-none select-none",
-                )}
-              >
-                {templates.map((tmpl) => {
-                  const exs = parseExercises<TemplateExercise>(tmpl.exercises)
-                  const tmplTags = parseTemplateTags(tmpl.tags)
-                  const cover = tmpl.coverImageUrl?.trim()
-                  const preview =
-                    exs.length === 0
-                      ? "No exercises"
-                      : exs.length <= 2
-                        ? exs.map((e) => e.name).join(" · ")
-                        : `${exs[0].name} · ${exs[1].name} +${exs.length - 2}`
-                  const isDragSource = routinePointerDrag === tmpl.id
-                  const isDropTarget =
-                    routinePointerDrag != null &&
-                    routineDragOverId === tmpl.id &&
-                    routinePointerDrag !== tmpl.id
-                  return (
-                    <div
-                      key={tmpl.id}
-                      data-routine-tile={tmpl.id}
-                      onPointerDown={(e) => handleRoutineTilePointerDown(tmpl.id, e)}
-                      onPointerMove={handleRoutineTilePointerMove}
-                      onPointerUp={handleRoutineTilePointerEnd}
-                      onPointerCancel={handleRoutineTilePointerEnd}
-                      className={cn(
-                        "glass group flex h-full min-h-0 flex-col overflow-hidden rounded-2xl transition-[opacity,transform,box-shadow]",
-                        routineRearrangeMode && "cursor-grab active:cursor-grabbing",
-                        isDragSource && "pointer-events-none opacity-50 scale-[0.98] z-30 shadow-lg",
-                        isDropTarget && "ring-2 ring-primary/55 ring-offset-2 ring-offset-background",
-                      )}
-                    >
-                      <div className="relative aspect-square w-full shrink-0 border-b border-border/10 bg-muted/20">
-                        {cover ? (
-                          <img
-                            src={cover}
-                            alt=""
-                            className="absolute inset-0 size-full object-cover pointer-events-none"
-                          />
-                        ) : (
-                          <div className="flex size-full items-center justify-center bg-gradient-to-br from-muted/30 to-muted/10 pointer-events-none">
-                            <Dumbbell className="size-[clamp(2rem,32%,2.75rem)] text-muted-foreground/15" />
-                          </div>
-                        )}
-                        <div
-                          className={cn(
-                            "absolute left-1.5 top-1.5 z-20 sm:left-2 sm:top-2",
-                            routineRearrangeMode && "pointer-events-none opacity-0",
-                          )}
-                        >
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setTemplateMenuId(
-                                  templateMenuId === tmpl.id ? null : tmpl.id,
-                                )
-                              }
-                              className="rounded-lg border border-border/25 bg-background/80 p-1.5 text-muted-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-background hover:text-foreground touch-manipulation dark:border-white/10 dark:bg-background/55"
-                              aria-label="Routine options"
-                            >
-                              <MoreHorizontal className="size-4" />
-                            </button>
-                            {templateMenuId === tmpl.id && (
-                              <div className="absolute left-0 top-full z-30 mt-1 min-w-[148px] rounded-xl border border-border/25 bg-popover p-1 shadow-xl animate-in fade-in slide-in-from-top-1 duration-100">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    openEditRoutineEditor(tmpl)
-                                    setTemplateMenuId(null)
-                                  }}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs hover:bg-muted/20 transition-colors"
-                                >
-                                  <Pencil className="size-3.5" />
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={templates.length < 2}
-                                  title={
-                                    templates.length < 2
-                                      ? "Add another routine to reorder"
-                                      : undefined
-                                  }
-                                  onClick={() => {
-                                    setRoutineRearrangeMode(true)
-                                    setTemplateMenuId(null)
-                                  }}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs hover:bg-muted/20 transition-colors disabled:pointer-events-none disabled:opacity-40"
-                                >
-                                  <ArrowLeftRight className="size-3.5" />
-                                  Rearrange tile
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteTemplate(tmpl.id)}
-                                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
-                                >
-                                  <Trash2 className="size-3.5" />
-                                  Delete
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex min-h-[6.5rem] flex-1 flex-col gap-1.5 p-2.5 pt-2 sm:min-h-[7rem] sm:p-3">
-                        <div
-                          className={cn(
-                            "min-h-0 min-w-0 flex-1 space-y-1",
-                            routineRearrangeMode && "pointer-events-none",
-                          )}
-                        >
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <h3 className="line-clamp-2 min-w-0 flex-1 text-left text-sm font-semibold leading-snug text-foreground sm:text-base">
-                              {tmpl.name}
-                            </h3>
-                            {tmplTags.length > 0 ? (
-                              <div className="flex max-w-[38%] shrink-0 flex-wrap items-center justify-end gap-1 min-w-0 sm:max-w-[36%]">
-                                {tmplTags.map((tg, ti) => (
-                                  <span
-                                    key={`${tg}-${ti}`}
-                                    className="inline-flex min-w-0 max-w-[min(100%,3.75rem)] items-center truncate rounded-md border border-cyan-600/30 bg-cyan-500/18 px-1.5 py-0.5 text-left text-[8px] font-semibold leading-tight tracking-normal text-cyan-950 dark:border-cyan-300/35 dark:bg-cyan-400/18 dark:text-cyan-100 sm:max-w-[4.25rem] sm:px-2 sm:py-1 sm:text-[9px]"
-                                  >
-                                    {tg}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                          <p
-                            className="line-clamp-2 text-[9px] leading-relaxed text-muted-foreground/55 sm:text-[10px]"
-                            title={exs.map((e) => e.name).join(", ")}
-                          >
-                            {preview}
-                          </p>
-                        </div>
-                        <Button
-                          variant="glass"
-                          size="sm"
-                          disabled={routineRearrangeMode || startingWorkout}
-                          className={cn(
-                            "mt-auto h-8 w-full shrink-0 gap-1 px-2 text-[11px] press-scale touch-manipulation sm:h-9 sm:text-xs",
-                            routineRearrangeMode && "pointer-events-none",
-                          )}
-                          onClick={() =>
-                            startSession(
-                              tmpl.name,
-                              exs,
-                              tmpl.coverImageUrl?.trim() ?? null,
-                              tmpl.id,
-                            )
-                          }
-                        >
-                          <Play className="size-3 shrink-0" />
-                          Start
-                        </Button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-              {routineRearrangeMode && routinePointerDrag && templates.length > 1 ? (
-                <div
-                  data-routine-drop-end
-                  className={cn(
-                    "mt-2 rounded-xl border border-dashed px-3 py-3 text-center text-xs transition-colors pointer-events-auto",
-                    routineDragOverId === ROUTINE_REORDER_DROP_END
-                      ? "border-primary/60 bg-primary/15 text-foreground"
-                      : "border-primary/35 bg-primary/5 text-muted-foreground",
-                  )}
-                >
-                  Drop here to move to end
-                </div>
-              ) : null}
-              </>
-            )}
-          </div>
-
-          {/* Quick start */}
-          <div className="animate-fade-up stagger-3 space-y-2">
-            <Button
-              type="button"
-              variant="glass"
-              size="sm"
-              disabled={startingWorkout}
-              onClick={() => void startSession("Workout")}
-              className="h-8 w-full shrink-0 gap-1 px-2 text-[11px] press-scale touch-manipulation sm:h-9 sm:text-xs"
-            >
-              <Play className="size-3 shrink-0" />
-              {startingWorkout ? "Starting…" : "Start Empty Workout"}
-            </Button>
-            {startError && (
-              <p className="text-center text-xs text-destructive px-1" role="alert">
-                {startError}
-              </p>
-            )}
-          </div>
-
-          <WorkoutRecoverySection
-            className="animate-fade-up stagger-4"
-            sessions={completedSessions}
-            weekStart={weekStart}
-            weekEnd={weekEnd}
-            today={today}
-            yesterday={yesterday}
-          />
-
-          {/* ── Journal ──────────────────────────── */}
-          <div className="animate-fade-up stagger-5 space-y-2">
-            <div className="flex items-center gap-2 px-1 mb-1">
-              <div className="hud-divider flex-1" />
-              <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/50 shrink-0">
-                Journal
-              </span>
-              <div className="hud-divider flex-1" />
-            </div>
-
-            {completedSessions.length === 0 && (
-              <div className="glass-panel p-8 text-center">
-                <Dumbbell className="mx-auto size-8 text-muted-foreground/20 mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  No completed workouts yet
-                </p>
-                <p className="text-[11px] text-muted-foreground/50 mt-1">
-                  Start a workout to begin tracking
-                </p>
-              </div>
-            )}
-
-            {journalHistoryDisplay.todayGroups.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
-                  Today
-                </p>
-                {journalHistoryDisplay.todayGroups.map(([dk, ds]) => (
-                  <WorkoutJournalDayCard
-                    key={dk}
-                    dateKey={dk}
-                    daySessions={ds}
-                    alwaysExpanded
-                  />
-                ))}
-              </div>
-            )}
-            {journalHistoryDisplay.earlierGroups.length > 0 && (
-              <HistoryEarlierSection dayCount={journalHistoryDisplay.earlierGroups.length}>
-                {journalHistoryDisplay.earlierGroups.map(([dk, ds]) => (
-                  <WorkoutJournalDayCard
-                    key={dk}
-                    dateKey={dk}
-                    daySessions={ds}
-                    alwaysExpanded={false}
-                  />
-                ))}
-              </HistoryEarlierSection>
-            )}
-            <HistoryArchivedNote archivedDayCount={journalHistoryDisplay.archivedDayCount} />
-          </div>
+      ) : startError ? (
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-4">
+          <p className="text-center text-sm text-destructive" role="alert">
+            {startError}
+          </p>
+          <Button type="button" variant="outline" onClick={() => router.push("/")}>
+            Back to hub
+          </Button>
         </div>
-      )}
+      ) : startingWorkout || (!templatesLoaded && pendingStart) ? (
+        <div className="flex min-h-[40vh] items-center justify-center px-4">
+          <p className="text-sm text-muted-foreground">Starting workout…</p>
+        </div>
+      ) : null}
 
-      {/* Hub deep-link start (?start=templateId|free) */}
       <Suspense fallback={null}>
         <HubStartFromQuery
           templatesLoaded={templatesLoaded}
@@ -4608,7 +3716,6 @@ export default function WorkoutsPage() {
         />
       </Suspense>
 
-      {/* ── Routine editor dialog ────────────── */}
       <RoutineEditor
         open={showRoutineEditor}
         onClose={closeRoutineEditor}

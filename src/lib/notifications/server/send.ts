@@ -9,7 +9,7 @@ export interface PushPayload {
   title: string
   /** Body text (single line, < 120 chars works best on iOS) */
   body: string
-  /** Target URL when the user taps. Relative ("/calories") or absolute. */
+  /** Target URL when the user taps. Relative ("/?expand=calories") or absolute. */
   url?: string
   /** Lucide icon name as a path override; defaults to /icons/icon.svg */
   icon?: string

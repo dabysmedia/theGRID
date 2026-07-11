@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { subDays } from "date-fns"
 import { PageHeader } from "./PageHeader"
 import { WeeklyHero } from "./WeeklyHero"
@@ -8,6 +9,7 @@ import type { HubExpandedPanel } from "./hub/HubExpandPanels"
 import { HubPresence, HUB_SECTION_MOTION_MS } from "./hub/HubMotion"
 import { FastingTimer } from "./FastingTimer"
 import { useActiveDate } from "@/context/DateContext"
+import { useQuickLog } from "@/context/QuickLogContext"
 import { useUser } from "@/context/UserContext"
 import { cn, formatDate, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
@@ -19,7 +21,52 @@ import {
   computeNextInjection,
   readInjectionIntervalDays,
 } from "@/lib/hub-tile-prefs"
+import {
+  HUB_EXPAND_QUERY,
+  parseHubExpandPanel,
+  shouldOpenLogFood,
+} from "@/lib/hub-expand-deep-link"
+import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
 import { countDosedWeeks } from "@/lib/peptides"
+
+/**
+ * Consumes `?expand=<panel>` (+ optional `logFood=1`) once, then strips the query.
+ * Suspense-wrapped because it reads search params.
+ */
+function HubExpandFromQuery({
+  onExpand,
+}: {
+  onExpand: (panel: HubExpandedPanel) => void
+}) {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const { openQuickLog } = useQuickLog()
+  const handledRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const expandRaw = searchParams.get(HUB_EXPAND_QUERY)
+    const logFood = shouldOpenLogFood(searchParams)
+    if (!expandRaw && !logFood) return
+
+    const key = `${expandRaw ?? ""}|${logFood ? "1" : "0"}`
+    if (handledRef.current === key) return
+    handledRef.current = key
+
+    const panel = parseHubExpandPanel(expandRaw)
+    if (panel) onExpand(panel)
+    if (logFood) openQuickLog("calories")
+
+    if (expandRaw || logFood) {
+      const next = new URLSearchParams(searchParams.toString())
+      next.delete(HUB_EXPAND_QUERY)
+      next.delete(CALORIES_LOG_FOOD_QUERY)
+      const qs = next.toString()
+      router.replace(qs ? `/?${qs}` : "/", { scroll: false })
+    }
+  }, [searchParams, router, onExpand, openQuickLog])
+
+  return null
+}
 
 interface CategorySummary {
   todayValue: number
@@ -238,6 +285,9 @@ export function HubDashboard() {
         overview && "max-lg:flex-1 max-lg:overflow-hidden",
       )}
     >
+      <Suspense fallback={null}>
+        <HubExpandFromQuery onExpand={setHubExpanded} />
+      </Suspense>
       <div className="shrink-0">
         <PageHeader title="THEGRID" />
       </div>

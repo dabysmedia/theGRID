@@ -655,7 +655,9 @@ export function WeeklyHero({
 
         <FadeSection
           show={showStepsBars}
-          className={cn(fillViewport && expanded == null && "min-h-0 shrink")}
+          /* Never flex-shrink the steps chart — HubCollapse clips with overflow:hidden,
+             so min-h-0 shrink made the bars disappear on short phones. */
+          className={fillViewport && expanded == null ? "shrink-0" : undefined}
         >
           {expanded == null ? (
             <div
@@ -691,7 +693,7 @@ export function WeeklyHero({
           />
         </HubPresence>
 
-        {/* Protocol / training — classic rail collapses; expand panel keeps prior hero destination */}
+        {/* Protocol / training — classic 2-col rail (no nested HubCollapse around text) */}
         <FadeSection show={showProtocolRail} className={fillViewport ? "shrink-0" : undefined}>
           <HubCollapse
             open={expanded !== "peptides" && expanded !== "workouts"}
@@ -778,7 +780,7 @@ export function WeeklyHero({
             </div>
           </HubCollapse>
 
-          <HubPresence open={expanded === "peptides"} durationMs={HUB_MOTION_MS}>
+          <HubPresence open={expanded === "peptides"} durationMs={680}>
             <HubPeptidesExpand
               lastDoseMg={peptideSummary?.lastDoseMg ?? null}
               lastInjectedAt={peptideSummary?.lastInjectedAt ?? null}
@@ -792,7 +794,7 @@ export function WeeklyHero({
             />
           </HubPresence>
 
-          <HubPresence open={expanded === "workouts"} durationMs={HUB_MOTION_MS}>
+          <HubPresence open={expanded === "workouts"} durationMs={680}>
             <HubWorkoutsExpand
               weekCount={weekWo}
               todayCount={workoutSummary?.todayCount ?? data.workouts.todayValue}

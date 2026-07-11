@@ -105,7 +105,8 @@
   --bottom-dock-clearance: calc(6.5rem + env(safe-area-inset-bottom, 0px));
   /* Hub instrument sizes — scale down on short phones, cap on tall ones */
   --hub-ring-size: clamp(5.25rem, 16svh, 7rem);
-  --hub-bar-area: clamp(2.5rem, 7.5svh, 3.625rem);
+  /* Steps chart: keep a readable floor on short phones; prefer ~instrument size */
+  --hub-bar-area: clamp(3.5rem, 11svh, 4.75rem);
   --hub-protocol-min-h: clamp(4rem, 10.5svh, 5.5rem);
   --hub-protocol-glyph: clamp(4rem, 10.5svh, 5.5rem);
   --hub-section-gap: clamp(0.25rem, 1.1svh, 1rem);

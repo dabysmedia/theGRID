@@ -399,7 +399,7 @@ export default function StatsPage() {
 
           {/* â”€â”€ CALORIES â”€â”€ */}
           <SectionChart
-            title="Calories" icon={Flame} color={CATEGORY_THEME.calories.color} href="/calories" stagger={1}
+            title="Calories" icon={Flame} color={CATEGORY_THEME.calories.color} href={CATEGORY_THEME.calories.href} stagger={1}
             summaryCards={<>
               <StatCard label="Avg / Day" value={s.calories.avg != null ? s.calories.avg.toLocaleString() : "--"} sub="cal Â· logged days" color={CATEGORY_THEME.calories.color} />
               <StatCard label="Total" value={s.calories.total.toLocaleString()} sub="cal" />
@@ -453,7 +453,7 @@ export default function StatsPage() {
 
           {/* â”€â”€ STEPS â”€â”€ */}
           <SectionChart
-            title="Steps" icon={Footprints} color={CATEGORY_THEME.steps.color} href="/steps" stagger={3}
+            title="Steps" icon={Footprints} color={CATEGORY_THEME.steps.color} href={CATEGORY_THEME.steps.href} stagger={3}
             summaryCards={<>
               <StatCard label="Avg / Day" value={s.steps.avg != null ? s.steps.avg.toLocaleString() : "--"} sub="steps Â· logged days" color={CATEGORY_THEME.steps.color} />
               <StatCard label="Total" value={s.steps.total.toLocaleString()} sub="steps Â· incl. runs" />
@@ -547,7 +547,7 @@ export default function StatsPage() {
 
           {/* â”€â”€ SLEEP â”€â”€ */}
           <SectionChart
-            title="Sleep" icon={Moon} color={CATEGORY_THEME.sleep.color} href="/sleep" stagger={6}
+            title="Sleep" icon={Moon} color={CATEGORY_THEME.sleep.color} href={CATEGORY_THEME.sleep.href} stagger={6}
             summaryCards={<>
               <StatCard label="Avg / Night" value={s.sleep.avg != null ? `${s.sleep.avg}` : "--"} sub="hrs" color={CATEGORY_THEME.sleep.color} />
               <StatCard label="Days Logged" value={`${s.sleep.daysLogged}`} sub={daysLabel} />

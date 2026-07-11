@@ -1,12 +1,10 @@
-const CACHE_NAME = "thegrid-v5"
+const CACHE_NAME = "thegrid-v6"
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
       cache.addAll([
         "/",
-        "/weight",
-        "/log",
         "/manifest.json",
         "/icons/icon.svg",
       ])
