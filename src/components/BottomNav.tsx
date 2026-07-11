@@ -94,14 +94,19 @@ export function BottomNav() {
 
   return (
     <>
-      {open && (
-        <button
-          type="button"
-          aria-label="Close navigation"
-          className="fixed inset-0 z-40 animate-in fade-in duration-300 bg-background/60 backdrop-blur-sm motion-reduce:animate-none motion-reduce:backdrop-blur-none"
-          onClick={close}
-        />
-      )}
+      <button
+        type="button"
+        aria-label="Close navigation"
+        aria-hidden={!open}
+        tabIndex={open ? 0 : -1}
+        className={cn(
+          "fixed inset-0 z-40 bg-background/60 backdrop-blur-sm transition-[opacity,backdrop-filter] duration-500 ease-out motion-reduce:transition-none motion-reduce:backdrop-blur-none",
+          open
+            ? "pointer-events-auto opacity-100"
+            : "pointer-events-none opacity-0 backdrop-blur-none",
+        )}
+        onClick={close}
+      />
 
       <nav
         className="fixed bottom-0 right-0 z-50 flex w-full animate-slide-up flex-col items-end ps-[max(0.75rem,env(safe-area-inset-left,0px))] pe-[max(0.75rem,env(safe-area-inset-right,0px))] pb-[env(safe-area-inset-bottom,0px)] sm:ps-4 sm:pe-4 md:ps-6 md:pe-6"
@@ -109,7 +114,20 @@ export function BottomNav() {
       >
         <div className="mb-2 flex max-w-full flex-row items-end justify-end gap-2">
           {/* Keep the dock row clear while the menu sheet is open. */}
-          {!open ? <FastingNavChip /> : null}
+          <div
+            className={cn(
+              "overflow-hidden transition-[max-width,opacity,transform] duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+              open
+                ? "pointer-events-none max-w-0 translate-y-2 opacity-0"
+                : "max-w-64 translate-y-0 opacity-100",
+            )}
+            aria-hidden={open}
+            inert={open}
+          >
+            <div className="w-max">
+              <FastingNavChip />
+            </div>
+          </div>
           <div className="glass-panel relative flex w-fit max-w-[min(100vw-1.5rem,calc(42rem+3.5rem))] flex-col overflow-hidden shadow-lg shadow-black/40">
             <div
               className={cn(
@@ -217,15 +235,22 @@ export function BottomNav() {
                   open && "border-l border-white/10 bg-grid-accent-dim/30 text-primary"
                 )}
               >
-                {open ? (
-                  <ChevronRight
-                    className="h-6 w-6 motion-safe:transition-transform motion-safe:duration-500 motion-safe:[transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)]"
-                    strokeWidth={2}
-                    aria-hidden
+                <span className="relative h-6 w-6" aria-hidden>
+                  <Menu
+                    className={cn(
+                      "absolute inset-0 h-6 w-6 transition-[opacity,transform] duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+                      open ? "rotate-45 scale-75 opacity-0" : "rotate-0 scale-100 opacity-100",
+                    )}
+                    strokeWidth={1.8}
                   />
-                ) : (
-                  <Menu className="h-6 w-6" strokeWidth={1.8} aria-hidden />
-                )}
+                  <ChevronRight
+                    className={cn(
+                      "absolute inset-0 h-6 w-6 transition-[opacity,transform] duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+                      open ? "rotate-0 scale-100 opacity-100" : "-rotate-45 scale-75 opacity-0",
+                    )}
+                    strokeWidth={2}
+                  />
+                </span>
                 <span className="sr-only">{open ? "Close menu" : "Open menu"}</span>
               </button>
 

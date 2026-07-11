@@ -13,6 +13,7 @@ import { useUser } from "@/context/UserContext"
 import { isAgentPublicPath } from "@/lib/agent/public-routes"
 import { ProfileSwitcher, UserProfileAvatar } from "@/components/ProfileSwitcher"
 import { usePathname } from "next/navigation"
+import Link from "next/link"
 import {
   Dialog,
   DialogContent,
@@ -83,14 +84,11 @@ export function ProfileDialogProvider({ children }: { children: ReactNode }) {
 }
 
 export function ProfileHeaderTrigger({ className }: { className?: string }) {
-  const { openProfile } = useProfileDialog()
   const { user } = useUser()
 
   return (
-    <button
-      type="button"
-      onClick={openProfile}
-      aria-haspopup="dialog"
+    <Link
+      href="/more"
       className={cn(
         "mt-1.5 flex shrink-0 items-center justify-center rounded-full ring-1 transition-all duration-150 sm:mt-1",
         "min-h-10 min-w-10",
@@ -108,6 +106,6 @@ export function ProfileHeaderTrigger({ className }: { className?: string }) {
       ) : (
         <UserCircle className="size-6 text-muted-foreground" aria-hidden />
       )}
-    </button>
+    </Link>
   )
 }

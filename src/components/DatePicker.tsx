@@ -3,10 +3,10 @@
 import { useRef } from "react"
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react"
 import { useActiveDate } from "@/context/DateContext"
-import { parseLocalDate } from "@/lib/utils"
+import { cn, parseLocalDate } from "@/lib/utils"
 import { format } from "date-fns"
 
-export function DatePicker() {
+export function DatePicker({ compact = false }: { compact?: boolean }) {
   const { activeDate, setActiveDate, isToday, goToday, goPrev, goNext } =
     useActiveDate()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -23,12 +23,15 @@ export function DatePicker() {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className={cn("flex items-center gap-1", compact ? "min-w-0 flex-nowrap" : "flex-wrap")}>
       {/* Prev day */}
       <button
         onClick={goPrev}
         type="button"
-        className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-xl text-muted-foreground/50 transition-colors hover:bg-grid-accent-dim hover:text-primary press-scale sm:h-8 sm:w-8"
+        className={cn(
+          "flex touch-manipulation items-center justify-center rounded-xl text-muted-foreground/50 transition-colors hover:bg-grid-accent-dim hover:text-primary press-scale",
+          compact ? "h-8 w-7 shrink-0 sm:w-8" : "h-11 w-11 sm:h-8 sm:w-8",
+        )}
         aria-label="Previous day"
       >
         <ChevronLeft className="h-5 w-5 sm:h-4 sm:w-4" />
@@ -38,11 +41,15 @@ export function DatePicker() {
       <button
         type="button"
         onClick={openPicker}
-        className={`relative min-h-11 touch-manipulation group rounded-xl px-3 py-2.5 text-xs tracking-[0.1em] uppercase transition-all sm:min-h-0 sm:py-1.5 ${
+        className={cn(
+          "group relative touch-manipulation rounded-xl uppercase transition-all",
+          compact
+            ? "min-h-8 min-w-0 truncate whitespace-nowrap px-1.5 py-1 text-[9px] tracking-[0.07em] sm:px-2 sm:text-[10px]"
+            : "min-h-11 px-3 py-2.5 text-xs tracking-[0.1em] sm:min-h-0 sm:py-1.5",
           isToday
-            ? "text-muted-foreground hover:text-foreground hover:bg-glass-highlight/30"
-            : "text-primary font-semibold bg-grid-accent-dim border border-primary/20"
-        }`}
+            ? "text-muted-foreground hover:bg-glass-highlight/30 hover:text-foreground"
+            : "border border-primary/20 bg-grid-accent-dim font-semibold text-primary",
+        )}
       >
         <span className="text-muted-foreground/40 mr-1.5 group-hover:text-muted-foreground/60 transition-colors">
           {"//"}
@@ -66,7 +73,10 @@ export function DatePicker() {
       <button
         type="button"
         onClick={goNext}
-        className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-xl text-muted-foreground/50 transition-colors hover:bg-grid-accent-dim hover:text-primary press-scale sm:h-8 sm:w-8"
+        className={cn(
+          "flex touch-manipulation items-center justify-center rounded-xl text-muted-foreground/50 transition-colors hover:bg-grid-accent-dim hover:text-primary press-scale",
+          compact ? "h-8 w-7 shrink-0 sm:w-8" : "h-11 w-11 sm:h-8 sm:w-8",
+        )}
         aria-label="Next day"
       >
         <ChevronRight className="h-5 w-5 sm:h-4 sm:w-4" />
@@ -77,7 +87,12 @@ export function DatePicker() {
         <button
           type="button"
           onClick={goToday}
-          className="ml-1.5 flex min-h-11 touch-manipulation items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary transition-all bg-grid-accent-dim border border-primary/20 hover:bg-primary/20 hover:border-primary/35 sm:min-h-0 sm:px-2.5 sm:py-1.5"
+          className={cn(
+            "flex touch-manipulation items-center gap-1.5 rounded-xl border border-primary/20 bg-grid-accent-dim font-semibold uppercase text-primary transition-all hover:border-primary/35 hover:bg-primary/20",
+            compact
+              ? "ml-0 min-h-8 px-2 py-1 text-[9px] tracking-[0.08em]"
+              : "ml-1.5 min-h-11 px-3 py-2 text-[10px] tracking-[0.12em] sm:min-h-0 sm:px-2.5 sm:py-1.5",
+          )}
         >
           <RotateCcw className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
           Today

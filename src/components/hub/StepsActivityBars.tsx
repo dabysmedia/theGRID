@@ -4,6 +4,8 @@ import { Plus } from "lucide-react"
 import { MeshHeartSvg } from "@/components/hub/MeshHeartSvg"
 import { useQuickLog } from "@/context/QuickLogContext"
 import { cn } from "@/lib/utils"
+import { useCountUp } from "@/components/useCountUp"
+import type { CSSProperties } from "react"
 import {
   READINESS_BAND_LABEL,
   readinessBand,
@@ -110,6 +112,10 @@ export function StepsActivityBars({
       : null
   const readinessLabel = readinessScore != null ? String(readinessScore) : "—"
   const highReadinessPulse = band === "peak" || band === "high"
+  const animatedHrv = useCountUp(
+    hrvMs != null && Number.isFinite(hrvMs) ? Math.round(hrvMs) : null,
+    { durationMs: 1100, enabled: !hideReadiness },
+  )
   const hrvLabel =
     hrvMs != null && Number.isFinite(hrvMs) ? String(Math.round(hrvMs)) : "—"
   const goalLineBottomPx =
@@ -135,10 +141,6 @@ export function StepsActivityBars({
   return (
     <div
       className={cn("relative -mx-4 lg:-mx-5", className)}
-      style={{
-        perspective: "520px",
-        perspectiveOrigin: "50% 120%",
-      }}
     >
       {/* Floor grid behind bars — no local steel wash (card wash is continuous) */}
       <div
@@ -157,12 +159,22 @@ export function StepsActivityBars({
       />
 
       {/* Readiness — text inset; gradient full-bleed to card edges */}
-      {!hideReadiness ? (
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+          hideReadiness
+            ? "pointer-events-none grid-rows-[0fr] opacity-0"
+            : "grid-rows-[1fr] opacity-100",
+        )}
+        aria-hidden={hideReadiness}
+      >
+      <div className="min-h-0 overflow-hidden">
       <button
         type="button"
         onClick={onReadinessClick}
         aria-label={readinessSelected ? "Collapse vitals" : "Expand vitals"}
         aria-expanded={readinessSelected}
+        tabIndex={hideReadiness ? -1 : undefined}
         className={cn(
           "relative z-10 block w-full text-left transition-colors hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25",
           readinessSelected && "bg-muted/10",
@@ -207,7 +219,7 @@ export function StepsActivityBars({
                   textShadow: `0 0 12px ${accent}66`,
                 }}
               >
-                {hrvLabel}
+                {animatedHrv != null ? Math.round(animatedHrv) : hrvLabel}
               </span>
               <span className="mt-px text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/65">
                 ms
@@ -268,16 +280,24 @@ export function StepsActivityBars({
           style={{
             opacity: readinessScore != null ? 1 : 0.45,
             background:
-              readinessScore != null
-                ? `linear-gradient(90deg, ${accent}55 0%, ${accent} 42%, ${accent}cc 100%)`
-                : "linear-gradient(90deg, oklch(0.28 0.01 250 / 55%) 0%, oklch(0.34 0.01 250 / 70%) 50%, oklch(0.28 0.01 250 / 55%) 100%)",
-            boxShadow: band
-              ? `inset 0 1px 0 #ffffff44, 0 0 10px ${accent}55`
-              : "inset 0 1px 0 oklch(0.40 0.01 250 / 22%)",
+              "linear-gradient(90deg, oklch(0.28 0.01 250 / 55%) 0%, oklch(0.34 0.01 250 / 70%) 50%, oklch(0.28 0.01 250 / 55%) 100%)",
           }}
         >
           {readinessScore != null ? (
             <>
+              <div
+                className={cn(
+                  "absolute inset-0 origin-left",
+                  !hideReadiness &&
+                    "animate-readiness-bar motion-reduce:animate-none",
+                )}
+                style={{
+                  background: `linear-gradient(90deg, ${accent}55 0%, ${accent} 42%, ${accent}cc 100%)`,
+                  boxShadow: band
+                    ? `inset 0 1px 0 #ffffff44, 0 0 10px ${accent}55`
+                    : "inset 0 1px 0 oklch(0.40 0.01 250 / 22%)",
+                }}
+              />
               <div
                 className="absolute inset-x-0 top-0 h-1/2 opacity-40"
                 style={{
@@ -286,8 +306,17 @@ export function StepsActivityBars({
               />
               {/* Soft score-position tick so /100 isn't only a number on the right */}
               <div
-                className="pointer-events-none absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${readinessScore}%` }}
+                className={cn(
+                  "pointer-events-none absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2",
+                  !hideReadiness &&
+                    "animate-readiness-marker motion-reduce:animate-none",
+                )}
+                style={
+                  {
+                    left: `${readinessScore}%`,
+                    "--readiness-position": `${readinessScore}%`,
+                  } as CSSProperties
+                }
                 aria-hidden
               >
                 <div
@@ -309,12 +338,16 @@ export function StepsActivityBars({
           ) : null}
         </div>
       </button>
-      ) : null}
+      </div>
+      </div>
 
       {/* Soft seam only — no opaque cut between readiness and steps */}
-      {!hideSteps && !hideReadiness ? (
+      {!hideSteps ? (
         <div
-          className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/5 to-transparent"
+          className={cn(
+            "pointer-events-none bg-gradient-to-r from-transparent via-white/5 to-transparent transition-[height,opacity] duration-500",
+            hideReadiness ? "h-0 opacity-0" : "h-px opacity-100",
+          )}
           aria-hidden
         />
       ) : null}
@@ -460,7 +493,7 @@ export function StepsActivityBars({
                 <div
                   key={i}
                   className="relative flex min-w-0 flex-1 justify-center"
-                  style={{ ...barAreaStyle, perspective: "240px" }}
+                  style={barAreaStyle}
                 >
                   {/* Per-day step value — fades in as the chart grows */}
                   <div
@@ -497,64 +530,29 @@ export function StepsActivityBars({
                     </span>
                   </div>
 
-                  {/* Outer keeps isometric pose; inner owns scaleY grow (must not share transform). */}
+                  {/* Upright rectangular bars: height morph and entrance grow stay independent. */}
                   <div
                     className="absolute bottom-0 transition-[height,max-width] duration-500 ease-out motion-reduce:transition-none"
                     style={{
-                      width: "78%",
-                      maxWidth: expanded ? 38 : 34,
+                      width: "72%",
+                      maxWidth: expanded ? 36 : 32,
                       height: useScaledBars ? `${heightPct}%` : heightPx,
-                      transformStyle: "preserve-3d",
-                      transform: "rotateX(12deg) rotateY(-18deg)",
                     }}
                   >
                     <div
-                      className="absolute inset-0 origin-bottom animate-bar-grow motion-reduce:animate-none"
+                      className="absolute inset-0 origin-bottom overflow-hidden rounded-t-[4px] rounded-b-[1px] border border-emerald-200/10 animate-bar-grow motion-reduce:animate-none"
                       style={{
-                        animationDelay: `${delay}ms`,
-                        transformStyle: "preserve-3d",
-                      }}
-                    >
-                    <div
-                      className="absolute left-0 right-0 top-0"
-                      style={{
-                        height: 9,
-                        transform: "translateY(-7px) rotateX(72deg)",
-                        transformOrigin: "bottom",
+                        transitionDelay: `${delay}ms`,
                         background: isToday
-                          ? "linear-gradient(135deg, #86efac, #22c55e)"
-                          : "linear-gradient(135deg, #4ade8088, #16a34a66)",
+                          ? "linear-gradient(180deg, #86efac 0%, #22c55e 38%, #15803d 100%)"
+                          : "linear-gradient(180deg, #4ade80aa 0%, #16a34a88 52%, #14532d77 100%)",
                         boxShadow: isToday
-                          ? "0 0 12px #22c55e66"
-                          : "0 0 6px #22c55e22",
-                      }}
-                    />
-                    <div
-                      className="absolute bottom-0 top-0"
-                      style={{
-                        width: 8,
-                        right: -7,
-                        transform: "skewY(-38deg)",
-                        transformOrigin: "left bottom",
-                        background: isToday
-                          ? "linear-gradient(180deg, #16a34a, #14532d)"
-                          : "linear-gradient(180deg, #15803d88, #052e1688)",
-                      }}
-                    />
-                    <div
-                      className="absolute inset-0 overflow-hidden"
-                      style={{
-                        background: isToday
-                          ? "linear-gradient(180deg, #4ade80 0%, #22c55e 45%, #15803d 100%)"
-                          : "linear-gradient(180deg, #22c55e99 0%, #16a34a66 55%, #14532d55 100%)",
-                        boxShadow: isToday
-                          ? "inset 0 1px 0 #bbf7d0aa, 0 0 14px #22c55e55"
-                          : "inset 0 1px 0 #86efac33",
-                        borderRadius: "1px 1px 0 0",
+                          ? "inset 0 1px 0 #dcfce7aa, 0 0 14px #22c55e55"
+                          : "inset 0 1px 0 #bbf7d044, 0 0 7px #22c55e22",
                       }}
                     >
                       <div
-                        className="absolute inset-x-0 top-0 h-1/3 opacity-40"
+                        className="absolute inset-x-0 top-0 h-1/3 opacity-35"
                         style={{
                           background:
                             "linear-gradient(180deg, #ffffff55, transparent)",
@@ -569,7 +567,6 @@ export function StepsActivityBars({
                           }}
                         />
                       ) : null}
-                    </div>
                     </div>
                   </div>
                 </div>

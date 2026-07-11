@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { Pencil, Plus, Trash2 } from "lucide-react"
 import { CaloriesPipField } from "@/components/calories/CaloriesPipField"
+import { CaloriesFocusPanel } from "@/components/calories/CaloriesFocusPanel"
 import { LogFoodDialog } from "@/components/calories/LogFoodDialog"
 import { Button } from "@/components/ui/button"
 import { HUB_MOTION_MS } from "@/components/hub/HubMotion"
@@ -216,6 +217,25 @@ export function CaloriesExpandShell({
 
   return (
     <>
+      <CaloriesFocusPanel
+        consumed={consumed}
+        target={target}
+        entries={entries}
+        mealGroups={mealGroups}
+        status={entriesStatus}
+        onAdd={openAddFood}
+        onEdit={startEdit}
+        onRetry={() => setReloadKey((key) => key + 1)}
+        onDelete={(entry) =>
+          requestDelete(
+            entry.id,
+            entry.description?.trim() || `${entry.calories} cal · ${entry.mealType}`,
+          )
+        }
+      />
+
+      {false ? (
+      <>
       {/* UPPER LEFT — intake + Add food, under Overview back (rings-row top) */}
       <div
         className={cn(
@@ -433,6 +453,8 @@ export function CaloriesExpandShell({
           />
         </div>
       </div>
+      </>
+      ) : null}
 
       <LogFoodDialog
         open={logFoodOpen}

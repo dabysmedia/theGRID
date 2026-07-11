@@ -28,7 +28,7 @@ export function PeptideVialGraphic({
         : "h-12 w-12"
 
   const imageScale =
-    size === "lg" ? "scale-[1.28]" : size === "md" ? "scale-[1.24]" : "scale-[1.12]"
+    size === "lg" ? "scale-[1.28]" : size === "md" ? "scale-[1.34]" : "scale-[1.12]"
 
   return (
     <div

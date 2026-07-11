@@ -8,6 +8,7 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { DailyWeighIn } from "@/components/DailyWeighIn"
+import { DatePicker } from "@/components/DatePicker"
 import { StepsActivityBars } from "@/components/hub/StepsActivityBars"
 import {
   HubCaloriesExpand,
@@ -24,6 +25,7 @@ import { HubRingBay } from "@/components/hub/HubRingBay"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { WeekWorkoutGoalRing, WEEKLY_WORKOUT_GOAL } from "@/components/WeekWorkoutGoalRing"
 import { useActiveDate } from "@/context/DateContext"
+import { ProfileHeaderTrigger } from "@/context/ProfileDialogContext"
 import type { NextInjectionInfo } from "@/lib/hub-tile-prefs"
 import { cn, glassPanelClass, parseLocalDate } from "@/lib/utils"
 
@@ -349,6 +351,50 @@ function FadeSection({
   )
 }
 
+function FocusDialReadouts({
+  panel,
+  left,
+  right,
+}: {
+  panel: "calories" | "steps" | "sleep" | null
+  left: { label: string; value: string; detail: string }
+  right: { label: string; value: string; detail: string }
+}) {
+  if (panel == null) return null
+
+  return (
+    <div
+      key={panel}
+      className="pointer-events-none absolute inset-x-0 top-0 z-20 grid h-[calc(var(--hub-ring-size)+3rem)] grid-cols-[1fr_var(--hub-ring-size)_1fr] gap-2 lg:grid-cols-[1fr_124px_1fr]"
+      aria-hidden
+    >
+      <div className="flex min-w-0 items-center justify-end pr-1.5 text-right motion-safe:animate-fade-up motion-reduce:animate-none sm:pr-3">
+        <div className="min-w-0 border-r border-white/[0.07] pr-2.5 sm:pr-4">
+          <p className="type-hud-micro truncate">{left.label}</p>
+          <p className="mt-1 truncate text-base font-semibold tabular-nums tracking-tight text-foreground/90 sm:text-lg">
+            {left.value}
+          </p>
+          <p className="mt-0.5 truncate text-[9px] text-muted-foreground/45 sm:text-[10px]">
+            {left.detail}
+          </p>
+        </div>
+      </div>
+      <div />
+      <div className="flex min-w-0 items-center justify-start pl-1.5 text-left motion-safe:animate-fade-up motion-reduce:animate-none sm:pl-3">
+        <div className="min-w-0 border-l border-white/[0.07] pl-2.5 sm:pl-4">
+          <p className="type-hud-micro truncate">{right.label}</p>
+          <p className="mt-1 truncate text-base font-semibold tabular-nums tracking-tight text-foreground/90 sm:text-lg">
+            {right.value}
+          </p>
+          <p className="mt-0.5 truncate text-[9px] text-muted-foreground/45 sm:text-[10px]">
+            {right.detail}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function WeeklyHero({
   data,
   loading,
@@ -405,6 +451,18 @@ export function WeeklyHero({
   const calGoal = data.calories.goal ?? 2000
   const stepsGoal = data.steps.goal ?? 10000
   const sleepGoal = data.sleep.goal ?? 8
+  const caloriePct = calGoal > 0 ? Math.round((data.calories.todayValue / calGoal) * 100) : 0
+  const calorieRemaining = Math.max(0, calGoal - data.calories.todayValue)
+  const loggedStepDays = data.steps.last7.filter((value) => value > 0)
+  const stepWeekAvg = loggedStepDays.length
+    ? Math.round(loggedStepDays.reduce((sum, value) => sum + value, 0) / loggedStepDays.length)
+    : 0
+  const stepGoalDays = data.steps.last7.filter((value) => value >= stepsGoal).length
+  const loggedSleepDays = data.sleep.last7.filter((value) => value > 0)
+  const sleepWeekAvg = loggedSleepDays.length
+    ? loggedSleepDays.reduce((sum, value) => sum + value, 0) / loggedSleepDays.length
+    : 0
+  const sleepGoalDays = data.sleep.last7.filter((value) => value >= sleepGoal).length
 
   const isWeekView = viewMode === "week"
   const calValue = isWeekView ? calAvg : data.calories.todayValue
@@ -463,16 +521,15 @@ export function WeeklyHero({
         glassPanelClass,
         // Keep mobile padding stable across overview/expand so the card top
         // does not shift when fillViewport turns off.
-        "flex flex-col p-4 transition-opacity duration-500 max-lg:p-3 lg:p-5",
+        "flex min-h-0 flex-col overflow-hidden !rounded-[1.35rem] border border-white/[0.09] p-4 transition-opacity duration-500 max-lg:p-3 lg:p-5",
         fillViewport && expanded == null && "max-lg:h-full max-lg:min-h-0",
-        // glass-panel CSS sets overflow:hidden; sticky back control needs visible
         expanded != null && "!overflow-visible",
         loading ? "opacity-50" : "opacity-100",
       )}
     >
       {/* Full-card HUD wash — one continuous dark steel → near-black fade */}
       <div
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-0 rounded-[inherit]"
         aria-hidden
         style={{
           background:
@@ -493,6 +550,29 @@ export function WeeklyHero({
         className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/14 to-transparent"
         aria-hidden
       />
+      <div
+        className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-70"
+        aria-hidden
+        style={{
+          background:
+            "radial-gradient(ellipse 75% 34% at 50% -5%, oklch(0.72 0.02 250 / 10%), transparent 68%), radial-gradient(ellipse 45% 30% at 100% 100%, oklch(0.45 0.04 220 / 7%), transparent 72%)",
+          boxShadow:
+            "inset 0 1px 0 oklch(1 0 0 / 7%), inset 0 -1px 0 oklch(0 0 0 / 45%)",
+        }}
+      />
+
+      {/* The hub owns the app chrome on the home route. */}
+      <div className="relative z-20 mb-[var(--hub-section-gap)] border-b border-white/[0.07] pb-2 sm:pb-2.5">
+        <div className="flex min-w-0 items-center gap-2 px-0.5 sm:gap-3 sm:px-1">
+          <h1 className="font-kelly-slab min-w-0 shrink-0 text-lg font-semibold leading-none tracking-[-0.03em] sm:text-xl">
+            <span className="text-gradient-glass title-underline-accent block truncate">THEGRID</span>
+          </h1>
+          <div className="flex min-w-0 flex-1 justify-end overflow-hidden">
+            <DatePicker compact />
+          </div>
+          <ProfileHeaderTrigger className="!mt-0 min-h-9 min-w-9" />
+        </div>
+      </div>
 
       {/* Header — same h-7 slot; overview title ↔ back chrome crossfade (no push-down) */}
       <div
@@ -619,6 +699,47 @@ export function WeeklyHero({
                 />
               }
             />
+            <FocusDialReadouts
+              panel={expandedRing}
+              left={
+                expandedRing === "calories"
+                  ? {
+                      label: "Eaten",
+                      value: data.calories.todayValue.toLocaleString(),
+                      detail: `${caloriePct}% of target`,
+                    }
+                  : expandedRing === "steps"
+                    ? {
+                        label: "Today",
+                        value: Math.round(data.steps.todayValue).toLocaleString(),
+                        detail: `${Math.round((data.steps.todayValue / Math.max(stepsGoal, 1)) * 100)}% of goal`,
+                      }
+                    : {
+                        label: "Last sleep",
+                        value: `${data.sleep.todayValue.toFixed(1)}h`,
+                        detail: `${sleepGoal}h target`,
+                      }
+              }
+              right={
+                expandedRing === "calories"
+                  ? {
+                      label: "Remaining",
+                      value: calorieRemaining.toLocaleString(),
+                      detail: `${calGoal.toLocaleString()} cal goal`,
+                    }
+                  : expandedRing === "steps"
+                    ? {
+                        label: "7-day avg",
+                        value: stepWeekAvg.toLocaleString(),
+                        detail: `${stepGoalDays}/7 goal days`,
+                      }
+                    : {
+                        label: "7-day avg",
+                        value: `${sleepWeekAvg.toFixed(1)}h`,
+                        detail: `${sleepGoalDays}/7 goal nights`,
+                      }
+              }
+            />
           </FadeSection>
 
           {/* Expand chrome outside HubCollapse — absolute intake/food must not be clipped.
@@ -679,6 +800,7 @@ export function WeeklyHero({
             onStepsClick={() => toggleExpand("steps")}
             onReadinessClick={() => toggleExpand("vitals")}
             readinessSelected={expanded === "vitals"}
+            hideReadiness={expanded === "steps"}
             hideSteps={expanded === "vitals"}
             scaleToFit={fillViewport && expanded == null}
             className="animate-fade-up stagger-3 motion-safe:animate-fade-up motion-reduce:animate-none"
@@ -818,6 +940,7 @@ export function WeeklyHero({
             </HubPresence>
           </div>
         </FadeSection>
+
       </div>
     </div>
   )
