@@ -53,6 +53,7 @@ export type SyncResult = {
   vitalsUpserted: number
   rangeStart: string
   rangeEnd: string
+  warnings: string[]
 }
 
 export type SyncAllResult = {
@@ -133,29 +134,79 @@ export async function syncGoogleHealthForUser(
   const endExclusive = addDaysYmd(endYmd, 1)
   const hrSampleStartYmd = formatDate(subDays(new Date(), HR_SAMPLE_SYNC_DAYS - 1))
 
+  const fetchWarnings: string[] = []
+  let fetchAttempts = 0
+  let fetchSuccesses = 0
+
+  async function safeFetch<T>(
+    label: string,
+    enabled: boolean,
+    load: () => Promise<T>,
+    fallback: T,
+  ): Promise<T> {
+    if (!enabled) return fallback
+    fetchAttempts++
+    try {
+      const value = await load()
+      fetchSuccesses++
+      return value
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "request failed"
+      fetchWarnings.push(`${label}: ${message}`)
+      return fallback
+    }
+  }
+
   const [steps, sleep, weights, restingHr, hrv, hrZoneThresholds, hrRollup, timeInZone] =
     await Promise.all([
-      metrics.steps
-        ? fetchStepsForStepsDays(userId, startStepsKey, endStepsKey, stepsTz)
-        : Promise.resolve([]),
-      metrics.sleep ? fetchSleepSessions(userId, startYmd) : Promise.resolve([]),
-      metrics.weight ? fetchDailyWeight(userId, startYmd, endExclusive) : Promise.resolve([]),
-      metrics.vitals
-        ? fetchDailyRestingHeartRate(userId, startYmd, endExclusive)
-        : Promise.resolve([]),
-      metrics.vitals
-        ? fetchDailyHeartRateVariability(userId, startYmd, endExclusive)
-        : Promise.resolve([]),
-      metrics.vitals
-        ? fetchDailyHeartRateZones(userId, startYmd, endExclusive)
-        : Promise.resolve([]),
-      metrics.vitals
-        ? fetchHeartRateDailyRollup(userId, startYmd, endExclusive)
-        : Promise.resolve([]),
-      metrics.vitals
-        ? fetchTimeInHeartRateZoneDailyRollup(userId, startYmd, endExclusive)
-        : Promise.resolve([]),
+      safeFetch(
+        "Steps",
+        metrics.steps,
+        () => fetchStepsForStepsDays(userId, startStepsKey, endStepsKey, stepsTz),
+        [],
+      ),
+      safeFetch("Sleep", metrics.sleep, () => fetchSleepSessions(userId, startYmd), []),
+      safeFetch(
+        "Weight",
+        metrics.weight,
+        () => fetchDailyWeight(userId, startYmd, endExclusive),
+        [],
+      ),
+      safeFetch(
+        "Resting heart rate",
+        metrics.vitals,
+        () => fetchDailyRestingHeartRate(userId, startYmd, endExclusive),
+        [],
+      ),
+      safeFetch(
+        "HRV",
+        metrics.vitals,
+        () => fetchDailyHeartRateVariability(userId, startYmd, endExclusive),
+        [],
+      ),
+      safeFetch(
+        "Heart-rate zones",
+        metrics.vitals,
+        () => fetchDailyHeartRateZones(userId, startYmd, endExclusive),
+        [],
+      ),
+      safeFetch(
+        "Heart-rate rollup",
+        metrics.vitals,
+        () => fetchHeartRateDailyRollup(userId, startYmd, endExclusive),
+        [],
+      ),
+      safeFetch(
+        "Time in heart-rate zones",
+        metrics.vitals,
+        () => fetchTimeInHeartRateZoneDailyRollup(userId, startYmd, endExclusive),
+        [],
+      ),
     ])
+
+  if (fetchAttempts > 0 && fetchSuccesses === 0) {
+    throw new Error(`Google Health sync failed: ${fetchWarnings.join(" | ")}`)
+  }
 
   const hrSampleDays: Array<{ ymd: string; samples: Array<{ time: string; bpm: number }> }> = []
   if (metrics.vitals) {
@@ -430,7 +481,7 @@ export async function syncGoogleHealthForUser(
     where: { userId },
     data: {
       lastSyncAt: new Date(),
-      lastSyncError: null,
+      lastSyncError: fetchWarnings.length > 0 ? fetchWarnings.join(" | ") : null,
     },
   })
 
@@ -442,6 +493,7 @@ export async function syncGoogleHealthForUser(
     vitalsUpserted,
     rangeStart: startStepsKey,
     rangeEnd: endStepsKey,
+    warnings: fetchWarnings,
   }
 }
 

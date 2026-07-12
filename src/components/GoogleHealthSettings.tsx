@@ -97,16 +97,24 @@ export function GoogleHealthSettings() {
         sleepUpserted?: number
         weightUpserted?: number
         vitalsUpserted?: number
+        warnings?: string[]
       }
       if (!res.ok) {
         setMessage({ kind: "err", text: data.error || "Sync failed." })
         await load()
         return
       }
-      setMessage({
-        kind: "ok",
-        text: `Synced ${data.stepsUpserted ?? 0} step days, ${data.sleepUpserted ?? 0} sleep sessions, ${data.weightUpserted ?? 0} weigh-ins, ${data.vitalsUpserted ?? 0} vitals days.`,
-      })
+      const summary = `Synced ${data.stepsUpserted ?? 0} step days, ${data.sleepUpserted ?? 0} sleep sessions, ${data.weightUpserted ?? 0} weigh-ins, ${data.vitalsUpserted ?? 0} vitals days.`
+      setMessage(
+        data.warnings && data.warnings.length > 0
+          ? {
+              kind: "err",
+              text: `${summary} Some metrics could not refresh: ${data.warnings.join(" · ")}`,
+            }
+          : { kind: "ok", text: summary },
+      )
+      window.dispatchEvent(new CustomEvent("grid:google-health-synced"))
+      window.dispatchEvent(new CustomEvent("grid:log-saved"))
       await load()
     } finally {
       setBusy(null)
@@ -150,8 +158,8 @@ export function GoogleHealthSettings() {
           </h3>
           <p className="text-[11px] leading-relaxed text-muted-foreground/80">
             Import steps, sleep, weight, and heart-rate vitals from your Fitbit account via
-            Google Health. After connecting, steps, sleep, and vitals refresh automatically
-            every 15 minutes.
+            Google Health. After connecting, all supported metrics refresh when the app opens
+            or resumes, and automatically every 15 minutes.
           </p>
         </div>
       </div>

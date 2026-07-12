@@ -70,6 +70,7 @@ export function StageTimeline({
 }) {
   const gradientId = useId().replace(/:/g, "")
   const [activeStageIndex, setActiveStageIndex] = useState<number | null>(null)
+  const [scrubRatio, setScrubRatio] = useState<number | null>(null)
   const normalized = stages
     .map((stage) => ({
       ...stage,
@@ -99,10 +100,14 @@ export function StageTimeline({
   })
   const area = `${trace} V 121 H 0 Z`
   const activeStage = activeStageIndex != null ? normalized[activeStageIndex] : null
-  const activeStageX = activeStage ? ((activeStage.start + activeStage.end) / 2 - start) / total : 0
+  const activeStageX =
+    scrubRatio ??
+    (activeStage ? ((activeStage.start + activeStage.end) / 2 - start) / total : 0)
 
   const updateActiveStage = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const time = start + pointerRatio(event) * total
+    const ratio = pointerRatio(event)
+    const time = start + ratio * total
+    setScrubRatio(ratio)
     const index = normalized.findIndex((stage) => time >= stage.start && time <= stage.end)
     if (index >= 0) setActiveStageIndex(index)
   }
@@ -160,7 +165,10 @@ export function StageTimeline({
             }}
             onPointerMove={updateActiveStage}
             onPointerLeave={(event) => {
-              if (event.pointerType === "mouse") setActiveStageIndex(null)
+              if (event.pointerType === "mouse") {
+                setActiveStageIndex(null)
+                setScrubRatio(null)
+              }
             }}
             onContextMenu={(event) => event.preventDefault()}
           >
@@ -319,7 +327,7 @@ export function SleepHeartRateChart({
   className?: string
 }) {
   const gradientId = useId().replace(/:/g, "")
-  const [activePointIndex, setActivePointIndex] = useState<number | null>(null)
+  const [scrubRatio, setScrubRatio] = useState<number | null>(null)
   const start = new Date(bedtime).getTime()
   const end = new Date(wakeTime).getTime()
   const points = samples
@@ -337,20 +345,28 @@ export function SleepHeartRateChart({
   const line = points.map((point, index) => `${index === 0 ? "M" : "L"} ${xFor(point.time)} ${yFor(point.bpm)}`).join(" ")
   const area = `${line} L ${xFor(points[points.length - 1].time)} 188 L ${xFor(points[0].time)} 188 Z`
   const avg = Math.round(bpms.reduce((sum, value) => sum + value, 0) / bpms.length)
-  const activePoint = activePointIndex != null ? points[activePointIndex] : null
+  const activePoint = (() => {
+    if (scrubRatio == null) return null
+    const targetTime = start + scrubRatio * (end - start)
+    if (targetTime <= points[0].time) {
+      return { time: targetTime, bpm: points[0].bpm }
+    }
+    if (targetTime >= points[points.length - 1].time) {
+      return { time: targetTime, bpm: points[points.length - 1].bpm }
+    }
+
+    const rightIndex = points.findIndex((point) => point.time >= targetTime)
+    const left = points[Math.max(0, rightIndex - 1)]
+    const right = points[Math.max(0, rightIndex)]
+    const ratio = (targetTime - left.time) / Math.max(1, right.time - left.time)
+    return {
+      time: targetTime,
+      bpm: left.bpm + (right.bpm - left.bpm) * ratio,
+    }
+  })()
 
   const updateActivePoint = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const targetTime = start + pointerRatio(event) * (end - start)
-    let nearestIndex = 0
-    let nearestDistance = Number.POSITIVE_INFINITY
-    points.forEach((point, index) => {
-      const distance = Math.abs(point.time - targetTime)
-      if (distance < nearestDistance) {
-        nearestIndex = index
-        nearestDistance = distance
-      }
-    })
-    setActivePointIndex(nearestIndex)
+    setScrubRatio(pointerRatio(event))
   }
 
   return (
@@ -383,9 +399,9 @@ export function SleepHeartRateChart({
           {activePoint ? (
             <div
               className="pointer-events-none absolute top-1 z-30 min-w-[6.5rem] -translate-x-1/2 rounded-lg border border-sky-200/15 bg-[#10151d]/95 px-2.5 py-2 text-center shadow-xl backdrop-blur-md"
-              style={{ left: `${Math.max(12, Math.min(88, (xFor(activePoint.time) / 1000) * 100))}%` }}
+              style={{ left: `${Math.max(12, Math.min(88, (scrubRatio ?? 0) * 100))}%` }}
             >
-              <p className="text-lg font-semibold tabular-nums text-sky-100">{activePoint.bpm}</p>
+              <p className="text-lg font-semibold tabular-nums text-sky-100">{Math.round(activePoint.bpm)}</p>
               <p className="type-hud-micro text-sky-200/60">bpm</p>
               <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/55">
                 {format(new Date(activePoint.time), "h:mm a")}
@@ -405,7 +421,7 @@ export function SleepHeartRateChart({
             }}
             onPointerMove={updateActivePoint}
             onPointerLeave={(event) => {
-              if (event.pointerType === "mouse") setActivePointIndex(null)
+              if (event.pointerType === "mouse") setScrubRatio(null)
             }}
             onContextMenu={(event) => event.preventDefault()}
           >
@@ -428,7 +444,7 @@ export function SleepHeartRateChart({
             <line x1="1000" x2="1000" y1="20" y2="194" stroke="rgba(255,255,255,0.28)" strokeDasharray="5 5" vectorEffect="non-scaling-stroke" />
             {activePoint ? (
               <g>
-                <line x1={xFor(activePoint.time)} x2={xFor(activePoint.time)} y1="18" y2="194" stroke="rgba(255,255,255,0.55)" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+                <line x1={(scrubRatio ?? 0) * 1000} x2={(scrubRatio ?? 0) * 1000} y1="18" y2="194" stroke="rgba(255,255,255,0.55)" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
                 <circle cx={xFor(activePoint.time)} cy={yFor(activePoint.bpm)} r="5" fill="#bae6fd" stroke="#0f172a" strokeWidth="2" vectorEffect="non-scaling-stroke" />
               </g>
             ) : null}

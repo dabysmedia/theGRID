@@ -77,6 +77,51 @@ function formatPace(mins: number | null): string {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
+type SparseSeriesKey = "weight" | "runMiles" | "pace" | "sleepHrs"
+
+/**
+ * Recharts snaps its tooltip to data points. Sparse event series can therefore
+ * jump a large distance under a finger, so add interpolated scrub points along
+ * the same line the chart already draws between recorded measurements.
+ */
+function densifySparseSeries(
+  rows: DayData[],
+  key: SparseSeriesKey,
+  minimumPoints = 72,
+): DayData[] {
+  const actual = rows.filter((row) => {
+    const value = row[key]
+    return typeof value === "number" && Number.isFinite(value)
+  })
+  if (actual.length < 2) return actual
+
+  const subdivisions = Math.max(1, Math.ceil((minimumPoints - 1) / (actual.length - 1)))
+  const dense: DayData[] = []
+
+  for (let index = 0; index < actual.length - 1; index++) {
+    const left = actual[index]
+    const right = actual[index + 1]
+    const leftValue = left[key] as number
+    const rightValue = right[key] as number
+    const leftTime = parseLocalDate(left.date).getTime()
+    const rightTime = parseLocalDate(right.date).getTime()
+
+    for (let step = 0; step < subdivisions; step++) {
+      const ratio = step / subdivisions
+      const pointDate = new Date(leftTime + (rightTime - leftTime) * ratio)
+      dense.push({
+        ...left,
+        date: formatDate(pointDate),
+        label: format(pointDate, "d"),
+        [key]: Math.round((leftValue + (rightValue - leftValue) * ratio) * 100) / 100,
+      })
+    }
+  }
+
+  dense.push(actual[actual.length - 1])
+  return dense
+}
+
 function ChartTooltipContent({ active, payload, label, unit, formatter }: {
   active?: boolean
   payload?: Array<{ value: number | null }>
@@ -284,6 +329,13 @@ export default function StatsPage() {
     const all = data?.daily ?? []
     return isCurrentMonth ? all.slice(0, daysElapsed) : all
   }, [data, isCurrentMonth, daysElapsed])
+  const weightChartData = useMemo(() => densifySparseSeries(d, "weight"), [d])
+  const runChartData = useMemo(
+    () => densifySparseSeries(d.filter((row) => row.runMiles > 0), "runMiles"),
+    [d],
+  )
+  const paceChartData = useMemo(() => densifySparseSeries(d, "pace"), [d])
+  const sleepChartData = useMemo(() => densifySparseSeries(d, "sleepHrs"), [d])
 
   /** Highest logged value across elapsed days, or null if nothing logged. */
   const maxLogged = useCallback(
@@ -440,9 +492,9 @@ export default function StatsPage() {
               </>}
             >
               <ResponsiveContainer width="100%" height={130}>
-                <LineChart data={d.filter(x => x.weight != null)} accessibilityLayer={false}>
+                <LineChart data={weightChartData} accessibilityLayer={false}>
                   <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
-                  <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} />
+                  <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} />
                   <YAxis
                     tick={chartAxisStyle} tickLine={false} axisLine={false} width={36}
                     domain={["dataMin - 2", "dataMax + 2"]}
@@ -450,7 +502,7 @@ export default function StatsPage() {
                   <Tooltip content={<ChartTooltipContent unit="lbs" />} />
                   <Line
                     type="monotone" dataKey="weight" stroke={CATEGORY_THEME.weight.color}
-                    strokeWidth={2} dot={{ r: 2.5 }} connectNulls
+                    strokeWidth={2} dot={false} activeDot={{ r: 4 }} connectNulls
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -496,9 +548,9 @@ export default function StatsPage() {
               <div className="min-w-0">
                 <div className="text-[9px] uppercase tracking-[0.1em] text-muted-foreground/50 mb-1">Distance</div>
                 <ResponsiveContainer width="100%" height={110}>
-                  <AreaChart data={d.filter(x => x.runMiles > 0)} accessibilityLayer={false}>
+                  <AreaChart data={runChartData} accessibilityLayer={false}>
                     <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
-                    <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} />
                     <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={26} />
                     <Tooltip content={<ChartTooltipContent unit="mi" />} />
                     <Area
@@ -511,9 +563,9 @@ export default function StatsPage() {
               <div className="min-w-0">
                 <div className="text-[9px] uppercase tracking-[0.1em] text-muted-foreground/50 mb-1">Pace</div>
                 <ResponsiveContainer width="100%" height={110}>
-                  <LineChart data={d.filter(x => x.pace != null)} accessibilityLayer={false}>
+                  <LineChart data={paceChartData} accessibilityLayer={false}>
                     <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
-                    <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} />
                     <YAxis
                       tick={chartAxisStyle} tickLine={false} axisLine={false} width={30}
                       reversed domain={["dataMin - 0.5", "dataMax + 0.5"]}
@@ -522,7 +574,7 @@ export default function StatsPage() {
                     <Tooltip content={<ChartTooltipContent formatter={(v: number) => formatPace(v)} unit="/mi" />} />
                     <Line
                       type="monotone" dataKey="pace" stroke="oklch(0.82 0.18 110)"
-                      strokeWidth={2} dot={{ r: 2.5 }} connectNulls
+                      strokeWidth={2} dot={false} activeDot={{ r: 4 }} connectNulls
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -562,9 +614,9 @@ export default function StatsPage() {
             </>}
           >
             <ResponsiveContainer width="100%" height={130}>
-              <AreaChart data={d} accessibilityLayer={false}>
+              <AreaChart data={sleepChartData} accessibilityLayer={false}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
-                <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval={4} />
+                <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} />
                 <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={26} domain={[0, "dataMax + 1"]} />
                 <Tooltip content={<ChartTooltipContent unit="hrs" />} />
                 <Area

@@ -7,11 +7,13 @@ import { ProfileDialogProvider } from "@/context/ProfileDialogContext"
 import { QuickLogProvider } from "@/context/QuickLogContext"
 import { UserProvider } from "@/context/UserContext"
 import { ActiveWorkoutGuard } from "@/components/ActiveWorkoutGuard"
+import { GoogleHealthAutoSync } from "@/components/GoogleHealthAutoSync"
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <Suspense>
       <UserProvider>
+        <GoogleHealthAutoSync />
         <ProfileDialogProvider>
           <DateProvider>
             <QuickLogProvider>

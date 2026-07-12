@@ -1007,6 +1007,11 @@ html {
     outline: none;
   }
 
+  .chart-touch-safe .recharts-tooltip-wrapper {
+    will-change: transform;
+    transition: transform 55ms linear !important;
+  }
+
 .chart-touch-safe {
   touch-action: none !important;
   -webkit-user-drag: none;

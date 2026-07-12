@@ -39,7 +39,7 @@ async function tick() {
   try {
     const result = await syncGoogleHealthForAllUsers({
       days: 3,
-      metrics: { steps: true, sleep: true, weight: false, vitals: true },
+      metrics: { steps: true, sleep: true, weight: true, vitals: true },
     })
     console.log(
       `[google-health scheduler] synced users=${result.users} ok=${result.ok} failed=${result.failed}`,
