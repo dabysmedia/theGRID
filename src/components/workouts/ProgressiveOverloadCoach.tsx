@@ -293,10 +293,6 @@ export function ProgressiveOverloadCoach({
                     `RPE ${rirToRpe(rec.targetRir)}`,
                   )
                 : rec.detail}
-              <span className="mx-1.5 text-muted-foreground/30">·</span>
-              <span className="tabular-nums">
-                {rec.repMin}–{rec.repMax}
-              </span>
             </p>
           </div>
           {rec.delta ? (
