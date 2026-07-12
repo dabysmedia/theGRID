@@ -25,7 +25,7 @@ export interface ExerciseProgressionOverride extends ProfileOverrides {
 }
 
 export const DEFAULT_PROGRESSION_PREFS: ProgressionPrefs = {
-  effortScale: "rir",
+  effortScale: "rpe",
   coachEnabled: true,
   exercises: {},
 }
