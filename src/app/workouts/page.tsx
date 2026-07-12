@@ -282,7 +282,7 @@ function parseTemplateWeightToNumber(s: string): number | null {
 function parseTemplateRepsToNumber(s: string): number | null {
   const t = String(s ?? "").trim()
   if (!t) return null
-  if (/[-â€“â€”]/.test(t)) return null
+  if (/[-–—]/.test(t)) return null
   const n = parseInt(t, 10)
   return Number.isFinite(n) ? n : null
 }
@@ -724,12 +724,12 @@ function ExercisePicker({
             ))}
             {sessions > 0 && (
               <span className="text-[9px] text-muted-foreground/45">
-                Â· {sessions}Ã— logged
+                · {sessions}× logged
               </span>
             )}
             {ex.categories[0]?.name && sessions === 0 && (
               <span className="text-[9px] text-muted-foreground/45">
-                Â· {ex.categories[0].name}
+                · {ex.categories[0].name}
               </span>
             )}
           </div>
@@ -752,6 +752,7 @@ function ExercisePicker({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         showCloseButton
+        priority="high"
         className={cn(
           "glass-frost flex min-h-0 w-[min(100%,calc(100vw-1rem))] max-w-lg flex-col gap-0 overflow-hidden p-0",
           "max-h-[min(88dvh,calc(100dvh-1rem))] sm:max-h-[85vh]",
@@ -770,7 +771,7 @@ function ExercisePicker({
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/50" />
             <Input
               ref={inputRef}
-              placeholder="Search exercisesâ€¦"
+              placeholder="Search exercises…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-11 border-primary/15 bg-background/40 pl-9 text-base sm:text-sm"
@@ -826,7 +827,7 @@ function ExercisePicker({
 
           {!loading && usingFallback && (
             <p className="px-4 pb-0 pt-2 text-center text-[10px] text-amber-400/70">
-              Offline â€” using built-in list
+              Offline — using built-in list
             </p>
           )}
 
@@ -1214,7 +1215,7 @@ function RoutineEditor({
             </div>
             <div className="flex gap-2">
               <Input
-                placeholder="Add tagâ€¦"
+                placeholder="Add tag…"
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -1304,12 +1305,12 @@ function RoutineEditor({
                   className="flex size-full min-h-[104px] w-full flex-col items-center justify-center gap-1.5 px-4 text-muted-foreground/70 transition-colors hover:bg-muted/25 hover:text-muted-foreground disabled:opacity-50 touch-manipulation"
                 >
                   {coverUploading ? (
-                    <span className="text-xs">Uploadingâ€¦</span>
+                    <span className="text-xs">Uploading…</span>
                   ) : (
                     <>
                       <ImagePlus className="size-7 opacity-60" />
                       <span className="text-xs font-medium">Add cover image</span>
-                      <span className="text-[10px] text-muted-foreground/50">JPEG, PNG, or WebP Â· up to 8 MB</span>
+                      <span className="text-[10px] text-muted-foreground/50">JPEG, PNG, or WebP · up to 8 MB</span>
                     </>
                   )}
                 </button>
@@ -1389,7 +1390,7 @@ function RoutineEditor({
                           <Input
                             className="h-8 border-primary/15 bg-background/40 px-1.5 text-center text-xs tabular-nums"
                             inputMode="decimal"
-                            placeholder="â€”"
+                            placeholder="—"
                             value={row.weight}
                             onChange={(e) =>
                               updateTemplateSetRow(ex.id, row.id, "weight", e.target.value)
@@ -1798,7 +1799,7 @@ function ActiveWorkout({
         count: 5,
       })
       if (recs.length === 0) {
-        setFreeFormError("Couldnâ€™t build a session from your library â€” add exercises manually.")
+        setFreeFormError("Couldn’t build a session from your library — add exercises manually.")
         return
       }
       const next: SessionExercise[] = recs.map((r) => ({
@@ -2344,10 +2345,10 @@ function ActiveWorkout({
                       ? "All sets complete"
                       : queue.current
                         ? queue.movementTotal > 1
-                          ? `Mov ${queue.movementIndex}/${queue.movementTotal} Â· Set ${Math.min(queue.currentDone + 1, queue.currentTotal)}/${queue.currentTotal}`
+                          ? `Mov ${queue.movementIndex}/${queue.movementTotal} · Set ${Math.min(queue.currentDone + 1, queue.currentTotal)}/${queue.currentTotal}`
                           : `Set ${Math.min(queue.currentDone + 1, queue.currentTotal)}/${queue.currentTotal}`
                         : `${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`}
-                  {loggedVol > 0 ? ` Â· ${formatVolumeLb(loggedVol)} lb` : ""}
+                  {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5 tabular-nums">
@@ -2482,7 +2483,7 @@ function ActiveWorkout({
                     Free-form workout
                   </p>
                   <p className="mx-auto mt-1.5 max-w-[20rem] text-sm leading-relaxed text-muted-foreground/70">
-                    Pick upper or lower â€” we&apos;ll fill a session from your favorites and
+                    Pick upper or lower — we&apos;ll fill a session from your favorites and
                     the muscle groups that still need volume this week.
                   </p>
                 </div>
@@ -2493,12 +2494,12 @@ function ActiveWorkout({
                       {
                         id: "upper" as const,
                         label: "Upper",
-                        hint: "Push Â· pull Â· arms",
+                        hint: "Push · pull · arms",
                       },
                       {
                         id: "lower" as const,
                         label: "Lower",
-                        hint: "Squat Â· hinge Â· glutes",
+                        hint: "Squat · hinge · glutes",
                       },
                     ] as const
                   ).map((opt) => (
@@ -2519,7 +2520,7 @@ function ActiveWorkout({
                       <p className="mt-1 text-[11px] text-muted-foreground/60">{opt.hint}</p>
                       {freeFormBusy && freeFormSplit === opt.id ? (
                         <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-primary">
-                          Buildingâ€¦
+                          Building…
                         </p>
                       ) : null}
                     </button>
@@ -2611,7 +2612,7 @@ function ActiveWorkout({
                               ))}
                               {isDeferred ? (
                                 <span className="text-[10px] font-medium text-amber-400/90">
-                                  Skipped Â· back now
+                                  Skipped · back now
                                 </span>
                               ) : null}
                               {queue.next && !queue.allSetsComplete ? (
@@ -2746,8 +2747,8 @@ function ActiveWorkout({
 
                                 <span className="truncate px-0.5 text-xs tabular-nums text-muted-foreground/55">
                                   {prevSet
-                                    ? `${prevSet.weight ?? "â€“"}Ã—${prevSet.reps ?? "â€“"}`
-                                    : "â€“"}
+                                    ? `${prevSet.weight ?? "—"}×${prevSet.reps ?? "—"}`
+                                    : "—"}
                                 </span>
 
                                 <button
@@ -2769,11 +2770,15 @@ function ActiveWorkout({
 
                                 <Input
                                   type="number"
+                                  min="0"
+                                  step="0.5"
+                                  inputMode="decimal"
+                                  aria-label={`Weight for set ${set.setNumber} in pounds`}
                                   className={cn(
                                     setInputClass,
                                     ghostSetIds.has(set.id) && setInputGhostClass,
                                   )}
-                                  placeholder="â€”"
+                                  placeholder="—"
                                   value={set.weight ?? ""}
                                   onFocus={() => clearGhostForSet(set.id)}
                                   onChange={(e) =>
@@ -2788,11 +2793,15 @@ function ActiveWorkout({
 
                                 <Input
                                   type="number"
+                                  min="0"
+                                  step="1"
+                                  inputMode="numeric"
+                                  aria-label={`Reps for set ${set.setNumber}`}
                                   className={cn(
                                     setInputClass,
                                     ghostSetIds.has(set.id) && setInputGhostClass,
                                   )}
-                                  placeholder="â€”"
+                                  placeholder="—"
                                   value={set.reps ?? ""}
                                   onFocus={() => clearGhostForSet(set.id)}
                                   onChange={(e) =>
@@ -2850,7 +2859,7 @@ function ActiveWorkout({
                             className="mt-2 flex min-h-10 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border border-primary/25 px-3 text-xs font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 touch-manipulation"
                           >
                             <Check className="size-3.5" aria-hidden />
-                            Done editing â€” view summary
+                            Done editing — view summary
                           </button>
                         ) : (
                           <ProgressiveOverloadCoach
@@ -2886,7 +2895,7 @@ function ActiveWorkout({
                   All movements complete
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground/65">
-                  Nice work â€” wrap it up when you&apos;re ready.
+                  Nice work — wrap it up when you&apos;re ready.
                 </p>
                 <Button
                   type="button"
@@ -2925,7 +2934,7 @@ function ActiveWorkout({
                 >
                   <Check className="size-3.5 shrink-0" />
                   Finish
-                  {loggedVol > 0 ? ` Â· ${formatVolumeLb(loggedVol)} lb` : ""}
+                  {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
                 </Button>
               </div>
             ) : (
@@ -2933,8 +2942,8 @@ function ActiveWorkout({
                 <p className="min-w-0 truncate text-[11px] tabular-nums text-muted-foreground/55">
                   {queue.current
                     ? `${queue.completedSets}/${queue.totalSets}`
-                    : "Loggingâ€¦"}
-                  {loggedVol > 0 ? ` Â· ${formatVolumeLb(loggedVol)} lb` : ""}
+                    : "Logging…"}
+                  {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
                 </p>
                 <button
                   type="button"
@@ -3000,6 +3009,7 @@ function ActiveWorkout({
       >
         <DialogContent
           showCloseButton
+          priority="high"
           className={cn(
             "glass-frost max-w-sm gap-0 p-0",
             "[&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3",
@@ -3014,7 +3024,7 @@ function ActiveWorkout({
               </DialogTitle>
               <DialogDescription>
                 {confirmEndAction === "discard"
-                  ? "This session will be removed from your log. You canâ€™t undo this."
+                  ? "This session will be removed from your log. You can’t undo this."
                   : "Save this session as completed and return to the hub."}
               </DialogDescription>
             </DialogHeader>

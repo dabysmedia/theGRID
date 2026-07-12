@@ -137,6 +137,45 @@ export function MovementCompleteOverview({
         ) : null}
       </div>
 
+      <div className="mt-3 shrink-0">
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/65">
+          Set-by-set progress
+        </p>
+        <div className="grid gap-1.5">
+          {summary.setComparisons.map((set) => (
+            <div
+              key={set.setNumber}
+              className="flex items-center justify-between gap-3 rounded-xl border border-glass-border/25 bg-glass-highlight/[0.06] px-3 py-2"
+            >
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-foreground">Set {set.setNumber}</p>
+                <p className="text-[10px] tabular-nums text-muted-foreground/60">
+                  {set.currentWeight != null && set.currentWeight > 0
+                    ? `${formatLoad(set.currentWeight)} lb × `
+                    : ""}
+                  {set.currentReps} reps
+                  {set.previousReps != null
+                    ? ` · last time ${set.previousWeight != null ? `${formatLoad(set.previousWeight)} lb × ` : ""}${set.previousReps}`
+                    : " · first baseline"}
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "shrink-0 rounded-md border px-2 py-1 text-[10px] font-bold tabular-nums",
+                  set.outcome === "progressed"
+                    ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-400"
+                    : set.outcome === "adjust"
+                      ? "border-amber-500/35 bg-amber-500/10 text-amber-400"
+                      : "border-glass-border/35 bg-glass-highlight/10 text-muted-foreground",
+                )}
+              >
+                {set.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="glass-subtle mt-3 shrink-0 rounded-xl border border-glass-border/35 px-3 py-2">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/65">
@@ -146,14 +185,19 @@ export function MovementCompleteOverview({
             {COACH_STATUS_LABELS[next.status]}
           </span>
         </div>
-        <p className="mt-0.5 text-sm font-semibold text-foreground">{next.headline}</p>
+        <p className="mt-0.5 text-sm font-semibold text-foreground">
+          Do this next time: {next.headline}
+        </p>
         <p className="text-[11px] text-muted-foreground/70">
           {effortScale === "rpe"
             ? next.detail.replace(`${next.targetRir} RIR`, `RPE ${rirToRpe(next.targetRir)}`)
             : next.detail}
         </p>
         {next.goal ? (
-          <p className="mt-0.5 text-[10px] text-muted-foreground/55">{next.goal}</p>
+          <p className="mt-1 text-[10px] text-muted-foreground/65">
+            <span className="font-semibold text-muted-foreground/85">Why: </span>
+            {next.goal}
+          </p>
         ) : null}
         {next.confidence === "low" ? (
           <p className="mt-0.5 text-[10px] font-medium text-amber-400/85">

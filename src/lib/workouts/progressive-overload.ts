@@ -1549,6 +1549,16 @@ export function estimate1Rm(weight: number | null, reps: number | null): number 
 
 export type ProgressionOutcome = "progressed" | "held" | "adjust"
 
+export interface SetProgressComparison {
+  setNumber: number
+  currentWeight: number | null
+  currentReps: number
+  previousWeight: number | null
+  previousReps: number | null
+  outcome: ProgressionOutcome | "baseline"
+  label: string
+}
+
 export interface MovementSummary {
   exerciseName: string
   completedSets: number
@@ -1567,8 +1577,82 @@ export interface MovementSummary {
   } | null
   newBest: { kind: "load" | "reps"; text: string } | null
   outcome: ProgressionOutcome
+  setComparisons: SetProgressComparison[]
   flags: { pain: boolean; technique: boolean }
   nextSession: CoachRecommendation
+}
+
+/**
+ * Compare each completed working set with the same numbered set from the most
+ * recent session. A load improvement wins; at the same load, reps decide.
+ */
+export function compareCompletedSets(input: {
+  exercise: PoExercise
+  sessions: PoSession[]
+  excludeSessionId?: string
+}): SetProgressComparison[] {
+  const profile = buildExerciseProfile(input.exercise.name, input.exercise.category)
+  const direction = profile.loadBasis === "assisted" ? -1 : 1
+  const previous =
+    getComparableExerciseHistory(input.sessions, input.exercise.name, {
+      excludeSessionId: input.excludeSessionId,
+    })[0] ?? null
+
+  return input.exercise.sets.filter(isValidWorkingSet).map((current) => {
+    const prior = previous?.sets.find((set) => set.setNumber === current.setNumber) ?? null
+    const currentReps = current.reps ?? 0
+    if (prior == null) {
+      return {
+        setNumber: current.setNumber,
+        currentWeight: current.weight,
+        currentReps,
+        previousWeight: null,
+        previousReps: null,
+        outcome: "baseline",
+        label: "Baseline",
+      }
+    }
+
+    const previousReps = prior.reps ?? 0
+    const comparableLoads =
+      current.weight != null && prior.weight != null
+    const loadDelta = comparableLoads ? current.weight! - prior.weight! : 0
+    const directedLoadDelta = direction * loadDelta
+    const repDelta = currentReps - previousReps
+    const outcome: SetProgressComparison["outcome"] =
+      directedLoadDelta > 0 || (directedLoadDelta === 0 && repDelta > 0)
+        ? "progressed"
+        : directedLoadDelta === 0 && repDelta === 0
+          ? "held"
+          : "adjust"
+
+    let label: string
+    if (directedLoadDelta > 0) {
+      label =
+        profile.loadBasis === "assisted"
+          ? `${Math.abs(loadDelta)} lb less assist`
+          : `+${formatLoad(loadDelta)} lb`
+    } else if (directedLoadDelta < 0) {
+      label =
+        profile.loadBasis === "assisted"
+          ? `${Math.abs(loadDelta)} lb more assist`
+          : `${formatLoad(loadDelta)} lb`
+    } else if (repDelta !== 0) {
+      label = `${repDelta > 0 ? "+" : ""}${repDelta} rep${Math.abs(repDelta) === 1 ? "" : "s"}`
+    } else {
+      label = "Matched"
+    }
+
+    return {
+      setNumber: current.setNumber,
+      currentWeight: current.weight,
+      currentReps,
+      previousWeight: prior.weight,
+      previousReps,
+      outcome,
+      label,
+    }
+  })
 }
 
 export function summarizeMovementPerformance(input: {
@@ -1607,6 +1691,7 @@ export function summarizeMovementPerformance(input: {
     excludeSessionId: input.excludeSessionId,
   })
   const prev = history[0] ?? null
+  const setComparisons = compareCompletedSets(input)
 
   let comparison: MovementSummary["comparison"] = null
   let newBest: MovementSummary["newBest"] = null
@@ -1727,6 +1812,7 @@ export function summarizeMovementPerformance(input: {
     comparison,
     newBest,
     outcome,
+    setComparisons,
     flags,
     nextSession,
   }

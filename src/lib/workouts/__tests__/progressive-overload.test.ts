@@ -3,6 +3,7 @@ import {
   calculateExerciseSimilarity,
   calculateInitialPrescription,
   calculateNextSetRecommendation,
+  compareCompletedSets,
   evaluateCompletedSet,
   filterOutlierSets,
   getComparableExerciseHistory,
@@ -657,6 +658,37 @@ describe("summarizeMovementPerformance", () => {
     })
     expect(flagged.outcome).toBe("adjust")
     expect(flagged.flags.pain).toBe(true)
+  })
+})
+
+describe("compareCompletedSets", () => {
+  it("reports progress for each set against the same set last time", () => {
+    const previous = session(7, [
+      exercise("Goblet Squat", [
+        set(35, 12, { rir: 2 }),
+        set(35, 11, { rir: 2 }),
+        set(35, 10, { rir: 2 }),
+      ]),
+    ])
+    const current = exercise("Goblet Squat", [
+      set(35, 13, { rir: 2 }),
+      set(40, 10, { rir: 2 }),
+      set(35, 9, { rir: 1 }),
+    ])
+
+    expect(compareCompletedSets({ exercise: current, sessions: [previous] })).toEqual([
+      expect.objectContaining({ setNumber: 1, outcome: "progressed", label: "+1 rep" }),
+      expect.objectContaining({ setNumber: 2, outcome: "progressed", label: "+5 lb" }),
+      expect.objectContaining({ setNumber: 3, outcome: "adjust", label: "-1 rep" }),
+    ])
+  })
+
+  it("marks sets without a matching prior set as a baseline", () => {
+    const current = exercise("Goblet Squat", [set(35, 12, { rir: 2 })])
+    expect(compareCompletedSets({ exercise: current, sessions: [] })[0]).toMatchObject({
+      outcome: "baseline",
+      label: "Baseline",
+    })
   })
 })
 

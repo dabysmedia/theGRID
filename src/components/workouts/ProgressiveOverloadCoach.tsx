@@ -17,6 +17,7 @@ import {
   REASON_CODE_LABELS,
   RIR_CHOICES,
   calculateNextSetRecommendation,
+  compareCompletedSets,
   getComparableExerciseHistory,
   normalizeExerciseKey,
   rirToRpe,
@@ -167,123 +168,41 @@ export function ProgressiveOverloadCoach({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- audit once per movement
   }, [disabled, pendingEffortSet, sessionId, exercise.id])
 
-  if (disabled || dismissed) return null
-
   const scale = prefs.effortScale
 
-  /* ── Effort (RIR/RPE) prompt — prominent, flat, hard to miss ── */
-  if (pendingEffortSet != null) {
-    const setNo = pendingEffortSet.setNumber
-    const record = (rir: number | null, skipped: boolean) => {
-      onSetEffort(pendingEffortSet.id, {
-        rir,
-        rirSkipped: skipped,
-        techniqueFlag: effortFlags.technique || undefined,
-        painFlag: effortFlags.pain || undefined,
-      })
-      setEffortFlags({ technique: false, pain: false })
-    }
-    return (
-      <section
-        aria-label={`Effort rating for set ${setNo}`}
-        className={cn(
-          "animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-3 border-t border-primary/25 pt-3",
-          className,
-        )}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
-              Rate this set
-            </p>
-            <p className="mt-0.5 text-sm font-semibold text-foreground">
-              How many reps left after set {setNo}?
-            </p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground/65">
-              {scale === "rir"
-                ? "Tap your RIR — this drives progressive overload"
-                : "Tap your RPE — this drives progressive overload"}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/45 transition-colors hover:bg-glass-highlight/30 hover:text-foreground touch-manipulation"
-            onClick={() => record(null, true)}
-          >
-            Skip
-          </button>
-        </div>
-
-        <div className="grid grid-cols-6 gap-1.5">
-          {RIR_CHOICES.map((c) => {
-            const label = scale === "rir" ? c.label : c.rir === 5 ? "≤5" : String(rirToRpe(c.rir))
-            const isTarget = c.rir === rec.targetRir
-            return (
-              <button
-                key={c.rir}
-                type="button"
-                onClick={() => record(c.rir, false)}
-                aria-label={`${scale === "rir" ? `${c.label} reps in reserve` : `RPE ${label}`}${c.hint ? ` — ${c.hint}` : ""}`}
-                className={cn(
-                  "flex min-h-[3.25rem] flex-col items-center justify-center rounded-xl font-bold tabular-nums transition-all touch-manipulation active:scale-[0.95]",
-                  isTarget
-                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/25 ring-2 ring-primary/40"
-                    : "border border-primary/20 bg-primary/[0.07] text-foreground hover:bg-primary/15 hover:border-primary/40",
-                )}
-              >
-                <span className="text-base leading-none">{label}</span>
-                {c.hint ? (
-                  <span
-                    className={cn(
-                      "mt-0.5 text-[8px] font-medium leading-none",
-                      isTarget ? "text-primary-foreground/75" : "text-muted-foreground/55",
-                    )}
-                  >
-                    {c.hint}
-                  </span>
-                ) : null}
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            aria-pressed={effortFlags.technique}
-            onClick={() => setEffortFlags((f) => ({ ...f, technique: !f.technique }))}
-            className={cn(
-              "flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-[10px] font-semibold transition-colors touch-manipulation",
-              effortFlags.technique
-                ? "border border-amber-500/45 bg-amber-500/15 text-amber-400"
-                : "text-muted-foreground/55 hover:bg-glass-highlight/20 hover:text-foreground",
-            )}
-          >
-            <AlertTriangle className="size-3 shrink-0" aria-hidden />
-            Form broke
-          </button>
-          <button
-            type="button"
-            aria-pressed={effortFlags.pain}
-            onClick={() => setEffortFlags((f) => ({ ...f, pain: !f.pain }))}
-            className={cn(
-              "flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-[10px] font-semibold transition-colors touch-manipulation",
-              effortFlags.pain
-                ? "border border-rose-500/45 bg-rose-500/15 text-rose-400"
-                : "text-muted-foreground/55 hover:bg-glass-highlight/20 hover:text-foreground",
-            )}
-          >
-            <HeartPulse className="size-3 shrink-0" aria-hidden />
-            Pain
-          </button>
-        </div>
-      </section>
-    )
+  const recordEffort = (rir: number | null, skipped: boolean) => {
+    if (pendingEffortSet == null) return
+    onSetEffort(pendingEffortSet.id, {
+      rir,
+      rirSkipped: skipped,
+      techniqueFlag: effortFlags.technique || undefined,
+      painFlag: effortFlags.pain || undefined,
+    })
+    setEffortFlags({ technique: false, pain: false })
   }
+
+  const effortDialog = pendingEffortSet ? (
+    <EffortRatingDialog
+      set={pendingEffortSet}
+      scale={scale}
+      targetRir={rec.targetRir}
+      flags={effortFlags}
+      onFlagsChange={setEffortFlags}
+      onRecord={recordEffort}
+    />
+  ) : null
+
+  /* Effort is useful training data even when recommendation cards are hidden. */
+  if (disabled || dismissed) return effortDialog
 
   /* ── Flat recommendation strip (no nested card) ───────────────── */
   const apply = rec.apply
   const contextLine = rec.basedOn || rec.sourceLabel || rec.goal
+  const setComparisons = compareCompletedSets({
+    exercise,
+    sessions,
+    excludeSessionId: sessionId,
+  })
 
   return (
     <>
@@ -295,7 +214,7 @@ export function ProgressiveOverloadCoach({
           <div className="flex min-w-0 items-center gap-1.5">
             <TrendingUp className="size-3.5 shrink-0 text-primary/80" aria-hidden />
             <h4 className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/65">
-              {rec.kind === "next-set" ? "Next set" : "Today’s target"}
+              Progress & next step
             </h4>
             <span
               className={cn(
@@ -329,6 +248,34 @@ export function ProgressiveOverloadCoach({
           </div>
         </div>
 
+        {setComparisons.length > 0 ? (
+          <div aria-label="Progress by set">
+            <p className="mb-1 text-[10px] font-medium text-muted-foreground/60">
+              Compared with the same set last time
+            </p>
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+              {setComparisons.map((comparison) => (
+                <div
+                  key={comparison.setNumber}
+                  className={cn(
+                    "min-w-fit rounded-lg border px-2 py-1.5 text-[10px] font-semibold tabular-nums",
+                    comparison.outcome === "progressed"
+                      ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-400"
+                      : comparison.outcome === "adjust"
+                        ? "border-amber-500/35 bg-amber-500/10 text-amber-400"
+                        : "border-glass-border/30 bg-glass-highlight/[0.07] text-muted-foreground/80",
+                  )}
+                >
+                  Set {comparison.setNumber}: {comparison.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-primary/80">
+          {rec.kind === "next-set" ? "Do this next" : "Start here today"}
+        </p>
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p
@@ -360,7 +307,8 @@ export function ProgressiveOverloadCoach({
         </div>
 
         {contextLine ? (
-          <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground/50">
+          <p className="text-[11px] leading-snug text-muted-foreground/65">
+            <span className="font-semibold text-muted-foreground/85">Why: </span>
             {contextLine}
           </p>
         ) : null}
@@ -379,8 +327,8 @@ export function ProgressiveOverloadCoach({
             {apply.label}
           </Button>
         ) : apply ? (
-          <p className="text-[10px] font-medium text-primary/70">
-            Suggested load filled into the next set
+          <p className="rounded-lg bg-primary/[0.08] px-2 py-1.5 text-[10px] font-medium text-primary/85">
+            Ready to log: this target is already filled into your next set.
           </p>
         ) : null}
       </section>
@@ -395,7 +343,128 @@ export function ProgressiveOverloadCoach({
         prefs={prefs}
         onPrefsChange={setPrefs}
       />
+      {effortDialog}
     </>
+  )
+}
+
+function EffortRatingDialog({
+  set,
+  scale,
+  targetRir,
+  flags,
+  onFlagsChange,
+  onRecord,
+}: {
+  set: PoSet
+  scale: ProgressionPrefs["effortScale"]
+  targetRir: number
+  flags: { technique: boolean; pain: boolean }
+  onFlagsChange: (flags: { technique: boolean; pain: boolean }) => void
+  onRecord: (rir: number | null, skipped: boolean) => void
+}) {
+  return (
+    <Dialog open>
+      <DialogContent
+        priority="high"
+        showCloseButton={false}
+        className="glass-frost w-[calc(100vw-1rem)] max-w-sm gap-0 rounded-2xl p-0"
+        aria-label={`Rate effort for set ${set.setNumber}`}
+      >
+        <div className="px-4 pb-3 pt-5 text-center">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
+            Set {set.setNumber} logged
+          </p>
+          <DialogTitle className="mt-1 text-xl">
+            How hard was that set?
+          </DialogTitle>
+          <DialogDescription className="mt-1 text-xs">
+            {scale === "rpe"
+              ? "Choose RPE 5–10. RPE 10 means no reps left."
+              : "Choose reps in reserve. 0 means no reps left."}
+          </DialogDescription>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 px-4">
+          {[...RIR_CHOICES].reverse().map((choice) => {
+            const label =
+              scale === "rpe"
+                ? choice.rir === 5
+                  ? "5"
+                  : String(rirToRpe(choice.rir))
+                : choice.label
+            const selectedTarget = choice.rir === targetRir
+            const plainHint =
+              choice.rir === 0
+                ? "Max effort"
+                : choice.rir === 2
+                  ? "Target effort"
+                  : choice.rir === 5
+                    ? "Easy"
+                    : `${choice.rir} rep${choice.rir === 1 ? "" : "s"} left`
+            return (
+              <button
+                key={choice.rir}
+                type="button"
+                onClick={() => onRecord(choice.rir, false)}
+                className={cn(
+                  "flex min-h-16 flex-col items-center justify-center rounded-xl border px-2 font-bold tabular-nums transition-all touch-manipulation active:scale-[0.96]",
+                  selectedTarget
+                    ? "border-primary/55 bg-primary/15 text-primary ring-1 ring-primary/30"
+                    : "border-glass-border/35 bg-glass-highlight/[0.07] text-foreground hover:border-primary/35",
+                )}
+              >
+                <span className="text-lg leading-none">
+                  {scale === "rpe" ? `RPE ${label}` : `${label} RIR`}
+                </span>
+                <span className="mt-1 text-[9px] font-medium text-muted-foreground/70">
+                  {plainHint}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="mt-3 flex gap-2 px-4">
+          <button
+            type="button"
+            aria-pressed={flags.technique}
+            onClick={() => onFlagsChange({ ...flags, technique: !flags.technique })}
+            className={cn(
+              "flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-xs font-semibold touch-manipulation",
+              flags.technique
+                ? "border border-amber-500/45 bg-amber-500/15 text-amber-400"
+                : "bg-glass-highlight/[0.07] text-muted-foreground",
+            )}
+          >
+            <AlertTriangle className="size-3.5" aria-hidden />
+            Form slipped
+          </button>
+          <button
+            type="button"
+            aria-pressed={flags.pain}
+            onClick={() => onFlagsChange({ ...flags, pain: !flags.pain })}
+            className={cn(
+              "flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-xs font-semibold touch-manipulation",
+              flags.pain
+                ? "border border-rose-500/45 bg-rose-500/15 text-rose-400"
+                : "bg-glass-highlight/[0.07] text-muted-foreground",
+            )}
+          >
+            <HeartPulse className="size-3.5" aria-hidden />
+            Pain
+          </button>
+        </div>
+
+        <button
+          type="button"
+          className="mx-4 my-3 min-h-10 text-xs font-semibold text-muted-foreground/60 touch-manipulation"
+          onClick={() => onRecord(null, true)}
+        >
+          Skip effort rating
+        </button>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -433,6 +502,7 @@ function CoachWhyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
+        priority="high"
         className={cn(
           "glass-frost max-w-sm gap-0 p-0",
           "[&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3",
