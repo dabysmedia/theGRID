@@ -32,6 +32,7 @@ import {
   stepsDayKey,
 } from "@/lib/steps-day"
 import { deriveSleepScore, computeSleepEfficiency } from "@/lib/sleep-score"
+import { optionalNonNegativeInt } from "@/lib/google-health/normalize"
 import { subDays } from "date-fns"
 
 const GRAMS_PER_LB = 453.59237
@@ -290,11 +291,13 @@ export async function syncGoogleHealthForUser(
       where: { userId, externalId },
     })
 
+    const reportedMinutesInBed = optionalNonNegativeInt(session.minutesInSleepPeriod)
+    const reportedMinutesAsleep = optionalNonNegativeInt(session.minutesAsleep)
     const minutesInBed =
-      session.minutesInSleepPeriod ??
+      reportedMinutesInBed ??
       Math.round((session.wakeTime.getTime() - session.bedtime.getTime()) / 60000)
     const minutesAsleep =
-      session.minutesAsleep ??
+      reportedMinutesAsleep ??
       (session.remMinutes ?? 0) + (session.lightMinutes ?? 0) + (session.deepMinutes ?? 0)
     const efficiency =
       minutesAsleep > 0 ? computeSleepEfficiency(minutesAsleep, minutesInBed) : null
@@ -316,12 +319,12 @@ export async function syncGoogleHealthForUser(
       lightMinutes: session.lightMinutes ?? null,
       deepMinutes: session.deepMinutes ?? null,
       awakeMinutes: session.awakeMinutes ?? null,
-      minutesAsleep: session.minutesAsleep ?? null,
-      minutesInSleepPeriod: session.minutesInSleepPeriod ?? null,
-      minutesToFallAsleep: session.minutesToFallAsleep ?? null,
-      minutesAfterWakeUp: session.minutesAfterWakeUp ?? null,
-      restlessMinutes: session.restlessMinutes ?? null,
-      interruptionCount: session.interruptionCount ?? null,
+      minutesAsleep: reportedMinutesAsleep ?? null,
+      minutesInSleepPeriod: reportedMinutesInBed ?? null,
+      minutesToFallAsleep: optionalNonNegativeInt(session.minutesToFallAsleep) ?? null,
+      minutesAfterWakeUp: optionalNonNegativeInt(session.minutesAfterWakeUp) ?? null,
+      restlessMinutes: optionalNonNegativeInt(session.restlessMinutes) ?? null,
+      interruptionCount: optionalNonNegativeInt(session.interruptionCount) ?? null,
       efficiency,
       stagesJson: JSON.stringify(session.stages ?? []),
       notes: "Synced from Google Health / Fitbit",

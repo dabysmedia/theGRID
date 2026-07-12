@@ -2,6 +2,7 @@ import "server-only"
 
 import { GOOGLE_HEALTH_API } from "@/lib/google-health/config"
 import { getValidAccessToken } from "@/lib/google-health/tokens"
+import { optionalNonNegativeInt } from "@/lib/google-health/normalize"
 
 type CivilDate = { year?: number; month?: number; day?: number }
 type CivilTime = { hours?: number; minutes?: number; seconds?: number }
@@ -201,7 +202,11 @@ export type SleepSession = {
   stages?: SleepStageSegment[]
 }
 
-type SleepStagesSummaryRow = { type?: string; count?: number; minutes?: number }
+type SleepStagesSummaryRow = {
+  type?: string
+  count?: number | string
+  minutes?: number | string
+}
 
 type SleepDataPoint = {
   name?: string
@@ -213,11 +218,11 @@ type SleepDataPoint = {
     }
     stages?: Array<{ type?: string; startTime?: string; endTime?: string }>
     summary?: {
-      minutesInSleepPeriod?: number
-      minutesAsleep?: number
-      minutesAwake?: number
-      minutesToFallAsleep?: number
-      minutesAfterWakeUp?: number
+      minutesInSleepPeriod?: number | string
+      minutesAsleep?: number | string
+      minutesAwake?: number | string
+      minutesToFallAsleep?: number | string
+      minutesAfterWakeUp?: number | string
       stagesSummary?: SleepStagesSummaryRow[]
     }
   }
@@ -227,14 +232,14 @@ function stageMinutes(rows: SleepStagesSummaryRow[] | undefined, type: string): 
   if (!rows) return 0
   return rows
     .filter((r) => (r.type ?? "").toUpperCase() === type)
-    .reduce((s, r) => s + Number(r.minutes ?? 0), 0)
+    .reduce((sum, row) => sum + (optionalNonNegativeInt(row.minutes) ?? 0), 0)
 }
 
 function stageCount(rows: SleepStagesSummaryRow[] | undefined, type: string): number {
   if (!rows) return 0
   return rows
     .filter((row) => (row.type ?? "").toUpperCase() === type)
-    .reduce((sum, row) => sum + Number(row.count ?? 0), 0)
+    .reduce((sum, row) => sum + (optionalNonNegativeInt(row.count) ?? 0), 0)
 }
 
 export async function fetchSleepSessions(
@@ -284,11 +289,11 @@ export async function fetchSleepSessions(
         bedtime,
         wakeTime,
         dateYmd,
-        minutesAsleep: summary?.minutesAsleep,
-        minutesAwake: summary?.minutesAwake,
-        minutesInSleepPeriod: summary?.minutesInSleepPeriod,
-        minutesToFallAsleep: summary?.minutesToFallAsleep,
-        minutesAfterWakeUp: summary?.minutesAfterWakeUp,
+        minutesAsleep: optionalNonNegativeInt(summary?.minutesAsleep),
+        minutesAwake: optionalNonNegativeInt(summary?.minutesAwake),
+        minutesInSleepPeriod: optionalNonNegativeInt(summary?.minutesInSleepPeriod),
+        minutesToFallAsleep: optionalNonNegativeInt(summary?.minutesToFallAsleep),
+        minutesAfterWakeUp: optionalNonNegativeInt(summary?.minutesAfterWakeUp),
         restlessMinutes: stagesSummary ? stageMinutes(stagesSummary, "RESTLESS") : undefined,
         interruptionCount: stagesSummary ? stageCount(stagesSummary, "AWAKE") : undefined,
         remMinutes: stagesSummary ? stageMinutes(stagesSummary, "REM") : undefined,
