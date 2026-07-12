@@ -821,6 +821,16 @@ html {
   to   { opacity: 1; transform: scaleY(1); filter: brightness(1); }
 }
 
+@keyframes workout-focus-section-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.992); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes workout-week-bar-in {
+  from { opacity: 0; transform: scaleY(0); filter: brightness(1.45); }
+  to   { opacity: 1; transform: scaleY(1); filter: brightness(1); }
+}
+
 @keyframes route-enter {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -997,9 +1007,10 @@ html {
     outline: none;
   }
 
-  .chart-touch-safe {
-    touch-action: pan-y;
-  }
+.chart-touch-safe {
+  touch-action: none !important;
+  -webkit-user-drag: none;
+}
 
   .chart-touch-safe ::selection {
     background: transparent;
@@ -1036,6 +1047,15 @@ html {
   .sleep-night-bar {
     transform-origin: center bottom;
     animation: sleep-night-bar-grow 1.05s cubic-bezier(0.22, 0.7, 0.18, 1) both;
+  }
+
+  .workout-focus-section {
+    animation: workout-focus-section-in 0.9s cubic-bezier(0.22, 0.7, 0.18, 1) both;
+  }
+
+  .workout-week-bar {
+    transform-origin: center bottom;
+    animation: workout-week-bar-in 1.05s cubic-bezier(0.22, 0.7, 0.18, 1) both;
   }
 
   .animate-fade-up {
@@ -1168,6 +1188,13 @@ html {
       transform: none;
       animation: none;
       stroke-dashoffset: 0;
+    }
+
+    .workout-focus-section,
+    .workout-week-bar {
+      opacity: 1;
+      transform: none;
+      animation: none;
     }
 
     .animate-ring-pop,

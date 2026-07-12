@@ -707,9 +707,17 @@ export function WeightCorrelationPanel({
         </div>
       </div>
 
-      <div className="chart-touch-safe h-56 w-full min-w-0 -mx-0.5 shrink-0 sm:mx-0 sm:h-64 lg:h-72">
+      <div
+        className="chart-touch-safe h-56 w-full min-w-0 -mx-0.5 shrink-0 sm:mx-0 sm:h-64 lg:h-72"
+        onPointerDown={(event) => event.preventDefault()}
+        onContextMenu={(event) => event.preventDefault()}
+      >
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={daily} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
+          <ComposedChart
+            data={daily}
+            margin={{ top: 8, right: 8, left: 4, bottom: 0 }}
+            accessibilityLayer={false}
+          >
             <defs>
               <linearGradient id="corrMetricFill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={meta.color} stopOpacity={0.25} />

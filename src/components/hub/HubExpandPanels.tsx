@@ -1539,38 +1539,64 @@ export function HubWorkoutsExpand({
   }
 
   const workoutStats = (
-    <div className="min-w-0 space-y-2">
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-        <div className="min-w-0">
-          <p className="type-hud-micro text-muted-foreground/55">Week</p>
+    <div className="min-w-0 space-y-2.5">
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="flex min-h-[6.75rem] min-w-0 flex-col justify-between rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="type-hud-micro text-muted-foreground/55">Weekly goal</p>
+            <span className="type-hud-micro tabular-nums text-muted-foreground/45">
+              {met ? "Complete" : `${remaining} left`}
+            </span>
+          </div>
           <p
-            className="type-hud-stat-sm tabular-nums"
-            style={met ? { color: "#c4d632" } : undefined}
+            className="text-[1.65rem] font-semibold leading-none tabular-nums tracking-tight text-foreground/90"
+            style={met ? { color: "#dce95c", textShadow: "0 0 18px #c4d63233" } : undefined}
           >
-            {weekCount}/{WEEKLY_WORKOUT_GOAL}
+            {weekCount}
+            <span className="ml-1 text-sm font-medium text-muted-foreground/45">
+              / {WEEKLY_WORKOUT_GOAL}
+            </span>
           </p>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.055]">
+            <div
+              className="h-full origin-left rounded-full bg-gradient-to-r from-[#8f9c17] to-[#dce95c] transition-transform duration-700 ease-out"
+              style={{ transform: `scaleX(${Math.min(1, weekCount / WEEKLY_WORKOUT_GOAL)})` }}
+            />
+          </div>
         </div>
-        <div className="min-w-0">
+        <div className="flex min-h-[6.75rem] min-w-0 flex-col justify-between rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
           <p className="type-hud-micro text-muted-foreground/55">Recovery</p>
-          <p className="type-hud-stat-sm tabular-nums text-foreground/85">
-            {recoveryScore != null ? `${recoveryScore}/10` : "—"}
+          <p className="text-[1.65rem] font-semibold leading-none tabular-nums tracking-tight text-foreground/90">
+            {recoveryScore != null ? recoveryScore : "—"}
+            <span className="ml-1 text-sm font-medium text-muted-foreground/45">
+              {recoveryScore != null ? "/ 10" : "score"}
+            </span>
+          </p>
+          <p className="text-[11px] leading-snug text-muted-foreground/60">
+            {recoveryCue}
           </p>
         </div>
       </div>
-      <p className="type-hud-caption normal-case tracking-normal text-foreground/80">
-        {lastCue}
-      </p>
-      <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/55">
-        {recoveryCue}
-        {!met && remaining > 0 ? ` · ${remaining} more to goal` : ""}
-      </p>
+      <div className="flex items-center gap-3 rounded-xl border border-[#c4d632]/[0.11] bg-[#c4d632]/[0.035] px-3.5 py-3">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#c4d632]/20 bg-[#c4d632]/10">
+          <Dumbbell className="size-4 text-[#dce95c]" aria-hidden />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-foreground/90">{lastCue}</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground/55">
+            {todayCount > 0
+              ? `${todayCount} session${todayCount === 1 ? "" : "s"} logged today`
+              : "No session logged today"}
+          </p>
+        </div>
+      </div>
     </div>
   )
 
   return (
     <div className="space-y-4 px-0.5">
       {!hideHero ? (
-        <>
+        <div className="workout-focus-section space-y-3">
           <div className="min-w-0">
             <p className="type-hud-subsection">Workouts</p>
             <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
@@ -1581,36 +1607,73 @@ export function HubWorkoutsExpand({
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="grid items-center gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
             <WeekWorkoutGoalRing count={weekCount} size="lg" color="#c4d632" />
             <div className="min-w-0 flex-1">{workoutStats}</div>
           </div>
-        </>
+        </div>
       ) : (
-        workoutStats
+        <div className="workout-focus-section">{workoutStats}</div>
       )}
 
       <div
-        className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/8 to-transparent"
-        aria-hidden
-      />
+        className="workout-focus-section overflow-hidden rounded-2xl border border-[#c4d632]/15 bg-gradient-to-br from-[#c4d632]/[0.09] via-white/[0.025] to-transparent p-4"
+        style={{ animationDelay: "80ms" }}
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[15px] font-semibold text-foreground/95">Start training</p>
+            <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted-foreground/60">
+              Get a recovery-aware recommendation or build the session as you go.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={startingId != null}
+            onClick={goStartFreeForm}
+            className="inline-flex h-10 shrink-0 touch-manipulation items-center justify-center gap-2 rounded-xl border border-[#dce95c]/30 bg-[#c4d632]/15 px-4 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#e8f07a] transition-colors hover:border-[#dce95c]/50 hover:bg-[#c4d632]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50"
+          >
+            <Play className="size-3.5" aria-hidden />
+            {startingId === "free" ? "Starting…" : "Start"}
+          </button>
+        </div>
+      </div>
 
-      <div className="space-y-2">
-        <p className="type-hud-caption">Sessions · last 7</p>
-        <div className="flex items-end justify-between gap-1" style={{ height: 44 }}>
+      <div
+        className="workout-focus-section space-y-3 rounded-2xl border border-white/[0.065] bg-white/[0.02] p-4"
+        style={{ animationDelay: "150ms" }}
+      >
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="type-hud-caption">Training rhythm</p>
+            <p className="mt-1 text-[11px] text-muted-foreground/50">Sessions across the last 7 days</p>
+          </div>
+          <p className="text-sm font-semibold tabular-nums text-foreground/80">
+            {last7.reduce((sum, value) => sum + value, 0)}
+            <span className="ml-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/45">
+              total
+            </span>
+          </p>
+        </div>
+        <div className="flex h-[6.25rem] items-end justify-between gap-2">
           {last7.map((v, i) => {
             const max = Math.max(...last7, 1)
-            const h = Math.max(4, Math.round((v / max) * 40))
+            const h = Math.max(8, Math.round((v / max) * 58))
             const isToday = i === last7.length - 1
             return (
-              <div key={i} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+              <div key={i} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1.5">
+                <span className="text-[10px] font-semibold tabular-nums text-muted-foreground/55">
+                  {v > 0 ? v : "·"}
+                </span>
                 <div
-                  className="w-[70%] max-w-[18px] rounded-sm"
+                  className="workout-week-bar w-[62%] max-w-[28px] rounded-md"
                   style={{
                     height: h,
+                    animationDelay: `${220 + i * 65}ms`,
                     background: isToday
                       ? "linear-gradient(180deg, #e8f07a, #a3b01a)"
-                      : "linear-gradient(180deg, #c4d63288, #6b751888)",
+                      : "linear-gradient(180deg, #c4d632aa, #65701688)",
+                    boxShadow: isToday ? "0 0 18px #c4d6322e" : undefined,
                   }}
                 />
                 <span
@@ -1627,19 +1690,15 @@ export function HubWorkoutsExpand({
         </div>
       </div>
 
-      <div
-        className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/8 to-transparent"
-        aria-hidden
+      <ProgressionSummaryHero
+        variant="hud"
+        className="workout-focus-section rounded-2xl border border-white/[0.065] bg-white/[0.02] p-4"
       />
 
-      <ProgressionSummaryHero variant="hud" />
-
       <div
-        className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/8 to-transparent"
-        aria-hidden
-      />
-
-      <div className="space-y-2.5">
+        className="workout-focus-section space-y-2.5"
+        style={{ animationDelay: "280ms" }}
+      >
         <div className="flex items-baseline justify-between gap-2">
           <p className="type-hud-caption">Routines</p>
           <div className="flex items-center gap-2">
@@ -1690,25 +1749,26 @@ export function HubWorkoutsExpand({
         ) : null}
         {templatesStatus === "ready" && templates.length === 0 ? (
           <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-            No routines yet — tap New above, or start free-form below.
+            No routines yet — create one above, or use Start training.
           </p>
         ) : null}
 
         {templates.length > 0 ? (
-          <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 sm:gap-3.5">
+          <div className="grid grid-cols-1 items-stretch gap-2.5 sm:grid-cols-2 sm:gap-3">
             {templates.map((tmpl) => {
               const exs = parseHubRoutineExercises(tmpl.exercises)
               const tags = parseHubRoutineTags(tmpl.tags)
               const cover = tmpl.coverImageUrl?.trim()
               const preview = hubRoutinePreview(exs)
+              const setCount = exs.reduce((sum, exercise) => sum + hubRoutineSetCount(exercise), 0)
               const busy = startingId === tmpl.id
               return (
                 <div
                   key={tmpl.id}
                   data-routine-tile={tmpl.id}
-                  className="group flex h-full min-h-0 flex-col overflow-hidden rounded-2xl"
+                  className="group flex min-h-[8.25rem] overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.022] transition-colors hover:border-[#c4d632]/20 hover:bg-white/[0.035]"
                 >
-                  <div className="relative aspect-square w-full shrink-0 border-b border-white/[0.08] bg-white/[0.03]">
+                  <div className="relative w-[7.25rem] shrink-0 border-r border-white/[0.07] bg-white/[0.03] sm:w-[7.75rem]">
                     <button
                       type="button"
                       onClick={() => setPreviewId(tmpl.id)}
@@ -1725,7 +1785,7 @@ export function HubWorkoutsExpand({
                       ) : (
                         <div className="flex size-full items-center justify-center bg-gradient-to-br from-white/[0.06] via-transparent to-[#c4d632]/[0.06] pointer-events-none">
                           <Dumbbell
-                            className="size-[clamp(2rem,32%,2.75rem)] text-muted-foreground/20"
+                            className="size-9 text-muted-foreground/20"
                             aria-hidden
                           />
                         </div>
@@ -1741,41 +1801,42 @@ export function HubWorkoutsExpand({
                       </Link>
                     </div>
                   </div>
-                  <div className="flex min-h-[6.5rem] flex-1 flex-col gap-1.5 p-2.5 pt-2 sm:min-h-[7rem] sm:p-3">
-                    <div className="min-h-0 min-w-0 flex-1 space-y-1">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <button
-                          type="button"
-                          onClick={() => setPreviewId(tmpl.id)}
-                          className="line-clamp-2 min-w-0 flex-1 text-left text-sm font-semibold leading-snug text-foreground/95 touch-manipulation hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 sm:text-base"
-                        >
-                          {tmpl.name}
-                        </button>
-                        {tags.length > 0 ? (
-                          <div className="flex max-w-[38%] shrink-0 flex-wrap items-center justify-end gap-1 min-w-0 sm:max-w-[36%]">
-                            {tags.map((tg, ti) => (
-                              <span
-                                key={`${tg}-${ti}`}
-                                className="inline-flex min-w-0 max-w-[min(100%,3.75rem)] items-center truncate rounded-md border border-[#c4d632]/25 bg-[#c4d632]/12 px-1.5 py-0.5 text-left text-[8px] font-semibold leading-tight tracking-normal text-[#e8f07a] sm:max-w-[4.25rem] sm:px-2 sm:py-1 sm:text-[9px]"
-                              >
-                                {tg}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
+                  <div className="flex min-w-0 flex-1 flex-col p-3.5">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewId(tmpl.id)}
+                      className="line-clamp-1 min-w-0 text-left text-[15px] font-semibold leading-snug text-foreground/95 touch-manipulation hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30"
+                    >
+                      {tmpl.name}
+                    </button>
+                    {tags.length > 0 ? (
+                      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1">
+                        {tags.slice(0, 2).map((tag, index) => (
+                          <span
+                            key={`${tag}-${index}`}
+                            className="inline-flex max-w-[6.5rem] truncate rounded-md border border-[#c4d632]/20 bg-[#c4d632]/[0.08] px-1.5 py-0.5 text-[9px] font-semibold text-[#dce95c]/85"
+                          >
+                            {tag}
+                          </span>
+                        ))}
                       </div>
+                    ) : null}
+                    <div className="mt-2 min-w-0 flex-1">
                       <p
-                        className="line-clamp-2 type-hud-micro normal-case tracking-normal leading-relaxed text-muted-foreground/55"
+                        className="line-clamp-1 text-[11px] leading-relaxed text-muted-foreground/60"
                         title={exs.map((e) => e.name).join(", ")}
                       >
                         {preview}
+                      </p>
+                      <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground/40">
+                        {exs.length} movement{exs.length === 1 ? "" : "s"} · {setCount} working sets
                       </p>
                     </div>
                     <button
                       type="button"
                       disabled={startingId != null}
                       onClick={() => goStartRoutine(tmpl.id)}
-                      className="mt-auto inline-flex h-8 w-full shrink-0 items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2 type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation sm:h-9"
+                      className="mt-2 inline-flex h-9 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.035] px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/85 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
                     >
                       <Play className="size-3 shrink-0" aria-hidden />
                       {busy ? "…" : "Start"}
@@ -1786,28 +1847,6 @@ export function HubWorkoutsExpand({
             })}
           </div>
         ) : null}
-      </div>
-
-      <div
-        className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/8 to-transparent"
-        aria-hidden
-      />
-
-      <div className="space-y-2">
-        <p className="type-hud-caption">Free-form</p>
-        <button
-          type="button"
-          disabled={startingId != null}
-          onClick={goStartFreeForm}
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
-        >
-          <Play className="h-3.5 w-3.5" aria-hidden />
-          {startingId === "free" ? "Starting…" : "Start empty workout"}
-        </button>
-        <p className="type-hud-micro normal-case tracking-normal leading-relaxed text-muted-foreground/45">
-          Opens the active workout flow — pick upper/lower for a recommended session, or add
-          exercises manually.
-        </p>
       </div>
 
       <Dialog open={previewTmpl != null} onOpenChange={(open) => !open && setPreviewId(null)}>

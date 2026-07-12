@@ -149,11 +149,12 @@ export function StageTimeline({
           ) : null}
           <svg
             viewBox="0 0 1000 121"
-            className="h-[190px] w-full cursor-crosshair touch-pan-y overflow-visible sm:h-[210px]"
+            className="h-[190px] w-full cursor-crosshair touch-none overflow-visible sm:h-[210px]"
             role="img"
             aria-label="Layered sleep stages from bedtime to wake time"
             preserveAspectRatio="none"
             onPointerDown={(event) => {
+              event.preventDefault()
               event.currentTarget.setPointerCapture(event.pointerId)
               updateActiveStage(event)
             }}
@@ -393,11 +394,12 @@ export function SleepHeartRateChart({
           ) : null}
           <svg
             viewBox="0 0 1000 210"
-            className="h-[230px] w-full cursor-crosshair touch-pan-y overflow-visible sm:h-[260px]"
+            className="h-[230px] w-full cursor-crosshair touch-none overflow-visible sm:h-[260px]"
             role="img"
             aria-label={`Sleep heart rate averaged ${avg} beats per minute`}
             preserveAspectRatio="none"
             onPointerDown={(event) => {
+              event.preventDefault()
               event.currentTarget.setPointerCapture(event.pointerId)
               updateActivePoint(event)
             }}

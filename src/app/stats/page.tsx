@@ -157,7 +157,13 @@ function SectionChart({
         ) : null}
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{summaryCards}</div>
-      <div className="chart-touch-safe animate-chart-wipe min-h-[8rem] min-w-0">{children}</div>
+      <div
+        className="chart-touch-safe animate-chart-wipe min-h-[8rem] min-w-0"
+        onPointerDown={(event) => event.preventDefault()}
+        onContextMenu={(event) => event.preventDefault()}
+      >
+        {children}
+      </div>
     </div>
   )
 }
@@ -408,7 +414,7 @@ export default function StatsPage() {
             </>}
           >
             <ResponsiveContainer width="100%" height={130}>
-              <BarChart data={d} barSize={8}>
+              <BarChart data={d} barSize={8} accessibilityLayer={false}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                 <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval={4} />
                 <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={32} />
@@ -434,7 +440,7 @@ export default function StatsPage() {
               </>}
             >
               <ResponsiveContainer width="100%" height={130}>
-                <LineChart data={d.filter(x => x.weight != null)}>
+                <LineChart data={d.filter(x => x.weight != null)} accessibilityLayer={false}>
                   <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                   <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} />
                   <YAxis
@@ -462,7 +468,7 @@ export default function StatsPage() {
             </>}
           >
             <ResponsiveContainer width="100%" height={130}>
-              <BarChart data={d} barSize={8}>
+              <BarChart data={d} barSize={8} accessibilityLayer={false}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                 <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval={4} />
                 <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={32} />
@@ -490,7 +496,7 @@ export default function StatsPage() {
               <div className="min-w-0">
                 <div className="text-[9px] uppercase tracking-[0.1em] text-muted-foreground/50 mb-1">Distance</div>
                 <ResponsiveContainer width="100%" height={110}>
-                  <AreaChart data={d.filter(x => x.runMiles > 0)}>
+                  <AreaChart data={d.filter(x => x.runMiles > 0)} accessibilityLayer={false}>
                     <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                     <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} />
                     <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={26} />
@@ -505,7 +511,7 @@ export default function StatsPage() {
               <div className="min-w-0">
                 <div className="text-[9px] uppercase tracking-[0.1em] text-muted-foreground/50 mb-1">Pace</div>
                 <ResponsiveContainer width="100%" height={110}>
-                  <LineChart data={d.filter(x => x.pace != null)}>
+                  <LineChart data={d.filter(x => x.pace != null)} accessibilityLayer={false}>
                     <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                     <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} />
                     <YAxis
@@ -535,7 +541,7 @@ export default function StatsPage() {
             </>}
           >
             <ResponsiveContainer width="100%" height={130}>
-              <BarChart data={d} barSize={8}>
+              <BarChart data={d} barSize={8} accessibilityLayer={false}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                 <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval={4} />
                 <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={20} allowDecimals={false} />
@@ -556,7 +562,7 @@ export default function StatsPage() {
             </>}
           >
             <ResponsiveContainer width="100%" height={130}>
-              <AreaChart data={d}>
+              <AreaChart data={d} accessibilityLayer={false}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                 <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval={4} />
                 <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={26} domain={[0, "dataMax + 1"]} />
@@ -581,7 +587,7 @@ export default function StatsPage() {
             </>}
           >
             <ResponsiveContainer width="100%" height={130}>
-              <BarChart data={d} barSize={8}>
+              <BarChart data={d} barSize={8} accessibilityLayer={false}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                 <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval={4} />
                 <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={20} allowDecimals={false} />
@@ -602,7 +608,7 @@ export default function StatsPage() {
             </>}
           >
             <ResponsiveContainer width="100%" height={130}>
-              <BarChart data={d} barSize={8}>
+              <BarChart data={d} barSize={8} accessibilityLayer={false}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                 <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval={4} />
                 <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={20} allowDecimals={false} />
