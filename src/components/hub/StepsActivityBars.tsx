@@ -39,6 +39,10 @@ function formatHour(hour: number): string {
   return normalized < 12 ? `${normalized}a` : `${normalized - 12}p`
 }
 
+function formatHourLong(hour: number): string {
+  return formatHour(hour).replace("a", "am").replace("p", "pm")
+}
+
 type Props = {
   values: number[]
   labels: string[]
@@ -636,7 +640,8 @@ export function StepsActivityBars({
                 <div>
                   <p className="type-hud-micro text-emerald-200/75">Steps by hour</p>
                   <p className="mt-0.5 text-[9px] text-muted-foreground/50">
-                    Tracking day {formatHour(trackingStartHour)}–{formatHour(trackingStartHour)}
+                    Tracking day {formatHourLong(trackingStartHour)}–
+                    {formatHourLong(trackingStartHour)} next day
                   </p>
                 </div>
                 <p className="text-[10px] tabular-nums text-muted-foreground/60">
@@ -647,7 +652,7 @@ export function StepsActivityBars({
               <div
                 className="flex h-20 items-end gap-[2px]"
                 role="img"
-                aria-label={`Hourly steps from ${formatHour(trackingStartHour)} to ${formatHour(trackingStartHour)} the next day`}
+                aria-label={`Hourly steps from ${formatHourLong(trackingStartHour)} to ${formatHourLong(trackingStartHour)} the next day`}
               >
                 {hourlyValues.map((value, index) => {
                   const hour = (trackingStartHour + index) % 24
