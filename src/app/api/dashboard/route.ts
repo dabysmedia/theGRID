@@ -13,6 +13,7 @@ import { sleepDurationHours } from "@/lib/sleepDuration"
 import { computeReadinessScore } from "@/lib/readiness-score"
 import { deriveSleepScore, qualityToScore } from "@/lib/sleep-score"
 import {
+  DEFAULT_STEPS_TIMEZONE,
   STEPS_DAY_BOUNDARY_HOUR,
   addDaysYmd,
   resolveStepsTimezone,
@@ -186,7 +187,7 @@ export async function GET(req: NextRequest) {
       where: { id: userId },
       select: { timeZone: true },
     })
-    const trackingTz = resolveStepsTimezone(profile?.timeZone)
+    const trackingTz = resolveStepsTimezone(profile?.timeZone ?? DEFAULT_STEPS_TIMEZONE)
     const requestedRefDayStr =
       dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
         ? dateParam

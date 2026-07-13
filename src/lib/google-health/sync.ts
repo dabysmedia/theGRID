@@ -26,6 +26,7 @@ import {
   type HeartRateZoneThreshold,
 } from "@/lib/google-health/client"
 import {
+  DEFAULT_STEPS_TIMEZONE,
   bucketStepsByStepsDay,
   getStepsDayRange,
   hourlyStepsForStepsDay,
@@ -135,7 +136,7 @@ export async function syncGoogleHealthForUser(
     where: { id: userId },
     select: { vacationResumeDate: true, timeZone: true },
   })
-  const stepsTz = resolveStepsTimezone(user?.timeZone)
+  const stepsTz = resolveStepsTimezone(user?.timeZone ?? DEFAULT_STEPS_TIMEZONE)
   const endStepsKey = stepsDayKey(new Date(), stepsTz)
   const startStepsKey = addDaysYmd(endStepsKey, -(days - 1))
   const endYmd = formatDate(new Date())

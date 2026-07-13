@@ -4,7 +4,11 @@ import { startOfMonth, endOfMonth, eachDayOfInterval, format, addDays } from "da
 import { kmToMiles, runKmToStepsFromRun } from "@/lib/units"
 import { sleepDurationHours } from "@/lib/sleepDuration"
 import { resolveUserId, UserError } from "@/lib/current-user"
-import { resolveStepsTimezone, stepsDayKey } from "@/lib/steps-day"
+import {
+  DEFAULT_STEPS_TIMEZONE,
+  resolveStepsTimezone,
+  stepsDayKey,
+} from "@/lib/steps-day"
 
 export async function GET(req: NextRequest) {
   try {
@@ -185,7 +189,10 @@ export async function GET(req: NextRequest) {
 
     // Mid-month views should rate consistency against days that have actually
     // happened, not days that haven't occurred yet.
-    const todayKey = stepsDayKey(new Date(), resolveStepsTimezone(profile?.timeZone))
+    const todayKey = stepsDayKey(
+      new Date(),
+      resolveStepsTimezone(profile?.timeZone ?? DEFAULT_STEPS_TIMEZONE),
+    )
     const elapsedKeys = dayKeys.filter((k) => k <= todayKey)
     const daysElapsed = Math.max(1, Math.min(dayKeys.length, elapsedKeys.length))
 

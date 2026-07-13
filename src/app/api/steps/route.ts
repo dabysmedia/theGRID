@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { parseYyyyMmDdToStoredDate, utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
-import { resolveStepsTimezone, stepsRefDayKey } from "@/lib/steps-day"
+import {
+  DEFAULT_STEPS_TIMEZONE,
+  resolveStepsTimezone,
+  stepsRefDayKey,
+} from "@/lib/steps-day"
 
 export async function GET(req: NextRequest) {
   try {
@@ -39,7 +43,7 @@ export async function POST(req: NextRequest) {
       where: { id: userId },
       select: { timeZone: true },
     })
-    const timeZone = resolveStepsTimezone(user?.timeZone)
+    const timeZone = resolveStepsTimezone(user?.timeZone ?? DEFAULT_STEPS_TIMEZONE)
     const stepsDate = stepsRefDayKey(requestedDate, new Date(), timeZone)
     const entry = await prisma.stepEntry.create({
       data: {
