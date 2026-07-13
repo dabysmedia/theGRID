@@ -28,6 +28,7 @@ import {
 import {
   bucketStepsByStepsDay,
   getStepsDayRange,
+  hourlyStepsForStepsDay,
   resolveStepsTimezone,
   stepsDayKey,
 } from "@/lib/steps-day"
@@ -93,7 +94,10 @@ async function fetchStepsForStepsDays(
   startStepsKey: string,
   endStepsKey: string,
   timeZone: string,
-): Promise<DailyStepsRollup[]> {
+): Promise<{
+  daily: DailyStepsRollup[]
+  hourlyByDay: Map<string, number[]>
+}> {
   const { start } = getStepsDayRange(startStepsKey, timeZone)
   const { end } = getStepsDayRange(endStepsKey, timeZone)
   const hourly = await fetchHourlySteps(userId, start.toISOString(), end.toISOString())
@@ -105,11 +109,15 @@ async function fetchStepsForStepsDays(
     timeZone,
   )
   const out: DailyStepsRollup[] = []
+  const hourlyByDay = new Map<string, number[]>()
   for (const [date, count] of bucketed) {
     if (date < startStepsKey || date > endStepsKey) continue
-    if (count > 0) out.push({ date, count: Math.round(count) })
+    if (count > 0) {
+      out.push({ date, count: Math.round(count) })
+      hourlyByDay.set(date, hourlyStepsForStepsDay(hourly, date, timeZone))
+    }
   }
-  return out
+  return { daily: out, hourlyByDay }
 }
 
 export async function syncGoogleHealthForUser(
@@ -164,7 +172,10 @@ export async function syncGoogleHealthForUser(
         "Steps",
         metrics.steps,
         () => fetchStepsForStepsDays(userId, startStepsKey, endStepsKey, stepsTz),
-        [],
+        {
+          daily: [] as DailyStepsRollup[],
+          hourlyByDay: new Map<string, number[]>(),
+        },
       ),
       safeFetch("Sleep", metrics.sleep, () => fetchSleepSessions(userId, startYmd), []),
       safeFetch(
@@ -225,7 +236,7 @@ export async function syncGoogleHealthForUser(
 
   let stepsUpserted = 0
   const syncedStepsKeys = new Set<string>()
-  for (const row of steps) {
+  for (const row of steps.daily) {
     syncedStepsKeys.add(row.date)
     const externalId = `${GOOGLE_HEALTH_SOURCE}:steps:${row.date}`
     const date = parseYyyyMmDdToStoredDate(row.date)
@@ -235,7 +246,12 @@ export async function syncGoogleHealthForUser(
     if (existing) {
       await prisma.stepEntry.update({
         where: { id: existing.id },
-        data: { count: row.count, date, source: GOOGLE_HEALTH_SOURCE },
+        data: {
+          count: row.count,
+          date,
+          source: GOOGLE_HEALTH_SOURCE,
+          hourlyJson: JSON.stringify(steps.hourlyByDay.get(row.date) ?? []),
+        },
       })
     } else {
       // Replace prior google-health step row for the same steps-day if externalId missing (legacy)
@@ -250,7 +266,12 @@ export async function syncGoogleHealthForUser(
       if (sameDay) {
         await prisma.stepEntry.update({
           where: { id: sameDay.id },
-          data: { count: row.count, externalId, date },
+          data: {
+            count: row.count,
+            externalId,
+            date,
+            hourlyJson: JSON.stringify(steps.hourlyByDay.get(row.date) ?? []),
+          },
         })
       } else {
         await prisma.stepEntry.create({
@@ -260,6 +281,7 @@ export async function syncGoogleHealthForUser(
             count: row.count,
             source: GOOGLE_HEALTH_SOURCE,
             externalId,
+            hourlyJson: JSON.stringify(steps.hourlyByDay.get(row.date) ?? []),
           },
         })
       }

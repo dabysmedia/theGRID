@@ -76,6 +76,8 @@ model StepEntry {
   /** Stable external id for upsert (e.g. google-health:steps:2026-07-09).
    *  For google-health steps, the date segment is the 5am→5am tracking-day key. */
   externalId String?
+  /** JSON array of 24 hourly totals ordered from 05:00 through 04:00. */
+  hourlyJson String?
   userId     String?
   user       User?    @relation(fields: [userId], references: [id])
   createdAt  DateTime @default(now())

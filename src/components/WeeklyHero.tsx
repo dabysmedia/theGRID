@@ -46,6 +46,10 @@ interface CategorySummary {
   goal: number | null
   unit: string
   last7: number[]
+  remaining?: number
+  hourly?: number[]
+  hourlyUnbucketed?: number
+  trackingStartHour?: number
   /** Present for steps: 5am→5am tracking-day key for the last7 window end */
   refDay?: string
 }
@@ -438,11 +442,7 @@ export function WeeklyHero({
   const sleepGoal = data.sleep.goal ?? 8
   const caloriePct = calGoal > 0 ? Math.round((data.calories.todayValue / calGoal) * 100) : 0
   const calorieRemaining = Math.max(0, calGoal - data.calories.todayValue)
-  const loggedStepDays = data.steps.last7.filter((value) => value > 0)
-  const stepWeekAvg = loggedStepDays.length
-    ? Math.round(loggedStepDays.reduce((sum, value) => sum + value, 0) / loggedStepDays.length)
-    : 0
-  const stepGoalDays = data.steps.last7.filter((value) => value >= stepsGoal).length
+  const stepRemaining = Math.max(0, stepsGoal - data.steps.todayValue)
   const loggedSleepDays = data.sleep.last7.filter((value) => value > 0)
   const sleepWeekAvg = loggedSleepDays.length
     ? loggedSleepDays.reduce((sum, value) => sum + value, 0) / loggedSleepDays.length
@@ -728,9 +728,9 @@ export function WeeklyHero({
                     }
                   : expandedRing === "steps"
                     ? {
-                        label: "7-day avg",
-                        value: stepWeekAvg.toLocaleString(),
-                        detail: `${stepGoalDays}/7 goal days`,
+                        label: stepRemaining > 0 ? "Remaining" : "Goal",
+                        value: stepRemaining > 0 ? stepRemaining.toLocaleString() : "Met",
+                        detail: `${stepsGoal.toLocaleString()} step goal`,
                       }
                     : {
                         label: "7-day avg",
@@ -920,6 +920,9 @@ export function WeeklyHero({
             values={data.steps.last7}
             labels={stepsDayLabels}
             goal={stepsGoal}
+            hourly={data.steps.hourly}
+            hourlyUnbucketed={data.steps.hourlyUnbucketed}
+            trackingStartHour={data.steps.trackingStartHour}
             readiness={readinessValue}
             hrvMs={hrvMs}
             restingHeartRate={restingHeartRate}

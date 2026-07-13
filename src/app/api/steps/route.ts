@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { parseYyyyMmDdToStoredDate, utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
+import { resolveStepsTimezone, stepsRefDayKey } from "@/lib/steps-day"
 
 export async function GET(req: NextRequest) {
   try {
@@ -29,10 +30,21 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
     const body = await req.json()
+    const requestedDate = String(body.date ?? "")
+    const count = Number.parseInt(String(body.count ?? ""), 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate) || !Number.isFinite(count) || count <= 0) {
+      return NextResponse.json({ error: "Valid date and positive step count required" }, { status: 400 })
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { timeZone: true },
+    })
+    const timeZone = resolveStepsTimezone(user?.timeZone)
+    const stepsDate = stepsRefDayKey(requestedDate, new Date(), timeZone)
     const entry = await prisma.stepEntry.create({
       data: {
-        date: parseYyyyMmDdToStoredDate(String(body.date)),
-        count: parseInt(body.count),
+        date: parseYyyyMmDdToStoredDate(stepsDate),
+        count,
         userId,
       },
     })

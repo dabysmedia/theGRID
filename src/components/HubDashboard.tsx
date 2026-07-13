@@ -70,6 +70,10 @@ interface CategorySummary {
   goal: number | null
   unit: string
   last7: number[]
+  remaining?: number
+  hourly?: number[]
+  hourlyUnbucketed?: number
+  trackingStartHour?: number
 }
 
 interface DashboardData {
@@ -101,7 +105,16 @@ const emptyLast7 = () => Array.from({ length: 7 }, () => 0)
 
 const defaultData: DashboardData = {
   calories: { todayValue: 0, goal: 2000, unit: "cal", last7: emptyLast7() },
-  steps: { todayValue: 0, goal: 10000, unit: "steps", last7: emptyLast7() },
+  steps: {
+    todayValue: 0,
+    goal: 10000,
+    unit: "steps",
+    last7: emptyLast7(),
+    remaining: 10000,
+    hourly: Array.from({ length: 24 }, () => 0),
+    hourlyUnbucketed: 0,
+    trackingStartHour: 5,
+  },
   running: { todayValue: 0, goal: null, unit: "mi", last7: emptyLast7() },
   workouts: { todayValue: 0, goal: null, unit: "sessions", last7: emptyLast7() },
   sleep: { todayValue: 0, goal: 8, unit: "hrs", last7: emptyLast7() },

@@ -13,6 +13,7 @@ import { sleepDurationHours } from "@/lib/sleepDuration"
 import { computeReadinessScore } from "@/lib/readiness-score"
 import { deriveSleepScore, qualityToScore } from "@/lib/sleep-score"
 import {
+  STEPS_DAY_BOUNDARY_HOUR,
   addDaysYmd,
   resolveStepsTimezone,
   stepsDayKey,
@@ -35,6 +36,20 @@ interface DatedRow {
 type WeightBaselineTrend = "losing" | "maintaining" | "gaining"
 
 const WEEKLY_WEIGHT_MAINTAIN_LB = 0.45
+
+function parseHourlySteps(raw: string | null | undefined): number[] {
+  if (!raw) return Array.from({ length: 24 }, () => 0)
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return Array.from({ length: 24 }, () => 0)
+    return Array.from({ length: 24 }, (_, index) => {
+      const value = Number(parsed[index] ?? 0)
+      return Number.isFinite(value) && value > 0 ? Math.round(value) : 0
+    })
+  } catch {
+    return Array.from({ length: 24 }, () => 0)
+  }
+}
 
 function computeWeeklyWeightTrend(
   entries: { date: Date; value: number }[],
@@ -307,6 +322,17 @@ export async function GET(req: NextRequest) {
       items.reduce((s, e) => s + e.calories, 0)
     )
     const stepsLast7 = stepsDayTotals(stepEntries, runEntries)
+    const currentStepRows = stepEntries.filter(
+      (entry) => utcCalendarDayKeyFromIso(entry.date) === stepsRefDayStr,
+    )
+    const stepsHourly = currentStepRows.reduce(
+      (totals, entry) => {
+        const row = parseHourlySteps(entry.hourlyJson)
+        return totals.map((value, index) => value + row[index])
+      },
+      Array.from({ length: 24 }, () => 0),
+    )
+    const hourlyStepsTotal = stepsHourly.reduce((sum, value) => sum + value, 0)
     const runLast7Km = dailyTotals(runEntries, (items) =>
       items.reduce((s, e) => s + e.distance, 0)
     )
@@ -437,9 +463,13 @@ export async function GET(req: NextRequest) {
       steps: {
         todayValue: stepsLast7[6],
         goal: stepsGoal ?? 10000,
+        remaining: Math.max(0, (stepsGoal ?? 10000) - stepsLast7[6]),
         direction: stepsG?.direction ?? "up",
         unit: "steps",
         last7: stepsLast7,
+        hourly: stepsHourly,
+        hourlyUnbucketed: Math.max(0, stepsLast7[6] - hourlyStepsTotal),
+        trackingStartHour: STEPS_DAY_BOUNDARY_HOUR,
         /** yyyy-MM-dd key for the 5am→5am tracking day ending the last7 window */
         refDay: stepsRefDayStr,
       },

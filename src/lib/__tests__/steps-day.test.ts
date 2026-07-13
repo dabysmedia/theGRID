@@ -4,7 +4,9 @@ import {
   addDaysYmd,
   bucketStepsByStepsDay,
   getStepsDayRange,
+  hourlyStepsForStepsDay,
   localCalendarDayKey,
+  stepsDayHourIndex,
   stepsDayKey,
   stepsRefDayKey,
 } from "@/lib/steps-day"
@@ -92,6 +94,37 @@ describe("bucketStepsByStepsDay", () => {
       TZ,
     )
     expect(bucketed.get("2026-07-06")).toBe(42)
+  })
+})
+
+describe("hourly tracking-day buckets", () => {
+  it("orders hours from 5am through 4am and keeps 1am on the prior day", () => {
+    const mon05 = atLocal("2026-07-06", 5)
+    const mon23 = atLocal("2026-07-06", 23)
+    const tue01 = atLocal("2026-07-07", 1)
+    const tue05 = atLocal("2026-07-07", 5)
+
+    expect(stepsDayHourIndex(mon05, TZ)).toBe(0)
+    expect(stepsDayHourIndex(mon23, TZ)).toBe(18)
+    expect(stepsDayHourIndex(tue01, TZ)).toBe(20)
+    expect(stepsDayHourIndex(tue05, TZ)).toBe(0)
+
+    const hourly = hourlyStepsForStepsDay(
+      [
+        { startTime: mon05, count: 100 },
+        { startTime: mon23, count: 200 },
+        { startTime: tue01, count: 300 },
+        { startTime: tue05, count: 400 },
+      ],
+      "2026-07-06",
+      TZ,
+    )
+
+    expect(hourly).toHaveLength(24)
+    expect(hourly[0]).toBe(100)
+    expect(hourly[18]).toBe(200)
+    expect(hourly[20]).toBe(300)
+    expect(hourly.reduce((sum, count) => sum + count, 0)).toBe(600)
   })
 })
 

@@ -32,11 +32,22 @@ function formatBarSteps(value: number): string {
   return n.toLocaleString()
 }
 
+function formatHour(hour: number): string {
+  const normalized = ((hour % 24) + 24) % 24
+  if (normalized === 0) return "12a"
+  if (normalized === 12) return "12p"
+  return normalized < 12 ? `${normalized}a` : `${normalized - 12}p`
+}
+
 type Props = {
   values: number[]
   labels: string[]
   /** Daily step goal — drawn as a dotted yellow projection line across the bars. */
   goal?: number | null
+  /** 24 values ordered from the tracking-day start (normally 05:00) through 04:00. */
+  hourly?: number[]
+  hourlyUnbucketed?: number
+  trackingStartHour?: number
   readiness?: number | null
   hrvMs?: number | null
   restingHeartRate?: number | null
@@ -69,6 +80,9 @@ export function StepsActivityBars({
   values,
   labels,
   goal = null,
+  hourly = [],
+  hourlyUnbucketed = 0,
+  trackingStartHour = 5,
   readiness = null,
   hrvMs = null,
   restingHeartRate = null,
@@ -119,6 +133,14 @@ export function StepsActivityBars({
       ? Math.max(4, (goalValue / scaleMax) * barFillRatio * 100)
       : null
   const todaySteps = values[todayIdx] ?? 0
+  const remainingSteps =
+    goalValue != null ? Math.max(0, Math.round(goalValue - todaySteps)) : null
+  const hourlyValues = Array.from({ length: 24 }, (_, index) => {
+    const value = Number(hourly[index] ?? 0)
+    return Number.isFinite(value) && value > 0 ? Math.round(value) : 0
+  })
+  const hourlyMax = Math.max(...hourlyValues, 1)
+  const hourlyTotal = hourlyValues.reduce((sum, value) => sum + value, 0)
   const loggedDays = values.filter((v) => v > 0)
   const weekAvg =
     loggedDays.length > 0
@@ -374,7 +396,10 @@ export function StepsActivityBars({
             {goalValue != null ? (
               <span className="text-amber-300/70">
                 {" "}
-                · goal {Math.round(goalValue).toLocaleString()}
+                ·{" "}
+                {remainingSteps === 0
+                  ? "goal met"
+                  : `${remainingSteps?.toLocaleString()} left`}
               </span>
             ) : null}
           </p>
@@ -391,7 +416,7 @@ export function StepsActivityBars({
           aria-hidden={!expanded}
         >
           <div className="min-h-0 overflow-hidden">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <div className="min-w-0">
                 <p className="type-hud-micro text-muted-foreground/55">Today</p>
                 <p className="type-hud-stat-sm tabular-nums text-emerald-300">
@@ -399,8 +424,18 @@ export function StepsActivityBars({
                 </p>
               </div>
               <div className="min-w-0">
-                <p className="type-hud-micro text-muted-foreground/55">Goal</p>
+                <p className="type-hud-micro text-muted-foreground/55">Remaining</p>
                 <p className="type-hud-stat-sm tabular-nums text-amber-200/90">
+                  {remainingSteps != null
+                    ? remainingSteps === 0
+                      ? "Met"
+                      : remainingSteps.toLocaleString()
+                    : "—"}
+                </p>
+              </div>
+              <div className="min-w-0">
+                <p className="type-hud-micro text-muted-foreground/55">Goal</p>
+                <p className="type-hud-stat-sm tabular-nums text-foreground/85">
                   {goalValue != null ? Math.round(goalValue).toLocaleString() : "—"}
                 </p>
               </div>
@@ -596,6 +631,71 @@ export function StepsActivityBars({
           aria-hidden={!expanded}
         >
           <div className="min-h-0 overflow-hidden">
+            <div className="mb-3 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.035] px-3 pb-2.5 pt-3">
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <div>
+                  <p className="type-hud-micro text-emerald-200/75">Steps by hour</p>
+                  <p className="mt-0.5 text-[9px] text-muted-foreground/50">
+                    Tracking day {formatHour(trackingStartHour)}–{formatHour(trackingStartHour)}
+                  </p>
+                </div>
+                <p className="text-[10px] tabular-nums text-muted-foreground/60">
+                  {hourlyTotal > 0 ? `${hourlyTotal.toLocaleString()} synced` : "No hourly sync yet"}
+                </p>
+              </div>
+
+              <div
+                className="flex h-20 items-end gap-[2px]"
+                role="img"
+                aria-label={`Hourly steps from ${formatHour(trackingStartHour)} to ${formatHour(trackingStartHour)} the next day`}
+              >
+                {hourlyValues.map((value, index) => {
+                  const hour = (trackingStartHour + index) % 24
+                  return (
+                    <div
+                      key={hour}
+                      className="group relative flex h-full min-w-0 flex-1 items-end"
+                      title={`${formatHour(hour)}: ${value.toLocaleString()} steps`}
+                    >
+                      <div
+                        className={cn(
+                          "w-full rounded-t-sm transition-[height] duration-500",
+                          value > 0
+                            ? "bg-gradient-to-t from-emerald-700 to-emerald-300 shadow-[0_0_6px_rgba(52,211,153,0.25)]"
+                            : "h-px bg-white/10",
+                        )}
+                        style={
+                          value > 0
+                            ? { height: `${Math.max(5, (value / hourlyMax) * 100)}%` }
+                            : undefined
+                        }
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="mt-1 flex">
+                {hourlyValues.map((_, index) => {
+                  const hour = (trackingStartHour + index) % 24
+                  return (
+                    <span
+                      key={`hour-${hour}`}
+                      className="min-w-0 flex-1 text-center text-[7px] tabular-nums text-muted-foreground/45"
+                    >
+                      {index % 3 === 0 ? formatHour(hour) : ""}
+                    </span>
+                  )
+                })}
+              </div>
+              {hourlyUnbucketed > 0 ? (
+                <p className="mt-2 text-[9px] leading-snug text-muted-foreground/55">
+                  {Math.round(hourlyUnbucketed).toLocaleString()} manually logged or
+                  run-derived steps are included in today&apos;s total but not assigned to
+                  an hour.
+                </p>
+              ) : null}
+            </div>
+
             <button
               type="button"
               onClick={(e) => {

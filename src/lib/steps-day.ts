@@ -188,3 +188,43 @@ export function bucketStepsByStepsDay(
   }
   return out
 }
+
+/** Position in a tracking-day chart: 05:00 is 0 and 04:00 is 23. */
+export function stepsDayHourIndex(
+  date: Date | string,
+  timeZone?: string | null,
+): number | null {
+  const instant = typeof date === "string" ? new Date(date) : date
+  if (Number.isNaN(instant.getTime())) return null
+  const hour = localParts(instant, resolveStepsTimezone(timeZone)).hour
+  return (hour - STEPS_DAY_BOUNDARY_HOUR + 24) % 24
+}
+
+/**
+ * Build 24 chart buckets for one 05:00→05:00 tracking day. Repeated local
+ * hours during DST are combined; skipped hours remain zero.
+ */
+export function hourlyStepsForStepsDay(
+  samples: Array<{ startTime: Date | string; count: number }>,
+  dayKey: string,
+  timeZone?: string | null,
+): number[] {
+  const tz = resolveStepsTimezone(timeZone)
+  const buckets = Array.from({ length: 24 }, () => 0)
+  for (const sample of samples) {
+    const instant =
+      typeof sample.startTime === "string" ? new Date(sample.startTime) : sample.startTime
+    const count = Number(sample.count)
+    if (
+      Number.isNaN(instant.getTime()) ||
+      !Number.isFinite(count) ||
+      count <= 0 ||
+      stepsDayKey(instant, tz) !== dayKey
+    ) {
+      continue
+    }
+    const index = stepsDayHourIndex(instant, tz)
+    if (index != null) buckets[index] += Math.round(count)
+  }
+  return buckets
+}
