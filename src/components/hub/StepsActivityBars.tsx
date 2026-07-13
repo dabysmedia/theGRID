@@ -97,7 +97,6 @@ export function StepsActivityBars({
   readinessSelected = false,
   hideReadiness = false,
   hideSteps = false,
-  chartVisible: _chartVisible = true,
   scaleToFit = false,
   className,
 }: Props) {
