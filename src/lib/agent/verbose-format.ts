@@ -1,7 +1,7 @@
 import "server-only"
 
 import { storedEntryDayKey } from "@/lib/agent/timezone"
-import { sleepDurationHours } from "@/lib/sleepDuration"
+import { dailySleepDurationHours } from "@/lib/sleepDuration"
 import {
   compoundLabel,
   injectionSiteLabel,
@@ -353,8 +353,9 @@ export function formatSleepLine(s: {
   wakeTime: Date
   quality: number
   notes: string | null
+  minutesAsleep?: number | null
 }): string {
-  const hrs = sleepDurationHours(s.bedtime, s.wakeTime)
+  const hrs = dailySleepDurationHours([s])
   const dk = storedEntryDayKey(s.date)
   return `  - ${dk}: ${hrs}h, quality ${s.quality}/5, bed ${s.bedtime.toISOString()} → wake ${s.wakeTime.toISOString()}${s.notes ? ` — ${truncate(s.notes, 100)}` : ""}`
 }

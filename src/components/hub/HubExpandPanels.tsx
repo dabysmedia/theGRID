@@ -78,7 +78,7 @@ import {
   readinessBand,
 } from "@/lib/readiness-score"
 import { displaySleepScore, qualityToScore } from "@/lib/sleep-score"
-import { sleepDurationHours } from "@/lib/sleepDuration"
+import { dailySleepDurationHours, resolveSleepNightEntry } from "@/lib/sleepDuration"
 import {
   aggregateMuscleStats,
   formatVolumeLb,
@@ -164,7 +164,8 @@ export function HubSleepExpand({
         if (!res.ok || cancelled) return
         const rows = (await res.json()) as SleepEntryRow[]
         if (cancelled) return
-        setEntry(Array.isArray(rows) && rows.length > 0 ? rows[0]! : null)
+        const list = Array.isArray(rows) ? rows : []
+        setEntry(resolveSleepNightEntry(list))
       } catch {
         if (!cancelled) setEntry(null)
       } finally {
@@ -190,7 +191,7 @@ export function HubSleepExpand({
       : null
   const durationLabel =
     entry != null
-      ? `${sleepDurationHours(entry.bedtime, entry.wakeTime)}h`
+      ? `${dailySleepDurationHours([entry])}h`
       : hours > 0
         ? `${hours}h`
         : null

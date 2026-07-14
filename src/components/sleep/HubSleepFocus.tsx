@@ -17,7 +17,7 @@ import { useActiveDate } from "@/context/DateContext"
 import { useQuickLog } from "@/context/QuickLogContext"
 import { apiFetch } from "@/lib/api-fetch"
 import { displaySleepScore, qualityToScore } from "@/lib/sleep-score"
-import { sleepDurationHours } from "@/lib/sleepDuration"
+import { dailySleepDurationHours, resolveSleepNightEntry } from "@/lib/sleepDuration"
 import { cn, formatDate } from "@/lib/utils"
 
 type SleepEntryRow = {
@@ -79,21 +79,6 @@ function stageShares(entry: SleepEntryRow): Record<SleepStageKey, number> | null
     LIGHT: (values.LIGHT / total) * 100,
     DEEP: (values.DEEP / total) * 100,
   }
-}
-
-function sleepEntryCompleteness(entry: SleepEntryRow): number {
-  const stageMinutes =
-    (entry.awakeMinutes ?? 0) +
-    (entry.remMinutes ?? 0) +
-    (entry.lightMinutes ?? 0) +
-    (entry.deepMinutes ?? 0)
-  return (
-    (parseStages(entry.stagesJson).length > 0 ? 1000 : 0) +
-    (stageMinutes > 0 ? 500 : 0) +
-    (entry.minutesAsleep != null || entry.minutesToFallAsleep != null ? 300 : 0) +
-    (entry.efficiency != null ? 100 : 0) +
-    (entry.source === "google-health" ? 50 : 0)
-  )
 }
 
 function resolvedMinutesAsleep(entry: SleepEntryRow): number | null {
@@ -180,21 +165,21 @@ export function HubSleepFocus({
 
         const allRows = Array.isArray(rows) ? rows : []
         const sameDay = allRows.filter((row) => row.date.slice(0, 10) === activeDate)
-        const current =
-          sameDay.sort((a, b) => sleepEntryCompleteness(b) - sleepEntryCompleteness(a))[0] ??
-          allRows[0] ??
-          null
+        const current = resolveSleepNightEntry(sameDay) ?? allRows[0] ?? null
         setEntry(current)
-        const historyByDay = new Map<string, SleepEntryRow>()
+        const historyByDay = new Map<string, SleepEntryRow[]>()
         for (const row of allRows) {
           const day = row.date.slice(0, 10)
           if (day === activeDate) continue
-          const existing = historyByDay.get(day)
-          if (!existing || sleepEntryCompleteness(row) > sleepEntryCompleteness(existing)) {
-            historyByDay.set(day, row)
-          }
+          const bucket = historyByDay.get(day)
+          if (bucket) bucket.push(row)
+          else historyByDay.set(day, [row])
         }
-        setHistory(Array.from(historyByDay.values()))
+        setHistory(
+          Array.from(historyByDay.values())
+            .map((dayRows) => resolveSleepNightEntry(dayRows))
+            .filter((row): row is SleepEntryRow => row != null),
+        )
 
         if (current) {
           const bedtimeDay = formatDate(new Date(current.bedtime))
@@ -248,7 +233,7 @@ export function HubSleepFocus({
   }, [history])
 
   const durationRange = useMemo(
-    () => personalRange(history.map((row) => sleepDurationHours(row.bedtime, row.wakeTime))),
+    () => personalRange(history.map((row) => dailySleepDurationHours([row]))),
     [history],
   )
   const efficiencyRange = useMemo(
@@ -272,7 +257,7 @@ export function HubSleepFocus({
     [history],
   )
 
-  const duration = entry ? sleepDurationHours(entry.bedtime, entry.wakeTime) : hours
+  const duration = entry ? dailySleepDurationHours([entry]) : hours
   const score = entry ? entry.score ?? qualityToScore(entry.quality) : null
   const efficiency = entry?.efficiency ?? null
   const hasStageMinutes =

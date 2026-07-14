@@ -1,6 +1,6 @@
 import "server-only"
 
-import { sleepDurationHours } from "@/lib/sleepDuration"
+import { dailySleepDurationHours, resolveSleepNightEntry } from "@/lib/sleepDuration"
 import { localTimeParts } from "@/lib/notifications/server/local-time"
 import {
   agentTodayKey,
@@ -307,7 +307,25 @@ function buildTotals(raw: AgentRawData, bounds: Bounds, todayKey: string) {
   )
 
   const legacyWorkouts = filterByDayKey(raw.workoutEntries, bounds)
-  const sleepHrs = sleep.map((s) => sleepDurationHours(s.bedtime, s.wakeTime)).filter((h) => h > 0)
+  const sleepByDay = new Map<string, typeof sleep>()
+  for (const s of sleep) {
+    const key = dayKey(s.date)
+    const bucket = sleepByDay.get(key)
+    if (bucket) bucket.push(s)
+    else sleepByDay.set(key, [s])
+  }
+  const sleepNights = Array.from(sleepByDay.entries()).map(([date, items]) => {
+    const primary = resolveSleepNightEntry(items) ?? items[0]!
+    return {
+      date,
+      hours: dailySleepDurationHours(items),
+      quality: primary.quality,
+      bedtime: primary.bedtime.toISOString(),
+      wakeTime: primary.wakeTime.toISOString(),
+      notes: primary.notes,
+    }
+  })
+  const sleepHrs = sleepNights.map((s) => s.hours).filter((h) => h > 0)
 
   return {
     nutrition: {
@@ -369,17 +387,10 @@ function buildTotals(raw: AgentRawData, bounds: Bounds, todayKey: string) {
       })),
     },
     sleep: {
-      nights: sleep.length,
+      nights: sleepNights.length,
       avgHours: Math.round(avg(sleepHrs) * 10) / 10,
-      avgQuality: Math.round(avg(sleep.map((s) => s.quality)) * 10) / 10,
-      items: sleep.map((s) => ({
-        date: dayKey(s.date),
-        hours: sleepDurationHours(s.bedtime, s.wakeTime),
-        quality: s.quality,
-        bedtime: s.bedtime.toISOString(),
-        wakeTime: s.wakeTime.toISOString(),
-        notes: s.notes,
-      })),
+      avgQuality: Math.round(avg(sleepNights.map((s) => s.quality)) * 10) / 10,
+      items: sleepNights,
     },
     bodyweight: weightAnalytics,
     habits: filterHabitCompletions(raw.habits, bounds),
@@ -587,9 +598,19 @@ function narrativeSection(
 
   const sleep = filterByDayKey(raw.sleepEntries, bounds)
   if (sleep.length > 0) {
-    const sl = totals.sleep as { avgHours: number; avgQuality: number }
-    lines.push(`Sleep: ${sleep.length} nights, avg ${sl.avgHours}h, quality ${sl.avgQuality}/5`)
-    for (const s of sleep) lines.push(formatSleepLine(s))
+    const sl = totals.sleep as { avgHours: number; avgQuality: number; nights: number; items: Array<{ date: string }> }
+    lines.push(`Sleep: ${sl.nights} nights, avg ${sl.avgHours}h, quality ${sl.avgQuality}/5`)
+    const sleepByDay = new Map<string, typeof sleep>()
+    for (const s of sleep) {
+      const key = dayKey(s.date)
+      const bucket = sleepByDay.get(key)
+      if (bucket) bucket.push(s)
+      else sleepByDay.set(key, [s])
+    }
+    for (const items of sleepByDay.values()) {
+      const primary = resolveSleepNightEntry(items) ?? items[0]!
+      lines.push(formatSleepLine(primary))
+    }
   } else {
     lines.push("Sleep: (none)")
   }

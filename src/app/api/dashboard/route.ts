@@ -9,7 +9,7 @@ import {
   utcCalendarDayRangeInclusive,
 } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
-import { sleepDurationHours } from "@/lib/sleepDuration"
+import { dailySleepDurationHours, pickPrimarySleepEntry } from "@/lib/sleepDuration"
 import { computeReadinessScore } from "@/lib/readiness-score"
 import { deriveSleepScore, qualityToScore } from "@/lib/sleep-score"
 import {
@@ -371,11 +371,7 @@ export async function GET(req: NextRequest) {
     const legacyWorkoutCycle = totalsForDates(workoutEntries, trackingPeriod.dates, (items) => items.length)
     const sessionWorkoutCycle = totalsForDates(workoutSessions, trackingPeriod.dates, (items) => items.length)
     const workoutCycle = legacyWorkoutCycle.map((value, index) => value + sessionWorkoutCycle[index])
-    const sleepLast7 = dailyTotals(sleepEntries, (items) => {
-      if (!items.length) return 0
-      const hrs = items.map((e) => sleepDurationHours(e.bedtime, e.wakeTime))
-      return Math.round((hrs.reduce((s, v) => s + v, 0) / hrs.length) * 10) / 10
-    })
+    const sleepLast7 = dailyTotals(sleepEntries, (items) => dailySleepDurationHours(items))
     const peptidesLast7 = dailyTotals(peptideEntries, (items) =>
       items.reduce((s, e) => s + e.doseMg, 0)
     )
@@ -396,19 +392,17 @@ export async function GET(req: NextRequest) {
 
     const sleepScoreLast7 = dailyTotals(sleepEntries, (items) => {
       if (!items.length) return 0
-      const scores = items.map((e) => {
-        if (e.score != null && Number.isFinite(e.score)) return e.score
-        const derived = deriveSleepScore({
-          remMinutes: e.remMinutes,
-          lightMinutes: e.lightMinutes,
-          deepMinutes: e.deepMinutes,
-          awakeMinutes: e.awakeMinutes,
-          efficiency: e.efficiency,
-        })
-        if (derived != null) return derived
-        return qualityToScore(e.quality)
+      const primary = pickPrimarySleepEntry(items) ?? items[0]
+      if (primary.score != null && Number.isFinite(primary.score)) return primary.score
+      const derived = deriveSleepScore({
+        remMinutes: primary.remMinutes,
+        lightMinutes: primary.lightMinutes,
+        deepMinutes: primary.deepMinutes,
+        awakeMinutes: primary.awakeMinutes,
+        efficiency: primary.efficiency,
       })
-      return scores.reduce((s, v) => s + v, 0) / scores.length
+      if (derived != null) return derived
+      return qualityToScore(primary.quality)
     })
 
     const hrvBaselineSamples = vitalBaselineEntries
