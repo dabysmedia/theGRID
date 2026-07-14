@@ -2,6 +2,7 @@ import "server-only"
 
 import { prisma } from "@/lib/prisma"
 import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
+import { dailySleepDurationHours, pickPrimarySleepEntry } from "@/lib/sleepDuration"
 import {
   isValidTimeZone,
   localDayKey,
@@ -278,12 +279,22 @@ export async function buildUserContext(
   const todaysCarbs = sum(todaysMeals.map((m) => m.carbs ?? 0))
   const todaysFat = sum(todaysMeals.map((m) => m.fat ?? 0))
 
-  const sleepHrsByDay = sleepEntries
-    .map((e) => ({
-      key: ymd(e.date),
-      hrs: hoursBetween(e.bedtime, e.wakeTime),
-      qual: e.quality,
-    }))
+  const sleepByDay = new Map<string, typeof sleepEntries>()
+  for (const e of sleepEntries) {
+    const key = ymd(e.date)
+    const bucket = sleepByDay.get(key)
+    if (bucket) bucket.push(e)
+    else sleepByDay.set(key, [e])
+  }
+  const sleepHrsByDay = Array.from(sleepByDay.entries())
+    .map(([key, items]) => {
+      const primary = pickPrimarySleepEntry(items)
+      return {
+        key,
+        hrs: dailySleepDurationHours(items),
+        qual: primary?.quality ?? items[0]?.quality ?? 0,
+      }
+    })
     .filter((s) => s.hrs > 0)
   const sleep7AvgHrs = avg(sleepHrsByDay.map((s) => s.hrs))
   const sleep7AvgQual = avg(sleepHrsByDay.map((s) => s.qual))
@@ -623,12 +634,6 @@ function avg(values: number[]): number {
   const filtered = values.filter((v) => Number.isFinite(v))
   if (filtered.length === 0) return 0
   return filtered.reduce((s, v) => s + v, 0) / filtered.length
-}
-
-function hoursBetween(bedtime: Date, wakeTime: Date): number {
-  const ms = wakeTime.getTime() - bedtime.getTime()
-  if (!Number.isFinite(ms) || ms <= 0) return 0
-  return ms / 3_600_000
 }
 
 /**

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { startOfMonth, endOfMonth, eachDayOfInterval, format, addDays } from "date-fns"
 import { kmToMiles, runKmToStepsFromRun } from "@/lib/units"
-import { sleepDurationHours } from "@/lib/sleepDuration"
+import { dailySleepDurationHours } from "@/lib/sleepDuration"
 import { resolveUserId, UserError } from "@/lib/current-user"
 import {
   DEFAULT_STEPS_TIMEZONE,
@@ -98,9 +98,17 @@ export async function GET(req: NextRequest) {
       workoutsByDay.set(dateKey(s.date), (workoutsByDay.get(dateKey(s.date)) ?? 0) + 1)
     }
 
-    const sleepByDay = new Map<string, number>()
+    const sleepByDay = new Map<string, Array<{ bedtime: Date; wakeTime: Date; minutesAsleep: number | null }>>()
     for (const e of sleeps) {
-      sleepByDay.set(dateKey(e.date), sleepDurationHours(e.bedtime, e.wakeTime))
+      const key = dateKey(e.date)
+      const bucket = sleepByDay.get(key)
+      const row = { bedtime: e.bedtime, wakeTime: e.wakeTime, minutesAsleep: e.minutesAsleep }
+      if (bucket) bucket.push(row)
+      else sleepByDay.set(key, [row])
+    }
+    const sleepHoursByDay = new Map<string, number>()
+    for (const [key, items] of sleepByDay) {
+      sleepHoursByDay.set(key, dailySleepDurationHours(items))
     }
 
     const alcoholByDay = new Map<string, number>()
@@ -132,7 +140,7 @@ export async function GET(req: NextRequest) {
         runMiles: Math.round((runDistByDay.get(k) ?? 0) * 100) / 100,
         pace: bestPace ? Math.round(bestPace * 100) / 100 : null,
         workouts: workoutsByDay.get(k) ?? 0,
-        sleepHrs: sleepByDay.get(k) ? Math.round(sleepByDay.get(k)! * 10) / 10 : null,
+        sleepHrs: sleepHoursByDay.get(k) != null ? Math.round(sleepHoursByDay.get(k)! * 10) / 10 : null,
         alcohol: alcoholByDay.get(k) ?? 0,
         bowel: bowelByDay.get(k) ?? 0,
         weight: weightByDay.get(k) ?? null,
