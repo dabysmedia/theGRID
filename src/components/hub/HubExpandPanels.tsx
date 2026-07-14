@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { addDays, format, startOfWeek } from "date-fns"
 import {
+  Activity,
   ChevronDown,
   ChevronLeft,
   Dumbbell,
@@ -452,6 +453,7 @@ export function HubVitalsExpand({
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading")
+  const [loadReloadKey, setLoadReloadKey] = useState(0)
   const [completedSessions, setCompletedSessions] = useState<WorkoutSessionLike[]>([])
 
   const { weekStart, weekEnd } = useMemo(() => {
@@ -462,6 +464,21 @@ export function HubVitalsExpand({
       weekEnd: formatDate(addDays(start, 6)),
     }
   }, [activeDate])
+
+  useEffect(() => {
+    const refreshLoad = () => setLoadReloadKey((key) => key + 1)
+    const refreshVisibleLoad = () => {
+      if (document.visibilityState === "visible") refreshLoad()
+    }
+    window.addEventListener("grid:log-saved", refreshLoad)
+    window.addEventListener("focus", refreshLoad)
+    document.addEventListener("visibilitychange", refreshVisibleLoad)
+    return () => {
+      window.removeEventListener("grid:log-saved", refreshLoad)
+      window.removeEventListener("focus", refreshLoad)
+      document.removeEventListener("visibilitychange", refreshVisibleLoad)
+    }
+  }, [])
 
   const muscleStats = useMemo(
     () => aggregateMuscleStats(completedSessions, weekStart, weekEnd),
@@ -524,7 +541,7 @@ export function HubVitalsExpand({
     return () => {
       cancelled = true
     }
-  }, [activeDate])
+  }, [activeDate, loadReloadKey])
 
   async function syncNow() {
     setSyncing(true)
@@ -583,26 +600,62 @@ export function HubVitalsExpand({
   )
   const zones = data?.zones ?? []
   const totalZoneMinutes = zones.reduce((s, z) => s + z.minutes, 0)
+  const readinessScore =
+    readiness != null && Number.isFinite(readiness)
+      ? Math.max(0, Math.min(100, Math.round(readiness)))
+      : null
+  const loadSessionCount = useMemo(
+    () =>
+      completedSessions.filter((session) => {
+        const dateKey = session.date.split("T")[0]
+        return dateKey >= weekStart && dateKey <= weekEnd
+      }).length,
+    [completedSessions, weekEnd, weekStart],
+  )
+  const trainedSegmentCount = Object.keys(segmentScores ?? {}).length
 
   return (
-    <div className="space-y-4 px-0.5">
-      <div className="min-w-0">
-          <p className="type-hud-subsection">Vitals</p>
-          <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-            {band ? `${READINESS_BAND_LABEL[band]} · ` : ""}
-            HRV {dash(hrvMs != null ? Math.round(hrvMs) : null, " ms")}
-            {" · "}
-            RHR {dash(rhr, " bpm")}
-            {readiness != null ? ` · readiness ${Math.round(readiness)}` : ""}
-          </p>
+    <div className="space-y-5 px-0.5 sm:space-y-6">
+      <div className="relative min-w-0 overflow-hidden rounded-2xl border border-[#f43f5e]/15 bg-gradient-to-br from-[#f43f5e]/[0.09] via-white/[0.025] to-transparent p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="type-hud-subsection">Vitals</p>
+            <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
+              {band ? `${READINESS_BAND_LABEL[band]} · ` : ""}
+              HRV {dash(hrvMs != null ? Math.round(hrvMs) : null, " ms")}
+              {" · "}
+              RHR {dash(rhr, " bpm")}
+              {readiness != null ? ` · readiness ${Math.round(readiness)}` : ""}
+            </p>
+          </div>
+          <div
+            className="grid size-[4.75rem] shrink-0 place-items-center rounded-full p-[2px]"
+            style={{
+              background: `conic-gradient(${accent} ${(readinessScore ?? 0) * 3.6}deg, rgba(255,255,255,0.07) 0deg)`,
+              boxShadow: `0 0 24px ${accent}20`,
+            }}
+            aria-label={readinessScore != null ? `Readiness ${readinessScore} out of 100` : "Readiness unavailable"}
+          >
+            <div className="grid size-full place-items-center rounded-full border border-white/[0.06] bg-[#0a0d12]/95 text-center">
+              <div>
+                <p className="font-heading text-2xl leading-none tabular-nums" style={{ color: accent }}>
+                  {readinessScore ?? "—"}
+                </p>
+                <p className="mt-1 text-[7px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/45">
+                  readiness
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
         <button
           type="button"
           disabled={syncing}
           onClick={() => void syncNow()}
-          className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-[#f43f5e]/30 hover:bg-[#f43f5e]/[0.06] hover:text-rose-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f43f5e]/30 disabled:opacity-50"
+          className="inline-flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-[#f43f5e]/20 bg-[#f43f5e]/[0.07] px-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-100/80 transition-colors hover:border-[#f43f5e]/35 hover:bg-[#f43f5e]/[0.11] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f43f5e]/30 disabled:opacity-50 sm:w-auto"
         >
           <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} aria-hidden />
           {syncing ? "Syncing…" : "Sync Google Health"}
@@ -614,7 +667,7 @@ export function HubVitalsExpand({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
         {[
           {
             label: "HRV",
@@ -637,11 +690,11 @@ export function HubVitalsExpand({
         ].map((cell) => (
           <div
             key={cell.label}
-            className="min-w-0 rounded-xl border border-white/[0.06] bg-white/[0.02] px-2.5 py-2.5"
+            className="min-w-0 rounded-2xl border border-white/[0.07] bg-white/[0.025] px-3.5 py-3.5"
           >
             <p className="type-hud-micro text-muted-foreground/55">{cell.label}</p>
             <p
-              className="mt-0.5 type-hud-stat-sm tabular-nums"
+              className="mt-1 font-heading text-xl leading-none tabular-nums"
               style={{ color: cell.tone, textShadow: `0 0 12px ${cell.tone}33` }}
             >
               {cell.value}
@@ -658,14 +711,27 @@ export function HubVitalsExpand({
         aria-hidden
       />
 
-      <div className="space-y-2">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="type-hud-caption">Load · this week</p>
-          {loadStatus === "ready" ? (
-            <span className="type-hud-micro tabular-nums text-muted-foreground/50">
+      <div className="space-y-3 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid size-9 shrink-0 place-items-center rounded-xl border border-[#c4d632]/15 bg-[#c4d632]/[0.07]">
+              <Dumbbell className="size-4 text-[#dce95c]/75" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground/90">Training load</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground/55">Completed sets mapped by muscle</p>
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            <span className="text-[10px] font-semibold tabular-nums text-muted-foreground/60">
               {weekStart.slice(5).replace("-", "/")} – {weekEnd.slice(5).replace("-", "/")}
             </span>
-          ) : null}
+            {loadStatus === "ready" ? (
+              <p className="mt-0.5 text-[9px] uppercase tracking-[0.1em] text-muted-foreground/40">
+                {loadSessionCount} workout{loadSessionCount === 1 ? "" : "s"}
+              </p>
+            ) : null}
+          </div>
         </div>
         {loadStatus === "loading" ? (
           <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
@@ -677,37 +743,38 @@ export function HubVitalsExpand({
             Couldn&apos;t load muscle map.
           </p>
         ) : null}
-        {loadStatus === "ready" ? (
+        {loadStatus === "ready" && segmentScores && topMuscles.length > 0 ? (
           <>
             <WorkoutMuscleMap
               segmentScores={segmentScores}
-              className="[&_.anatomy-figure-chassis]:border-white/[0.06] [&_.anatomy-figure-chassis]:bg-white/[0.02]"
+              className="[&_.anatomy-figure-chassis]:border-white/[0.06] [&_.anatomy-figure-chassis]:bg-black/10"
             />
-            {topMuscles.length > 0 ? (
-              <div className="space-y-1.5 pt-1">
-                <p className="type-hud-micro text-muted-foreground/50">Top load</p>
-                <ul className="space-y-1">
-                  {topMuscles.map((row) => (
-                    <li
-                      key={row.muscle}
-                      className="flex items-baseline justify-between gap-2 type-hud-caption normal-case tracking-normal"
-                    >
-                      <span className="min-w-0 truncate text-foreground/85">{row.muscle}</span>
-                      <span className="shrink-0 tabular-nums text-muted-foreground/60">
-                        {Number.isInteger(row.sets) ? row.sets : row.sets.toFixed(1)} sets
-                        {" · "}
-                        {formatVolumeLb(row.volumeLb)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
-                No completed work this week yet — finish a session to light up the map.
-              </p>
-            )}
+            <div className="grid grid-cols-2 gap-2">
+              {topMuscles.slice(0, 4).map((row) => (
+                <div key={row.muscle} className="min-w-0 rounded-xl border border-white/[0.06] bg-black/10 px-3 py-2.5">
+                  <p className="truncate text-[11px] font-semibold text-foreground/85">{row.muscle}</p>
+                  <p className="mt-1 text-[10px] tabular-nums text-muted-foreground/55">
+                    {Number.isInteger(row.sets) ? row.sets : row.sets.toFixed(1)} sets · {formatVolumeLb(row.volumeLb)}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="text-center text-[9px] uppercase tracking-[0.12em] text-muted-foreground/40">
+              {trainedSegmentCount} body regions carrying load
+            </p>
           </>
+        ) : loadStatus === "ready" ? (
+          <div className="flex items-center gap-3 rounded-xl border border-dashed border-white/[0.08] bg-black/10 px-4 py-5">
+            <div className="grid size-11 shrink-0 place-items-center rounded-full bg-white/[0.035]">
+              <Activity className="size-5 text-muted-foreground/40" aria-hidden />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground/80">No completed sets this week</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/55">
+                Finish a workout and the muscles you trained will light up here automatically.
+              </p>
+            </div>
+          </div>
         ) : null}
       </div>
 
@@ -724,12 +791,17 @@ export function HubVitalsExpand({
         </p>
       ) : (
         <>
-          <div className="space-y-2">
+          <div className="space-y-3 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
             <div className="flex items-center justify-between gap-2">
-              <p className="type-hud-caption flex items-center gap-1.5">
-                <Waves className="h-3 w-3" style={{ color: VITALS_COLOR }} aria-hidden />
-                All-day heart rate
-              </p>
+              <div className="flex items-center gap-2.5">
+                <div className="grid size-9 place-items-center rounded-xl border border-[#f43f5e]/15 bg-[#f43f5e]/[0.07]">
+                  <Waves className="size-4 text-[#fb7185]/80" aria-hidden />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground/90">Heart rate today</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground/55">Five-minute samples across the day</p>
+                </div>
+              </div>
               <span className="type-hud-micro tabular-nums text-muted-foreground/50">
                 {hrChartData.length > 0 ? `${hrChartData.length} samples` : "No samples"}
               </span>
@@ -739,7 +811,11 @@ export function HubVitalsExpand({
                 Sync Google Health for 5-minute HR samples
               </p>
             ) : (
-              <div className="h-40 min-w-0 sm:h-44">
+              <div
+                className="chart-touch-safe h-52 min-w-0 select-none [-webkit-touch-callout:none] sm:h-56"
+                onPointerDown={(event) => event.preventDefault()}
+                onContextMenu={(event) => event.preventDefault()}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={hrChartData} margin={{ top: 6, right: 4, left: -18, bottom: 0 }}>
                     <defs>
@@ -755,7 +831,7 @@ export function HubVitalsExpand({
                     />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                      tick={{ fontSize: 9, fill: "var(--muted-foreground)", fontFamily: "var(--font-mono)" }}
                       axisLine={false}
                       tickLine={false}
                       interval="preserveStartEnd"
@@ -785,8 +861,9 @@ export function HubVitalsExpand({
                       type="monotone"
                       dataKey="bpm"
                       stroke={VITALS_COLOR}
-                      strokeWidth={2}
+                      strokeWidth={2.5}
                       fill="url(#hubHrAreaFill)"
+                      activeDot={{ r: 4 }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -794,8 +871,11 @@ export function HubVitalsExpand({
             )}
           </div>
 
-          <div className="space-y-2">
-            <p className="type-hud-caption">Heart-rate zones</p>
+          <div className="space-y-3 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground/90">Heart-rate zones</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground/55">How your cardiovascular effort was distributed</p>
+            </div>
             {zones.length === 0 ? (
               <p className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] px-3 py-3 text-center text-[12px] text-muted-foreground/60">
                 No zone data for this day yet
@@ -815,7 +895,7 @@ export function HubVitalsExpand({
                           {z.minutes} min
                         </span>
                       </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/30">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted/30">
                         <div
                           className="h-full rounded-full transition-all duration-700 ease-out"
                           style={{
@@ -831,14 +911,21 @@ export function HubVitalsExpand({
             )}
           </div>
 
-          <div className="space-y-2">
-            <p className="type-hud-caption">14-day RHR &amp; HRV</p>
+          <div className="space-y-3 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground/90">Recovery trend</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground/55">Resting heart rate and HRV · 14 days</p>
+            </div>
             {!hasTrend ? (
               <p className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] px-3 py-3 text-center text-[12px] text-muted-foreground/60">
                 Sync a couple of days to unlock trends
               </p>
             ) : (
-              <div className="h-36 min-w-0 sm:h-40">
+              <div
+                className="chart-touch-safe h-48 min-w-0 select-none [-webkit-touch-callout:none] sm:h-52"
+                onPointerDown={(event) => event.preventDefault()}
+                onContextMenu={(event) => event.preventDefault()}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={trendChartData} margin={{ top: 6, right: 4, left: -18, bottom: 0 }}>
                     <CartesianGrid
@@ -882,8 +969,9 @@ export function HubVitalsExpand({
                       dataKey="rhr"
                       name="RHR"
                       stroke={VITALS_COLOR}
-                      strokeWidth={2}
+                      strokeWidth={2.25}
                       dot={{ r: 2 }}
+                      activeDot={{ r: 4 }}
                       connectNulls
                     />
                     <Line
@@ -892,8 +980,9 @@ export function HubVitalsExpand({
                       dataKey="hrv"
                       name="HRV"
                       stroke="oklch(0.72 0.04 250)"
-                      strokeWidth={2}
+                      strokeWidth={2.25}
                       dot={{ r: 2 }}
+                      activeDot={{ r: 4 }}
                       connectNulls
                     />
                   </LineChart>

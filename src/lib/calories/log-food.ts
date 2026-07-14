@@ -14,6 +14,7 @@ export interface SavedMeal {
   name: string
   /** Single tag or comma-separated tags (breakfast, lunch, …) */
   mealType: string
+  foodCategory: import("@/lib/calories/saved-food-category").SavedFoodCategory
   calories: number
   protein: number | null
   carbs: number | null

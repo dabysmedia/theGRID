@@ -3536,6 +3536,7 @@ function WorkoutsPageInner() {
         /* Summary is best-effort; never block finishing the workout. */
       }
       setActiveTemplateId(null)
+      window.dispatchEvent(new CustomEvent("grid:log-saved"))
       router.push("/")
     }
   }

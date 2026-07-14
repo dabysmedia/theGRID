@@ -416,6 +416,8 @@ model SavedMeal {
   name      String
   /// One tag, or comma-separated tags: breakfast, lunch, dinner, snack
   mealType  String
+  /// Food format used to organize the saved library (shake, bar, snack, meal, etc.).
+  foodCategory String?
   calories  Int
   protein   Float?
   carbs     Float?
@@ -426,6 +428,7 @@ model SavedMeal {
   createdAt DateTime @default(now())
 
   @@index([mealType])
+  @@index([foodCategory])
   @@index([userId])
 }
 

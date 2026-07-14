@@ -24,6 +24,9 @@ import {
   type PendingSavedMealDelete,
   type SavedMeal,
 } from "@/lib/calories/log-food"
+import {
+  type SavedFoodCategory,
+} from "@/lib/calories/saved-food-category"
 
 export interface UseLogFoodDialogOptions {
   open: boolean
@@ -65,6 +68,9 @@ export function useLogFoodDialog({
   const [lastAddedDraftId, setLastAddedDraftId] = useState<string | null>(null)
 
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([])
+  const [savedMealSearch, setSavedMealSearch] = useState("")
+  const [savedMealCategory, setSavedMealCategory] =
+    useState<"all" | SavedFoodCategory>("all")
   const [showCreateMeal, setShowCreateMeal] = useState(false)
   const [newMealName, setNewMealName] = useState("")
   const [newMealCal, setNewMealCal] = useState("")
@@ -72,6 +78,7 @@ export function useLogFoodDialog({
   const [newMealCarbs, setNewMealCarbs] = useState("")
   const [newMealFat, setNewMealFat] = useState("")
   const [newMealTags, setNewMealTags] = useState<string[]>([])
+  const [newMealCategory, setNewMealCategory] = useState<SavedFoodCategory>("meal")
   const [editingSavedMealId, setEditingSavedMealId] = useState<string | null>(null)
   const [editSavedName, setEditSavedName] = useState("")
   const [editSavedCal, setEditSavedCal] = useState("")
@@ -79,6 +86,7 @@ export function useLogFoodDialog({
   const [editSavedCarbs, setEditSavedCarbs] = useState("")
   const [editSavedFat, setEditSavedFat] = useState("")
   const [editSavedTags, setEditSavedTags] = useState<string[]>([])
+  const [editSavedCategory, setEditSavedCategory] = useState<SavedFoodCategory>("meal")
   const [editSavedError, setEditSavedError] = useState<string | null>(null)
   const [savingSavedMealEdit, setSavingSavedMealEdit] = useState(false)
   const [showSavePrompt, setShowSavePrompt] = useState(false)
@@ -134,6 +142,8 @@ export function useLogFoodDialog({
       setShowEstimateMacros(false)
       setEditingSavedMealId(null)
       setEditSavedError(null)
+      setSavedMealSearch("")
+      setSavedMealCategory("all")
       return
     }
     if (!editingEntry) {
@@ -174,9 +184,24 @@ export function useLogFoodDialog({
 
   const displayedSavedMeals = useMemo(() => {
     const sorted = [...savedMeals].sort((a, b) => b.useCount - a.useCount || a.name.localeCompare(b.name))
-    if (!mealType) return sorted
-    const mt = mealType.toLowerCase()
-    return sorted.filter((m) => savedMealTagList(m).includes(mt))
+    const query = savedMealSearch.trim().toLowerCase()
+    const mt = mealType?.toLowerCase()
+    return sorted.filter((meal) => {
+      if (mt && !savedMealTagList(meal).includes(mt)) return false
+      if (savedMealCategory !== "all" && meal.foodCategory !== savedMealCategory) return false
+      if (query && !meal.name.toLowerCase().includes(query)) return false
+      return true
+    })
+  }, [savedMeals, mealType, savedMealCategory, savedMealSearch])
+
+  const savedMealCategoryCounts = useMemo(() => {
+    const counts = new Map<SavedFoodCategory, number>()
+    const mt = mealType?.toLowerCase()
+    for (const meal of savedMeals) {
+      if (mt && !savedMealTagList(meal).includes(mt)) continue
+      counts.set(meal.foodCategory, (counts.get(meal.foodCategory) ?? 0) + 1)
+    }
+    return counts
   }, [savedMeals, mealType])
 
   const estimateCalDisplay =
@@ -431,6 +456,7 @@ export function useLogFoodDialog({
     setEditSavedCarbs(meal.carbs != null ? String(meal.carbs) : "")
     setEditSavedFat(meal.fat != null ? String(meal.fat) : "")
     setEditSavedTags(savedMealTagList(meal))
+    setEditSavedCategory(meal.foodCategory)
   }
 
   function cancelEditSavedMeal() {
@@ -457,6 +483,7 @@ export function useLogFoodDialog({
         body: JSON.stringify({
           name: editSavedName.trim(),
           mealTags: editSavedTags,
+          foodCategory: editSavedCategory,
           calories: editSavedCal,
           protein: editSavedProtein || null,
           carbs: editSavedCarbs || null,
@@ -529,6 +556,7 @@ export function useLogFoodDialog({
       body: JSON.stringify({
         name: newMealName.trim(),
         mealTags: newMealTags,
+        foodCategory: newMealCategory,
         calories: newMealCal,
         protein: newMealProtein || null,
         carbs: newMealCarbs || null,
@@ -556,6 +584,7 @@ export function useLogFoodDialog({
     setNewMealCarbs("")
     setNewMealFat("")
     setNewMealTags(mealType ? [mealType] : [])
+    setNewMealCategory(mealType === "snack" ? "snack" : "meal")
   }
 
   async function handleSaveCurrentAsFrequent() {
@@ -618,6 +647,11 @@ export function useLogFoodDialog({
     updateDraftItemQuantity,
     adjustDraftItemQuantity,
     savedMeals,
+    savedMealSearch,
+    setSavedMealSearch,
+    savedMealCategory,
+    setSavedMealCategory,
+    savedMealCategoryCounts,
     showCreateMeal,
     setShowCreateMeal,
     newMealName,
@@ -632,6 +666,8 @@ export function useLogFoodDialog({
     setNewMealFat,
     newMealTags,
     setNewMealTags,
+    newMealCategory,
+    setNewMealCategory,
     editingSavedMealId,
     setEditingSavedMealId,
     editSavedName,
@@ -646,6 +682,8 @@ export function useLogFoodDialog({
     setEditSavedFat,
     editSavedTags,
     setEditSavedTags,
+    editSavedCategory,
+    setEditSavedCategory,
     editSavedError,
     savingSavedMealEdit,
     showSavePrompt,

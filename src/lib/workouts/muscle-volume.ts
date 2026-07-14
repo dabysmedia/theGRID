@@ -35,6 +35,8 @@ export interface MuscleWeekStats {
 /** Coarse library muscle names → SVG slugs (both sides when bilateral). */
 const MUSCLE_SLUGS: Record<string, string[]> = {
   chest: ["chest"],
+  "upper chest": ["chest"],
+  "lower chest": ["chest"],
   back: ["upper-back", "lower-back", "trapezius"],
   lats: ["upper-back"],
   "upper back": ["upper-back"],
@@ -43,7 +45,11 @@ const MUSCLE_SLUGS: Record<string, string[]> = {
   erectors: ["lower-back"],
   shoulders: ["deltoids"],
   deltoids: ["deltoids"],
+  "front delts": ["deltoids"],
+  "rear delts": ["deltoids"],
+  "side delts": ["deltoids"],
   biceps: ["biceps"],
+  brachialis: ["biceps"],
   triceps: ["triceps"],
   arms: ["biceps", "triceps", "forearm"],
   forearms: ["forearm"],
@@ -63,6 +69,9 @@ const MUSCLE_SLUGS: Record<string, string[]> = {
   trapezius: ["trapezius"],
   traps: ["trapezius"],
   adductors: ["adductors"],
+  "hip adductors": ["adductors"],
+  abductors: ["gluteal"],
+  "hip abductors": ["gluteal"],
   cardio: [],
 }
 

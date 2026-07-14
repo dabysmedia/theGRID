@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId, UserError } from "@/lib/current-user"
+import {
+  inferSavedFoodCategory,
+  isSavedFoodCategory,
+  type SavedFoodCategory,
+} from "@/lib/calories/saved-food-category"
 
 const ALLOWED_MEAL_TAGS = new Set(["breakfast", "lunch", "dinner", "snack"])
 
@@ -31,6 +36,14 @@ function normalizeMealTagsFromBody(body: Record<string, unknown>): string[] | nu
   return null
 }
 
+function normalizeFoodCategory(
+  body: Record<string, unknown>,
+  fallback: { name: string; mealType: string; calories: number },
+): SavedFoodCategory {
+  if (isSavedFoodCategory(body.foodCategory)) return body.foodCategory
+  return inferSavedFoodCategory(fallback)
+}
+
 export async function GET(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
@@ -41,13 +54,34 @@ export async function GET(req: NextRequest) {
       where: { userId },
       orderBy: { useCount: "desc" },
     })
+    const categorizedMeals = meals.map((meal) => ({
+      ...meal,
+      foodCategory: isSavedFoodCategory(meal.foodCategory)
+        ? meal.foodCategory
+        : inferSavedFoodCategory(meal),
+    }))
+    const uncategorized = categorizedMeals.filter(
+      (meal, index) => meal.foodCategory !== meals[index].foodCategory,
+    )
+    if (uncategorized.length > 0) {
+      await Promise.allSettled(
+        uncategorized.map((meal) =>
+          prisma.savedMeal.update({
+            where: { id: meal.id },
+            data: { foodCategory: meal.foodCategory },
+          }),
+        ),
+      )
+    }
     if (mealType) {
       const mt = mealType.trim().toLowerCase()
       if (ALLOWED_MEAL_TAGS.has(mt)) {
-        return NextResponse.json(meals.filter((m) => splitStoredMealTags(m.mealType).includes(mt)))
+        return NextResponse.json(
+          categorizedMeals.filter((meal) => splitStoredMealTags(meal.mealType).includes(mt)),
+        )
       }
     }
-    return NextResponse.json(meals)
+    return NextResponse.json(categorizedMeals)
   } catch (e) {
     if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
     return NextResponse.json({ error: "Failed to fetch" }, { status: 500 })
@@ -76,10 +110,12 @@ export async function POST(req: NextRequest) {
     if (!Number.isFinite(calories) || calories < 0) {
       return NextResponse.json({ error: "Valid calories are required." }, { status: 400 })
     }
+    const mealType = tags.join(",")
     const meal = await prisma.savedMeal.create({
       data: {
         name,
-        mealType: tags.join(","),
+        mealType,
+        foodCategory: normalizeFoodCategory(body, { name, mealType, calories }),
         calories,
         protein: safeOptionalFloat(body.protein),
         carbs: safeOptionalFloat(body.carbs),
@@ -128,11 +164,13 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Valid calories are required." }, { status: 400 })
     }
 
+    const mealType = tags.join(",")
     const meal = await prisma.savedMeal.update({
       where: { id },
       data: {
         name,
-        mealType: tags.join(","),
+        mealType,
+        foodCategory: normalizeFoodCategory(body, { name, mealType, calories }),
         calories,
         protein: safeOptionalFloat(body.protein),
         carbs: safeOptionalFloat(body.carbs),

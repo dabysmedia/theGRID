@@ -30,6 +30,11 @@ import {
   PhotoCalorieEstimator,
 } from "@/components/calories/PhotoCalorieEstimator"
 import { mealTypes, savedMealTagList, draftMealItemTotals } from "@/lib/calories/log-food"
+import {
+  SAVED_FOOD_CATEGORIES,
+  savedFoodCategoryLabel,
+  type SavedFoodCategory,
+} from "@/lib/calories/saved-food-category"
 import { useLogFoodDialog, type UseLogFoodDialogOptions } from "@/components/calories/useLogFoodDialog"
 
 export type LogFoodDialogProps = UseLogFoodDialogOptions
@@ -134,7 +139,10 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
             )}
           </div>
 
-          <div className="relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+          <div
+            key={`${s.logFoodMode}-${s.showCreateMeal ? "create" : "browse"}-${s.editingEntry ? "edit" : "log"}`}
+            className="relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
+          >
             <div className="flex min-h-full flex-col gap-4">
               {!s.editingEntry && s.draftMealItems.length > 0 && (
                 <DraftMealsSection s={s} />
@@ -495,17 +503,22 @@ function DraftMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
 }
 
 function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
+  const filteredLibraryCount = Array.from(s.savedMealCategoryCounts.values()).reduce(
+    (sum, count) => sum + count,
+    0,
+  )
+
   return (
     <div className="flex min-h-0 flex-1 flex-col animate-in fade-in duration-200">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/45">
-            Saved meals
+            Saved foods
           </p>
           <p className="mt-0.5 text-[11px] text-muted-foreground/55">
             {s.mealType
-              ? `Showing ${s.mealType}`
-              : "Tap one to add · filter with meal chips above"}
+              ? `Available for ${s.mealType}`
+              : `${s.savedMeals.length} saved · tap one to add`}
           </p>
         </div>
         <button
@@ -514,11 +527,14 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
             s.setSaveMealError(null)
             s.setEditingSavedMealId(null)
             if (!s.showCreateMeal) s.setNewMealTags(s.mealType ? [s.mealType] : [])
+            if (!s.showCreateMeal) {
+              s.setNewMealCategory(s.mealType === "snack" ? "snack" : "meal")
+            }
             s.setShowCreateMeal(!s.showCreateMeal)
           }}
           className="min-h-10 shrink-0 rounded-xl border border-primary/25 bg-primary/10 px-3.5 py-2 text-xs font-semibold text-primary transition-colors hover:border-primary/40 hover:bg-primary/18 active:scale-[0.98] touch-manipulation"
         >
-          {s.showCreateMeal ? "Cancel" : "+ New"}
+          {s.showCreateMeal ? "Cancel" : "+ Add food"}
         </button>
       </div>
 
@@ -534,14 +550,27 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
             }
           }}
         >
+          <div>
+            <p className="text-sm font-semibold text-foreground/90">Add a saved food</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground/55">
+              Give it a type so it stays easy to find later.
+            </p>
+          </div>
           <Input
-            placeholder="Meal name"
+            placeholder="Food name"
             value={s.newMealName}
             onChange={(e) => s.setNewMealName(e.target.value)}
             className="h-10 bg-background/40 border-primary/15 text-sm"
           />
+          <FoodCategoryPicker
+            value={s.newMealCategory}
+            onChange={s.setNewMealCategory}
+            label="What kind of food is it?"
+          />
           <div className="space-y-1">
-            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">Tags</Label>
+            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">
+              When do you usually eat it?
+            </Label>
             <div className="flex flex-wrap gap-1.5">
               {mealTypes.map((m) => {
                 const on = s.newMealTags.includes(m)
@@ -591,17 +620,81 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
           </div>
           {s.saveMealError && <p className="text-[10px] text-destructive" role="alert">{s.saveMealError}</p>}
           <Button type="button" variant="glass" size="sm" className="w-full h-10 text-sm" onClick={() => void s.handleCreateMeal()}>
-            Save
+            Save food
           </Button>
+        </div>
+      )}
+
+      {s.savedMeals.length > 0 && !s.showCreateMeal && (
+        <div className="mb-3 space-y-2.5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/45" />
+            <Input
+              type="search"
+              value={s.savedMealSearch}
+              onChange={(event) => s.setSavedMealSearch(event.target.value)}
+              placeholder="Search saved foods"
+              aria-label="Search saved foods"
+              className="h-11 border-white/[0.08] bg-background/35 pl-9 pr-9 text-sm"
+            />
+            {s.savedMealSearch ? (
+              <button
+                type="button"
+                onClick={() => s.setSavedMealSearch("")}
+                aria-label="Clear saved food search"
+                className="absolute right-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground/50 hover:bg-white/[0.05] hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            ) : null}
+          </div>
+          <div
+            className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            aria-label="Saved food categories"
+          >
+            <button
+              type="button"
+              onClick={() => s.setSavedMealCategory("all")}
+              className={cn(
+                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors touch-manipulation",
+                s.savedMealCategory === "all"
+                  ? "border-primary/35 bg-primary/15 text-primary"
+                  : "border-white/[0.07] bg-white/[0.025] text-muted-foreground/60",
+              )}
+            >
+              All
+              <span className="tabular-nums opacity-60">{filteredLibraryCount}</span>
+            </button>
+            {SAVED_FOOD_CATEGORIES.map((category) => {
+              const count = s.savedMealCategoryCounts.get(category.id) ?? 0
+              if (count === 0) return null
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => s.setSavedMealCategory(category.id)}
+                  className={cn(
+                    "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors touch-manipulation",
+                    s.savedMealCategory === category.id
+                      ? "border-primary/35 bg-primary/15 text-primary"
+                      : "border-white/[0.07] bg-white/[0.025] text-muted-foreground/60",
+                  )}
+                >
+                  {category.label}
+                  <span className="tabular-nums opacity-60">{count}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
       {s.savedMeals.length === 0 && !s.showCreateMeal && (
         <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border/30 px-6 py-10 text-center">
           <Bookmark className="mb-3 h-8 w-8 text-muted-foreground/30" />
-          <p className="text-sm font-medium text-foreground/80">No saved meals yet</p>
+          <p className="text-sm font-medium text-foreground/80">No saved foods yet</p>
           <p className="mt-1 max-w-[16rem] text-[12px] leading-relaxed text-muted-foreground/60">
-            Save frequent meals for one-tap logging, or switch to Estimate for a quick calorie entry.
+            Save frequent foods for one-tap logging, or switch to Estimate for a quick calorie entry.
           </p>
           <div className="mt-4 flex gap-2">
             <Button
@@ -620,26 +713,29 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
               className="h-10"
               onClick={() => {
                 s.setNewMealTags(s.mealType ? [s.mealType] : [])
+                s.setNewMealCategory(s.mealType === "snack" ? "snack" : "meal")
                 s.setShowCreateMeal(true)
               }}
             >
-              + New meal
+              + Add food
             </Button>
           </div>
         </div>
       )}
 
-      {s.savedMeals.length > 0 && s.displayedSavedMeals.length === 0 && s.mealType && (
-        <p className="mb-2 text-[11px] text-muted-foreground/70">
-          No saved meals tagged for <span className="capitalize font-medium text-foreground/80">{s.mealType}</span>. Tap
-          the chip again to show all, or add one with this tag.
-        </p>
+      {s.savedMeals.length > 0 && s.displayedSavedMeals.length === 0 && (
+        <div className="mb-2 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] px-4 py-5 text-center">
+          <p className="text-sm font-medium text-foreground/80">No matching saved foods</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/55">
+            Try another category, clear the search, or add a new food.
+          </p>
+        </div>
       )}
 
       {s.displayedSavedMeals.length > 0 && (
         <div
           className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-y-contain touch-pan-y pr-0.5 [-webkit-overflow-scrolling:touch]"
-          aria-label="Saved meals"
+          aria-label="Saved foods"
         >
           {s.displayedSavedMeals.map((meal) => {
             const inDraftCount = s.savedMealCountsInDraft.get(meal.id) ?? 0
@@ -679,6 +775,9 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
                       <span className="flex flex-wrap items-center gap-1">
                         <span className="text-xs font-medium tabular-nums text-muted-foreground/55">
                           {meal.calories} cal
+                        </span>
+                        <span className="shrink-0 rounded-full border border-primary/15 bg-primary/[0.07] px-1.5 py-0.5 text-[9px] font-medium text-primary/75">
+                          {savedFoodCategoryLabel(meal.foodCategory)}
                         </span>
                         {tags.map((t) => (
                           <span
@@ -727,10 +826,17 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
                       value={s.editSavedName}
                       onChange={(e) => s.setEditSavedName(e.target.value)}
                       className="h-10 bg-background/40 border-primary/15 text-sm"
-                      placeholder="Meal name"
+                      placeholder="Food name"
+                    />
+                    <FoodCategoryPicker
+                      value={s.editSavedCategory}
+                      onChange={s.setEditSavedCategory}
+                      label="Food type"
                     />
                     <div className="space-y-1">
-                      <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">Tags</Label>
+                      <Label className="text-[9px] uppercase tracking-wider text-muted-foreground/50">
+                        Meal-time tags
+                      </Label>
                       <div className="flex flex-wrap gap-1.5">
                         {mealTypes.map((m) => {
                           const on = s.editSavedTags.includes(m)
@@ -806,6 +912,45 @@ function SavedMealsSection({ s }: { s: ReturnType<typeof useLogFoodDialog> }) {
         </div>
       )}
     </div>
+  )
+}
+
+function FoodCategoryPicker({
+  value,
+  onChange,
+  label,
+}: {
+  value: SavedFoodCategory
+  onChange: (category: SavedFoodCategory) => void
+  label: string
+}) {
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/50">
+        {label}
+      </legend>
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+        {SAVED_FOOD_CATEGORIES.map((category) => {
+          const selected = value === category.id
+          return (
+            <button
+              key={category.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onChange(category.id)}
+              className={cn(
+                "min-h-10 rounded-lg border px-2 py-2 text-left text-[10px] font-semibold leading-tight transition-colors touch-manipulation",
+                selected
+                  ? "border-primary/35 bg-primary/15 text-primary ring-1 ring-primary/15"
+                  : "border-white/[0.07] bg-white/[0.025] text-muted-foreground/65 hover:bg-white/[0.045] hover:text-foreground/80",
+              )}
+            >
+              {category.singular}
+            </button>
+          )
+        })}
+      </div>
+    </fieldset>
   )
 }
 
