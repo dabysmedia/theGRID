@@ -17,6 +17,14 @@ model User {
   vacationResumeDate String?
   /// IANA timezone (e.g. "America/New_York"); used to fire local-time reminders.
   timeZone    String?
+  /// When enabled, workout goals and load use the user's repeating work rotation instead of Mon-Sun.
+  workCycleEnabled     Boolean @default(false)
+  /// yyyy-MM-dd key for cycle day 1.
+  workCycleAnchorDate  String?
+  workCycleLength      Int     @default(8)
+  /// Ordered JSON array of day, night, or off phase names.
+  workCyclePatternJson String  @default("[\"day\",\"day\",\"night\",\"night\",\"off\",\"off\",\"off\",\"off\"]")
+  workoutGoalPerCycle  Int     @default(3)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

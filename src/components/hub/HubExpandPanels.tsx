@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { addDays, format, startOfWeek } from "date-fns"
+import { format } from "date-fns"
 import {
   Activity,
   ChevronDown,
@@ -33,7 +33,7 @@ import {
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { PeptideHalfLifeMeter } from "@/components/PeptideHalfLifeMeter"
 import { PeptideHungerMeter } from "@/components/PeptideHungerMeter"
-import { WeekWorkoutGoalRing, WEEKLY_WORKOUT_GOAL } from "@/components/WeekWorkoutGoalRing"
+import { WeekWorkoutGoalRing } from "@/components/WeekWorkoutGoalRing"
 import {
   StageMinuteBars,
   StageTimeline,
@@ -60,6 +60,7 @@ import { useActiveDate } from "@/context/DateContext"
 import { useQuickLog } from "@/context/QuickLogContext"
 import { useUser } from "@/context/UserContext"
 import { apiFetch } from "@/lib/api-fetch"
+import { getTrackingPeriod } from "@/lib/work-cycle"
 import {
   writeInjectionIntervalDays,
   type NextInjectionInfo,
@@ -84,7 +85,7 @@ import {
   muscleStatsToSegmentScores,
   type WorkoutSessionLike,
 } from "@/lib/workouts/muscle-volume"
-import { cn, formatDate, parseLocalDate } from "@/lib/utils"
+import { cn, parseLocalDate } from "@/lib/utils"
 
 export type HubExpandedPanel =
   | "calories"
@@ -447,6 +448,7 @@ export function HubVitalsExpand({
   fallbackRhr?: number | null
 }) {
   const { activeDate } = useActiveDate()
+  const { user } = useUser()
   const [data, setData] = useState<VitalsPayload | null>(null)
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
   const [syncing, setSyncing] = useState(false)
@@ -456,14 +458,23 @@ export function HubVitalsExpand({
   const [loadReloadKey, setLoadReloadKey] = useState(0)
   const [completedSessions, setCompletedSessions] = useState<WorkoutSessionLike[]>([])
 
-  const { weekStart, weekEnd } = useMemo(() => {
-    const ref = parseLocalDate(activeDate)
-    const start = startOfWeek(ref, { weekStartsOn: 1 })
-    return {
-      weekStart: formatDate(start),
-      weekEnd: formatDate(addDays(start, 6)),
-    }
-  }, [activeDate])
+  const trainingPeriod = useMemo(
+    () => getTrackingPeriod(activeDate, {
+      enabled: user?.workCycleEnabled,
+      anchorDate: user?.workCycleAnchorDate,
+      length: user?.workCycleLength,
+      patternJson: user?.workCyclePatternJson,
+      goal: user?.workoutGoalPerCycle,
+    }),
+    [
+      activeDate,
+      user?.workCycleEnabled,
+      user?.workCycleAnchorDate,
+      user?.workCycleLength,
+      user?.workCyclePatternJson,
+      user?.workoutGoalPerCycle,
+    ],
+  )
 
   useEffect(() => {
     const refreshLoad = () => setLoadReloadKey((key) => key + 1)
@@ -481,8 +492,8 @@ export function HubVitalsExpand({
   }, [])
 
   const muscleStats = useMemo(
-    () => aggregateMuscleStats(completedSessions, weekStart, weekEnd),
-    [completedSessions, weekStart, weekEnd],
+    () => aggregateMuscleStats(completedSessions, trainingPeriod.startDate, trainingPeriod.endDate),
+    [completedSessions, trainingPeriod.endDate, trainingPeriod.startDate],
   )
 
   const segmentScores = useMemo(() => {
@@ -608,9 +619,9 @@ export function HubVitalsExpand({
     () =>
       completedSessions.filter((session) => {
         const dateKey = session.date.split("T")[0]
-        return dateKey >= weekStart && dateKey <= weekEnd
+        return dateKey >= trainingPeriod.startDate && dateKey <= trainingPeriod.endDate
       }).length,
-    [completedSessions, weekEnd, weekStart],
+    [completedSessions, trainingPeriod.endDate, trainingPeriod.startDate],
   )
   const trainedSegmentCount = Object.keys(segmentScores ?? {}).length
 
@@ -724,7 +735,7 @@ export function HubVitalsExpand({
           </div>
           <div className="shrink-0 text-right">
             <span className="text-[10px] font-semibold tabular-nums text-muted-foreground/60">
-              {weekStart.slice(5).replace("-", "/")} – {weekEnd.slice(5).replace("-", "/")}
+              {trainingPeriod.startDate.slice(5).replace("-", "/")} – {trainingPeriod.endDate.slice(5).replace("-", "/")}
             </span>
             {loadStatus === "ready" ? (
               <p className="mt-0.5 text-[9px] uppercase tracking-[0.1em] text-muted-foreground/40">
@@ -769,7 +780,9 @@ export function HubVitalsExpand({
               <Activity className="size-5 text-muted-foreground/40" aria-hidden />
             </div>
             <div>
-              <p className="text-sm font-medium text-foreground/80">No completed sets this week</p>
+              <p className="text-sm font-medium text-foreground/80">
+                No completed sets this {trainingPeriod.mode === "rotation" ? "rotation" : "week"}
+              </p>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/55">
                 Finish a workout and the muscles you trained will light up here automatically.
               </p>
@@ -1539,17 +1552,31 @@ function hubRoutineSetCount(ex: HubRoutineExercise): number {
 }
 
 export function HubWorkoutsExpand({
-  weekCount,
+  periodCount,
+  periodGoal,
+  periodMode,
   todayCount,
-  last7,
-  dayLabels,
+  periodValues,
+  periodLabels,
+  periodDayIndex,
+  periodDayNumber,
+  periodPhaseLabel,
+  periodEndDate,
+  nextPeriodStartDate,
   recoveryScore,
   hideHero = false,
 }: {
-  weekCount: number
+  periodCount: number
+  periodGoal: number
+  periodMode: "rotation" | "calendar"
   todayCount: number
-  last7: number[]
-  dayLabels: string[]
+  periodValues: number[]
+  periodLabels: string[]
+  periodDayIndex: number
+  periodDayNumber: number
+  periodPhaseLabel: string
+  periodEndDate: string
+  nextPeriodStartDate: string
   recoveryScore: number | null
   /** When true, omit ring/title hero — overview rail owns that morph. */
   hideHero?: boolean
@@ -1583,13 +1610,18 @@ export function HubWorkoutsExpand({
     }
   }, [])
 
-  const met = weekCount >= WEEKLY_WORKOUT_GOAL
-  const remaining = Math.max(0, WEEKLY_WORKOUT_GOAL - weekCount)
-  const lastSessionIdx = [...last7].reverse().findIndex((v) => v > 0)
+  const met = periodCount >= periodGoal
+  const remaining = Math.max(0, periodGoal - periodCount)
+  const valuesThroughToday = periodValues.slice(0, Math.min(periodValues.length, periodDayIndex + 1))
+  const lastSessionIdx = [...valuesThroughToday].reverse().findIndex((v) => v > 0)
   const daysSinceLast =
     lastSessionIdx < 0 ? null : lastSessionIdx === 0 ? 0 : lastSessionIdx
 
-  let lastCue = "No sessions this week"
+  const periodNoun = periodMode === "rotation" ? "rotation" : "week"
+  const nextPeriodLabel = format(parseLocalDate(nextPeriodStartDate), "MMM d")
+  const periodEndLabel = format(parseLocalDate(periodEndDate), "MMM d")
+
+  let lastCue = `No sessions this ${periodNoun}`
   if (daysSinceLast === 0) lastCue = "Trained today"
   else if (daysSinceLast === 1) lastCue = "Last session yesterday"
   else if (daysSinceLast != null) lastCue = `Last session ${daysSinceLast}d ago`
@@ -1632,7 +1664,9 @@ export function HubWorkoutsExpand({
       <div className="grid grid-cols-2 gap-2.5">
         <div className="flex min-h-[6.75rem] min-w-0 flex-col justify-between rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
           <div className="flex items-center justify-between gap-2">
-            <p className="type-hud-micro text-muted-foreground/55">Weekly goal</p>
+            <p className="type-hud-micro text-muted-foreground/55">
+              {periodMode === "rotation" ? "Rotation goal" : "Weekly goal"}
+            </p>
             <span className="type-hud-micro tabular-nums text-muted-foreground/45">
               {met ? "Complete" : `${remaining} left`}
             </span>
@@ -1641,15 +1675,15 @@ export function HubWorkoutsExpand({
             className="text-[1.65rem] font-semibold leading-none tabular-nums tracking-tight text-foreground/90"
             style={met ? { color: "#dce95c", textShadow: "0 0 18px #c4d63233" } : undefined}
           >
-            {weekCount}
+            {periodCount}
             <span className="ml-1 text-sm font-medium text-muted-foreground/45">
-              / {WEEKLY_WORKOUT_GOAL}
+              / {periodGoal}
             </span>
           </p>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.055]">
             <div
               className="h-full origin-left rounded-full bg-gradient-to-r from-[#8f9c17] to-[#dce95c] transition-transform duration-700 ease-out"
-              style={{ transform: `scaleX(${Math.min(1, weekCount / WEEKLY_WORKOUT_GOAL)})` }}
+              style={{ transform: `scaleX(${Math.min(1, periodCount / periodGoal)})` }}
             />
           </div>
         </div>
@@ -1679,6 +1713,19 @@ export function HubWorkoutsExpand({
           </p>
         </div>
       </div>
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.018] px-3.5 py-2.5">
+        <div className="min-w-0">
+          <p className="text-[12px] font-semibold text-foreground/85">
+            {periodMode === "rotation" ? `Cycle day ${periodDayNumber} · ${periodPhaseLabel}` : `Week day ${periodDayNumber}`}
+          </p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground/50">
+            Current {periodNoun} ends {periodEndLabel}
+          </p>
+        </div>
+        <p className="shrink-0 text-right type-hud-micro text-[#c4d632]/80">
+          Next {periodMode === "rotation" ? "rotation" : "week"}<br />{nextPeriodLabel}
+        </p>
+      </div>
     </div>
   )
 
@@ -1690,14 +1737,14 @@ export function HubWorkoutsExpand({
             <p className="type-hud-subsection">Workouts</p>
             <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
               {met
-                ? `Goal met · ${weekCount} this week`
-                : `${weekCount}/${WEEKLY_WORKOUT_GOAL} this week`}
+                ? `Goal met · ${periodCount} this ${periodNoun}`
+                : `${periodCount}/${periodGoal} this ${periodNoun}`}
               {todayCount > 0 ? ` · ${todayCount} today` : ""}
             </p>
           </div>
 
           <div className="grid items-center gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
-            <WeekWorkoutGoalRing count={weekCount} size="lg" color="#c4d632" />
+            <WeekWorkoutGoalRing count={periodCount} goal={periodGoal} size="lg" color="#c4d632" />
             <div className="min-w-0 flex-1">{workoutStats}</div>
           </div>
         </div>
@@ -1735,20 +1782,22 @@ export function HubWorkoutsExpand({
         <div className="flex items-end justify-between gap-3">
           <div>
             <p className="type-hud-caption">Training rhythm</p>
-            <p className="mt-1 text-[11px] text-muted-foreground/50">Sessions across the last 7 days</p>
+            <p className="mt-1 text-[11px] text-muted-foreground/50">
+              Sessions across the current {periodMode === "rotation" ? "8-day rotation" : "calendar week"}
+            </p>
           </div>
           <p className="text-sm font-semibold tabular-nums text-foreground/80">
-            {last7.reduce((sum, value) => sum + value, 0)}
+            {periodValues.reduce((sum, value) => sum + value, 0)}
             <span className="ml-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/45">
               total
             </span>
           </p>
         </div>
         <div className="flex h-[6.25rem] items-end justify-between gap-2">
-          {last7.map((v, i) => {
-            const max = Math.max(...last7, 1)
+          {periodValues.map((v, i) => {
+            const max = Math.max(...periodValues, 1)
             const h = Math.max(8, Math.round((v / max) * 58))
-            const isToday = i === last7.length - 1
+            const isToday = i === periodDayIndex
             return (
               <div key={i} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1.5">
                 <span className="text-[10px] font-semibold tabular-nums text-muted-foreground/55">
@@ -1771,7 +1820,7 @@ export function HubWorkoutsExpand({
                     isToday ? "text-[#c4d632]" : "text-muted-foreground/45",
                   )}
                 >
-                  {dayLabels[i] ?? ""}
+                  {periodLabels[i] ?? ""}
                 </span>
               </div>
             )

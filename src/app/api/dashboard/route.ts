@@ -20,6 +20,7 @@ import {
   stepsDayKey,
   stepsRefDayKey,
 } from "@/lib/steps-day"
+import { getTrackingPeriod } from "@/lib/work-cycle"
 
 interface GoalRow {
   category: string
@@ -185,7 +186,14 @@ export async function GET(req: NextRequest) {
     const now = new Date()
     const profile = await prisma.user.findUnique({
       where: { id: userId },
-      select: { timeZone: true },
+      select: {
+        timeZone: true,
+        workCycleEnabled: true,
+        workCycleAnchorDate: true,
+        workCycleLength: true,
+        workCyclePatternJson: true,
+        workoutGoalPerCycle: true,
+      },
     })
     const trackingTz = resolveStepsTimezone(profile?.timeZone ?? DEFAULT_STEPS_TIMEZONE)
     const requestedRefDayStr =
@@ -197,11 +205,20 @@ export async function GET(req: NextRequest) {
     const refDayStr = stepsRefDayKey(requestedRefDayStr, now, trackingTz)
     const refDate = parseLocalDate(refDayStr)
     const weekStartStr = formatDate(subDays(refDate, 6))
+    const trackingPeriod = getTrackingPeriod(refDayStr, {
+      enabled: profile?.workCycleEnabled,
+      anchorDate: profile?.workCycleAnchorDate,
+      length: profile?.workCycleLength,
+      patternJson: profile?.workCyclePatternJson,
+      goal: profile?.workoutGoalPerCycle,
+    })
+    const dashboardRangeStartStr =
+      trackingPeriod.startDate < weekStartStr ? trackingPeriod.startDate : weekStartStr
     const vitalsBaselineStartStr = formatDate(subDays(refDate, 29))
     const weightRangeStartStr = formatDate(subDays(refDate, 55))
     const stepsRefDayStr = refDayStr
 
-    const dateInRange = utcCalendarDayRangeInclusive(weekStartStr, refDayStr)
+    const dateInRange = utcCalendarDayRangeInclusive(dashboardRangeStartStr, refDayStr)
     const vitalsBaselineRange = utcCalendarDayRangeInclusive(
       vitalsBaselineStartStr,
       refDayStr,
@@ -301,6 +318,16 @@ export async function GET(req: NextRequest) {
       return result
     }
 
+    function totalsForDates<T extends { date: Date }>(
+      entries: T[],
+      dates: string[],
+      valueExtractor: (items: T[]) => number,
+    ): number[] {
+      return dates.map((dayKey) =>
+        valueExtractor(entries.filter((entry) => utcCalendarDayKeyFromIso(entry.date) === dayKey))
+      )
+    }
+
     function stepsDayTotals(
       entries: { date: Date; count: number }[],
       runRows: { date: Date; distance: number }[],
@@ -341,6 +368,9 @@ export async function GET(req: NextRequest) {
     const legacyWorkoutLast7 = dailyTotals(workoutEntries, (items) => items.length)
     const sessionWorkoutLast7 = dailyTotals(workoutSessions, (items) => items.length)
     const workoutLast7 = legacyWorkoutLast7.map((v, i) => v + sessionWorkoutLast7[i])
+    const legacyWorkoutCycle = totalsForDates(workoutEntries, trackingPeriod.dates, (items) => items.length)
+    const sessionWorkoutCycle = totalsForDates(workoutSessions, trackingPeriod.dates, (items) => items.length)
+    const workoutCycle = legacyWorkoutCycle.map((value, index) => value + sessionWorkoutCycle[index])
     const sleepLast7 = dailyTotals(sleepEntries, (items) => {
       if (!items.length) return 0
       const hrs = items.map((e) => sleepDurationHours(e.bedtime, e.wakeTime))
@@ -487,6 +517,11 @@ export async function GET(req: NextRequest) {
         direction: woG?.direction ?? "up",
         unit: "sessions",
         last7: workoutLast7,
+        cycle: {
+          ...trackingPeriod,
+          values: workoutCycle,
+          count: workoutCycle.reduce((sum, value) => sum + value, 0),
+        },
       },
       sleep: {
         todayValue: Math.round(sleepLast7[6] * 10) / 10,

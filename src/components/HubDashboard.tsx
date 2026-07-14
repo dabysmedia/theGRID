@@ -76,11 +76,28 @@ interface CategorySummary {
   trackingStartHour?: number
 }
 
+interface WorkoutCycleSummary {
+  mode: "rotation" | "calendar"
+  startDate: string
+  endDate: string
+  nextStartDate: string
+  dates: string[]
+  labels: string[]
+  length: number
+  dayIndex: number
+  dayNumber: number
+  phase: "day" | "night" | "off" | "calendar"
+  phaseLabel: string
+  goal: number
+  values: number[]
+  count: number
+}
+
 interface DashboardData {
   calories: CategorySummary
   steps: CategorySummary
   running: CategorySummary
-  workouts: CategorySummary
+  workouts: CategorySummary & { cycle?: WorkoutCycleSummary }
   sleep: CategorySummary
   peptides: CategorySummary
   alcohol: CategorySummary
@@ -139,14 +156,6 @@ interface PeptideHubEntry {
   doseMg: number
   injectionSite?: string
   compound?: string
-}
-
-function workoutsThisWeek(last7: number[], refDateKey: string): number {
-  const refDate = parseLocalDate(refDateKey)
-  const dayOfWeek = refDate.getDay()
-  const daysIntoWeek = dayOfWeek === 0 ? 7 : dayOfWeek
-  const slice = last7.slice(Math.max(0, last7.length - daysIntoWeek))
-  return slice.reduce((s, v) => s + v, 0)
 }
 
 export function HubDashboard() {
@@ -263,11 +272,6 @@ export function HubDashboard() {
     }
   }, [activeDate])
 
-  const weekWorkoutCount = useMemo(
-    () => workoutsThisWeek(data.workouts.last7, activeDate),
-    [data.workouts.last7, activeDate]
-  )
-
   const lastPeptide = peptideEntries[0] ?? null
   const nextInjection = useMemo(
     () =>
@@ -325,9 +329,18 @@ export function HubDashboard() {
             hungerLogs: peptideHungerLogs,
           }}
           workoutSummary={{
-            weekCount: weekWorkoutCount,
+            periodCount: data.workouts.cycle?.count ?? data.workouts.last7.reduce((sum, value) => sum + value, 0),
+            periodGoal: data.workouts.cycle?.goal ?? 3,
+            periodMode: data.workouts.cycle?.mode ?? "calendar",
+            periodValues: data.workouts.cycle?.values ?? data.workouts.last7,
+            periodLabels: data.workouts.cycle?.labels ?? ["M", "T", "W", "T", "F", "S", "S"],
+            periodDayIndex: data.workouts.cycle?.dayIndex ?? 6,
+            periodDayNumber: data.workouts.cycle?.dayNumber ?? 7,
+            periodPhaseLabel: data.workouts.cycle?.phaseLabel ?? "Calendar week",
+            periodStartDate: data.workouts.cycle?.startDate ?? activeDate,
+            periodEndDate: data.workouts.cycle?.endDate ?? activeDate,
+            nextPeriodStartDate: data.workouts.cycle?.nextStartDate ?? activeDate,
             todayCount: data.workouts.todayValue,
-            last7: data.workouts.last7,
             recoveryScore:
               data.recovery.todayValue > 0 ? data.recovery.todayValue : null,
           }}

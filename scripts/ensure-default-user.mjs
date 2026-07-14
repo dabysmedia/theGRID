@@ -41,18 +41,44 @@ if (!hasUserTable) {
 }
 
 const { c: count } = db.prepare("SELECT COUNT(*) as c FROM User").get()
-if (count > 0) {
-  console.log("[ensure-default-user] Users already exist, skipping bootstrap")
-  db.close()
-  process.exit(0)
+if (count === 0) {
+  const id = "carlos"
+  const pinHash = hashPin("1234")
+  db.prepare(
+    `INSERT INTO "User" ("id", "name", "pinHash", "avatarColor", "createdAt", "updatedAt")
+     VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`
+  ).run(id, "Carlos", pinHash, "#22c55e")
+  console.log("[ensure-default-user] Created default profile Carlos (PIN: 1234)")
+} else {
+  console.log("[ensure-default-user] Users already exist, keeping existing profiles")
 }
 
-const id = "carlos"
-const pinHash = hashPin("1234")
-db.prepare(
-  `INSERT INTO "User" ("id", "name", "pinHash", "avatarColor", "createdAt", "updatedAt")
-   VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`
-).run(id, "Carlos", pinHash, "#22c55e")
+const userColumns = new Set(db.prepare(`PRAGMA table_info("User")`).all().map((row) => row.name))
+if (
+  userColumns.has("workCycleEnabled") &&
+  userColumns.has("workCycleAnchorDate") &&
+  userColumns.has("workCycleLength") &&
+  userColumns.has("workCyclePatternJson") &&
+  userColumns.has("workoutGoalPerCycle")
+) {
+  const pattern = JSON.stringify(["day", "day", "night", "night", "off", "off", "off", "off"])
+  const result = db.prepare(
+    `UPDATE "User"
+     SET "workCycleEnabled" = 1,
+         "workCycleAnchorDate" = '2026-07-15',
+         "workCycleLength" = 8,
+         "workCyclePatternJson" = ?,
+         "workoutGoalPerCycle" = 3,
+         "updatedAt" = datetime('now')
+     WHERE (
+       lower("name") = 'carlos'
+       OR "id" = 'carlos'
+       OR (SELECT COUNT(*) FROM "User") = 1
+     ) AND "workCycleAnchorDate" IS NULL`
+  ).run(pattern)
+  if (result.changes > 0) {
+    console.log("[ensure-default-user] Configured Carlos's 8-day work rotation")
+  }
+}
 
-console.log("[ensure-default-user] Created default profile Carlos (PIN: 1234)")
 db.close()

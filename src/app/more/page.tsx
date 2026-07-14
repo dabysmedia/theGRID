@@ -7,6 +7,7 @@ import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { ProfileSwitcher } from "@/components/ProfileSwitcher"
 import { ProfilePhotoSettings } from "@/components/ProfilePhotoSettings"
 import { VacationModeSettings } from "@/components/VacationModeSettings"
+import { WorkCycleSettings } from "@/components/WorkCycleSettings"
 import { GoogleHealthSettings } from "@/components/GoogleHealthSettings"
 import { PushNotificationManager } from "@/components/PushNotificationManager"
 import { CATEGORY_THEME } from "@/lib/category-theme"
@@ -45,6 +46,8 @@ export default function MorePage() {
         <div className="space-y-2">
           <h2 className="type-hud-rail text-muted-foreground/70">Settings</h2>
           <VacationModeSettings />
+          <div className="hud-divider" />
+          <WorkCycleSettings />
         </div>
         <div className="hud-divider" />
         <Suspense fallback={null}>

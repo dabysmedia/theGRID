@@ -9,6 +9,7 @@ export const WORKOUT_RING_COLOR = "#c4d632"
 
 type WeekWorkoutGoalRingProps = {
   count: number
+  goal?: number
   /** sm = icon-sized; md = hub protocol/training rail; lg = tile / expand hero */
   size?: "sm" | "md" | "lg"
   color?: string
@@ -17,11 +18,11 @@ type WeekWorkoutGoalRingProps = {
 
 export function WeekWorkoutGoalRing({
   count,
+  goal = WEEKLY_WORKOUT_GOAL,
   size = "sm",
   color = WORKOUT_RING_COLOR,
   className,
 }: WeekWorkoutGoalRingProps) {
-  const goal = WEEKLY_WORKOUT_GOAL
   const capped = Math.min(Math.max(count, 0), goal)
   const met = count >= goal
   const uid = useId().replace(/:/g, "")

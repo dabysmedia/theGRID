@@ -19,6 +19,12 @@ export interface UserProfile {
   avatarUrl?: string | null
   /** yyyy-MM-dd — first day calorie & weight logging resume; omitted/null = off */
   vacationResumeDate?: string | null
+  workCycleEnabled?: boolean
+  /** yyyy-MM-dd key for rotation day one. */
+  workCycleAnchorDate?: string | null
+  workCycleLength?: number
+  workCyclePatternJson?: string
+  workoutGoalPerCycle?: number
 }
 
 interface UserContextValue {
@@ -111,7 +117,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const colorSame = f.avatarColor === user.avatarColor
     const urlSame = (f.avatarUrl ?? null) === (user.avatarUrl ?? null)
     const vacationSame = (f.vacationResumeDate ?? null) === (user.vacationResumeDate ?? null)
-    if (nameSame && colorSame && urlSame && vacationSame) return
+    const workCycleSame =
+      Boolean(f.workCycleEnabled) === Boolean(user.workCycleEnabled) &&
+      (f.workCycleAnchorDate ?? null) === (user.workCycleAnchorDate ?? null) &&
+      (f.workCycleLength ?? 8) === (user.workCycleLength ?? 8) &&
+      (f.workCyclePatternJson ?? "") === (user.workCyclePatternJson ?? "") &&
+      (f.workoutGoalPerCycle ?? 3) === (user.workoutGoalPerCycle ?? 3)
+    if (nameSame && colorSame && urlSame && vacationSame && workCycleSame) return
     setUser(f)
     storeUser(f)
   }, [users, user])

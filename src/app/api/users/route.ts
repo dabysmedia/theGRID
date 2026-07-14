@@ -14,10 +14,18 @@ const userListBaseSelect = {
   avatarUrl: true,
 } as const
 
+const workCycleSelect = {
+  workCycleEnabled: true,
+  workCycleAnchorDate: true,
+  workCycleLength: true,
+  workCyclePatternJson: true,
+  workoutGoalPerCycle: true,
+} as const
+
 export async function GET() {
   try {
     const users = await prisma.user.findMany({
-      select: { ...userListBaseSelect, vacationResumeDate: true },
+      select: { ...userListBaseSelect, vacationResumeDate: true, ...workCycleSelect },
       orderBy: { createdAt: "asc" },
     })
     return NextResponse.json(users)
@@ -30,7 +38,15 @@ export async function GET() {
         orderBy: { createdAt: "asc" },
       })
       return NextResponse.json(
-        users.map((u) => ({ ...u, vacationResumeDate: null as string | null }))
+        users.map((u) => ({
+          ...u,
+          vacationResumeDate: null as string | null,
+          workCycleEnabled: false,
+          workCycleAnchorDate: null as string | null,
+          workCycleLength: 8,
+          workCyclePatternJson: '["day","day","night","night","off","off","off","off"]',
+          workoutGoalPerCycle: 3,
+        }))
       )
     } catch (e2) {
       console.error("[users GET]", e2)
@@ -60,7 +76,14 @@ export async function POST(req: NextRequest) {
         pinHash: pin ? hashPin(pin) : "",
         avatarColor,
       },
-      select: { id: true, name: true, avatarColor: true, avatarUrl: true },
+      select: {
+        id: true,
+        name: true,
+        avatarColor: true,
+        avatarUrl: true,
+        vacationResumeDate: true,
+        ...workCycleSelect,
+      },
     })
     return NextResponse.json(user, { status: 201 })
   } catch (e) {

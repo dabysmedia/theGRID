@@ -19,7 +19,6 @@ import {
   Trash2,
   X,
 } from "lucide-react"
-import { addDays, startOfWeek, subDays } from "date-fns"
 import { useRouter, useSearchParams } from "next/navigation"
 import { apiFetch } from "@/lib/api-fetch"
 import { Button } from "@/components/ui/button"
@@ -32,6 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useActiveDate } from "@/context/DateContext"
+import { useUser } from "@/context/UserContext"
 import { useFullscreenOverlay } from "@/context/FullscreenOverlayContext"
 import {
   DEFAULT_WORKOUT_REST,
@@ -39,7 +39,8 @@ import {
   saveWorkoutRestConfig,
   type WorkoutRestConfig,
 } from "@/lib/workout-rest-config"
-import { cn, formatDate, parseLocalDate } from "@/lib/utils"
+import { cn } from "@/lib/utils"
+import { getTrackingPeriod } from "@/lib/work-cycle"
 import { PlateCalculatorDialog } from "@/components/workouts/PlateCalculatorDialog"
 import { FALLBACK_EXERCISES, type ApiExercise } from "@/lib/workouts/exercise-library"
 import {
@@ -3309,6 +3310,7 @@ function WorkoutsPageInner() {
   templatesRef.current = templates
 
   const { activeDate } = useActiveDate()
+  const { user } = useUser()
   const today = activeDate
 
   useEffect(() => {
@@ -3334,14 +3336,25 @@ function WorkoutsPageInner() {
     return sessions.find((s) => norm(s) === "active") ?? null
   }, [sessions])
 
-  const { weekStart, weekEnd } = useMemo(() => {
-    const ref = parseLocalDate(activeDate)
-    const start = startOfWeek(ref, { weekStartsOn: 1 })
-    return {
-      weekStart: formatDate(start),
-      weekEnd: formatDate(addDays(start, 6)),
-    }
-  }, [activeDate])
+  const trainingPeriod = useMemo(
+    () => getTrackingPeriod(activeDate, {
+      enabled: user?.workCycleEnabled,
+      anchorDate: user?.workCycleAnchorDate,
+      length: user?.workCycleLength,
+      patternJson: user?.workCyclePatternJson,
+      goal: user?.workoutGoalPerCycle,
+    }),
+    [
+      activeDate,
+      user?.workCycleEnabled,
+      user?.workCycleAnchorDate,
+      user?.workCycleLength,
+      user?.workCyclePatternJson,
+      user?.workoutGoalPerCycle,
+    ],
+  )
+  const weekStart = trainingPeriod.startDate
+  const weekEnd = trainingPeriod.endDate
 
   const completedSessions = useMemo(() => {
     const norm = (s: WorkoutSession) =>

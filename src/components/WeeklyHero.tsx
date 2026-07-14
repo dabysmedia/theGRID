@@ -23,7 +23,7 @@ import { HubSleepFocus } from "@/components/sleep/HubSleepFocus"
 import { HubCollapse, HubPresence, HUB_MOTION_MS, HUB_SECTION_MOTION_MS } from "@/components/hub/HubMotion"
 import { HubRingBay } from "@/components/hub/HubRingBay"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
-import { WeekWorkoutGoalRing, WEEKLY_WORKOUT_GOAL } from "@/components/WeekWorkoutGoalRing"
+import { WeekWorkoutGoalRing } from "@/components/WeekWorkoutGoalRing"
 import { useActiveDate } from "@/context/DateContext"
 import { ProfileHeaderTrigger } from "@/context/ProfileDialogContext"
 import type { NextInjectionInfo } from "@/lib/hub-tile-prefs"
@@ -321,9 +321,18 @@ interface WeeklyHeroProps {
     hungerLogs?: Array<{ date: string; hungerLevel: number }>
   }
   workoutSummary?: {
-    weekCount: number
+    periodCount: number
+    periodGoal: number
+    periodMode: "rotation" | "calendar"
+    periodValues: number[]
+    periodLabels: string[]
+    periodDayIndex: number
+    periodDayNumber: number
+    periodPhaseLabel: string
+    periodStartDate: string
+    periodEndDate: string
+    nextPeriodStartDate: string
     todayCount: number
-    last7: number[]
     recoveryScore: number | null
   }
 }
@@ -493,13 +502,15 @@ export function WeeklyHero({
     else peptideCue = `${peptideNext.daysUntil}d until next`
   }
 
-  const weekWo = workoutSummary?.weekCount ?? 0
-  const woMet = weekWo >= WEEKLY_WORKOUT_GOAL
+  const periodWo = workoutSummary?.periodCount ?? 0
+  const workoutGoal = workoutSummary?.periodGoal ?? 3
+  const workoutPeriodLabel = workoutSummary?.periodMode === "rotation" ? "this rotation" : "this week"
+  const woMet = periodWo >= workoutGoal
   const workoutCue = woMet
     ? "Goal met"
-    : weekWo === 0
+    : periodWo === 0
       ? "Not yet"
-      : `${weekWo}/${WEEKLY_WORKOUT_GOAL} this week`
+      : `${periodWo}/${workoutGoal} ${workoutPeriodLabel}`
 
   return (
     <div
@@ -759,14 +770,18 @@ export function WeeklyHero({
               <div className="flex min-w-0 items-start justify-end pt-1 pr-1.5 text-right sm:pt-1.5 sm:pr-3">
                 <div className="min-w-0 border-r border-white/[0.07] pr-2.5 sm:pr-4">
                   <p className="type-hud-micro">
-                    {expanded === "peptides" ? "Last dose" : "This week"}
+                    {expanded === "peptides"
+                      ? "Last dose"
+                      : workoutSummary?.periodMode === "rotation"
+                        ? "This rotation"
+                        : "This week"}
                   </p>
                   <p className="mt-1 truncate text-base font-semibold tabular-nums text-foreground/90 sm:text-lg">
                     {expanded === "peptides"
                       ? peptideSummary?.lastDoseMg != null
                         ? `${peptideSummary.lastDoseMg} mg`
                         : "—"
-                      : `${weekWo}/${WEEKLY_WORKOUT_GOAL}`}
+                      : `${periodWo}/${workoutGoal}`}
                   </p>
                   <p className="mt-0.5 truncate text-[9px] text-muted-foreground/45 sm:text-[10px]">
                     {expanded === "peptides"
@@ -790,7 +805,8 @@ export function WeeklyHero({
                   />
                 ) : (
                   <WeekWorkoutGoalRing
-                    count={weekWo}
+                    count={periodWo}
+                    goal={workoutGoal}
                     size="md"
                     color="#c4d632"
                     className="shrink-0"
@@ -825,8 +841,8 @@ export function WeeklyHero({
                     {expanded === "peptides"
                       ? `Every ${peptideSummary?.intervalDays ?? 7} days`
                       : woMet
-                        ? "Weekly goal met"
-                        : `${Math.max(0, WEEKLY_WORKOUT_GOAL - weekWo)} to goal`}
+                        ? workoutSummary?.periodMode === "rotation" ? "Rotation goal met" : "Weekly goal met"
+                        : `${Math.max(0, workoutGoal - periodWo)} to goal`}
                   </p>
                 </div>
               </div>
@@ -871,10 +887,17 @@ export function WeeklyHero({
         >
           <div className="pt-3">
             <HubWorkoutsExpand
-              weekCount={weekWo}
+              periodCount={periodWo}
+              periodGoal={workoutGoal}
+              periodMode={workoutSummary?.periodMode ?? "calendar"}
               todayCount={workoutSummary?.todayCount ?? data.workouts.todayValue}
-              last7={workoutSummary?.last7 ?? data.workouts.last7}
-              dayLabels={dayLabels}
+              periodValues={workoutSummary?.periodValues ?? data.workouts.last7}
+              periodLabels={workoutSummary?.periodLabels ?? dayLabels}
+              periodDayIndex={workoutSummary?.periodDayIndex ?? 6}
+              periodDayNumber={workoutSummary?.periodDayNumber ?? 7}
+              periodPhaseLabel={workoutSummary?.periodPhaseLabel ?? "Calendar week"}
+              periodEndDate={workoutSummary?.periodEndDate ?? activeDate}
+              nextPeriodStartDate={workoutSummary?.nextPeriodStartDate ?? activeDate}
               recoveryScore={workoutSummary?.recoveryScore ?? null}
               hideHero
             />
@@ -1006,7 +1029,8 @@ export function WeeklyHero({
                 >
                   <span className="pointer-events-none absolute left-1/3 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
                     <WeekWorkoutGoalRing
-                      count={weekWo}
+                      count={periodWo}
+                      goal={workoutGoal}
                       size="md"
                       color="#c4d632"
                       className="shrink-0"
@@ -1021,11 +1045,13 @@ export function WeeklyHero({
                       {workoutCue}
                     </p>
                     <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground/55">
-                      {workoutSummary?.recoveryScore != null
-                        ? `Recovery ${workoutSummary.recoveryScore}/10`
-                        : weekWo === 0
-                          ? "No sessions yet"
-                          : `${weekWo} logged`}
+                      {workoutSummary?.periodMode === "rotation"
+                        ? `Day ${workoutSummary.periodDayNumber} · ${workoutSummary.periodPhaseLabel}`
+                        : workoutSummary?.recoveryScore != null
+                          ? `Recovery ${workoutSummary.recoveryScore}/10`
+                          : periodWo === 0
+                            ? "No sessions yet"
+                            : `${periodWo} logged`}
                     </p>
                   </div>
                 </button>
