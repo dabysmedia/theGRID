@@ -20,6 +20,7 @@ export interface PhotoEstimatePrefill {
   protein: number | null
   carbs: number | null
   fat: number | null
+  imageUrl: string | null
 }
 
 interface PhotoCalorieEstimatorProps {
@@ -150,9 +151,10 @@ export function PhotoCalorieEstimator({
         protein: Number.isFinite(item.protein_g) ? item.protein_g : null,
         carbs: Number.isFinite(item.carbs_g) ? item.carbs_g : null,
         fat: Number.isFinite(item.fat_g) ? item.fat_g : null,
+        imageUrl,
       })
     },
-    [onUsePrefill]
+    [imageUrl, onUsePrefill]
   )
 
   const handleUseTotal = useCallback(() => {
@@ -174,8 +176,9 @@ export function PhotoCalorieEstimator({
         ? estimate.totals.carbs_g
         : null,
       fat: Number.isFinite(estimate.totals.fat_g) ? estimate.totals.fat_g : null,
+      imageUrl,
     })
-  }, [estimate, onUsePrefill])
+  }, [estimate, imageUrl, onUsePrefill])
 
   const handleToggle = useCallback(() => {
     if (disabled) return

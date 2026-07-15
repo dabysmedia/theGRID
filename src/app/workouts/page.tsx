@@ -2284,9 +2284,9 @@ function ActiveWorkout({
 
   const heroCover = session.coverImageUrl?.trim() ?? ""
   const setInputClass =
-    "h-10 min-h-10 border-primary/25 bg-glass-highlight/20 px-1 text-center text-base tabular-nums backdrop-blur-sm ring-1 ring-inset ring-primary/10 focus-visible:border-primary/50 focus-visible:ring-primary/30 sm:h-9 sm:text-sm"
+    "h-10 min-h-10 rounded-xl border-white/[0.09] bg-black/25 px-1 text-center text-base font-semibold tabular-nums text-foreground/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] backdrop-blur-sm focus-visible:border-primary/45 focus-visible:ring-primary/20 sm:h-9 sm:text-sm"
   const setInputGhostClass =
-    "border-primary/15 bg-glass-highlight/15 text-muted-foreground/50 ring-primary/10"
+    "border-primary/15 bg-primary/[0.045] text-muted-foreground/50"
 
   return (
     <>
@@ -2294,52 +2294,64 @@ function ActiveWorkout({
         role="dialog"
         aria-modal="true"
         aria-labelledby="active-workout-heading"
-        className="fixed inset-0 z-[120] flex flex-col bg-background sm:items-center sm:justify-center sm:bg-background/50 sm:p-4 sm:backdrop-blur-xl sm:supports-backdrop-filter:backdrop-blur-xl"
+        className="fixed inset-0 z-[120] flex flex-col overflow-hidden bg-[#030507] p-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:justify-center sm:bg-background/55 sm:p-4 sm:backdrop-blur-xl sm:supports-backdrop-filter:backdrop-blur-xl"
       >
         <div
+          className="pointer-events-none absolute inset-0 opacity-60"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,.028) 1px, transparent 1px)",
+            backgroundSize: "32px 32px",
+            maskImage: "radial-gradient(ellipse 82% 82% at 50% 42%, black, transparent 88%)",
+          }}
+          aria-hidden
+        />
+        <div
           className={cn(
-            "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-background",
-            "sm:glass-frost sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:max-w-lg sm:flex-none sm:rounded-2xl",
+            "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-[1.65rem] border border-white/[0.1] bg-[#080b10]/95 shadow-[0_26px_90px_rgba(0,0,0,0.72),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-2xl",
+            "sm:glass-frost sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:max-w-lg sm:flex-none sm:rounded-[1.65rem]",
           )}
         >
           {heroCover ? (
             <>
               {/* Full-bleed hero band sized for large phones */}
               <div
-                className="pointer-events-none absolute left-0 right-0 top-0 z-0 h-[min(28dvh,11.5rem)] bg-cover bg-[center_20%] bg-no-repeat opacity-[0.32] dark:opacity-[0.38] sm:rounded-t-2xl"
+                className="pointer-events-none absolute left-0 right-0 top-0 z-0 h-[min(28dvh,11.5rem)] rounded-t-[1.65rem] bg-cover bg-[center_20%] bg-no-repeat opacity-[0.28] dark:opacity-[0.34]"
                 style={{ backgroundImage: `url(${heroCover})` }}
                 aria-hidden
               />
               <div
-                className="pointer-events-none absolute left-0 right-0 top-0 z-[1] h-[min(28dvh,11.5rem)] bg-gradient-to-b from-background/55 via-background/75 to-background sm:rounded-t-2xl"
+                className="pointer-events-none absolute left-0 right-0 top-0 z-[1] h-[min(28dvh,11.5rem)] rounded-t-[1.65rem] bg-gradient-to-b from-[#11151b]/45 via-[#080b10]/78 to-[#080b10]"
                 aria-hidden
               />
             </>
           ) : (
             <div
-              className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-40 bg-gradient-to-b from-primary/[0.08] via-transparent to-transparent"
+              className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-48 bg-[radial-gradient(ellipse_72%_90%_at_18%_0%,rgba(196,214,50,0.12),transparent_72%)]"
               aria-hidden
             />
           )}
           <div
-            className="pointer-events-none absolute inset-0 z-[2] bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/10%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/8%),transparent_55%)]"
+            className="pointer-events-none absolute inset-0 z-[2] bg-[radial-gradient(ellipse_90%_55%_at_50%_-8%,oklch(1_0_0/8%),transparent_58%)] dark:bg-[radial-gradient(ellipse_90%_50%_at_50%_-6%,oklch(1_0_0/7%),transparent_55%)]"
             aria-hidden
           />
+          <div className="pointer-events-none absolute inset-x-7 top-0 z-[3] h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" aria-hidden />
           <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col overflow-hidden">
           {/* Compact header + progress + rest */}
-          <div className="shrink-0 space-y-2.5 px-4 pb-3 pt-[max(0.65rem,env(safe-area-inset-top))] sm:px-5 sm:pt-4">
+          <div className="mx-2 mt-2 shrink-0 space-y-2.5 rounded-[1.25rem] border border-white/[0.07] bg-black/20 px-3 pb-3 pt-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:mx-3 sm:px-4">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <div className="status-dot scale-90" />
-                  <h2
-                    id="active-workout-heading"
-                    className="truncate font-heading text-base font-semibold leading-tight text-foreground sm:text-sm"
-                  >
-                    {session.name?.trim() || "Active workout"}
-                  </h2>
+                  <p className="type-hud-micro text-primary/70">Live session</p>
                 </div>
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground/65">
+                <h2
+                  id="active-workout-heading"
+                  className="mt-1 truncate font-heading text-lg font-semibold leading-tight tracking-tight text-foreground/95 sm:text-base"
+                >
+                  {session.name?.trim() || "Active workout"}
+                </h2>
+                <p className="mt-0.5 truncate text-[11px] text-muted-foreground/60">
                   {exercises.length === 0
                     ? "Add exercises to begin"
                     : queue.allSetsComplete
@@ -2352,8 +2364,8 @@ function ActiveWorkout({
                   {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-1.5 tabular-nums">
-                <Clock className="size-3.5 text-primary/80" aria-hidden />
+              <div className="flex shrink-0 items-center gap-1.5 rounded-xl border border-primary/15 bg-primary/[0.055] px-2.5 py-2 tabular-nums">
+                <Clock className="size-3.5 text-primary/75" aria-hidden />
                 <span className="font-heading text-lg font-bold leading-none text-primary sm:text-base">
                   {formatTimer(elapsed)}
                 </span>
@@ -2371,7 +2383,7 @@ function ActiveWorkout({
                   aria-label={`${queue.completedSets} of ${queue.totalSets} sets complete`}
                 >
                   <div
-                    className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+                    className="h-full rounded-full bg-gradient-to-r from-[#8f9c17] to-[#dce95c] shadow-[0_0_12px_rgba(196,214,50,0.28)] transition-all duration-500 ease-out"
                     style={{ width: `${sessionProgressPct}%` }}
                   />
                 </div>
@@ -2419,7 +2431,7 @@ function ActiveWorkout({
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  className="glass-subtle flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-xl px-2.5 py-1.5 text-left touch-manipulation"
+                  className="glass-subtle flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border-white/[0.07] bg-white/[0.022] px-3 py-1.5 text-left touch-manipulation"
                   aria-expanded={restSettingsOpen}
                   aria-label={
                     restSettingsOpen
@@ -2475,9 +2487,10 @@ function ActiveWorkout({
           </div>
 
           {/* One movement at a time â€” edge-to-edge on mobile */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-1 sm:px-5 sm:py-2">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2 sm:px-4 sm:py-3">
             {exercises.length === 0 ? (
-              <div className="my-auto flex flex-col gap-4 px-1 py-6 sm:px-2">
+              <div className="relative my-auto flex flex-col gap-4 overflow-hidden rounded-[1.45rem] border border-white/[0.075] bg-gradient-to-br from-white/[0.045] via-white/[0.018] to-transparent px-4 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] sm:px-5">
+                <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:linear-gradient(to_right,rgba(255,255,255,.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,.03)_1px,transparent_1px)] [background-size:20px_20px]" aria-hidden />
                 <div className="text-center">
                   <Dumbbell className="mx-auto size-8 text-primary/50" aria-hidden />
                   <p className="mt-3 font-heading text-lg font-semibold text-foreground">
@@ -2485,7 +2498,7 @@ function ActiveWorkout({
                   </p>
                   <p className="mx-auto mt-1.5 max-w-[20rem] text-sm leading-relaxed text-muted-foreground/70">
                     Pick upper or lower — we&apos;ll fill a session from your favorites and
-                    the muscle groups that still need volume this week.
+                    the muscle groups that still need volume this training cycle.
                   </p>
                 </div>
 
@@ -2581,7 +2594,7 @@ function ActiveWorkout({
                   <div
                     key={ex.id}
                     className={cn(
-                      "relative flex min-h-0 flex-1 flex-col",
+                      "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.45rem] border border-white/[0.075] bg-gradient-to-br from-white/[0.045] via-white/[0.018] to-transparent p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]",
                       cardAnimClass,
                     )}
                   >
@@ -2650,7 +2663,7 @@ function ActiveWorkout({
                         </div>
 
                         {!showMovementSummary ? (
-                          <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.25rem_4.5rem_4.5rem_3rem] gap-1.5 px-0.5 sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5">
+                          <div className="grid grid-cols-[2.15rem_minmax(2.4rem,1fr)_1.9rem_4rem_4rem_2.5rem] gap-1 px-0.5 sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5">
                             <span className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/55">
                               Set
                             </span>
@@ -2723,7 +2736,7 @@ function ActiveWorkout({
                               ) : null}
                               <div
                                 className={cn(
-                                  "grid grid-cols-[2.5rem_minmax(0,1fr)_2.25rem_4.5rem_4.5rem_3rem] items-center gap-1.5 rounded-xl px-0.5 py-1 transition-colors sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5 sm:py-0.5",
+                                  "grid grid-cols-[2.15rem_minmax(2.4rem,1fr)_1.9rem_4rem_4rem_2.5rem] items-center gap-1 rounded-xl px-0.5 py-1 transition-colors sm:grid-cols-[2rem_1fr_2.25rem_4.5rem_4.5rem_2.75rem] sm:gap-1.5 sm:py-0.5",
                                   set.completed &&
                                     "border border-primary/20 bg-primary/10 ring-1 ring-primary/20",
                                 )}
@@ -2913,7 +2926,7 @@ function ActiveWorkout({
           </div>
 
           {/* Thin action bar â€” More menu holds Add / Finish / Discard */}
-          <div className="relative shrink-0 border-t border-glass-border/20 px-3 py-1.5 pb-[max(0.4rem,env(safe-area-inset-bottom))] sm:px-5">
+          <div className="relative mx-2 mb-2 shrink-0 rounded-xl border border-white/[0.07] bg-black/25 px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] backdrop-blur-xl sm:mx-3 sm:px-4">
             {queue.allSetsComplete ? (
               <div className="flex items-stretch gap-2">
                 <Button
@@ -3063,20 +3076,20 @@ function ActiveWorkout({
         </DialogContent>
       </Dialog>
 
-      <PlateCalculatorDialog
-        open={plateCalcTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setPlateCalcTarget(null)
-        }}
-        initialWeight={plateCalcTarget?.weight ?? null}
-        onApply={(weightLb) => {
-          if (plateCalcTarget) {
+      {plateCalcTarget ? (
+        <PlateCalculatorDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setPlateCalcTarget(null)
+          }}
+          initialWeight={plateCalcTarget.weight}
+          onApply={(weightLb) => {
             updateSet(plateCalcTarget.exId, plateCalcTarget.setId, "weight", weightLb)
             clearGhostForSet(plateCalcTarget.setId)
-          }
-          setPlateCalcTarget(null)
-        }}
-      />
+            setPlateCalcTarget(null)
+          }}
+        />
+      ) : null}
 
       <ExercisePicker
         open={showPicker}

@@ -1,22 +1,92 @@
 import { NextRequest, NextResponse } from "next/server"
+import {
+  mapOpenFoodFactsProduct,
+  rankOpenFoodFactsProducts,
+  type FoodSearchItem,
+  type OpenFoodFactsProduct,
+} from "@/lib/calories/open-food-facts"
 
 /** Avoid Next.js caching upstream food API responses (stale/empty in prod). */
 const fetchNoStore: RequestInit = { cache: "no-store" }
 
 export const dynamic = "force-dynamic"
 
-interface FoodItem {
-  food_id: string
-  food_name: string
-  brand_name: string | null
-  food_type: string
-  serving_description: string | null
-  serving_size_g: number | null
-  calories: number | null
-  protein: number | null
-  carbs: number | null
-  fat: number | null
-  source: "fatsecret" | "usda"
+type FoodItem = FoodSearchItem
+
+const OPEN_FOOD_FACTS_BASE = "https://world.openfoodfacts.org"
+const OPEN_FOOD_FACTS_FIELDS = [
+  "code",
+  "product_name",
+  "generic_name",
+  "brands",
+  "nutriments",
+  "serving_size",
+  "serving_quantity",
+  "quantity",
+  "image_front_small_url",
+  "image_front_url",
+  "completeness",
+].join(",")
+const OPEN_FOOD_FACTS_USER_AGENT =
+  process.env.OPEN_FOOD_FACTS_USER_AGENT?.trim() ||
+  "theGRID/0.1 (https://github.com/dabysmedia/theGRID)"
+
+const offSearchCache = new Map<
+  string,
+  { expiresAt: number; foods: FoodSearchItem[] }
+>()
+
+async function openFoodFactsFetch(url: string): Promise<Response> {
+  return fetch(url, {
+    ...fetchNoStore,
+    headers: {
+      Accept: "application/json",
+      "User-Agent": OPEN_FOOD_FACTS_USER_AGENT,
+    },
+    signal: AbortSignal.timeout(8_000),
+  })
+}
+
+async function searchOpenFoodFacts(query: string): Promise<FoodItem[]> {
+  const cacheKey = query.trim().toLocaleLowerCase()
+  const cached = offSearchCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) return cached.foods
+
+  // Open Food Facts currently exposes full-text product search through its
+  // legacy endpoint. The UI submits searches explicitly to respect its limit.
+  const url = new URL("/cgi/search.pl", OPEN_FOOD_FACTS_BASE)
+  url.searchParams.set("search_terms", query.trim())
+  url.searchParams.set("search_simple", "1")
+  url.searchParams.set("action", "process")
+  url.searchParams.set("json", "1")
+  url.searchParams.set("page_size", "30")
+  url.searchParams.set("fields", OPEN_FOOD_FACTS_FIELDS)
+
+  const res = await openFoodFactsFetch(url.toString())
+  if (!res.ok) throw new Error(`Open Food Facts search ${res.status}`)
+
+  const data = (await res.json()) as { products?: OpenFoodFactsProduct[] }
+  const foods = rankOpenFoodFactsProducts(data.products ?? [], query)
+  offSearchCache.set(cacheKey, { expiresAt: Date.now() + 5 * 60_000, foods })
+  return foods
+}
+
+async function lookupOpenFoodFactsBarcode(barcode: string): Promise<FoodItem | null> {
+  const url = new URL(
+    `/api/v2/product/${encodeURIComponent(barcode)}.json`,
+    OPEN_FOOD_FACTS_BASE,
+  )
+  url.searchParams.set("fields", OPEN_FOOD_FACTS_FIELDS)
+
+  const res = await openFoodFactsFetch(url.toString())
+  if (!res.ok) throw new Error(`Open Food Facts product ${res.status}`)
+
+  const data = (await res.json()) as {
+    status?: number
+    product?: OpenFoodFactsProduct
+  }
+  if (data.status !== 1 || !data.product) return null
+  return mapOpenFoodFactsProduct(data.product)
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -116,6 +186,7 @@ async function searchFatSecret(query: string): Promise<FoodItem[]> {
       protein: parsed.protein,
       carbs: parsed.carbs,
       fat: parsed.fat,
+      image_url: null,
       source: "fatsecret" as const,
     }
   })
@@ -223,6 +294,7 @@ async function searchFDC(query: string): Promise<FoodItem[]> {
       protein: protein != null ? Math.round(protein * 10) / 10 : null,
       carbs: carbs != null ? Math.round(carbs * 10) / 10 : null,
       fat: fat != null ? Math.round(fat * 10) / 10 : null,
+      image_url: null,
       source: "usda" as const,
     }
   })
@@ -233,11 +305,80 @@ async function searchFDC(query: string): Promise<FoodItem[]> {
    ═══════════════════════════════════════════════════════ */
 
 export async function GET(req: NextRequest) {
-  const query = req.nextUrl.searchParams.get("q")
-  if (!query || query.trim().length < 2) {
+  const barcode = req.nextUrl.searchParams.get("barcode")?.trim() ?? ""
+  if (barcode) {
+    if (!/^\d{4,18}$/.test(barcode)) {
+      return NextResponse.json(
+        { foods: [], source: "openfoodfacts", error: "Enter a valid barcode number." },
+        { status: 400 },
+      )
+    }
+
+    try {
+      const food = await lookupOpenFoodFactsBarcode(barcode)
+      if (!food) {
+        return NextResponse.json(
+          {
+            foods: [],
+            source: "openfoodfacts",
+            error: "That barcode is not in Open Food Facts yet.",
+          },
+          { status: 404 },
+        )
+      }
+      return NextResponse.json({ foods: [food], source: "openfoodfacts" })
+    } catch (err) {
+      console.error("Open Food Facts barcode lookup failed:", (err as Error).message)
+      return NextResponse.json(
+        {
+          foods: [],
+          source: "openfoodfacts",
+          error: "Barcode lookup is temporarily unavailable.",
+        },
+        { status: 502 },
+      )
+    }
+  }
+
+  const query = req.nextUrl.searchParams.get("q")?.trim() ?? ""
+  if (query.length < 2) {
     return NextResponse.json({ foods: [], source: null })
   }
 
+  let openFoodFactsFailed = false
+  try {
+    const foods = await searchOpenFoodFacts(query)
+    if (foods.length > 0) {
+      return NextResponse.json({ foods, source: "openfoodfacts" })
+    }
+  } catch (err) {
+    openFoodFactsFailed = true
+    console.warn(
+      "Open Food Facts unavailable, trying configured fallback:",
+      (err as Error).message,
+    )
+  }
+
+  const hasConfiguredFallback =
+    (Boolean(process.env.FATSECRET_CLIENT_ID?.trim()) &&
+      Boolean(process.env.FATSECRET_CLIENT_SECRET?.trim())) ||
+    Boolean(process.env.FDC_API_KEY?.trim())
+
+  if (hasConfiguredFallback) return searchConfiguredFallback(query)
+
+  return NextResponse.json(
+    {
+      foods: [],
+      source: "openfoodfacts",
+      ...(openFoodFactsFailed
+        ? { error: "Food search is temporarily unavailable. Try again shortly." }
+        : {}),
+    },
+    { status: openFoodFactsFailed ? 502 : 200 },
+  )
+}
+
+async function searchConfiguredFallback(query: string) {
   const hasFatSecret =
     Boolean(process.env.FATSECRET_CLIENT_ID?.trim()) &&
     Boolean(process.env.FATSECRET_CLIENT_SECRET?.trim())

@@ -208,12 +208,16 @@ export function ProgressiveOverloadCoach({
     <>
       <section
         aria-label="Progressive overload coach"
-        className={cn("space-y-2 border-t border-glass-border/20 pt-3", className)}
+        className={cn(
+          "relative mt-2 space-y-2 overflow-hidden rounded-2xl border border-white/[0.075] bg-gradient-to-br from-primary/[0.07] via-white/[0.025] to-transparent p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]",
+          className,
+        )}
       >
+        <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" aria-hidden />
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
             <TrendingUp className="size-3.5 shrink-0 text-primary/80" aria-hidden />
-            <h4 className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/65">
+            <h4 className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
               Progress & next step
             </h4>
             <span
@@ -296,7 +300,7 @@ export function ProgressiveOverloadCoach({
             </p>
           </div>
           {rec.delta ? (
-            <span className="mb-0.5 shrink-0 rounded-lg bg-primary/12 px-2.5 py-1 text-xs font-bold tabular-nums text-primary">
+            <span className="mb-0.5 shrink-0 rounded-lg border border-primary/15 bg-primary/10 px-2.5 py-1 text-xs font-bold tabular-nums text-primary">
               {rec.delta}
             </span>
           ) : null}
@@ -323,7 +327,7 @@ export function ProgressiveOverloadCoach({
             {apply.label}
           </Button>
         ) : apply ? (
-          <p className="rounded-lg bg-primary/[0.08] px-2 py-1.5 text-[10px] font-medium text-primary/85">
+          <p className="rounded-lg border border-primary/10 bg-primary/[0.065] px-2 py-1.5 text-[10px] font-medium text-primary/85">
             Ready to log: this target is already filled into your next set.
           </p>
         ) : null}

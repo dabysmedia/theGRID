@@ -6,6 +6,7 @@ import {
   isSavedFoodCategory,
   type SavedFoodCategory,
 } from "@/lib/calories/saved-food-category"
+import { normalizeFoodImageUrl } from "@/lib/calories/food-image"
 
 const ALLOWED_MEAL_TAGS = new Set(["breakfast", "lunch", "dinner", "snack"])
 
@@ -120,6 +121,7 @@ export async function POST(req: NextRequest) {
         protein: safeOptionalFloat(body.protein),
         carbs: safeOptionalFloat(body.carbs),
         fat: safeOptionalFloat(body.fat),
+        imageUrl: normalizeFoodImageUrl(body.imageUrl),
         userId,
       },
     })
@@ -175,6 +177,9 @@ export async function PUT(req: NextRequest) {
         protein: safeOptionalFloat(body.protein),
         carbs: safeOptionalFloat(body.carbs),
         fat: safeOptionalFloat(body.fat),
+        ...("imageUrl" in body
+          ? { imageUrl: normalizeFoodImageUrl(body.imageUrl) }
+          : {}),
       },
     })
     return NextResponse.json(meal)

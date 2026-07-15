@@ -1,4 +1,5 @@
 "use client"
+/* eslint-disable @next/next/no-img-element -- food images may be dynamic product URLs */
 
 import { Flame, Pencil, Plus, Trash2, Utensils } from "lucide-react"
 import type { CalorieEntry } from "@/lib/calories/log-food"
@@ -230,6 +231,13 @@ export function CaloriesFocusPanel({
                     <ul className="divide-y divide-white/[0.06]">
                       {items.map((entry) => (
                         <li key={entry.id} className="group/row flex items-center gap-3 px-3 py-3 transition-colors hover:bg-white/[0.025] sm:px-4">
+                          {entry.imageUrl ? (
+                            <img
+                              src={entry.imageUrl}
+                              alt=""
+                              className="h-16 w-14 shrink-0 object-contain drop-shadow-[0_8px_14px_rgba(0,0,0,0.28)] sm:h-18 sm:w-16"
+                            />
+                          ) : null}
                           <div className="min-w-0 flex-1">
                             <p className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground/92 sm:text-sm">
                               {entry.description?.trim() || "Logged entry"}

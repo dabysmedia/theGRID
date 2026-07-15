@@ -479,7 +479,7 @@ export function recommendFreeFormWorkout(
     }
     if (sessionCount >= 3) reasonParts.push("a favorite of yours")
     else if (sessionCount > 0) reasonParts.push("you've logged this before")
-    else if (!compound) reasonParts.push("fresh for this week")
+    else if (!compound) reasonParts.push("fresh in this training cycle")
 
     candidates.push({
       name: ex.name,

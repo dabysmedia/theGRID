@@ -7,6 +7,7 @@ export interface CalorieEntry {
   protein: number | null
   carbs: number | null
   fat: number | null
+  imageUrl: string | null
 }
 
 export interface SavedMeal {
@@ -19,6 +20,7 @@ export interface SavedMeal {
   protein: number | null
   carbs: number | null
   fat: number | null
+  imageUrl: string | null
   useCount: number
 }
 
@@ -32,6 +34,7 @@ export interface DraftMealItem {
   unitProtein: number | null
   unitCarbs: number | null
   unitFat: number | null
+  imageUrl?: string | null
   savedMealId?: string
 }
 

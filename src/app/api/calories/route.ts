@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { parseYyyyMmDdToStoredDate, utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
 import { assertNotVacationBlocked } from "@/lib/vacation-block-server"
+import { normalizeFoodImageUrl } from "@/lib/calories/food-image"
 
 export async function GET(req: NextRequest) {
   try {
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
         protein: safeOptionalFloat(body.protein),
         carbs: safeOptionalFloat(body.carbs),
         fat: safeOptionalFloat(body.fat),
+        imageUrl: normalizeFoodImageUrl(body.imageUrl),
         userId,
       },
     })
@@ -134,6 +136,9 @@ export async function PUT(req: NextRequest) {
         protein: safeOptionalFloat(body.protein),
         carbs: safeOptionalFloat(body.carbs),
         fat: safeOptionalFloat(body.fat),
+        ...("imageUrl" in body
+          ? { imageUrl: normalizeFoodImageUrl(body.imageUrl) }
+          : {}),
       },
     })
     return NextResponse.json(entry)

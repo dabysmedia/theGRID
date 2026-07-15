@@ -67,6 +67,8 @@ model CalorieEntry {
   protein     Float?
   carbs       Float?
   fat         Float?
+  /// Product or meal photo shown in the food log. May be an HTTPS URL or local upload path.
+  imageUrl    String?
   userId      String?
   user        User?    @relation(fields: [userId], references: [id])
   createdAt   DateTime @default(now())
@@ -430,6 +432,8 @@ model SavedMeal {
   protein   Float?
   carbs     Float?
   fat       Float?
+  /// Product or meal photo shown in the saved-food library.
+  imageUrl  String?
   useCount  Int      @default(0)
   userId    String?
   user      User?    @relation(fields: [userId], references: [id])

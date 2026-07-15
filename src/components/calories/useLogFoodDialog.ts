@@ -65,6 +65,7 @@ export function useLogFoodDialog({
   const [protein, setProtein] = useState("")
   const [carbs, setCarbs] = useState("")
   const [fat, setFat] = useState("")
+  const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null)
   const [lastAddedDraftId, setLastAddedDraftId] = useState<string | null>(null)
 
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([])
@@ -175,6 +176,7 @@ export function useLogFoodDialog({
     setProtein(editingEntry.protein != null ? String(editingEntry.protein) : "")
     setCarbs(editingEntry.carbs != null ? String(editingEntry.carbs) : "")
     setFat(editingEntry.fat != null ? String(editingEntry.fat) : "")
+    setCurrentImageUrl(editingEntry.imageUrl)
     setShowSavePrompt(false)
     setLogFoodMode("estimate")
     setShowEstimateMacros(
@@ -248,6 +250,7 @@ export function useLogFoodDialog({
       unitProtein: fields.unitProtein,
       unitCarbs: fields.unitCarbs,
       unitFat: fields.unitFat,
+      imageUrl: fields.imageUrl,
       savedMealId: fields.savedMealId,
     }
   }
@@ -288,6 +291,7 @@ export function useLogFoodDialog({
     protein: number | null
     carbs: number | null
     fat: number | null
+    image_url?: string | null
   }) {
     if (vacationBlocksLog) return
     const cal = food.calories
@@ -303,6 +307,7 @@ export function useLogFoodDialog({
         unitProtein: food.protein != null ? Math.round(food.protein) : null,
         unitCarbs: food.carbs != null ? Math.round(food.carbs) : null,
         unitFat: food.fat != null ? Math.round(food.fat) : null,
+        imageUrl: food.image_url ?? null,
       })
     )
     setLogFoodMode("saved")
@@ -316,6 +321,7 @@ export function useLogFoodDialog({
       setProtein(prefill.protein != null ? String(prefill.protein) : "")
       setCarbs(prefill.carbs != null ? String(prefill.carbs) : "")
       setFat(prefill.fat != null ? String(prefill.fat) : "")
+      setCurrentImageUrl(prefill.imageUrl)
       setShowSavePrompt(true)
       setShowEstimateMacros(
         prefill.protein != null || prefill.carbs != null || prefill.fat != null
@@ -338,6 +344,7 @@ export function useLogFoodDialog({
     setProtein("")
     setCarbs("")
     setFat("")
+    setCurrentImageUrl(null)
     setShowSavePrompt(false)
   }
 
@@ -359,6 +366,7 @@ export function useLogFoodDialog({
         unitProtein: Number.isFinite(p) ? p : null,
         unitCarbs: Number.isFinite(c) ? c : null,
         unitFat: Number.isFinite(f) ? f : null,
+        imageUrl: currentImageUrl,
       })
     )
     resetCurrentItemFields()
@@ -409,6 +417,7 @@ export function useLogFoodDialog({
           protein: protein || null,
           carbs: carbs || null,
           fat: fat || null,
+          imageUrl: currentImageUrl,
         }),
       })
 
@@ -435,6 +444,7 @@ export function useLogFoodDialog({
         unitProtein: meal.protein,
         unitCarbs: meal.carbs,
         unitFat: meal.fat,
+        imageUrl: meal.imageUrl,
         savedMealId: meal.id,
       })
     )
@@ -526,6 +536,7 @@ export function useLogFoodDialog({
             protein: totals.protein != null ? String(totals.protein) : null,
             carbs: totals.carbs != null ? String(totals.carbs) : null,
             fat: totals.fat != null ? String(totals.fat) : null,
+            imageUrl: item.imageUrl ?? null,
           }),
         })
         if (res.ok) {
@@ -601,11 +612,53 @@ export function useLogFoodDialog({
         protein: protein || null,
         carbs: carbs || null,
         fat: fat || null,
+        imageUrl: currentImageUrl,
       }),
     })
 
     fetchSavedMeals()
     setShowSavePrompt(false)
+  }
+
+  async function handleSaveSearchFood(food: {
+    food_name: string
+    brand_name: string | null
+    calories: number | null
+    protein: number | null
+    carbs: number | null
+    fat: number | null
+    image_url?: string | null
+  }): Promise<boolean> {
+    if (food.calories == null || food.calories <= 0) return false
+    const roundedCalories = Math.round(food.calories)
+    const name = food.brand_name ? `${food.food_name} (${food.brand_name})` : food.food_name
+    const existing = savedMeals.find(
+      (meal) =>
+        meal.name.toLowerCase() === name.toLowerCase() && meal.calories === roundedCalories,
+    )
+    if (existing) {
+      setFlashSavedMealId(existing.id)
+      return true
+    }
+
+    const res = await apiFetch("/api/saved-meals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        mealTags: [mealType || mealTypes[0]],
+        calories: roundedCalories,
+        protein: food.protein,
+        carbs: food.carbs,
+        fat: food.fat,
+        imageUrl: food.image_url ?? null,
+      }),
+    })
+    if (!res.ok) return false
+    const saved = (await res.json()) as SavedMeal
+    setSavedMeals((current) => [saved, ...current.filter((meal) => meal.id !== saved.id)])
+    setFlashSavedMealId(saved.id)
+    return true
   }
 
   function requestDeleteSavedMeal(id: string, name: string) {
@@ -643,6 +696,7 @@ export function useLogFoodDialog({
     setCarbs,
     fat,
     setFat,
+    currentImageUrl,
     lastAddedDraftId,
     updateDraftItemQuantity,
     adjustDraftItemQuantity,
@@ -717,6 +771,7 @@ export function useLogFoodDialog({
     handlePostMealToDay,
     handleCreateMeal,
     handleSaveCurrentAsFrequent,
+    handleSaveSearchFood,
     requestDeleteSavedMeal,
     cancelEdit,
     pendingSavedDelete,
