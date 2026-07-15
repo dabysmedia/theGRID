@@ -1,7 +1,7 @@
 "use client"
 /* eslint-disable @next/next/no-img-element -- food images can come from dynamic food sources */
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import {
   BookOpen,
   Camera,
@@ -57,14 +57,12 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
   const { open } = props
   const { activeDate } = useActiveDate()
   const state = useLogFoodDialog(props)
-  const [screen, setScreen] = useState<ComposerScreen>("foods")
+  const [screen, setScreen] = useState<ComposerScreen>(() =>
+    props.editingMeal ? "meal" : "foods",
+  )
   const editingEntry = Boolean(state.editingEntry)
   const editingMeal = Boolean(state.editingMeal)
   const visibleScreen = editingEntry ? "manual" : screen
-
-  useEffect(() => {
-    if (open && state.editingMeal) setScreen("meal")
-  }, [open, state.editingMeal])
 
   function handleOpenChange(next: boolean) {
     if (!next) {

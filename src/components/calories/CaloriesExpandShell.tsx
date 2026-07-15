@@ -471,6 +471,7 @@ export function CaloriesExpandShell({
       ) : null}
 
       <LogFoodDialog
+        key={editingMeal ? `meal-${editingMeal.mealType}` : "food-composer"}
         open={logFoodOpen}
         onOpenChange={(open) => {
           setLogFoodOpen(open)
