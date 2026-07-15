@@ -11,6 +11,7 @@ import {
   Loader2,
   Plus,
   Search,
+  Store,
   Utensils,
   X,
 } from "lucide-react"
@@ -26,27 +27,12 @@ import {
   measurementUnitLabel,
   type FoodMeasurementUnit,
 } from "@/lib/calories/measurements"
+import type {
+  CatalogFoodResult,
+  PortionSelection,
+} from "@/components/calories/food-search-types"
 
-export interface CatalogFoodResult {
-  food_id: string
-  food_name: string
-  brand_name: string | null
-  food_type: string
-  serving_description: string | null
-  serving_size_g: number | null
-  calories: number | null
-  protein: number | null
-  carbs: number | null
-  fat: number | null
-  image_url: string | null
-  source?: "openfoodfacts" | "fatsecret" | "usda"
-}
-
-export interface PortionSelection {
-  amount: number
-  unit: FoodMeasurementUnit
-  multiplier: number
-}
+export type { CatalogFoodResult, PortionSelection } from "@/components/calories/food-search-types"
 
 type SelectedFood =
   | { kind: "catalog"; food: CatalogFoodResult }
@@ -261,11 +247,11 @@ export function UnifiedFoodSearch({
           </div>
         </div>
 
-        <div className="mt-7">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/55">
+        <div className="mt-6">
+          <p className="type-hud-label-soft">
             Choose a measurement
           </p>
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="mt-2 flex rounded-xl border border-glass-border bg-glass-highlight/20 p-1">
             {unitOptions.map((option) => (
               <button
                 key={option}
@@ -283,10 +269,10 @@ export function UnifiedFoodSearch({
                   } else setAmount(String(selectedBasis.amount))
                 }}
                 className={cn(
-                  "h-12 rounded-xl border text-xs font-semibold transition-colors",
+                  "flex-1 rounded-lg py-2.5 text-[12px] font-semibold tracking-wide transition-colors",
                   unit === option
-                    ? "border-primary/35 bg-primary/10 text-primary"
-                    : "border-white/[0.08] bg-white/[0.025] text-muted-foreground hover:bg-white/[0.05]",
+                    ? "bg-background/90 text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {option === "g"
@@ -299,7 +285,8 @@ export function UnifiedFoodSearch({
               </button>
             ))}
           </div>
-          <div className="mt-3 flex items-center rounded-2xl border border-white/[0.09] bg-black/15 px-4">
+          <div className="mt-3 rounded-2xl border border-border/25 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-[#ef4444]/[0.06] px-4 py-4 text-center">
+            <p className="type-hud-label-soft">Portion</p>
             <Input
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
@@ -307,17 +294,17 @@ export function UnifiedFoodSearch({
               min="0.01"
               step={unit === "g" ? "1" : "0.1"}
               inputMode="decimal"
-              className="h-16 flex-1 border-0 bg-transparent px-0 text-3xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
+              className="h-14 border-0 bg-transparent px-0 text-center font-heading text-5xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
               aria-label="Portion amount"
               autoFocus
             />
-            <span className="text-sm font-semibold text-muted-foreground">
+            <p className="type-hud-unit mt-1">
               {measurementUnitLabel(unit, numericAmount)}
-            </span>
+            </p>
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-4 divide-x divide-white/[0.08] border-y border-white/[0.08] py-4">
+        <div className="mt-5 grid grid-cols-4 divide-x divide-border/25 border-y border-border/25 py-4">
           <NutritionNumber label="Calories" value={scaled(selectedBasis.calories)} />
           <NutritionNumber label="Protein" value={scaled(selectedBasis.protein)} suffix="g" />
           <NutritionNumber label="Carbs" value={scaled(selectedBasis.carbs)} suffix="g" />
@@ -340,6 +327,8 @@ export function UnifiedFoodSearch({
 
   const showSaved = filter === "all" || filter === "saved"
   const showRecipes = filter === "all" || filter === "recipes"
+  const restaurantCatalog = catalog.filter((food) => food.source === "restaurant")
+  const generalCatalog = catalog.filter((food) => food.source !== "restaurant")
   const noResults =
     !loading &&
     catalog.length === 0 &&
@@ -348,7 +337,7 @@ export function UnifiedFoodSearch({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="sticky top-0 z-20 bg-[oklch(0.12_0.008_250/94%)] pb-3 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-background/90 pb-3 backdrop-blur-xl">
         <div className="flex gap-2">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground/45" />
@@ -356,8 +345,8 @@ export function UnifiedFoodSearch({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search foods, saved foods, recipes…"
-              className="h-14 rounded-2xl border-white/[0.1] bg-black/20 pl-12 pr-11 text-base shadow-[0_10px_35px_rgba(0,0,0,0.15)]"
+              placeholder="Search foods, recipes, restaurants…"
+              className="h-12 rounded-xl border-glass-border bg-glass-highlight/20 pl-11 pr-10 text-sm"
               autoFocus
             />
             {query ? (
@@ -374,13 +363,13 @@ export function UnifiedFoodSearch({
           <button
             type="button"
             onClick={() => setScannerOpen(true)}
-            className="flex size-14 shrink-0 items-center justify-center rounded-2xl border border-white/[0.09] bg-white/[0.03] text-primary transition-colors hover:bg-primary/10"
+            className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-glass-border bg-glass-highlight/20 text-primary transition-colors hover:bg-primary/10"
             aria-label="Scan barcode"
           >
             <Barcode className="size-5" />
           </button>
         </div>
-        <div className="mt-2 flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
+        <div className="mt-2 flex rounded-xl border border-glass-border bg-glass-highlight/20 p-1">
           {([
             ["all", "All foods"],
             ["saved", "My foods"],
@@ -391,10 +380,10 @@ export function UnifiedFoodSearch({
               type="button"
               onClick={() => setFilter(id)}
               className={cn(
-                "h-9 shrink-0 rounded-xl border px-3.5 text-[10px] font-bold uppercase tracking-[0.1em] transition-colors",
+                "flex-1 rounded-lg py-2 text-[11px] font-semibold transition-colors",
                 filter === id
-                  ? "border-primary/30 bg-primary/10 text-primary"
-                  : "border-white/[0.07] bg-white/[0.02] text-muted-foreground/60",
+                  ? "bg-background/90 text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               {label}
@@ -436,11 +425,41 @@ export function UnifiedFoodSearch({
           </ResultSection>
         ) : null}
 
-        {filter === "all" && (catalog.length > 0 || loading || error) ? (
+        {filter === "all" && restaurantCatalog.length > 0 ? (
+          <ResultSection
+            icon={Store}
+            title="Restaurant menus"
+            caption={`${restaurantCatalog.length} matches`}
+          >
+            {restaurantCatalog.map((food) => (
+              <FoodResultRow
+                key={food.food_id}
+                name={food.food_name}
+                subtitle={[food.brand_name, food.serving_description].filter(Boolean).join(" · ")}
+                calories={food.calories}
+                protein={food.protein}
+                image={food.image_url}
+                onClick={() => chooseFood({ kind: "catalog", food })}
+                accessory={
+                  onSaveCatalog ? (
+                    <SaveCatalogButton
+                      food={food}
+                      saving={savingId === food.food_id}
+                      saved={savedIds.has(food.food_id)}
+                      onSave={saveCatalogFood}
+                    />
+                  ) : null
+                }
+              />
+            ))}
+          </ResultSection>
+        ) : null}
+
+        {filter === "all" && (generalCatalog.length > 0 || loading || error) ? (
           <ResultSection
             icon={Search}
             title="Food database"
-            caption={loading ? "Searching…" : `${catalog.length} matches`}
+            caption={loading ? "Searching…" : `${generalCatalog.length} matches`}
           >
             {loading && catalog.length === 0
               ? [0, 1, 2].map((item) => (
@@ -454,7 +473,7 @@ export function UnifiedFoodSearch({
                 ))
               : null}
             {error ? <p className="py-4 text-xs text-destructive">{error}</p> : null}
-            {catalog.map((food) => (
+            {generalCatalog.map((food) => (
               <FoodResultRow
                 key={food.food_id}
                 name={food.food_name}
@@ -465,24 +484,12 @@ export function UnifiedFoodSearch({
                 onClick={() => chooseFood({ kind: "catalog", food })}
                 accessory={
                   onSaveCatalog ? (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        void saveCatalogFood(food)
-                      }}
-                      disabled={savingId === food.food_id || savedIds.has(food.food_id)}
-                      className="flex size-9 items-center justify-center rounded-xl text-muted-foreground/45 hover:bg-primary/10 hover:text-primary"
-                      aria-label={`Save ${food.food_name}`}
-                    >
-                      {savingId === food.food_id ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : savedIds.has(food.food_id) ? (
-                        <Check className="size-4 text-primary" />
-                      ) : (
-                        <Bookmark className="size-4" />
-                      )}
-                    </button>
+                    <SaveCatalogButton
+                      food={food}
+                      saving={savingId === food.food_id}
+                      saved={savedIds.has(food.food_id)}
+                      onSave={saveCatalogFood}
+                    />
                   ) : null
                 }
               />
@@ -513,6 +520,39 @@ export function UnifiedFoodSearch({
   )
 }
 
+function SaveCatalogButton({
+  food,
+  saving,
+  saved,
+  onSave,
+}: {
+  food: CatalogFoodResult
+  saving: boolean
+  saved: boolean
+  onSave: (food: CatalogFoodResult) => Promise<void>
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation()
+        void onSave(food)
+      }}
+      disabled={saving || saved}
+      className="flex size-9 items-center justify-center rounded-xl text-muted-foreground/45 hover:bg-primary/10 hover:text-primary"
+      aria-label={`Save ${food.food_name}`}
+    >
+      {saving ? (
+        <Loader2 className="size-4 animate-spin" />
+      ) : saved ? (
+        <Check className="size-4 text-primary" />
+      ) : (
+        <Bookmark className="size-4" />
+      )}
+    </button>
+  )
+}
+
 function ResultSection({
   icon: Icon,
   title,
@@ -528,7 +568,7 @@ function ResultSection({
     <section>
       <div className="flex items-center gap-2 border-b border-white/[0.07] pb-2">
         <Icon className="size-3.5 text-primary/75" />
-        <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/75">
+        <h3 className="type-hud-subsection text-foreground/75">
           {title}
         </h3>
         <span className="ml-auto text-[9px] text-muted-foreground/45">{caption}</span>
@@ -559,7 +599,7 @@ function FoodResultRow({
     <button
       type="button"
       onClick={onClick}
-      className="group flex min-h-[5.25rem] w-full items-center gap-3 border-b border-white/[0.06] py-3 text-left transition-colors hover:bg-white/[0.025]"
+      className="group flex min-h-[4.75rem] w-full items-center gap-3 border-b border-border/20 py-2.5 text-left transition-colors hover:bg-glass-highlight/[0.06]"
     >
       <FoodArtwork src={image} label={name} />
       <span className="min-w-0 flex-1">
@@ -579,7 +619,7 @@ function FoodResultRow({
         </span>
       </span>
       {accessory}
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/10 text-primary transition-transform group-active:scale-90">
+      <span className="food-search-add-chip flex size-9 shrink-0 items-center justify-center rounded-full border transition-transform group-active:scale-90">
         <Plus className="size-4" />
       </span>
     </button>
@@ -591,7 +631,7 @@ function RecipeResult({ recipe, onAdd }: { recipe: Recipe; onAdd: () => void }) 
     <button
       type="button"
       onClick={onAdd}
-      className="group flex min-h-[5.75rem] w-full items-center gap-3 border-b border-white/[0.06] py-3 text-left transition-colors hover:bg-white/[0.025]"
+      className="group flex min-h-[4.75rem] w-full items-center gap-3 border-b border-border/20 py-2.5 text-left transition-colors hover:bg-glass-highlight/[0.06]"
     >
       <FoodArtwork src={recipe.imageUrl} label={recipe.name} recipe />
       <span className="min-w-0 flex-1">
@@ -603,7 +643,7 @@ function RecipeResult({ recipe, onAdd }: { recipe: Recipe; onAdd: () => void }) 
           {recipe.calories.toLocaleString()} cal
         </span>
       </span>
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/10 text-primary transition-transform group-active:scale-90">
+      <span className="food-search-add-chip flex size-9 shrink-0 items-center justify-center rounded-full border transition-transform group-active:scale-90">
         <Plus className="size-4" />
       </span>
     </button>
@@ -628,14 +668,14 @@ function FoodArtwork({
       className={cn(
         "shrink-0 rounded-2xl bg-white/[0.035]",
         recipe ? "object-cover" : "object-contain",
-        large ? "size-24" : "size-14",
+        large ? "size-24" : "size-12",
       )}
     />
   ) : (
     <span
       className={cn(
         "flex shrink-0 items-center justify-center rounded-2xl bg-white/[0.04] text-primary/60",
-        large ? "size-24" : "size-14",
+        large ? "size-24" : "size-12",
       )}
       aria-label={label}
     >
@@ -655,10 +695,10 @@ function NutritionNumber({
 }) {
   return (
     <div className="px-1 text-center">
-      <p className="text-sm font-semibold tabular-nums">
+      <p className="type-hud-stat-sm">
         {value == null ? "—" : `${Math.round(value * 10) / 10}${suffix}`}
       </p>
-      <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.1em] text-muted-foreground/45">
+      <p className="type-hud-micro mt-1">
         {label}
       </p>
     </div>

@@ -296,31 +296,40 @@ export function useLogFoodDialog({
   }
 
   function pushDraftItem(item: DraftMealItem) {
-    setDraftMealItems((prev) => {
-      const existing = item.savedMealId
-        ? prev.find((i) => i.savedMealId === item.savedMealId)
-        : prev.find(
-            (i) =>
-              !i.savedMealId &&
-              i.mealType === item.mealType &&
-              i.description === item.description &&
-              i.unitCalories === item.unitCalories
-          )
+    const existing = item.savedMealId
+      ? draftMealItems.find((candidate) => candidate.savedMealId === item.savedMealId)
+      : draftMealItems.find(
+          (candidate) =>
+            !candidate.savedMealId &&
+            candidate.mealType === item.mealType &&
+            candidate.description === item.description &&
+            candidate.unitCalories === item.unitCalories,
+        )
+    const highlightedId = existing?.id ?? item.id
 
-      if (existing) {
-        const nextQty = Math.round((existing.quantity + 1) * 4) / 4
-        setLastAddedDraftId(existing.id)
-        window.setTimeout(() => {
-          setLastAddedDraftId((cur) => (cur === existing.id ? null : cur))
-        }, 1200)
-        return prev.map((i) => (i.id === existing.id ? { ...i, quantity: nextQty } : i))
+    setLastAddedDraftId(highlightedId)
+    window.setTimeout(() => {
+      setLastAddedDraftId((current) => (current === highlightedId ? null : current))
+    }, 1200)
+
+    setDraftMealItems((previous) => {
+      const currentExisting = previous.find((candidate) =>
+        item.savedMealId
+          ? candidate.savedMealId === item.savedMealId
+          : !candidate.savedMealId &&
+            candidate.mealType === item.mealType &&
+            candidate.description === item.description &&
+            candidate.unitCalories === item.unitCalories,
+      )
+      if (currentExisting) {
+        const nextQuantity = Math.round((currentExisting.quantity + 1) * 4) / 4
+        return previous.map((candidate) =>
+          candidate.id === currentExisting.id
+            ? { ...candidate, quantity: nextQuantity }
+            : candidate,
+        )
       }
-
-      setLastAddedDraftId(item.id)
-      window.setTimeout(() => {
-        setLastAddedDraftId((cur) => (cur === item.id ? null : cur))
-      }, 1200)
-      return [...prev, item]
+      return [...previous, item]
     })
   }
 

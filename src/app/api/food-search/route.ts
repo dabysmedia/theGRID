@@ -5,6 +5,7 @@ import {
   type FoodSearchItem,
   type OpenFoodFactsProduct,
 } from "@/lib/calories/open-food-facts"
+import { searchRestaurantMenus } from "@/lib/calories/restaurant-menu-catalog"
 
 /** Avoid Next.js caching upstream food API responses (stale/empty in prod). */
 const fetchNoStore: RequestInit = { cache: "no-store" }
@@ -12,6 +13,18 @@ const fetchNoStore: RequestInit = { cache: "no-store" }
 export const dynamic = "force-dynamic"
 
 type FoodItem = FoodSearchItem
+
+function mergeFoodResults(primary: FoodItem[], secondary: FoodItem[]): FoodItem[] {
+  const seen = new Set<string>()
+  return [...primary, ...secondary].filter((food) => {
+    const key = [food.brand_name, food.food_name, food.serving_description]
+      .map((value) => value?.toLowerCase().trim() ?? "")
+      .join("|")
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  }).slice(0, 40)
+}
 
 const OPEN_FOOD_FACTS_BASE = "https://world.openfoodfacts.org"
 const OPEN_FOOD_FACTS_FIELDS = [
@@ -345,11 +358,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ foods: [], source: null })
   }
 
+  const restaurantFoods = searchRestaurantMenus(query)
   let openFoodFactsFailed = false
   try {
     const foods = await searchOpenFoodFacts(query)
-    if (foods.length > 0) {
-      return NextResponse.json({ foods, source: "openfoodfacts" })
+    const mergedFoods = mergeFoodResults(restaurantFoods, foods)
+    if (mergedFoods.length > 0) {
+      return NextResponse.json({
+        foods: mergedFoods,
+        source:
+          restaurantFoods.length > 0 && foods.length > 0
+            ? "mixed"
+            : restaurantFoods.length > 0
+              ? "restaurant"
+              : "openfoodfacts",
+      })
     }
   } catch (err) {
     openFoodFactsFailed = true
@@ -357,6 +380,10 @@ export async function GET(req: NextRequest) {
       "Open Food Facts unavailable, trying configured fallback:",
       (err as Error).message,
     )
+  }
+
+  if (restaurantFoods.length > 0) {
+    return NextResponse.json({ foods: restaurantFoods, source: "restaurant" })
   }
 
   const hasConfiguredFallback =

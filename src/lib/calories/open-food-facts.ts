@@ -1,4 +1,4 @@
-export type FoodDataSource = "openfoodfacts" | "fatsecret" | "usda"
+export type FoodDataSource = "openfoodfacts" | "fatsecret" | "usda" | "restaurant"
 
 export interface FoodSearchItem {
   food_id: string
