@@ -233,12 +233,13 @@ export function UnifiedFoodSearch({
   }
 
   if (selected && selectedBasis) {
-    const food = selected.food
-    const name = selected.kind === "catalog" ? food.food_name : food.name
-    const image = selected.kind === "catalog" ? food.image_url : food.imageUrl
+    const name =
+      selected.kind === "catalog" ? selected.food.food_name : selected.food.name
+    const image =
+      selected.kind === "catalog" ? selected.food.image_url : selected.food.imageUrl
     const subtitle =
       selected.kind === "catalog"
-        ? food.brand_name || food.serving_description
+        ? selected.food.brand_name || selected.food.serving_description
         : "Saved food"
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col py-1 motion-safe:animate-fade-up">
