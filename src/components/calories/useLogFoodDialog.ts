@@ -613,7 +613,7 @@ export function useLogFoodDialog({
               : item.quantity,
           portionUnit: item.portionUnit ?? "serving",
         }
-      }
+      })
       const response = await apiFetch("/api/calories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
