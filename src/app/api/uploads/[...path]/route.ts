@@ -21,10 +21,11 @@ function resolveUploadPath(parts: string[]): { filePath: string; contentType: st
   const [segment, ...rest] = parts
   if (!segment || rest.length === 0) return null
 
-  if (!PUBLIC_SEGMENTS.has(segment) && segment !== "coach") return null
+  if (!PUBLIC_SEGMENTS.has(segment) && segment !== "coach" && segment !== "food") return null
   if (!rest.every(isSafeSegment)) return null
-  if (segment !== "coach" && rest.length !== 1) return null
-  if (segment === "coach" && rest.length !== 2) return null
+  const userScoped = segment === "coach" || segment === "food"
+  if (!userScoped && rest.length !== 1) return null
+  if (userScoped && rest.length !== 2) return null
 
   const filename = rest[rest.length - 1]
   const ext = path.extname(filename).slice(1).toLowerCase()
@@ -38,7 +39,7 @@ function resolveUploadPath(parts: string[]): { filePath: string; contentType: st
     filePath,
     contentType,
     cacheControl:
-      segment === "coach"
+      userScoped
         ? "private, max-age=31536000, immutable"
         : "public, max-age=31536000, immutable",
   }

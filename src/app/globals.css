@@ -1758,6 +1758,11 @@ html {
   -webkit-backdrop-filter: blur(76px) saturate(1.75);
 }
 
+.food-log-surface.food-log-composer {
+  width: min(calc(100vw - 0.5rem), 68rem) !important;
+  max-width: min(calc(100vw - 0.5rem), 68rem) !important;
+}
+
 .food-log-surface::before {
   content: "";
   position: absolute;

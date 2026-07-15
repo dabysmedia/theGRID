@@ -8,6 +8,8 @@ export interface CalorieEntry {
   carbs: number | null
   fat: number | null
   imageUrl: string | null
+  portionAmount: number | null
+  portionUnit: string | null
 }
 
 export interface SavedMeal {
@@ -21,7 +23,36 @@ export interface SavedMeal {
   carbs: number | null
   fat: number | null
   imageUrl: string | null
+  servingAmount: number
+  servingUnit: import("@/lib/calories/measurements").FoodMeasurementUnit
+  servingWeightG: number | null
   useCount: number
+}
+
+export interface RecipeIngredient {
+  id: string
+  name: string
+  calories: number
+  protein: number | null
+  carbs: number | null
+  fat: number | null
+  portionAmount: number
+  portionUnit: import("@/lib/calories/measurements").FoodMeasurementUnit
+  imageUrl: string | null
+  sortOrder: number
+}
+
+export interface Recipe {
+  id: string
+  name: string
+  mealType: string
+  imageUrl: string | null
+  calories: number
+  protein: number | null
+  carbs: number | null
+  fat: number | null
+  useCount: number
+  ingredients: RecipeIngredient[]
 }
 
 export interface DraftMealItem {
@@ -36,6 +67,9 @@ export interface DraftMealItem {
   unitFat: number | null
   imageUrl?: string | null
   savedMealId?: string
+  recipeId?: string
+  portionAmount?: number
+  portionUnit?: import("@/lib/calories/measurements").FoodMeasurementUnit
 }
 
 export function draftMealItemTotals(item: DraftMealItem) {

@@ -11,6 +11,7 @@ import {
 import { LogFoodDialog } from "@/components/calories/LogFoodDialog"
 import { LogStepsDialog } from "@/components/quick-log/LogStepsDialog"
 import { LogSleepDialog } from "@/components/quick-log/LogSleepDialog"
+import type { DraftMealItem } from "@/lib/calories/log-food"
 
 export type QuickLogKind = "calories" | "steps" | "sleep"
 
@@ -28,6 +29,7 @@ export function useQuickLog(): QuickLogContextValue {
 
 export function QuickLogProvider({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<QuickLogKind | null>(null)
+  const [foodDraft, setFoodDraft] = useState<DraftMealItem[]>([])
 
   const openQuickLog = useCallback((kind: QuickLogKind) => {
     setActive(kind)
@@ -48,6 +50,8 @@ export function QuickLogProvider({ children }: { children: ReactNode }) {
       <LogFoodDialog
         open={active === "calories"}
         onOpenChange={(o) => !o && close()}
+        draftMealItems={foodDraft}
+        onDraftMealItemsChange={setFoodDraft}
         onPosted={() => handleSaved()}
       />
       <LogStepsDialog

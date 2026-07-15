@@ -22,11 +22,24 @@ import {
   type CalorieEntry,
   type DraftMealItem,
   type PendingSavedMealDelete,
+  type Recipe,
   type SavedMeal,
 } from "@/lib/calories/log-food"
 import {
   type SavedFoodCategory,
 } from "@/lib/calories/saved-food-category"
+import type {
+  CatalogFoodResult,
+  PortionSelection,
+} from "@/components/calories/UnifiedFoodSearch"
+
+function mealTypeForCurrentTime() {
+  const hour = new Date().getHours()
+  if (hour < 11) return "breakfast"
+  if (hour < 16) return "lunch"
+  if (hour < 21) return "dinner"
+  return "snack"
+}
 
 export interface UseLogFoodDialogOptions {
   open: boolean
@@ -37,6 +50,7 @@ export interface UseLogFoodDialogOptions {
   onDraftMealItemsChange?: Dispatch<SetStateAction<DraftMealItem[]>>
   onPosted?: (created: CalorieEntry[]) => void
   onUpdated?: (entry: CalorieEntry) => void
+  initialMealType?: string | null
 }
 
 export function useLogFoodDialog({
@@ -48,6 +62,7 @@ export function useLogFoodDialog({
   onDraftMealItemsChange,
   onPosted,
   onUpdated,
+  initialMealType,
 }: UseLogFoodDialogOptions) {
   const { activeDate } = useActiveDate()
   const { user } = useUser()
@@ -69,6 +84,7 @@ export function useLogFoodDialog({
   const [lastAddedDraftId, setLastAddedDraftId] = useState<string | null>(null)
 
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([])
+  const [recipes, setRecipes] = useState<Recipe[]>([])
   const [savedMealSearch, setSavedMealSearch] = useState("")
   const [savedMealCategory, setSavedMealCategory] =
     useState<"all" | SavedFoodCategory>("all")
@@ -97,6 +113,13 @@ export function useLogFoodDialog({
   const [showEstimateMacros, setShowEstimateMacros] = useState(false)
   const [flashSavedMealId, setFlashSavedMealId] = useState<string | null>(null)
   const [postingMeal, setPostingMeal] = useState(false)
+  const [postMealError, setPostMealError] = useState<string | null>(null)
+  const [showRecipeCreator, setShowRecipeCreator] = useState(false)
+  const [recipeName, setRecipeName] = useState("")
+  const [recipeImageUrl, setRecipeImageUrl] = useState<string | null>(null)
+  const [recipeSaving, setRecipeSaving] = useState(false)
+  const [recipeImageUploading, setRecipeImageUploading] = useState(false)
+  const [recipeError, setRecipeError] = useState<string | null>(null)
   const [pendingSavedDelete, setPendingSavedDelete] =
     useState<PendingSavedMealDelete | null>(null)
   const [pendingSavedDeleteBusy, setPendingSavedDeleteBusy] = useState(false)
@@ -132,9 +155,19 @@ export function useLogFoodDialog({
     }
   }, [])
 
+  const fetchRecipes = useCallback(async () => {
+    try {
+      const response = await apiFetch("/api/recipes")
+      const data = await response.json()
+      setRecipes(Array.isArray(data) ? data : [])
+    } catch {
+      setRecipes([])
+    }
+  }, [])
+
   useEffect(() => {
-    if (open) void fetchSavedMeals()
-  }, [open, fetchSavedMeals])
+    if (open) void Promise.all([fetchSavedMeals(), fetchRecipes()])
+  }, [open, fetchSavedMeals, fetchRecipes])
 
   useEffect(() => {
     if (!open) {
@@ -145,14 +178,18 @@ export function useLogFoodDialog({
       setEditSavedError(null)
       setSavedMealSearch("")
       setSavedMealCategory("all")
+      setShowRecipeCreator(false)
+      setRecipeError(null)
+      setPostMealError(null)
       return
     }
     if (!editingEntry) {
+      setMealType(initialMealType ?? mealTypeForCurrentTime())
       setLogFoodMode("saved")
       setLogFoodPhotoOpen(false)
       setShowEstimateMacros(false)
     }
-  }, [open, editingEntry])
+  }, [open, editingEntry, initialMealType])
 
   useEffect(() => {
     if (!open) return
@@ -252,6 +289,9 @@ export function useLogFoodDialog({
       unitFat: fields.unitFat,
       imageUrl: fields.imageUrl,
       savedMealId: fields.savedMealId,
+      recipeId: fields.recipeId,
+      portionAmount: fields.portionAmount,
+      portionUnit: fields.portionUnit,
     }
   }
 
@@ -284,17 +324,12 @@ export function useLogFoodDialog({
     })
   }
 
-  function handleFoodSelect(food: {
-    food_name: string
-    brand_name: string | null
-    calories: number | null
-    protein: number | null
-    carbs: number | null
-    fat: number | null
-    image_url?: string | null
-  }) {
+  function handleFoodSelect(
+    food: CatalogFoodResult,
+    portion: PortionSelection = { amount: 1, unit: "serving", multiplier: 1 },
+  ) {
     if (vacationBlocksLog) return
-    const cal = food.calories
+    const cal = food.calories != null ? food.calories * portion.multiplier : null
     if (cal == null || cal <= 0) return
 
     const label = food.brand_name ? `${food.food_name} (${food.brand_name})` : food.food_name
@@ -304,13 +339,14 @@ export function useLogFoodDialog({
         mealType: effectiveMealType,
         description: label,
         unitCalories: Math.round(cal),
-        unitProtein: food.protein != null ? Math.round(food.protein) : null,
-        unitCarbs: food.carbs != null ? Math.round(food.carbs) : null,
-        unitFat: food.fat != null ? Math.round(food.fat) : null,
+        unitProtein: food.protein != null ? Math.round(food.protein * portion.multiplier * 10) / 10 : null,
+        unitCarbs: food.carbs != null ? Math.round(food.carbs * portion.multiplier * 10) / 10 : null,
+        unitFat: food.fat != null ? Math.round(food.fat * portion.multiplier * 10) / 10 : null,
         imageUrl: food.image_url ?? null,
+        portionAmount: portion.amount,
+        portionUnit: portion.unit,
       })
     )
-    setLogFoodMode("saved")
   }
 
   const handlePhotoPrefill = useCallback(
@@ -418,6 +454,8 @@ export function useLogFoodDialog({
           carbs: carbs || null,
           fat: fat || null,
           imageUrl: currentImageUrl,
+          portionAmount: editingEntry.portionAmount,
+          portionUnit: editingEntry.portionUnit,
         }),
       })
 
@@ -432,7 +470,14 @@ export function useLogFoodDialog({
     addCurrentItemToMeal()
   }
 
-  function handleUseSavedMeal(meal: SavedMeal) {
+  function handleUseSavedMeal(
+    meal: SavedMeal,
+    portion: PortionSelection = {
+      amount: meal.servingAmount || 1,
+      unit: meal.servingUnit || "serving",
+      multiplier: 1,
+    },
+  ) {
     if (vacationBlocksLog) return
     const mealTags = savedMealTagList(meal)
     const effectiveMealType = mealType || (mealTags.length > 0 ? mealTags[0] : mealTypes[0])
@@ -440,18 +485,46 @@ export function useLogFoodDialog({
       createDraftItem({
         mealType: effectiveMealType,
         description: meal.name,
-        unitCalories: meal.calories,
-        unitProtein: meal.protein,
-        unitCarbs: meal.carbs,
-        unitFat: meal.fat,
+        unitCalories: Math.round(meal.calories * portion.multiplier),
+        unitProtein: meal.protein != null ? Math.round(meal.protein * portion.multiplier * 10) / 10 : null,
+        unitCarbs: meal.carbs != null ? Math.round(meal.carbs * portion.multiplier * 10) / 10 : null,
+        unitFat: meal.fat != null ? Math.round(meal.fat * portion.multiplier * 10) / 10 : null,
         imageUrl: meal.imageUrl,
         savedMealId: meal.id,
+        portionAmount: portion.amount,
+        portionUnit: portion.unit,
       })
     )
     setFlashSavedMealId(meal.id)
     window.setTimeout(() => setFlashSavedMealId(null), 900)
     void apiFetch(`/api/saved-meals?id=${meal.id}`, { method: "PATCH" })
       .then(() => fetchSavedMeals())
+      .catch(() => {})
+  }
+
+  function handleUseRecipe(recipe: Recipe) {
+    if (vacationBlocksLog) return
+    const recipeTags = savedMealTagList(recipe)
+    const effectiveMealType =
+      mealType || (recipeTags.length > 0 ? recipeTags[0] : mealTypes[0])
+    const nextItems = recipe.ingredients.map((ingredient) =>
+      createDraftItem({
+        mealType: effectiveMealType,
+        description: ingredient.name,
+        unitCalories: ingredient.calories,
+        unitProtein: ingredient.protein,
+        unitCarbs: ingredient.carbs,
+        unitFat: ingredient.fat,
+        imageUrl: ingredient.imageUrl,
+        recipeId: recipe.id,
+        portionAmount: ingredient.portionAmount,
+        portionUnit: ingredient.portionUnit,
+      }),
+    )
+    setDraftMealItems((current) => [...current, ...nextItems])
+    if (nextItems[0]) setLastAddedDraftId(nextItems[0].id)
+    void apiFetch(`/api/recipes?id=${recipe.id}`, { method: "PATCH" })
+      .then(() => fetchRecipes())
       .catch(() => {})
   }
 
@@ -521,35 +594,141 @@ export function useLogFoodDialog({
   async function handlePostMealToDay() {
     if (vacationBlocksLog || draftMealItems.length === 0 || postingMeal) return
     setPostingMeal(true)
+    setPostMealError(null)
     try {
-      const created: CalorieEntry[] = []
-      for (const item of draftMealItems) {
+      const entries = draftMealItems.map((item) => {
         const totals = draftMealItemTotals(item)
-        const res = await apiFetch("/api/calories", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            date: today,
-            mealType: item.mealType,
-            description: item.description,
-            calories: String(totals.calories),
-            protein: totals.protein != null ? String(totals.protein) : null,
-            carbs: totals.carbs != null ? String(totals.carbs) : null,
-            fat: totals.fat != null ? String(totals.fat) : null,
-            imageUrl: item.imageUrl ?? null,
-          }),
-        })
-        if (res.ok) {
-          created.push(await res.json())
+        return {
+          date: today,
+          mealType: item.mealType,
+          description: item.description,
+          calories: totals.calories,
+          protein: totals.protein,
+          carbs: totals.carbs,
+          fat: totals.fat,
+          imageUrl: item.imageUrl ?? null,
+          portionAmount:
+            item.portionAmount != null
+              ? Math.round(item.portionAmount * item.quantity * 100) / 100
+              : item.quantity,
+          portionUnit: item.portionUnit ?? "serving",
         }
+      })
+      const response = await apiFetch("/api/calories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entries }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        setPostMealError(
+          data && typeof data.error === "string"
+            ? data.error
+            : "Your meal could not be posted. Nothing was changed.",
+        )
+        return
       }
-      if (created.length > 0) {
-        onPosted?.(created)
-        onOpenChange(false)
-      }
+      const created = (await response.json()) as CalorieEntry[]
+      onPosted?.(created)
       setDraftMealItems([])
+      onOpenChange(false)
+    } catch {
+      setPostMealError("Your meal could not be posted. Check your connection and try again.")
     } finally {
       setPostingMeal(false)
+    }
+  }
+
+  async function handleRecipeImage(file: File) {
+    if (recipeImageUploading) return
+    setRecipeError(null)
+    setRecipeImageUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const response = await apiFetch("/api/recipes/upload", {
+        method: "POST",
+        body: formData,
+      })
+      const data = await response.json()
+      if (!response.ok || typeof data.url !== "string") {
+        setRecipeError(
+          typeof data.error === "string" ? data.error : "Picture upload failed.",
+        )
+        return
+      }
+      setRecipeImageUrl(data.url)
+    } catch {
+      setRecipeError("Picture upload failed.")
+    } finally {
+      setRecipeImageUploading(false)
+    }
+  }
+
+  function resetRecipeCreator() {
+    setShowRecipeCreator(false)
+    setRecipeName("")
+    setRecipeImageUrl(null)
+    setRecipeError(null)
+  }
+
+  async function handleSaveRecipe() {
+    if (recipeSaving || draftMealItems.length === 0) return
+    if (!recipeName.trim()) {
+      setRecipeError("Give this recipe a name.")
+      return
+    }
+    setRecipeSaving(true)
+    setRecipeError(null)
+    try {
+      const ingredients = draftMealItems.map((item) => {
+        const totals = draftMealItemTotals(item)
+        return {
+          name: item.description || "Recipe ingredient",
+          ...totals,
+          portionAmount:
+            item.portionAmount != null
+              ? Math.round(item.portionAmount * item.quantity * 100) / 100
+              : item.quantity,
+          portionUnit: item.portionUnit ?? "serving",
+          imageUrl: item.imageUrl ?? null,
+        }
+      })
+      const response = await apiFetch("/api/recipes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: recipeName.trim(),
+          mealTags: [mealType || draftMealItems[0]?.mealType || mealTypes[0]],
+          imageUrl: recipeImageUrl,
+          ingredients,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setRecipeError(
+          data && typeof data.error === "string"
+            ? data.error
+            : "Could not save recipe.",
+        )
+        return
+      }
+      setRecipes((current) => [
+        data as Recipe,
+        ...current.filter((recipe) => recipe.id !== data.id),
+      ])
+      resetRecipeCreator()
+    } finally {
+      setRecipeSaving(false)
+    }
+  }
+
+  async function handleDeleteRecipe(recipe: Recipe) {
+    const response = await apiFetch(`/api/recipes?id=${recipe.id}`, {
+      method: "DELETE",
+    })
+    if (response.ok) {
+      setRecipes((current) => current.filter((item) => item.id !== recipe.id))
     }
   }
 
@@ -620,15 +799,7 @@ export function useLogFoodDialog({
     setShowSavePrompt(false)
   }
 
-  async function handleSaveSearchFood(food: {
-    food_name: string
-    brand_name: string | null
-    calories: number | null
-    protein: number | null
-    carbs: number | null
-    fat: number | null
-    image_url?: string | null
-  }): Promise<boolean> {
+  async function handleSaveSearchFood(food: CatalogFoodResult): Promise<boolean> {
     if (food.calories == null || food.calories <= 0) return false
     const roundedCalories = Math.round(food.calories)
     const name = food.brand_name ? `${food.food_name} (${food.brand_name})` : food.food_name
@@ -652,6 +823,9 @@ export function useLogFoodDialog({
         carbs: food.carbs,
         fat: food.fat,
         imageUrl: food.image_url ?? null,
+        servingAmount: 1,
+        servingUnit: "serving",
+        servingWeightG: food.serving_size_g,
       }),
     })
     if (!res.ok) return false
@@ -701,6 +875,7 @@ export function useLogFoodDialog({
     updateDraftItemQuantity,
     adjustDraftItemQuantity,
     savedMeals,
+    recipes,
     savedMealSearch,
     setSavedMealSearch,
     savedMealCategory,
@@ -751,6 +926,15 @@ export function useLogFoodDialog({
     setShowEstimateMacros,
     flashSavedMealId,
     postingMeal,
+    postMealError,
+    showRecipeCreator,
+    setShowRecipeCreator,
+    recipeName,
+    setRecipeName,
+    recipeImageUrl,
+    recipeSaving,
+    recipeImageUploading,
+    recipeError,
     draftMealItems,
     setDraftMealItems,
     vacationBlocksLog,
@@ -765,6 +949,7 @@ export function useLogFoodDialog({
     addCalories,
     handleSubmit,
     handleUseSavedMeal,
+    handleUseRecipe,
     openEditSavedMeal,
     cancelEditSavedMeal,
     handleUpdateSavedMeal,
@@ -772,6 +957,10 @@ export function useLogFoodDialog({
     handleCreateMeal,
     handleSaveCurrentAsFrequent,
     handleSaveSearchFood,
+    handleRecipeImage,
+    handleSaveRecipe,
+    resetRecipeCreator,
+    handleDeleteRecipe,
     requestDeleteSavedMeal,
     cancelEdit,
     pendingSavedDelete,

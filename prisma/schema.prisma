@@ -41,6 +41,7 @@ model User {
   longGoals       LongGoal[]
   habits          Habit[]
   savedMeals      SavedMeal[]
+  recipes         Recipe[]
   alcoholEntries  AlcoholEntry[]
   bowelEntries    BowelEntry[]
   journalEntries  JournalEntry[]
@@ -69,6 +70,9 @@ model CalorieEntry {
   fat         Float?
   /// Product or meal photo shown in the food log. May be an HTTPS URL or local upload path.
   imageUrl    String?
+  /// Human-readable portion used when logging (for example 125 g or 4 oz).
+  portionAmount Float?
+  portionUnit   String?
   userId      String?
   user        User?    @relation(fields: [userId], references: [id])
   createdAt   DateTime @default(now())
@@ -434,6 +438,11 @@ model SavedMeal {
   fat       Float?
   /// Product or meal photo shown in the saved-food library.
   imageUrl  String?
+  /// Nutrition values above describe this base portion.
+  servingAmount  Float  @default(1)
+  servingUnit    String @default("serving")
+  /// Weight of one serving, when known, enables grams/ounces conversion.
+  servingWeightG Float?
   useCount  Int      @default(0)
   userId    String?
   user      User?    @relation(fields: [userId], references: [id])
@@ -442,6 +451,46 @@ model SavedMeal {
   @@index([mealType])
   @@index([foodCategory])
   @@index([userId])
+}
+
+model Recipe {
+  id        String   @id @default(cuid())
+  name      String
+  /// One tag, or comma-separated tags: breakfast, lunch, dinner, snack
+  mealType  String
+  /// User-uploaded cover image for the complete recipe.
+  imageUrl  String?
+  calories  Int
+  protein   Float?
+  carbs     Float?
+  fat       Float?
+  useCount  Int      @default(0)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  ingredients RecipeIngredient[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([mealType])
+  @@index([userId])
+}
+
+model RecipeIngredient {
+  id          String   @id @default(cuid())
+  recipeId    String
+  recipe      Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  sortOrder   Int      @default(0)
+  name        String
+  calories    Int
+  protein     Float?
+  carbs       Float?
+  fat         Float?
+  portionAmount Float  @default(1)
+  portionUnit   String @default("serving")
+  imageUrl      String?
+  createdAt     DateTime @default(now())
+
+  @@index([recipeId])
 }
 
 model AlcoholEntry {
