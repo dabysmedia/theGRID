@@ -25,9 +25,8 @@ import {
   type Recipe,
   type SavedMeal,
 } from "@/lib/calories/log-food"
-import {
-  type SavedFoodCategory,
-} from "@/lib/calories/saved-food-category"
+import { isFoodMeasurementUnit } from "@/lib/calories/measurements"
+import type { SavedFoodCategory } from "@/lib/calories/saved-food-category"
 import type {
   CatalogFoodResult,
   PortionSelection,
@@ -41,15 +40,23 @@ function mealTypeForCurrentTime() {
   return "snack"
 }
 
+export interface EditingMeal {
+  mealType: string
+  entries: CalorieEntry[]
+}
+
 export interface UseLogFoodDialogOptions {
   open: boolean
   onOpenChange: (open: boolean) => void
   editingEntry?: CalorieEntry | null
   onEditingEntryChange?: (entry: CalorieEntry | null) => void
+  editingMeal?: EditingMeal | null
+  onEditingMealChange?: (meal: EditingMeal | null) => void
   draftMealItems?: DraftMealItem[]
   onDraftMealItemsChange?: Dispatch<SetStateAction<DraftMealItem[]>>
   onPosted?: (created: CalorieEntry[]) => void
   onUpdated?: (entry: CalorieEntry) => void
+  onMealUpdated?: (entries: CalorieEntry[], previousIds: string[]) => void
   initialMealType?: string | null
 }
 
@@ -58,10 +65,13 @@ export function useLogFoodDialog({
   onOpenChange,
   editingEntry: controlledEditingEntry,
   onEditingEntryChange,
+  editingMeal: controlledEditingMeal,
+  onEditingMealChange,
   draftMealItems: controlledDraft,
   onDraftMealItemsChange,
   onPosted,
   onUpdated,
+  onMealUpdated,
   initialMealType,
 }: UseLogFoodDialogOptions) {
   const { activeDate } = useActiveDate()
@@ -73,6 +83,7 @@ export function useLogFoodDialog({
   const setDraftMealItems = onDraftMealItemsChange ?? setInternalDraft
 
   const editingEntry = controlledEditingEntry ?? null
+  const editingMeal = controlledEditingMeal ?? null
 
   const [mealType, setMealType] = useState<string | null>(null)
   const [description, setDescription] = useState("")
@@ -130,14 +141,16 @@ export function useLogFoodDialog({
   )
 
   const vacationBlocksEditingEntry = useMemo(
-    () =>
-      editingEntry
+    () => {
+      const entry = editingEntry ?? editingMeal?.entries[0]
+      return entry
         ? isVacationBlockingCalendarDay(
             user?.vacationResumeDate,
-            editingEntry.date.split("T")[0]
+            entry.date.split("T")[0],
           )
-        : false,
-    [user?.vacationResumeDate, editingEntry]
+        : false
+    },
+    [user?.vacationResumeDate, editingEntry, editingMeal]
   )
 
   const vacationResumeLabel =
@@ -183,13 +196,13 @@ export function useLogFoodDialog({
       setPostMealError(null)
       return
     }
-    if (!editingEntry) {
+    if (!editingEntry && !editingMeal) {
       setMealType(initialMealType ?? mealTypeForCurrentTime())
       setLogFoodMode("saved")
       setLogFoodPhotoOpen(false)
       setShowEstimateMacros(false)
     }
-  }, [open, editingEntry, initialMealType])
+  }, [open, editingEntry, editingMeal, initialMealType])
 
   useEffect(() => {
     if (!open) return
@@ -220,6 +233,30 @@ export function useLogFoodDialog({
       editingEntry.protein != null || editingEntry.carbs != null || editingEntry.fat != null
     )
   }, [editingEntry, open])
+
+  useEffect(() => {
+    if (!editingMeal || !open) return
+    setMealType(editingMeal.mealType)
+    setDraftMealItems(
+      editingMeal.entries.map((entry) => ({
+        id: `entry-${entry.id}`,
+        entryId: entry.id,
+        mealType: editingMeal.mealType,
+        description: entry.description,
+        quantity: 1,
+        unitCalories: entry.calories,
+        unitProtein: entry.protein,
+        unitCarbs: entry.carbs,
+        unitFat: entry.fat,
+        imageUrl: entry.imageUrl,
+        portionAmount: entry.portionAmount ?? 1,
+        portionUnit: isFoodMeasurementUnit(entry.portionUnit)
+          ? entry.portionUnit
+          : "serving",
+      })),
+    )
+    setPostMealError(null)
+  }, [editingMeal, open, setDraftMealItems])
 
   const displayedSavedMeals = useMemo(() => {
     const sorted = [...savedMeals].sort((a, b) => b.useCount - a.useCount || a.name.localeCompare(b.name))
@@ -280,6 +317,7 @@ export function useLogFoodDialog({
   ): DraftMealItem {
     return {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      entryId: fields.entryId,
       quantity: fields.quantity ?? 1,
       mealType: fields.mealType,
       description: fields.description,
@@ -439,6 +477,8 @@ export function useLogFoodDialog({
 
   function cancelEdit() {
     onEditingEntryChange?.(null)
+    onEditingMealChange?.(null)
+    setDraftMealItems([])
     resetCurrentItemFields()
     setMealType(null)
   }
@@ -601,15 +641,22 @@ export function useLogFoodDialog({
   }
 
   async function handlePostMealToDay() {
-    if (vacationBlocksLog || draftMealItems.length === 0 || postingMeal) return
+    if (
+      (vacationBlocksLog && !editingMeal) ||
+      (draftMealItems.length === 0 && !editingMeal) ||
+      vacationBlocksEditingEntry ||
+      postingMeal
+    ) return
     setPostingMeal(true)
     setPostMealError(null)
     try {
+      const date = editingMeal?.entries[0]?.date.split("T")[0] ?? today
       const entries = draftMealItems.map((item) => {
         const totals = draftMealItemTotals(item)
         return {
-          date: today,
-          mealType: item.mealType,
+          ...(item.entryId ? { id: item.entryId } : {}),
+          date,
+          mealType: mealType || item.mealType,
           description: item.description,
           calories: totals.calories,
           protein: totals.protein,
@@ -624,21 +671,37 @@ export function useLogFoodDialog({
         }
       })
       const response = await apiFetch("/api/calories", {
-        method: "POST",
+        method: editingMeal ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entries }),
+        body: JSON.stringify({
+          entries,
+          ...(editingMeal
+            ? {
+                deleteIds: editingMeal.entries
+                  .map((entry) => entry.id)
+                  .filter((id) => !draftMealItems.some((item) => item.entryId === id)),
+              }
+            : {}),
+        }),
       })
       if (!response.ok) {
         const data = await response.json().catch(() => null)
         setPostMealError(
           data && typeof data.error === "string"
             ? data.error
-            : "Your meal could not be posted. Nothing was changed.",
+            : editingMeal
+              ? "Your meal could not be updated. Nothing was changed."
+              : "Your meal could not be posted. Nothing was changed.",
         )
         return
       }
       const created = (await response.json()) as CalorieEntry[]
-      onPosted?.(created)
+      if (editingMeal) {
+        onMealUpdated?.(created, editingMeal.entries.map((entry) => entry.id))
+        onEditingMealChange?.(null)
+      } else {
+        onPosted?.(created)
+      }
       setDraftMealItems([])
       onOpenChange(false)
     } catch {
@@ -867,6 +930,7 @@ export function useLogFoodDialog({
 
   return {
     editingEntry,
+    editingMeal,
     mealType,
     setMealType,
     description,

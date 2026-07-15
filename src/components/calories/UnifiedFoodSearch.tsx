@@ -337,16 +337,16 @@ export function UnifiedFoodSearch({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="sticky top-0 z-20 bg-background/90 pb-3 backdrop-blur-xl">
+      <div className="food-search-sticky sticky top-0 z-20 pb-3 backdrop-blur-xl">
         <div className="flex gap-2">
           <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground/45" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 text-red-200/45" />
             <Input
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search foods, recipes, restaurants…"
-              className="h-12 rounded-xl border-glass-border bg-glass-highlight/20 pl-11 pr-10 text-sm"
+              className="food-search-input h-12 rounded-2xl pl-11 pr-10 text-sm"
               autoFocus
             />
             {query ? (
@@ -363,7 +363,7 @@ export function UnifiedFoodSearch({
           <button
             type="button"
             onClick={() => setScannerOpen(true)}
-            className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-glass-border bg-glass-highlight/20 text-primary transition-colors hover:bg-primary/10"
+            className="food-search-scan-button flex size-12 shrink-0 items-center justify-center rounded-2xl border text-red-200/80 transition-colors hover:text-red-100"
             aria-label="Scan barcode"
           >
             <Barcode className="size-5" />

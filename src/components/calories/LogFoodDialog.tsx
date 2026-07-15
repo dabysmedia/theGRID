@@ -57,9 +57,12 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
   const { open } = props
   const { activeDate } = useActiveDate()
   const state = useLogFoodDialog(props)
-  const [screen, setScreen] = useState<ComposerScreen>("foods")
-  const editing = Boolean(state.editingEntry)
-  const visibleScreen = editing ? "manual" : screen
+  const [screen, setScreen] = useState<ComposerScreen>(() =>
+    props.editingMeal ? "meal" : "foods",
+  )
+  const editingEntry = Boolean(state.editingEntry)
+  const editingMeal = Boolean(state.editingMeal)
+  const visibleScreen = editingEntry ? "manual" : screen
 
   function handleOpenChange(next: boolean) {
     if (!next) {
@@ -75,8 +78,10 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
     state.setLogFoodPhotoOpen(next === "photo")
   }
 
-  const description = editing && state.editingEntry
+  const description = editingEntry && state.editingEntry
     ? `${formatDisplayDate(parseLocalDate(state.editingEntry.date.split("T")[0]))} · ${state.editingEntry.mealType}`
+    : state.editingMeal?.entries[0]
+      ? `${formatDisplayDate(parseLocalDate(state.editingMeal.entries[0].date.split("T")[0]))} · ${state.editingMeal.mealType}`
     : formatDisplayDate(parseLocalDate(activeDate))
 
   return (
@@ -97,14 +102,20 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
               <span className="flex size-8 items-center justify-center rounded-xl border border-[#ef4444]/20 bg-[#ef4444]/[0.08]">
                 <Flame className="size-4 text-[#ef4444]" aria-hidden />
               </span>
-              {editing ? "Edit food" : visibleScreen === "meal" ? "Review meal" : "Add food"}
+              {editingEntry
+                ? "Edit food"
+                : editingMeal
+                  ? `Edit ${state.editingMeal?.mealType ?? "meal"}`
+                  : visibleScreen === "meal"
+                    ? "Review meal"
+                    : "Add food"}
             </DialogTitle>
             <DialogDescription className="type-hud-caption mt-1 normal-case text-muted-foreground/70">
               {description}
             </DialogDescription>
           </DialogHeader>
 
-          {!editing && visibleScreen !== "meal" ? (
+          {!editingEntry && visibleScreen !== "meal" ? (
             <div className="mt-3 flex rounded-xl border border-glass-border bg-glass-highlight/20 p-1">
               {mealTypes.map((meal) => {
                 const accent = MEAL_ACCENT[meal]
@@ -132,7 +143,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
             </div>
           ) : null}
 
-          {!editing && visibleScreen !== "meal" ? (
+          {!editingEntry && visibleScreen !== "meal" ? (
             <nav className="mt-2 flex gap-1 overflow-x-auto [scrollbar-width:none]" aria-label="Food logging method">
               {[
                 { id: "foods" as const, label: "Foods", icon: Search },
@@ -159,7 +170,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
           ) : null}
         </header>
 
-        {state.vacationBlocksLog && !editing ? (
+        {state.vacationBlocksLog && !editingEntry && !editingMeal ? (
           <div className="mx-4 mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2.5 text-xs text-amber-100/85">
             Food logging is paused by vacation mode until {state.vacationResumeLabel}.
           </div>
@@ -188,7 +199,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
             <ManualEntryPanel
               state={state}
               onAdded={() => {
-                if (!editing && state.estimateCalDisplay != null) setScreen("meal")
+                if (!editingEntry && state.estimateCalDisplay != null) setScreen("meal")
               }}
             />
           ) : null}
@@ -216,7 +227,8 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
 
         <DialogFooter
           state={state}
-          editing={editing}
+          editingEntry={editingEntry}
+          editingMeal={editingMeal}
           screen={visibleScreen}
           onReview={() => setScreen("meal")}
         />
@@ -227,16 +239,18 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
 
 function DialogFooter({
   state,
-  editing,
+  editingEntry,
+  editingMeal,
   screen,
   onReview,
 }: {
   state: DialogState
-  editing: boolean
+  editingEntry: boolean
+  editingMeal: boolean
   screen: ComposerScreen
   onReview: () => void
 }) {
-  if (editing) {
+  if (editingEntry) {
     return (
       <div className="shrink-0 border-t border-border/30 bg-background/70 px-4 py-3 pb-[max(0.75rem,calc(0.5rem+env(safe-area-inset-bottom)))] backdrop-blur-md">
         <div className="flex gap-2">
@@ -257,7 +271,7 @@ function DialogFooter({
     )
   }
 
-  if (state.draftMealItems.length === 0) return null
+  if (state.draftMealItems.length === 0 && !editingMeal) return null
 
   return (
     <div className="shrink-0 border-t border-border/30 bg-background/70 px-4 py-3 pb-[max(0.75rem,calc(0.5rem+env(safe-area-inset-bottom)))] backdrop-blur-md">
@@ -271,12 +285,21 @@ function DialogFooter({
           type="button"
           variant="glass"
           className="h-12 w-full press-scale text-sm font-semibold"
-          disabled={state.postingMeal || state.vacationBlocksLog}
+          disabled={
+            state.postingMeal ||
+            (editingMeal ? state.vacationBlocksEditingEntry : state.vacationBlocksLog)
+          }
           onClick={() => void state.handlePostMealToDay()}
         >
           {state.postingMeal
-            ? "Adding meal…"
-            : `Add ${state.draftMealItems.length} item${state.draftMealItems.length === 1 ? "" : "s"} · ${state.draftTotals.calories.toLocaleString()} cal`}
+            ? editingMeal
+              ? "Saving meal…"
+              : "Adding meal…"
+            : editingMeal
+              ? state.draftMealItems.length === 0
+                ? "Delete meal"
+                : `Save meal · ${state.draftTotals.calories.toLocaleString()} cal`
+              : `Add ${state.draftMealItems.length} item${state.draftMealItems.length === 1 ? "" : "s"} · ${state.draftTotals.calories.toLocaleString()} cal`}
         </Button>
       ) : (
         <button
@@ -331,7 +354,8 @@ function MealReview({ state, onBack }: { state: DialogState; onBack: () => void 
               {state.mealType ?? "Meal"}
             </p>
             <p className="type-hud-caption mt-0.5 normal-case">
-              {state.draftMealItems.length} item{state.draftMealItems.length === 1 ? "" : "s"} ready to log
+              {state.draftMealItems.length} item{state.draftMealItems.length === 1 ? "" : "s"}{" "}
+              {state.editingMeal ? "in this meal" : "ready to log"}
             </p>
           </div>
           <p className="font-heading text-3xl font-semibold tabular-nums text-red-100/90">

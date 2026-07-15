@@ -133,13 +133,13 @@ export function RestaurantMenuBrowser({
   return (
     <div className="space-y-5">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/50" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-red-200/45" />
         <Input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search restaurants or menu items"
-          className="h-12 rounded-xl border-glass-border bg-glass-highlight/20 pl-10"
+          className="food-search-input h-12 rounded-2xl pl-10"
           autoFocus
         />
       </div>
@@ -263,13 +263,13 @@ function RestaurantMenuView({
       </div>
 
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/50" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-red-200/45" />
         <Input
           type="search"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder={`Search ${restaurant.name}'s menu`}
-          className="h-12 rounded-xl border-glass-border bg-glass-highlight/20 pl-10"
+          className="food-search-input h-12 rounded-2xl pl-10"
           autoFocus
         />
       </div>

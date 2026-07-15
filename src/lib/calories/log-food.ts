@@ -57,6 +57,8 @@ export interface Recipe {
 
 export interface DraftMealItem {
   id: string
+  /** Existing calorie-log row when this draft is editing a posted meal. */
+  entryId?: string
   mealType: string
   description: string | null
   /** Number of servings / units (default 1). */
