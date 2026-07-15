@@ -313,7 +313,14 @@ export function useLogFoodDialog({
     }, 1200)
 
     setDraftMealItems((previous) => {
-      const currentExisting = previous.find((candidate) => candidate.id === existing?.id)
+      const currentExisting = previous.find((candidate) =>
+        item.savedMealId
+          ? candidate.savedMealId === item.savedMealId
+          : !candidate.savedMealId &&
+            candidate.mealType === item.mealType &&
+            candidate.description === item.description &&
+            candidate.unitCalories === item.unitCalories,
+      )
       if (currentExisting) {
         const nextQuantity = Math.round((currentExisting.quantity + 1) * 4) / 4
         return previous.map((candidate) =>
