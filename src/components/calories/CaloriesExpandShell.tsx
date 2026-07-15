@@ -263,7 +263,7 @@ export function CaloriesExpandShell({
         </p>
         <button
           type="button"
-          onClick={openAddFood}
+          onClick={() => openAddFood()}
           className={cn(
             "mt-2.5 inline-flex h-9 w-full items-center justify-center gap-1.5",
             "rounded-xl border border-red-400/40 bg-[oklch(0.16_0.03_25/72%)] px-3",
