@@ -30,7 +30,7 @@ export function CaloriesFocusPanel({
   mealGroups,
   status,
   onAdd,
-  onEdit,
+  onEditMeal,
   onDelete,
   onRetry,
 }: {
@@ -40,7 +40,7 @@ export function CaloriesFocusPanel({
   mealGroups: MealGroup[]
   status: "loading" | "ready" | "error"
   onAdd: (mealType?: string) => void
-  onEdit: (entry: CalorieEntry) => void
+  onEditMeal: (mealType: string, entries: CalorieEntry[]) => void
   onDelete: (entry: CalorieEntry) => void
   onRetry: () => void
 }) {
@@ -191,6 +191,14 @@ export function CaloriesFocusPanel({
                       <span className="text-sm font-semibold tabular-nums" style={{ color: accent.text }}>{total.toLocaleString()} cal</span>
                       <button
                         type="button"
+                        onClick={() => onEditMeal(meal, items)}
+                        className="flex size-9 items-center justify-center rounded-xl border border-white/[0.08] text-muted-foreground transition-colors hover:border-white/[0.15] hover:bg-white/[0.04] hover:text-foreground/80"
+                        aria-label={`Edit ${meal} meal`}
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => onAdd(meal)}
                         className="flex size-9 items-center justify-center rounded-xl border border-white/[0.08] text-muted-foreground transition-colors hover:border-red-300/25 hover:bg-red-400/[0.06] hover:text-red-100"
                         aria-label={`Add food to ${meal}`}
@@ -236,10 +244,7 @@ export function CaloriesFocusPanel({
                             <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/45">cal</p>
                           </div>
 
-                          <div className="flex shrink-0 items-center gap-0.5">
-                            <button type="button" onClick={() => onEdit(entry)} className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/45 transition-colors hover:bg-white/[0.05] hover:text-foreground/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/15" aria-label={"Edit " + (entry.description?.trim() || entry.calories + " cal")}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
+                          <div className="flex shrink-0 items-center">
                             <button type="button" onClick={() => onDelete(entry)} className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/35 transition-colors hover:bg-red-400/[0.06] hover:text-red-300/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/15" aria-label={"Delete " + (entry.description?.trim() || entry.calories + " cal")}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>

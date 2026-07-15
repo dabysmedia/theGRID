@@ -121,7 +121,60 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
-    const body = await req.json()
+    const body = (await req.json()) as Record<string, unknown>
+
+    if (Array.isArray(body.entries)) {
+      const rawEntries = body.entries
+      const deleteIds = Array.isArray(body.deleteIds)
+        ? body.deleteIds
+            .filter((id): id is string => typeof id === "string" && id.trim() !== "")
+            .map((id) => id.trim())
+        : []
+      if (rawEntries.length > 100 || deleteIds.length > 100 || rawEntries.length + deleteIds.length === 0) {
+        return NextResponse.json(
+          { error: "Update between 1 and 100 foods at a time." },
+          { status: 400 },
+        )
+      }
+
+      const entries = rawEntries.map((entry) =>
+        entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {},
+      )
+      const updateIds = entries
+        .map((entry) => (typeof entry.id === "string" ? entry.id.trim() : ""))
+        .filter(Boolean)
+      const touchedIds = [...new Set([...updateIds, ...deleteIds])]
+      if (touchedIds.length !== updateIds.length + deleteIds.length) {
+        return NextResponse.json({ error: "Duplicate entry ids are not allowed." }, { status: 400 })
+      }
+
+      if (touchedIds.length > 0) {
+        const ownedEntries = await prisma.calorieEntry.count({
+          where: { id: { in: touchedIds }, userId },
+        })
+        if (ownedEntries !== touchedIds.length) {
+          return NextResponse.json({ error: "One or more foods were not found." }, { status: 404 })
+        }
+      }
+
+      const data = await Promise.all(entries.map((entry) => calorieEntryData(entry, userId)))
+      const saved = await prisma.$transaction(async (tx) => {
+        const nextEntries = await Promise.all(
+          entries.map((entry, index) => {
+            const id = typeof entry.id === "string" ? entry.id.trim() : ""
+            return id
+              ? tx.calorieEntry.update({ where: { id }, data: data[index] })
+              : tx.calorieEntry.create({ data: data[index] })
+          }),
+        )
+        if (deleteIds.length > 0) {
+          await tx.calorieEntry.deleteMany({ where: { id: { in: deleteIds }, userId } })
+        }
+        return nextEntries
+      })
+      return NextResponse.json(saved)
+    }
+
     const id = typeof body.id === "string" ? body.id.trim() : ""
     if (!id) {
       return NextResponse.json({ error: "Entry id is required." }, { status: 400 })

@@ -6,6 +6,7 @@ import { Pencil, Plus, Trash2 } from "lucide-react"
 import { CaloriesPipField } from "@/components/calories/CaloriesPipField"
 import { CaloriesFocusPanel } from "@/components/calories/CaloriesFocusPanel"
 import { LogFoodDialog } from "@/components/calories/LogFoodDialog"
+import type { EditingMeal } from "@/components/calories/useLogFoodDialog"
 import { Button } from "@/components/ui/button"
 import { HUB_MOTION_MS } from "@/components/hub/HubMotion"
 import { useActiveDate } from "@/context/DateContext"
@@ -89,6 +90,7 @@ export function CaloriesExpandShell({
   const [logFoodOpen, setLogFoodOpen] = useState(false)
   const [preferredMealType, setPreferredMealType] = useState<string | null>(null)
   const [editingEntry, setEditingEntry] = useState<CalorieEntry | null>(null)
+  const [editingMeal, setEditingMeal] = useState<EditingMeal | null>(null)
   const [draftMealItems, setDraftMealItems] = useState<DraftMealItem[]>([])
   const [pendingDelete, setPendingDelete] = useState<{
     id: string
@@ -164,13 +166,22 @@ export function CaloriesExpandShell({
 
   function openAddFood(mealType?: string) {
     setEditingEntry(null)
+    setEditingMeal(null)
     setPreferredMealType(mealType ?? null)
     setLogFoodOpen(true)
   }
 
   function startEdit(entry: CalorieEntry) {
+    setEditingMeal(null)
     setPreferredMealType(null)
     setEditingEntry(entry)
+    setLogFoodOpen(true)
+  }
+
+  function startEditMeal(mealType: string, mealEntries: CalorieEntry[]) {
+    setEditingEntry(null)
+    setPreferredMealType(null)
+    setEditingMeal({ mealType, entries: mealEntries })
     setLogFoodOpen(true)
   }
 
@@ -227,7 +238,7 @@ export function CaloriesExpandShell({
         mealGroups={mealGroups}
         status={entriesStatus}
         onAdd={openAddFood}
-        onEdit={startEdit}
+        onEditMeal={startEditMeal}
         onRetry={() => setReloadKey((key) => key + 1)}
         onDelete={(entry) =>
           requestDelete(
@@ -464,13 +475,17 @@ export function CaloriesExpandShell({
         onOpenChange={(open) => {
           setLogFoodOpen(open)
           if (!open) {
+            if (editingMeal) setDraftMealItems([])
             setEditingEntry(null)
+            setEditingMeal(null)
             setPreferredMealType(null)
           }
         }}
         initialMealType={preferredMealType}
         editingEntry={editingEntry}
         onEditingEntryChange={setEditingEntry}
+        editingMeal={editingMeal}
+        onEditingMealChange={setEditingMeal}
         draftMealItems={draftMealItems}
         onDraftMealItemsChange={setDraftMealItems}
         onPosted={(created) => {
@@ -480,6 +495,15 @@ export function CaloriesExpandShell({
         onUpdated={(updated) => {
           setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)))
           setEditingEntry(null)
+          bumpHub()
+        }}
+        onMealUpdated={(updated, previousIds) => {
+          const previousIdSet = new Set(previousIds)
+          setEntries((current) => [
+            ...updated,
+            ...current.filter((entry) => !previousIdSet.has(entry.id)),
+          ])
+          setEditingMeal(null)
           bumpHub()
         }}
       />
