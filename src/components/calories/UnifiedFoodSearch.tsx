@@ -84,7 +84,7 @@ export function UnifiedFoodSearch({
 
   const searchCatalog = useCallback(async (value: string, barcode = false) => {
     const trimmed = value.trim()
-    if ((!barcode && trimmed.length < 2) || filter !== "all") {
+    if (!barcode && trimmed.length < 2) {
       setCatalog([])
       return
     }
@@ -109,7 +109,7 @@ export function UnifiedFoodSearch({
     } finally {
       if (requestId === requestRef.current) setLoading(false)
     }
-  }, [filter])
+  }, [])
 
   useEffect(() => {
     const trimmed = query.trim()
