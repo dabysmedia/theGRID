@@ -87,6 +87,7 @@ export function CaloriesExpandShell({
     "loading",
   )
   const [logFoodOpen, setLogFoodOpen] = useState(false)
+  const [preferredMealType, setPreferredMealType] = useState<string | null>(null)
   const [editingEntry, setEditingEntry] = useState<CalorieEntry | null>(null)
   const [draftMealItems, setDraftMealItems] = useState<DraftMealItem[]>([])
   const [pendingDelete, setPendingDelete] = useState<{
@@ -161,12 +162,14 @@ export function CaloriesExpandShell({
     window.dispatchEvent(new CustomEvent("grid:log-saved"))
   }
 
-  function openAddFood() {
+  function openAddFood(mealType?: string) {
     setEditingEntry(null)
+    setPreferredMealType(mealType ?? null)
     setLogFoodOpen(true)
   }
 
   function startEdit(entry: CalorieEntry) {
+    setPreferredMealType(null)
     setEditingEntry(entry)
     setLogFoodOpen(true)
   }
@@ -460,8 +463,12 @@ export function CaloriesExpandShell({
         open={logFoodOpen}
         onOpenChange={(open) => {
           setLogFoodOpen(open)
-          if (!open) setEditingEntry(null)
+          if (!open) {
+            setEditingEntry(null)
+            setPreferredMealType(null)
+          }
         }}
+        initialMealType={preferredMealType}
         editingEntry={editingEntry}
         onEditingEntryChange={setEditingEntry}
         draftMealItems={draftMealItems}

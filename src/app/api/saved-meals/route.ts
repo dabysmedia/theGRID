@@ -7,6 +7,7 @@ import {
   type SavedFoodCategory,
 } from "@/lib/calories/saved-food-category"
 import { normalizeFoodImageUrl } from "@/lib/calories/food-image"
+import { isFoodMeasurementUnit } from "@/lib/calories/measurements"
 
 const ALLOWED_MEAL_TAGS = new Set(["breakfast", "lunch", "dinner", "snack"])
 
@@ -95,6 +96,11 @@ function safeOptionalFloat(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+function safePositiveFloat(v: unknown, fallback: number): number {
+  const n = parseFloat(String(v ?? "").trim())
+  return Number.isFinite(n) && n > 0 ? n : fallback
+}
+
 export async function POST(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
@@ -122,6 +128,11 @@ export async function POST(req: NextRequest) {
         carbs: safeOptionalFloat(body.carbs),
         fat: safeOptionalFloat(body.fat),
         imageUrl: normalizeFoodImageUrl(body.imageUrl),
+        servingAmount: safePositiveFloat(body.servingAmount, 1),
+        servingUnit: isFoodMeasurementUnit(body.servingUnit)
+          ? body.servingUnit
+          : "serving",
+        servingWeightG: safeOptionalFloat(body.servingWeightG),
         userId,
       },
     })
@@ -180,6 +191,14 @@ export async function PUT(req: NextRequest) {
         ...("imageUrl" in body
           ? { imageUrl: normalizeFoodImageUrl(body.imageUrl) }
           : {}),
+        servingAmount: safePositiveFloat(body.servingAmount, existing.servingAmount),
+        servingUnit: isFoodMeasurementUnit(body.servingUnit)
+          ? body.servingUnit
+          : existing.servingUnit,
+        servingWeightG:
+          "servingWeightG" in body
+            ? safeOptionalFloat(body.servingWeightG)
+            : existing.servingWeightG,
       },
     })
     return NextResponse.json(meal)

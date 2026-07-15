@@ -3,6 +3,7 @@
 
 import { Flame, Pencil, Plus, Trash2, Utensils } from "lucide-react"
 import type { CalorieEntry } from "@/lib/calories/log-food"
+import { formatFoodPortion } from "@/lib/calories/measurements"
 
 type MealGroup = {
   meal: string
@@ -38,7 +39,7 @@ export function CaloriesFocusPanel({
   entries: CalorieEntry[]
   mealGroups: MealGroup[]
   status: "loading" | "ready" | "error"
-  onAdd: () => void
+  onAdd: (mealType?: string) => void
   onEdit: (entry: CalorieEntry) => void
   onDelete: (entry: CalorieEntry) => void
   onRetry: () => void
@@ -47,13 +48,6 @@ export function CaloriesFocusPanel({
   const overTarget = Math.max(0, consumed - target)
   const pct = target > 0 ? Math.round((consumed / target) * 100) : 0
   const progressPct = Math.min(100, Math.max(0, pct))
-  const mealMix = ["breakfast", "lunch", "dinner", "snack"].map((meal) => ({
-    meal,
-    total: mealGroups.find((group) => group.meal === meal)?.total ?? 0,
-    accent: MEAL_ACCENT[meal] ?? DEFAULT_ACCENT,
-  }))
-  const maxMealCalories = Math.max(1, ...mealMix.map((item) => item.total))
-
   return (
     <div className="pointer-events-auto mt-2 motion-safe:animate-fade-up motion-reduce:animate-none">
       <section className="relative border-y border-white/[0.07] px-0.5 py-4 sm:px-1 sm:py-5">
@@ -85,7 +79,7 @@ export function CaloriesFocusPanel({
 
             <button
               type="button"
-              onClick={onAdd}
+              onClick={() => onAdd()}
               className="hidden h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-300/20 bg-red-400/[0.05] px-3 type-hud-micro text-red-100/80 transition-[border-color,background-color,color,transform] duration-300 hover:border-red-300/35 hover:bg-red-400/[0.09] hover:text-red-50 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/30 sm:inline-flex"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden />
@@ -123,7 +117,7 @@ export function CaloriesFocusPanel({
 
           <button
             type="button"
-            onClick={onAdd}
+            onClick={() => onAdd()}
             className="mt-4 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-red-300/20 bg-red-400/[0.06] type-hud-micro text-red-100/85 transition-[border-color,background-color,transform] duration-300 hover:border-red-300/35 hover:bg-red-400/[0.1] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/30 sm:hidden"
           >
             <Plus className="h-4 w-4" aria-hidden />
@@ -132,42 +126,8 @@ export function CaloriesFocusPanel({
         </div>
       </section>
 
-      <section className="border-b border-white/[0.07] px-0.5 py-3.5 sm:px-1" aria-label="Meal distribution">
-        <div className="flex items-center justify-between gap-3">
-          <p className="type-hud-subsection">Meal mix</p>
-          <p className="type-hud-micro text-muted-foreground/40">Calories by meal</p>
-        </div>
-        <div className="mt-3 grid grid-cols-4 gap-2 sm:gap-3">
-          {mealMix.map((item) => {
-            const height = item.total > 0 ? Math.max(12, (item.total / maxMealCalories) * 100) : 4
-            return (
-              <div key={item.meal} className="min-w-0">
-                <div className="flex h-12 items-end border-b border-white/[0.06] px-1 sm:h-14">
-                  <div
-                    className="w-full origin-bottom transition-[height,opacity] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
-                    style={{
-                      height: height + "%",
-                      opacity: item.total > 0 ? 0.82 : 0.18,
-                      background: `linear-gradient(180deg, ${item.accent.dot}, ${item.accent.dot}55)`,
-                      boxShadow: item.total > 0 ? `0 0 10px ${item.accent.dot}33` : undefined,
-                    }}
-                    aria-hidden
-                  />
-                </div>
-                <p className="mt-1.5 truncate text-center text-[8px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/50 sm:text-[9px]">
-                  {item.meal}
-                </p>
-                <p className="mt-0.5 truncate text-center text-[10px] font-semibold tabular-nums text-foreground/70">
-                  {item.total.toLocaleString()}
-                </p>
-              </div>
-            )
-          })}
-        </div>
-      </section>
-
-      <section className="mt-1" aria-label="Today's food">
-        <header className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-0.5 py-3.5 sm:px-1">
+      <section className="mt-5" aria-label="Today's food">
+        <header className="flex items-center justify-between gap-3 px-0.5 pb-3 sm:px-1">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground/65">
               <Utensils className="h-3.5 w-3.5" aria-hidden />
@@ -181,7 +141,7 @@ export function CaloriesFocusPanel({
           </div>
           <button
             type="button"
-            onClick={onAdd}
+            onClick={() => onAdd()}
             className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 type-hud-micro text-muted-foreground/75 transition-colors hover:border-red-300/20 hover:bg-red-400/[0.05] hover:text-red-100/80"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden />
@@ -189,7 +149,7 @@ export function CaloriesFocusPanel({
           </button>
         </header>
 
-        <div>
+        <div className="space-y-3">
           {status === "loading" ? (
             <div className="space-y-2" aria-label="Loading food log">
               <div className="skeleton h-16" />
@@ -209,7 +169,7 @@ export function CaloriesFocusPanel({
               <Utensils className="mx-auto h-5 w-5 text-muted-foreground/35" aria-hidden />
               <p className="mt-2 text-sm font-medium text-foreground/75">No food logged yet</p>
               <p className="mt-1 text-[11px] text-muted-foreground/50">Add your first meal or snack for today.</p>
-              <button type="button" onClick={onAdd} className="mt-4 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-red-300/20 bg-red-400/[0.05] px-4 type-hud-micro text-red-100/80 transition-colors hover:bg-red-400/[0.09]">
+              <button type="button" onClick={() => onAdd()} className="mt-4 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-red-300/20 bg-red-400/[0.05] px-4 type-hud-micro text-red-100/80 transition-colors hover:bg-red-400/[0.09]">
                 <Plus className="h-3.5 w-3.5" aria-hidden />
                 Add food
               </button>
@@ -217,20 +177,31 @@ export function CaloriesFocusPanel({
           ) : null}
 
           {status === "ready" && mealGroups.length > 0 ? (
-            <div>
+            <div className="space-y-3">
               {mealGroups.map(({ meal, items, total }) => {
                 const accent = MEAL_ACCENT[meal] ?? DEFAULT_ACCENT
                 return (
-                  <div key={meal} className="min-w-0 border-b border-white/[0.07] motion-safe:animate-fade-up motion-reduce:animate-none">
-                    <div className="flex items-center gap-2.5 border-b border-white/[0.05] border-l-2 px-2.5 py-2 sm:px-3" style={{ borderLeftColor: accent.dot }}>
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent.dot, boxShadow: "0 0 10px " + accent.dot }} aria-hidden />
-                      <p className="min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: accent.text }}>{meal}</p>
-                      <span className="type-hud-stat-xs shrink-0" style={{ color: accent.text }}>{total.toLocaleString()} cal</span>
+                  <div key={meal} className="min-w-0 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.018] motion-safe:animate-fade-up motion-reduce:animate-none">
+                    <div className="flex items-center gap-3 border-b border-white/[0.07] px-3.5 py-3 sm:px-4">
+                      <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: accent.dot, boxShadow: "0 0 12px " + accent.dot + "55" }} aria-hidden />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: accent.text }}>{meal}</p>
+                        <p className="mt-0.5 text-[9px] text-muted-foreground/45">{items.length} item{items.length === 1 ? "" : "s"}</p>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums" style={{ color: accent.text }}>{total.toLocaleString()} cal</span>
+                      <button
+                        type="button"
+                        onClick={() => onAdd(meal)}
+                        className="flex size-9 items-center justify-center rounded-xl border border-white/[0.08] text-muted-foreground transition-colors hover:border-red-300/25 hover:bg-red-400/[0.06] hover:text-red-100"
+                        aria-label={`Add food to ${meal}`}
+                      >
+                        <Plus className="size-4" />
+                      </button>
                     </div>
 
-                    <ul className="divide-y divide-white/[0.06]">
+                    <ul className="divide-y divide-white/[0.055]">
                       {items.map((entry) => (
-                        <li key={entry.id} className="group/row flex items-center gap-3 px-3 py-3 transition-colors hover:bg-white/[0.025] sm:px-4">
+                        <li key={entry.id} className="group/row flex items-center gap-3 px-3.5 py-3.5 transition-colors hover:bg-white/[0.025] sm:px-4">
                           {entry.imageUrl ? (
                             <img
                               src={entry.imageUrl}
@@ -242,15 +213,22 @@ export function CaloriesFocusPanel({
                             <p className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground/92 sm:text-sm">
                               {entry.description?.trim() || "Logged entry"}
                             </p>
-                            {(entry.protein != null || entry.carbs != null || entry.fat != null) ? (
-                              <p className="mt-1 text-[10px] tabular-nums text-muted-foreground/50">
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                              {formatFoodPortion(entry.portionAmount, entry.portionUnit) ? (
+                                <span className="rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground/60">
+                                  {formatFoodPortion(entry.portionAmount, entry.portionUnit)}
+                                </span>
+                              ) : null}
+                              {(entry.protein != null || entry.carbs != null || entry.fat != null) ? (
+                              <span className="text-[10px] tabular-nums text-muted-foreground/50">
                                 {[
                                   entry.protein != null ? "P " + entry.protein + "g" : null,
                                   entry.carbs != null ? "C " + entry.carbs + "g" : null,
                                   entry.fat != null ? "F " + entry.fat + "g" : null,
                                 ].filter(Boolean).join(" · ")}
-                              </p>
-                            ) : null}
+                              </span>
+                              ) : null}
+                            </div>
                           </div>
 
                           <div className="shrink-0 text-right">
