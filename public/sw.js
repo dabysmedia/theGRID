@@ -1,4 +1,4 @@
-const CACHE_NAME = "thegrid-v6"
+const CACHE_NAME = "thegrid-v7"
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -7,6 +7,9 @@ self.addEventListener("install", (event) => {
         "/",
         "/manifest.json",
         "/icons/icon.svg",
+        "/icons/icon-192.png",
+        "/icons/icon-512.png",
+        "/apple-touch-icon.png",
       ])
     )
   )
