@@ -6,6 +6,7 @@ import { Pencil, Plus, Trash2 } from "lucide-react"
 import { CaloriesPipField } from "@/components/calories/CaloriesPipField"
 import { CaloriesFocusPanel } from "@/components/calories/CaloriesFocusPanel"
 import { LogFoodDialog } from "@/components/calories/LogFoodDialog"
+import { MealTypePickerDialog } from "@/components/calories/MealTypePickerDialog"
 import type { EditingMeal } from "@/components/calories/useLogFoodDialog"
 import { Button } from "@/components/ui/button"
 import { HUB_MOTION_MS } from "@/components/hub/HubMotion"
@@ -87,8 +88,10 @@ export function CaloriesExpandShell({
   const [entriesStatus, setEntriesStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   )
+  const [mealPickerOpen, setMealPickerOpen] = useState(false)
   const [logFoodOpen, setLogFoodOpen] = useState(false)
   const [preferredMealType, setPreferredMealType] = useState<string | null>(null)
+  const [composerSession, setComposerSession] = useState(0)
   const [editingEntry, setEditingEntry] = useState<CalorieEntry | null>(null)
   const [editingMeal, setEditingMeal] = useState<EditingMeal | null>(null)
   const [draftMealItems, setDraftMealItems] = useState<DraftMealItem[]>([])
@@ -168,6 +171,14 @@ export function CaloriesExpandShell({
     setEditingEntry(null)
     setEditingMeal(null)
     setPreferredMealType(mealType ?? null)
+    setMealPickerOpen(true)
+  }
+
+  function chooseMeal(mealType: (typeof mealTypes)[number]) {
+    setPreferredMealType(mealType)
+    setDraftMealItems([])
+    setComposerSession((session) => session + 1)
+    setMealPickerOpen(false)
     setLogFoodOpen(true)
   }
 
@@ -470,8 +481,19 @@ export function CaloriesExpandShell({
       </>
       ) : null}
 
+      <MealTypePickerDialog
+        open={mealPickerOpen}
+        onOpenChange={setMealPickerOpen}
+        onSelect={chooseMeal}
+        suggestedMealType={preferredMealType}
+      />
+
       <LogFoodDialog
-        key={editingMeal ? `meal-${editingMeal.mealType}` : "food-composer"}
+        key={
+          editingMeal
+            ? `meal-${editingMeal.mealType}`
+            : `food-composer-${composerSession}`
+        }
         open={logFoodOpen}
         onOpenChange={(open) => {
           setLogFoodOpen(open)

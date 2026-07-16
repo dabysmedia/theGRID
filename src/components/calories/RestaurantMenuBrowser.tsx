@@ -140,7 +140,6 @@ export function RestaurantMenuBrowser({
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search restaurants or menu items"
           className="food-search-input h-12 rounded-2xl pl-10"
-          autoFocus
         />
       </div>
 
@@ -270,7 +269,6 @@ function RestaurantMenuView({
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder={`Search ${restaurant.name}'s menu`}
           className="food-search-input h-12 rounded-2xl pl-10"
-          autoFocus
         />
       </div>
 

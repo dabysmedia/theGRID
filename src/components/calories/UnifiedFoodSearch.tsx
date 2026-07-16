@@ -347,7 +347,6 @@ export function UnifiedFoodSearch({
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search foods, recipes, restaurants…"
               className="food-search-input h-12 rounded-2xl pl-11 pr-10 text-sm"
-              autoFocus
             />
             {query ? (
               <button
@@ -369,7 +368,7 @@ export function UnifiedFoodSearch({
             <Barcode className="size-5" />
           </button>
         </div>
-        <div className="mt-2 flex rounded-xl border border-glass-border bg-glass-highlight/20 p-1">
+        <div className="food-search-filters mt-2 flex rounded-xl border p-1">
           {([
             ["all", "All foods"],
             ["saved", "My foods"],
@@ -382,7 +381,7 @@ export function UnifiedFoodSearch({
               className={cn(
                 "flex-1 rounded-lg py-2 text-[11px] font-semibold transition-colors",
                 filter === id
-                  ? "bg-background/90 text-foreground shadow-sm"
+                  ? "food-search-filter-active text-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
