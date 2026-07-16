@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- food images may be dynamic product URLs */
 
 import { Flame, Pencil, Plus, Trash2, Utensils } from "lucide-react"
+import { FoodFallbackIcon } from "@/components/calories/FoodFallbackIcon"
 import type { CalorieEntry } from "@/lib/calories/log-food"
 import { formatFoodPortion } from "@/lib/calories/measurements"
 
@@ -216,7 +217,12 @@ export function CaloriesFocusPanel({
                               alt=""
                               className="h-16 w-14 shrink-0 object-contain drop-shadow-[0_8px_14px_rgba(0,0,0,0.28)] sm:h-18 sm:w-16"
                             />
-                          ) : null}
+                          ) : (
+                            <FoodFallbackIcon
+                              label={entry.description?.trim() || "Food"}
+                              className="size-14 sm:size-16"
+                            />
+                          )}
                           <div className="min-w-0 flex-1">
                             <p className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground/92 sm:text-sm">
                               {entry.description?.trim() || "Logged entry"}

@@ -1738,11 +1738,11 @@ html {
   --primary: oklch(0.704 0.191 22.216);
   --primary-foreground: oklch(0.985 0 0);
   --ring: oklch(0.704 0.191 22.216);
-  width: min(calc(100vw - 0.75rem), 34rem) !important;
-  max-width: min(calc(100vw - 0.75rem), 34rem) !important;
+  width: min(calc(100vw - 1.5rem), 34rem) !important;
+  max-width: min(calc(100vw - 1.5rem), 34rem) !important;
   max-height: calc(
-    100dvh - max(0.375rem, env(safe-area-inset-top, 0px)) -
-      max(0.375rem, env(safe-area-inset-bottom, 0px))
+    100dvh - max(0.75rem, env(safe-area-inset-top, 0px)) -
+      max(0.75rem, env(safe-area-inset-bottom, 0px))
   ) !important;
 }
 
@@ -1763,19 +1763,19 @@ html {
 .food-log-surface .food-search-sticky {
   background: linear-gradient(
     to bottom,
-    rgb(7 10 14 / 98%) 0%,
-    rgb(7 10 14 / 96%) 82%,
+    color-mix(in oklab, var(--card) 94%, transparent) 0%,
+    color-mix(in oklab, var(--card) 88%, transparent) 82%,
     transparent 100%
   );
 }
 
 .food-log-surface .food-search-input {
-  border-color: rgb(248 113 113 / 32%) !important;
-  background: #070a0e !important;
-  color: rgb(248 250 252 / 92%);
+  border-color: color-mix(in oklab, var(--glass-border) 82%, var(--primary) 18%) !important;
+  background: color-mix(in oklab, var(--glass) 72%, transparent) !important;
+  color: var(--foreground);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 3%),
-    0 8px 28px -22px rgb(0 0 0 / 90%);
+    inset 0 1px 0 color-mix(in oklab, var(--glass-highlight) 32%, transparent),
+    0 8px 28px -22px oklch(0 0 0 / 55%);
   backdrop-filter: blur(12px);
 }
 
@@ -1784,16 +1784,16 @@ html {
 }
 
 .food-log-surface .food-search-input:focus-visible {
-  border-color: rgb(248 113 113 / 64%) !important;
-  background: #080b10 !important;
+  border-color: oklch(0.704 0.191 22.216 / 58%) !important;
+  background: color-mix(in oklab, var(--glass) 88%, transparent) !important;
   box-shadow:
     0 0 0 3px rgb(248 113 113 / 10%),
     0 8px 26px -16px rgb(239 68 68 / 38%);
 }
 
 .food-log-surface .food-search-scan-button {
-  border-color: rgb(248 113 113 / 25%);
-  background: #0b090c;
+  border-color: color-mix(in oklab, var(--glass-border) 78%, var(--primary) 22%);
+  background: color-mix(in oklab, var(--glass) 76%, transparent);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 4%),
     0 8px 24px -20px rgb(239 68 68 / 55%);
@@ -1805,13 +1805,13 @@ html {
 }
 
 .food-log-surface .food-search-filters {
-  border-color: rgb(255 255 255 / 7%);
-  background: #070a0e;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 2%);
+  border-color: var(--glass-border);
+  background: color-mix(in oklab, var(--glass) 68%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--glass-highlight) 25%, transparent);
 }
 
 .food-log-surface .food-search-filter-active {
-  background: #0d1117;
+  background: color-mix(in oklab, var(--background) 82%, var(--glass-highlight) 18%);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 4%),
     0 4px 14px -10px rgb(0 0 0 / 90%);
@@ -1840,12 +1840,6 @@ html {
     oklch(0.42 0.15 24 / 42%) 0%,
     oklch(0.28 0.09 24 / 25%) 100%
   );
-}
-
-@media (min-width: 640px) {
-  .food-log-surface {
-    max-height: min(92dvh, 52rem) !important;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

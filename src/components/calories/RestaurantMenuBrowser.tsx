@@ -9,9 +9,9 @@ import {
   Plus,
   Search,
   Store,
-  Utensils,
 } from "lucide-react"
 import { apiFetch } from "@/lib/api-fetch"
+import { FoodFallbackIcon } from "@/components/calories/FoodFallbackIcon"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -286,9 +286,10 @@ function RestaurantMenuView({
                 onClick={() => onSelect(menuItem)}
                 className="group flex min-h-16 w-full items-center gap-3 py-2.5 text-left"
               >
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#ef4444]/[0.07] text-[#ef4444]/70">
-                  <Utensils className="size-4" />
-                </span>
+                <FoodFallbackIcon
+                  label={menuItem.name}
+                  className="size-10 rounded-xl text-lg"
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-medium">{menuItem.name}</span>
                   <span className="mt-1 flex flex-wrap gap-x-2 text-[10px] tabular-nums text-muted-foreground/60">

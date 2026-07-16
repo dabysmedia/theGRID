@@ -34,11 +34,12 @@ import { cn, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { UnifiedFoodSearch } from "@/components/calories/UnifiedFoodSearch"
 import { RestaurantMenuBrowser } from "@/components/calories/RestaurantMenuBrowser"
 import { PhotoCalorieEstimator } from "@/components/calories/PhotoCalorieEstimator"
+import { FoodFallbackIcon } from "@/components/calories/FoodFallbackIcon"
 import {
   useLogFoodDialog,
   type UseLogFoodDialogOptions,
 } from "@/components/calories/useLogFoodDialog"
-import { draftMealItemTotals, mealTypes } from "@/lib/calories/log-food"
+import { draftMealItemTotals } from "@/lib/calories/log-food"
 import { formatFoodPortion } from "@/lib/calories/measurements"
 
 export type LogFoodDialogProps = UseLogFoodDialogOptions
@@ -63,6 +64,9 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
   const editingEntry = Boolean(state.editingEntry)
   const editingMeal = Boolean(state.editingMeal)
   const visibleScreen = editingEntry ? "manual" : screen
+  const activeMeal =
+    state.mealType ?? state.editingMeal?.mealType ?? props.initialMealType
+  const activeMealAccent = activeMeal ? MEAL_ACCENT[activeMeal] : null
 
   function handleOpenChange(next: boolean) {
     if (!next) {
@@ -89,8 +93,8 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
       <DialogContent
         showCloseButton
         className={cn(
-          "glass-frost food-log-surface flex h-[95dvh] max-h-[95dvh] w-[min(100%,calc(100vw-0.75rem))] max-w-none flex-col gap-0 overflow-hidden p-0",
-          "sm:h-[min(92dvh,54rem)] sm:max-h-[54rem] sm:max-w-2xl",
+          "glass-frost food-log-surface flex h-[calc(100dvh-1.5rem)] max-h-[calc(100dvh-1.5rem)] w-[min(100%,calc(100vw-1.5rem))] max-w-none flex-col gap-0 overflow-hidden p-0",
+          "sm:max-w-2xl",
           "[&_[data-slot=dialog-close]]:right-3 [&_[data-slot=dialog-close]]:top-3",
         )}
       >
@@ -98,7 +102,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
           className="shrink-0 border-b border-border/20 bg-gradient-to-b from-[#ef4444]/[0.08] to-transparent px-4 pb-3 pt-4 pr-12"
         >
           <DialogHeader className="space-y-0 text-left">
-            <DialogTitle className="flex items-center gap-2 font-heading text-lg tracking-tight">
+            <DialogTitle className="flex flex-wrap items-center gap-2 font-heading text-lg tracking-tight">
               <span className="flex size-8 items-center justify-center rounded-xl border border-[#ef4444]/20 bg-[#ef4444]/[0.08]">
                 <Flame className="size-4 text-[#ef4444]" aria-hidden />
               </span>
@@ -111,6 +115,19 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
                       ? "Build meal"
                       : "Review meal"
                     : "Add food"}
+              {activeMeal && activeMealAccent ? (
+                <span
+                  className="ml-1 inline-flex h-7 items-center gap-1.5 rounded-full border border-white/[0.08] bg-glass-highlight/[0.08] px-2.5 font-sans text-[10px] font-semibold capitalize tracking-wide text-foreground/75"
+                  aria-label={`Logging ${activeMeal}`}
+                >
+                  <span
+                    className="size-1.5 rounded-full"
+                    style={{ background: activeMealAccent.dot }}
+                    aria-hidden
+                  />
+                  {activeMeal}
+                </span>
+              ) : null}
             </DialogTitle>
             <DialogDescription className="type-hud-caption mt-1 normal-case text-muted-foreground/70">
               {description}
@@ -118,35 +135,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
           </DialogHeader>
 
           {!editingEntry && visibleScreen !== "meal" ? (
-            <div className="mt-3 flex rounded-xl border border-glass-border bg-glass-highlight/20 p-1">
-              {mealTypes.map((meal) => {
-                const accent = MEAL_ACCENT[meal]
-                const selected = state.mealType === meal
-                return (
-                  <button
-                    key={meal}
-                    type="button"
-                    onClick={() => state.setMealType(meal)}
-                    className={cn(
-                      "flex-1 rounded-lg py-2 text-[11px] font-semibold capitalize tracking-wide transition-colors",
-                      selected
-                        ? "bg-background/90 text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    <span
-                      className="mr-1.5 inline-block size-1.5 rounded-full align-middle"
-                      style={{ background: accent.dot }}
-                    />
-                    {meal}
-                  </button>
-                )
-              })}
-            </div>
-          ) : null}
-
-          {!editingEntry && visibleScreen !== "meal" ? (
-            <nav className="mt-2 flex gap-1 overflow-x-auto [scrollbar-width:none]" aria-label="Food logging method">
+            <nav className="mt-3 flex gap-1 overflow-x-auto [scrollbar-width:none]" aria-label="Food logging method">
               {[
                 { id: "foods" as const, label: "Foods", icon: Search },
                 { id: "restaurants" as const, label: "Restaurants", icon: Store },
@@ -432,9 +421,10 @@ function MealReview({ state, onBack }: { state: DialogState; onBack: () => void 
                         className="size-12 shrink-0 rounded-xl object-contain"
                       />
                     ) : (
-                      <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#ef4444]/[0.06] text-[#ef4444]/65">
-                        <Utensils className="size-4" />
-                      </span>
+                      <FoodFallbackIcon
+                        label={item.description || "Food"}
+                        className="rounded-xl"
+                      />
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="line-clamp-2 text-[13px] font-medium leading-snug">
