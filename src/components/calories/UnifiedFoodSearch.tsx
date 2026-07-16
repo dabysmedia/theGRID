@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { BarcodeScanner } from "@/components/calories/BarcodeScanner"
+import { FoodFallbackIcon } from "@/components/calories/FoodFallbackIcon"
 import type { Recipe, SavedMeal } from "@/lib/calories/log-food"
 import {
   availableFoodUnits,
@@ -671,15 +672,7 @@ function FoodArtwork({
       )}
     />
   ) : (
-    <span
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-2xl bg-white/[0.04] text-primary/60",
-        large ? "size-24" : "size-12",
-      )}
-      aria-label={label}
-    >
-      {recipe ? <BookOpen className={large ? "size-8" : "size-5"} /> : <Utensils className={large ? "size-8" : "size-5"} />}
-    </span>
+    <FoodFallbackIcon label={label} large={large} recipe={recipe} />
   )
 }
 
