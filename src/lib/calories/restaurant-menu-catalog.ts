@@ -1,4 +1,5 @@
 import type { FoodSearchItem } from "@/lib/calories/open-food-facts"
+import { rankAndMergeFoodSearchResults } from "@/lib/calories/food-search-ranking"
 
 export interface RestaurantMenuItem {
   id: string
@@ -404,39 +405,20 @@ export function restaurantMenuFoods(restaurant: RestaurantMenu): FoodSearchItem[
   )
 }
 
-function normalizeSearch(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-}
-
 export function searchRestaurantMenus(query: string, limit = 30): FoodSearchItem[] {
-  const normalizedQuery = normalizeSearch(query)
-  if (normalizedQuery.length < 2) return []
-
-  const terms = normalizedQuery.split(/\s+/)
-  return RESTAURANT_MENUS.flatMap((restaurant) => {
-    const brandText = normalizeSearch([restaurant.name, ...restaurant.aliases].join(" "))
-    return restaurantMenuFoods(restaurant).map((food) => {
-      const itemText = normalizeSearch(food.food_name)
-      const searchable = `${brandText} ${itemText}`
-      if (!terms.every((term) => searchable.includes(term))) return null
-      const score =
-        brandText === normalizedQuery
-          ? 4
-          : itemText === normalizedQuery
-            ? 3
-            : itemText.startsWith(normalizedQuery)
-              ? 2
-              : 1
-      return { food, score }
-    })
-  })
-    .filter((match): match is { food: FoodSearchItem; score: number } => match != null)
-    .sort((a, b) => b.score - a.score || a.food.food_name.localeCompare(b.food.food_name))
-    .slice(0, limit)
-    .map((match) => match.food)
+  if (query.trim().length < 2) return []
+  const foods = RESTAURANT_MENUS.flatMap((restaurant) =>
+    restaurantMenuFoods(restaurant).map((food) => ({
+      ...food,
+      brand_name: [restaurant.name, ...restaurant.aliases].join(" · "),
+    })),
+  )
+  return rankAndMergeFoodSearchResults(query, [foods], limit).map((food) => ({
+    ...food,
+    brand_name:
+      RESTAURANT_MENUS.find((restaurant) => food.food_id.startsWith(`restaurant:${restaurant.id}:`))
+        ?.name ?? food.brand_name,
+  }))
 }
 
 export function getRestaurantMenu(id: string): RestaurantMenu | null {
