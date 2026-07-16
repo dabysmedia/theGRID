@@ -61,7 +61,7 @@ describe("mapOpenFoodFactsProduct", () => {
 })
 
 describe("rankOpenFoodFactsProducts", () => {
-  it("drops incomplete duplicates and boosts exact-name matches", () => {
+  it("drops duplicates and products that do not match every query token", () => {
     const foods = rankOpenFoodFactsProducts(
       [
         { code: "1", product_name: "Chocolate bar", brands: "A", nutriments: { "energy-kcal_100g": 500 } },
@@ -72,8 +72,21 @@ describe("rankOpenFoodFactsProducts", () => {
       "quest bar",
     )
 
-    expect(foods).toHaveLength(2)
+    expect(foods).toHaveLength(1)
     expect(foods[0].food_name).toBe("Quest bar")
     expect(foods.map((food) => food.food_id)).not.toContain("off:3")
+  })
+
+  it("keeps a brand plus product prefix match ahead of unrelated brand products", () => {
+    const foods = rankOpenFoodFactsProducts(
+      [
+        { code: "1", product_name: "California sliced almonds", brands: "Costco", nutriments: { "energy-kcal_100g": 520 } },
+        { code: "2", product_name: "Colombian cold brew coffee", brands: "Costco", nutriments: { "energy-kcal_100g": 5 } },
+        { code: "3", product_name: "Rotisserie Chicken", brands: "Costco", nutriments: { "energy-kcal_100g": 165 } },
+      ],
+      "Costco rotisse",
+    )
+
+    expect(foods.map((food) => food.food_name)).toEqual(["Rotisserie Chicken"])
   })
 })

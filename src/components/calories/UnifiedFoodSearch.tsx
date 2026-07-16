@@ -338,7 +338,7 @@ export function UnifiedFoodSearch({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="food-search-sticky sticky top-0 z-20 pb-3 backdrop-blur-xl">
+      <div className="z-20 pb-3">
         <div className="flex gap-2">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 text-red-200/45" />

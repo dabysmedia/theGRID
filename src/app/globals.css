@@ -1760,15 +1760,6 @@ html {
   background: oklch(0.704 0.191 22.216 / 24%);
 }
 
-.food-log-surface .food-search-sticky {
-  background: linear-gradient(
-    to bottom,
-    color-mix(in oklab, var(--card) 94%, transparent) 0%,
-    color-mix(in oklab, var(--card) 88%, transparent) 82%,
-    transparent 100%
-  );
-}
-
 .food-log-surface .food-search-input {
   border-color: color-mix(in oklab, var(--glass-border) 82%, var(--primary) 18%) !important;
   background: color-mix(in oklab, var(--glass) 72%, transparent) !important;

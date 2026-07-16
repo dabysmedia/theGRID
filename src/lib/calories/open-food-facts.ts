@@ -1,4 +1,11 @@
-export type FoodDataSource = "openfoodfacts" | "fatsecret" | "usda" | "restaurant"
+import { foodSearchRelevance } from "@/lib/calories/food-search-ranking"
+
+export type FoodDataSource =
+  | "catalog"
+  | "openfoodfacts"
+  | "fatsecret"
+  | "usda"
+  | "restaurant"
 
 export interface FoodSearchItem {
   food_id: string
@@ -117,15 +124,14 @@ function normalized(value: string): string {
 }
 
 /**
- * Removes incomplete/duplicate community records while preserving Open Food
- * Facts' relevance order. Exact and prefix name matches get a small boost.
+ * Removes incomplete/duplicate community records and applies the same
+ * token-aware relevance rules used across all food data sources.
  */
 export function rankOpenFoodFactsProducts(
   products: OpenFoodFactsProduct[],
   query: string,
   limit = 18,
 ): FoodSearchItem[] {
-  const q = normalized(query)
   const seen = new Set<string>()
 
   return products
@@ -133,9 +139,21 @@ export function rankOpenFoodFactsProducts(
       item: mapOpenFoodFactsProduct(product),
       completeness: asNumber(product.completeness) ?? 0,
       index,
+      relevance: null as number | null,
     }))
-    .filter((entry): entry is typeof entry & { item: FoodSearchItem } => {
-      if (!entry.item || entry.item.calories == null || entry.item.calories <= 0) return false
+    .map((entry) => ({
+      ...entry,
+      relevance: entry.item ? foodSearchRelevance(entry.item, query) : null,
+    }))
+    .filter((entry): entry is typeof entry & { item: FoodSearchItem; relevance: number } => {
+      if (
+        !entry.item ||
+        entry.relevance == null ||
+        entry.item.calories == null ||
+        entry.item.calories <= 0
+      ) {
+        return false
+      }
       const key = [
         normalized(entry.item.food_name),
         normalized(entry.item.brand_name ?? ""),
@@ -146,20 +164,9 @@ export function rankOpenFoodFactsProducts(
       return true
     })
     .sort((a, b) => {
-      const aName = normalized(a.item.food_name)
-      const bName = normalized(b.item.food_name)
-      const score = (name: string, brand: string | null, completeness: number, index: number) => {
-        let value = Math.max(0, 30 - index)
-        if (name === q) value += 100
-        else if (name.startsWith(q)) value += 55
-        else if (name.includes(q)) value += 25
-        if (normalized(brand ?? "").includes(q)) value += 18
-        value += completeness * 8
-        return value
-      }
       return (
-        score(bName, b.item.brand_name, b.completeness, b.index) -
-        score(aName, a.item.brand_name, a.completeness, a.index)
+        b.relevance + b.completeness * 8 - b.index * 0.1 -
+        (a.relevance + a.completeness * 8 - a.index * 0.1)
       )
     })
     .slice(0, limit)

@@ -5,6 +5,8 @@ import {
   type FoodSearchItem,
   type OpenFoodFactsProduct,
 } from "@/lib/calories/open-food-facts"
+import { rankAndMergeFoodSearchResults } from "@/lib/calories/food-search-ranking"
+import { searchPreparedFoodCatalog } from "@/lib/calories/prepared-food-catalog"
 import { searchRestaurantMenus } from "@/lib/calories/restaurant-menu-catalog"
 
 /** Avoid Next.js caching upstream food API responses (stale/empty in prod). */
@@ -14,16 +16,15 @@ export const dynamic = "force-dynamic"
 
 type FoodItem = FoodSearchItem
 
-function mergeFoodResults(primary: FoodItem[], secondary: FoodItem[]): FoodItem[] {
-  const seen = new Set<string>()
-  return [...primary, ...secondary].filter((food) => {
-    const key = [food.brand_name, food.food_name, food.serving_description]
-      .map((value) => value?.toLowerCase().trim() ?? "")
-      .join("|")
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  }).slice(0, 40)
+function mergeFoodResults(query: string, ...groups: FoodItem[][]): FoodItem[] {
+  return rankAndMergeFoodSearchResults(query, groups)
+}
+
+function resultSource(foods: FoodItem[]): string | null {
+  const sources = new Set(foods.map((food) => food.source))
+  if (sources.size === 0) return null
+  if (sources.size > 1) return "mixed"
+  return foods[0]?.source ?? null
 }
 
 const OPEN_FOOD_FACTS_BASE = "https://world.openfoodfacts.org"
@@ -358,20 +359,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ foods: [], source: null })
   }
 
+  const preparedFoods = searchPreparedFoodCatalog(query)
   const restaurantFoods = searchRestaurantMenus(query)
   let openFoodFactsFailed = false
   try {
     const foods = await searchOpenFoodFacts(query)
-    const mergedFoods = mergeFoodResults(restaurantFoods, foods)
+    const mergedFoods = mergeFoodResults(query, preparedFoods, restaurantFoods, foods)
     if (mergedFoods.length > 0) {
       return NextResponse.json({
         foods: mergedFoods,
-        source:
-          restaurantFoods.length > 0 && foods.length > 0
-            ? "mixed"
-            : restaurantFoods.length > 0
-              ? "restaurant"
-              : "openfoodfacts",
+        source: resultSource(mergedFoods),
       })
     }
   } catch (err) {
@@ -382,8 +379,12 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  if (restaurantFoods.length > 0) {
-    return NextResponse.json({ foods: restaurantFoods, source: "restaurant" })
+  const builtInFoods = mergeFoodResults(query, preparedFoods, restaurantFoods)
+  if (builtInFoods.length > 0) {
+    return NextResponse.json({
+      foods: builtInFoods,
+      source: resultSource(builtInFoods),
+    })
   }
 
   const hasConfiguredFallback =
@@ -427,8 +428,9 @@ async function searchConfiguredFallback(query: string) {
   if (hasFatSecret) {
     try {
       const foods = await searchFatSecret(query)
-      if (foods.length > 0) {
-        return NextResponse.json({ foods, source: "fatsecret" })
+      const rankedFoods = mergeFoodResults(query, foods)
+      if (rankedFoods.length > 0) {
+        return NextResponse.json({ foods: rankedFoods, source: "fatsecret" })
       }
     } catch (err) {
       console.warn(
@@ -450,7 +452,10 @@ async function searchConfiguredFallback(query: string) {
 
   try {
     const foods = await searchFDC(query)
-    return NextResponse.json({ foods, source: "usda" })
+    return NextResponse.json({
+      foods: mergeFoodResults(query, foods),
+      source: "usda",
+    })
   } catch (err) {
     console.error("USDA FDC food search failed:", (err as Error).message)
     return NextResponse.json(
