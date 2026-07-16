@@ -58,7 +58,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
   const { activeDate } = useActiveDate()
   const state = useLogFoodDialog(props)
   const [screen, setScreen] = useState<ComposerScreen>(() =>
-    props.editingMeal ? "meal" : "foods",
+    props.editingMeal || props.initialMealType ? "meal" : "foods",
   )
   const editingEntry = Boolean(state.editingEntry)
   const editingMeal = Boolean(state.editingMeal)
@@ -66,7 +66,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
 
   function handleOpenChange(next: boolean) {
     if (!next) {
-      setScreen("foods")
+      setScreen(props.initialMealType ? "meal" : "foods")
       state.resetRecipeCreator()
     }
     props.onOpenChange(next)
@@ -107,7 +107,9 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
                 : editingMeal
                   ? `Edit ${state.editingMeal?.mealType ?? "meal"}`
                   : visibleScreen === "meal"
-                    ? "Review meal"
+                    ? state.draftMealItems.length === 0
+                      ? "Build meal"
+                      : "Review meal"
                     : "Add food"}
             </DialogTitle>
             <DialogDescription className="type-hud-caption mt-1 normal-case text-muted-foreground/70">
@@ -334,14 +336,16 @@ function MealReview({ state, onBack }: { state: DialogState; onBack: () => void 
 
   return (
     <div className="space-y-4">
-      <button
-        type="button"
-        onClick={onBack}
-        className="flex h-9 items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="size-4" />
-        Add more food
-      </button>
+      {state.draftMealItems.length > 0 ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex h-9 items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="size-4" />
+          Add more food
+        </button>
+      ) : null}
 
       <section className="overflow-hidden rounded-2xl border border-border/25 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-[#ef4444]/[0.06]">
         <div className="flex items-center gap-3 px-4 py-4">
@@ -354,8 +358,11 @@ function MealReview({ state, onBack }: { state: DialogState; onBack: () => void 
               {state.mealType ?? "Meal"}
             </p>
             <p className="type-hud-caption mt-0.5 normal-case">
-              {state.draftMealItems.length} item{state.draftMealItems.length === 1 ? "" : "s"}{" "}
-              {state.editingMeal ? "in this meal" : "ready to log"}
+              {state.draftMealItems.length === 0
+                ? "Empty meal"
+                : `${state.draftMealItems.length} item${state.draftMealItems.length === 1 ? "" : "s"} ${
+                    state.editingMeal ? "in this meal" : "ready to log"
+                  }`}
             </p>
           </div>
           <p className="font-heading text-3xl font-semibold tabular-nums text-red-100/90">
@@ -373,21 +380,29 @@ function MealReview({ state, onBack }: { state: DialogState; onBack: () => void 
       <section>
         <div className="flex items-center justify-between pb-2">
           <p className="type-hud-subsection">Meal contents</p>
-          <button
-            type="button"
-            onClick={() => state.setDraftMealItems([])}
-            className="flex h-8 items-center gap-1.5 rounded-lg px-2 type-hud-micro text-muted-foreground/55 hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" />
-            Clear
-          </button>
+          {state.draftMealItems.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => state.setDraftMealItems([])}
+              className="flex h-8 items-center gap-1.5 rounded-lg px-2 type-hud-micro text-muted-foreground/55 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" />
+              Clear
+            </button>
+          ) : null}
         </div>
 
         {state.draftMealItems.length === 0 ? (
-          <div className="rounded-2xl border border-border/20 py-10 text-center">
-            <Utensils className="mx-auto size-5 text-muted-foreground/35" />
-            <p className="mt-2 text-sm font-medium">This meal is empty</p>
-            <Button type="button" variant="outline" className="mt-4 h-10" onClick={onBack}>
+          <div className="rounded-2xl border border-dashed border-red-300/15 bg-red-400/[0.025] px-5 py-10 text-center">
+            <span className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-red-400/[0.07] text-red-200/65">
+              <Utensils className="size-5" />
+            </span>
+            <p className="mt-3 text-sm font-medium">Your {state.mealType ?? "meal"} is empty</p>
+            <p className="mt-1 text-xs text-muted-foreground/55">
+              Add foods, a restaurant item, or a quick entry.
+            </p>
+            <Button type="button" variant="glass" className="mt-5 h-11" onClick={onBack}>
+              <Plus className="size-4" />
               Add food
             </Button>
           </div>

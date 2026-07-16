@@ -85,7 +85,7 @@ export function useLogFoodDialog({
   const editingEntry = controlledEditingEntry ?? null
   const editingMeal = controlledEditingMeal ?? null
 
-  const [mealType, setMealType] = useState<string | null>(null)
+  const [mealType, setMealType] = useState<string | null>(initialMealType ?? null)
   const [description, setDescription] = useState("")
   const [calories, setCalories] = useState("")
   const [protein, setProtein] = useState("")
