@@ -24,6 +24,7 @@ import { HubCollapse, HubPresence, HUB_MOTION_MS, HUB_SECTION_MOTION_MS } from "
 import { HubRingBay } from "@/components/hub/HubRingBay"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { WeekWorkoutGoalRing } from "@/components/WeekWorkoutGoalRing"
+import { WaterTracker } from "@/components/WaterTracker"
 import { useActiveDate } from "@/context/DateContext"
 import { ProfileHeaderTrigger } from "@/context/ProfileDialogContext"
 import type { NextInjectionInfo } from "@/lib/hub-tile-prefs"
@@ -860,6 +861,13 @@ export function WeeklyHero({
             />
           ) : null}
         </div>
+
+        <FadeSection
+          show={expanded == null}
+          className={fillViewport ? "shrink-0" : undefined}
+        >
+          <WaterTracker />
+        </FadeSection>
 
         <HubPresence
           open={expanded === "peptides"}

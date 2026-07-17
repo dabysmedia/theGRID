@@ -29,6 +29,7 @@ model User {
   updatedAt   DateTime @updatedAt
 
   calorieEntries  CalorieEntry[]
+  waterEntries    WaterEntry[]
   stepEntries     StepEntry[]
   runEntries      RunEntry[]
   workoutEntries  WorkoutEntry[]
@@ -57,6 +58,18 @@ model User {
   googleHealthConnection  GoogleHealthConnection?
   vitalDailyEntries       VitalDailyEntry[]
   heartRateSamples        HeartRateSample[]
+}
+
+model WaterEntry {
+  id        String   @id @default(cuid())
+  date      DateTime
+  amountOz  Float
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@index([userId])
 }
 
 model CalorieEntry {
