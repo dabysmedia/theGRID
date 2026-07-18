@@ -48,6 +48,17 @@ describe("getStepsDayRange", () => {
     expect(stepsDayKey(end, TZ)).toBe("2026-07-07")
     expect(end.getTime() - start.getTime()).toBe(24 * 60 * 60 * 1000)
   })
+
+  it("is the window used for all-day heart-rate samples (not UTC midnight)", () => {
+    const { start, end } = getStepsDayRange("2026-07-06", TZ)
+    // 00:00 local on the calendar day is still the previous tracking day.
+    expect(stepsDayKey(atLocal("2026-07-06", 0, 0), TZ)).toBe("2026-07-05")
+    expect(start.toISOString()).not.toBe("2026-07-06T00:00:00.000Z")
+    // 04:59 belongs to this range; 05:00 next day is exclusive end.
+    expect(atLocal("2026-07-07", 4, 59).getTime()).toBeGreaterThanOrEqual(start.getTime())
+    expect(atLocal("2026-07-07", 4, 59).getTime()).toBeLessThan(end.getTime())
+    expect(atLocal("2026-07-07", 5, 0).getTime()).toBe(end.getTime())
+  })
 })
 
 describe("stepsRefDayKey", () => {

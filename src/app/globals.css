@@ -1225,8 +1225,12 @@ html {
     transition: transform 55ms linear !important;
   }
 
+  /*
+   * Prefer vertical page scroll; horizontal scrubbing is handled in JS
+   * (useAxisLockedScrub / chart pointer handlers) once the gesture locks.
+   */
   .chart-touch-safe {
-    touch-action: none !important;
+    touch-action: pan-y !important;
     -webkit-user-drag: none;
   }
 

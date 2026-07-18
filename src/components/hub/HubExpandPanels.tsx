@@ -454,6 +454,8 @@ export function HubVitalsExpand({
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
+  const [hrTipActive, setHrTipActive] = useState(false)
+  const [trendTipActive, setTrendTipActive] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading")
   const [loadReloadKey, setLoadReloadKey] = useState(0)
@@ -813,7 +815,9 @@ export function HubVitalsExpand({
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground/90">Heart rate today</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground/55">Five-minute samples across the day</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground/55">
+                    Five-minute samples · tracking day 5 AM–5 AM
+                  </p>
                 </div>
               </div>
               <span className="type-hud-micro tabular-nums text-muted-foreground/50">
@@ -827,11 +831,18 @@ export function HubVitalsExpand({
             ) : (
               <div
                 className="chart-touch-safe h-52 min-w-0 select-none [-webkit-touch-callout:none] sm:h-56"
-                onPointerDown={(event) => event.preventDefault()}
+                onPointerUp={() => setHrTipActive(false)}
+                onPointerCancel={() => setHrTipActive(false)}
+                onPointerLeave={() => setHrTipActive(false)}
                 onContextMenu={(event) => event.preventDefault()}
               >
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={hrChartData} margin={{ top: 6, right: 4, left: -18, bottom: 0 }}>
+                  <AreaChart
+                    data={hrChartData}
+                    margin={{ top: 6, right: 4, left: -18, bottom: 0 }}
+                    onMouseMove={() => setHrTipActive(true)}
+                    onMouseLeave={() => setHrTipActive(false)}
+                  >
                     <defs>
                       <linearGradient id="hubHrAreaFill" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor={VITALS_COLOR} stopOpacity={0.35} />
@@ -862,6 +873,7 @@ export function HubVitalsExpand({
                       <ReferenceLine y={rhr} stroke="oklch(1 0 0 / 20%)" strokeDasharray="4 4" />
                     ) : null}
                     <Tooltip
+                      active={hrTipActive}
                       contentStyle={{
                         background: "oklch(0.19 0.012 250 / 98%)",
                         border: "1px solid oklch(1 0 0 / 8%)",
@@ -937,11 +949,18 @@ export function HubVitalsExpand({
             ) : (
               <div
                 className="chart-touch-safe h-48 min-w-0 select-none [-webkit-touch-callout:none] sm:h-52"
-                onPointerDown={(event) => event.preventDefault()}
+                onPointerUp={() => setTrendTipActive(false)}
+                onPointerCancel={() => setTrendTipActive(false)}
+                onPointerLeave={() => setTrendTipActive(false)}
                 onContextMenu={(event) => event.preventDefault()}
               >
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trendChartData} margin={{ top: 6, right: 4, left: -18, bottom: 0 }}>
+                  <LineChart
+                    data={trendChartData}
+                    margin={{ top: 6, right: 4, left: -18, bottom: 0 }}
+                    onMouseMove={() => setTrendTipActive(true)}
+                    onMouseLeave={() => setTrendTipActive(false)}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke="oklch(1 0 0 / 5%)"
@@ -969,6 +988,7 @@ export function HubVitalsExpand({
                       width={28}
                     />
                     <Tooltip
+                      active={trendTipActive}
                       contentStyle={{
                         background: "oklch(0.19 0.012 250 / 98%)",
                         border: "1px solid oklch(1 0 0 / 8%)",
