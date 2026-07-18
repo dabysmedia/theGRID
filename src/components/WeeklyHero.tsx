@@ -519,10 +519,11 @@ export function WeeklyHero({
         glassPanelClass,
         // Keep mobile padding stable across overview/expand so the card top
         // does not shift when fillViewport turns off.
+        // Always clip to the rounded frame; expand panels scroll inside the
+        // body below so card edges stay visible.
         "flex min-h-0 flex-col overflow-hidden !rounded-[1.35rem] border border-white/[0.09] p-4 transition-opacity duration-700 max-lg:p-3 lg:p-5",
-        fillViewport && "max-lg:min-h-full",
-        fillViewport && expanded == null && "max-lg:h-full max-lg:min-h-0",
-        expanded != null && "!overflow-visible",
+        fillViewport && expanded == null && "max-lg:min-h-full max-lg:h-full max-lg:min-h-0",
+        fillViewport && expanded != null && "h-full min-h-0",
         loading ? "opacity-50" : "opacity-100",
       )}
     >
@@ -561,7 +562,7 @@ export function WeeklyHero({
       />
 
       {/* The hub owns the app chrome on the home route. */}
-      <div className="relative z-20 mb-[var(--hub-section-gap)] border-b border-white/[0.07] pb-2 sm:pb-2.5">
+      <div className="relative z-20 mb-[var(--hub-section-gap)] shrink-0 border-b border-white/[0.07] pb-2 sm:pb-2.5">
         <div className="flex min-w-0 items-center gap-2 px-0.5 sm:gap-3 sm:px-1">
           <h1 className="font-kelly-slab min-w-0 shrink-0 text-lg font-semibold leading-none tracking-[-0.03em] sm:text-xl">
             <span className="text-gradient-glass title-underline-accent block truncate">THEGRID</span>
@@ -573,11 +574,12 @@ export function WeeklyHero({
         </div>
       </div>
 
-      {/* Header — same h-7 slot; overview title ↔ back chrome crossfade (no push-down) */}
+      {/* Header — same h-7 slot; overview title ↔ back chrome crossfade (no push-down).
+          Stays outside the scroll body so the card frame (and back control) remain pinned. */}
       <div
         className={cn(
-          "relative flex h-7 shrink-0 items-center mb-[var(--hub-section-gap)]",
-          expanded != null ? "z-20 sticky top-0" : "z-10",
+          "relative mb-[var(--hub-section-gap)] flex h-7 shrink-0 items-center",
+          expanded != null ? "z-20" : "z-10",
         )}
       >
         <div
@@ -640,6 +642,8 @@ export function WeeklyHero({
         key={viewMode}
         className={cn(
           "relative z-10 motion-safe:animate-fade-up motion-reduce:animate-none",
+          fillViewport && expanded != null &&
+            "min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]",
           protocolFocused || weightFocused || expanded === "vitals"
             ? "space-y-0"
             : fillViewport && expanded == null

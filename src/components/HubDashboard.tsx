@@ -8,7 +8,7 @@ import type { HubExpandedPanel } from "./hub/HubExpandPanels"
 import { useActiveDate } from "@/context/DateContext"
 import { useQuickLog } from "@/context/QuickLogContext"
 import { useUser } from "@/context/UserContext"
-import { cn, formatDate, parseLocalDate } from "@/lib/utils"
+import { formatDate, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { isVacationBlockingCalendarDay, vacationCalorieDayMask } from "@/lib/vacation-mode"
@@ -287,29 +287,18 @@ export function HubDashboard() {
     [peptideEntries],
   )
 
-  const overview = hubExpanded == null
-
   return (
     <div
-      className={cn(
-        // Keep header↔hub gap identical in overview and expand (lg:gap-8 only —
-        // never introduce a mobile gap on expand that shoves the hub down).
-        "flex h-full min-h-0 flex-col overflow-hidden [scrollbar-gutter:stable]",
-        // Collapsed hub: fill main (above dock clearance) and lock overflow on
-        // mobile so the overview fits one screen. Expanded panels grow in place.
-        overview && "max-lg:flex-1 max-lg:overflow-hidden",
-        !overview && "overflow-y-auto overscroll-contain",
-      )}
+      // Keep header↔hub gap identical in overview and expand (lg:gap-8 only —
+      // never introduce a mobile gap on expand that shoves the hub down).
+      // Lock the shell to the viewport; WeeklyHero scrolls inside the card so
+      // rounded edges stay visible on tall expand panels (calories, etc.).
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden [scrollbar-gutter:stable]"
     >
       <Suspense fallback={null}>
         <HubExpandFromQuery onExpand={setHubExpanded} />
       </Suspense>
-      <div
-        className={cn(
-          "route-enter min-h-0 max-lg:min-h-full",
-          overview && "max-lg:flex max-lg:min-h-0 max-lg:flex-1 max-lg:flex-col",
-        )}
-      >
+      <div className="route-enter flex min-h-0 flex-1 flex-col">
         <WeeklyHero
           data={dashboardForHero}
           loading={loading}
