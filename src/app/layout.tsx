@@ -52,7 +52,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full min-h-dvh antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} dark min-app-shell-height antialiased`}
     >
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -62,7 +62,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="flex h-full min-h-dvh flex-col bg-background text-foreground relative overflow-x-hidden">
+      <body className="relative flex min-app-shell-height flex-col overflow-x-hidden bg-background text-foreground">
         <div className="page-bg" aria-hidden />
 
         {/* Subtle scan-line overlay */}
