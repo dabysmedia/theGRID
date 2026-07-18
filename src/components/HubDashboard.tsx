@@ -293,12 +293,12 @@ export function HubDashboard() {
       // never introduce a mobile gap on expand that shoves the hub down).
       // Lock the shell to the viewport; WeeklyHero scrolls inside the card so
       // rounded edges stay visible on tall expand panels (calories, etc.).
-      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden [scrollbar-gutter:stable]"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden [scrollbar-gutter:stable]"
     >
       <Suspense fallback={null}>
         <HubExpandFromQuery onExpand={setHubExpanded} />
       </Suspense>
-      <div className="route-enter flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         <WeeklyHero
           data={dashboardForHero}
           loading={loading}

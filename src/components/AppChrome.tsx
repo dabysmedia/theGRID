@@ -16,20 +16,28 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const isHub = pathname === "/"
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className={cn(
+        "flex min-h-0 flex-1 flex-col",
+        // Pin hub/fullscreen shells to the live visual viewport so the card
+        // always fills — CSS 100dvh alone can stay short until a scroll reflow.
+        (isHub || fullscreen) && "app-shell-height overflow-hidden",
+      )}
+    >
       <main
         className={cn(
           "mx-auto flex w-full max-w-full min-h-0 flex-1 flex-col",
           isHub
             ? [
-                "h-dvh overflow-hidden",
+                "h-full max-h-full overflow-hidden",
                 "pt-[max(0.5rem,env(safe-area-inset-top,0px))] pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]",
                 "ps-[max(0.5rem,env(safe-area-inset-left,0px))] pe-[max(0.5rem,env(safe-area-inset-right,0px))]",
                 "sm:p-3 md:max-w-2xl lg:max-w-3xl xl:max-w-5xl",
               ]
             : fullscreen
-              ? "h-dvh max-w-none overflow-hidden p-0"
+              ? "h-full max-h-full max-w-none overflow-hidden p-0"
               : [
+                  "min-h-0",
                   "ps-[max(0.75rem,env(safe-area-inset-left,0px))] pe-[max(0.75rem,env(safe-area-inset-right,0px))]",
                   "pt-[var(--app-chrome-top)]",
                   agentPublic

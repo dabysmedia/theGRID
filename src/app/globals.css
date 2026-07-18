@@ -101,6 +101,12 @@
 
   /* App chrome / hub viewport layout (mobile full-height overview) */
   --app-chrome-top: calc(env(safe-area-inset-top, 0px) + 2rem);
+  /*
+   * Visible viewport height. ViewportHeightSync overwrites this from
+   * visualViewport so the shell always fills the screen (100dvh alone can
+   * stay short until a scroll reflow on mobile browsers).
+   */
+  --app-height: 100dvh;
   /* Matches PageFooter dock spacer: dock h-16 + mb-2 + breathing room + safe area */
   --bottom-dock-clearance: calc(6.5rem + env(safe-area-inset-bottom, 0px));
   /* Hub instrument sizes — scale down on short phones, cap on tall ones */
@@ -111,6 +117,16 @@
   --hub-protocol-glyph: clamp(4rem, 10.5svh, 5.5rem);
   --hub-section-gap: clamp(0.25rem, 1.1svh, 1rem);
   --hub-fasting-ring: clamp(7.5rem, 22svh, 12.5rem);
+}
+
+/* Full-bleed app shell — avoid Tailwind arbitrary `h-[var(--x,fallback)]`
+   (commas break the utility parser). */
+.app-shell-height {
+  height: var(--app-height, 100dvh);
+  max-height: var(--app-height, 100dvh);
+}
+.min-app-shell-height {
+  min-height: var(--app-height, 100dvh);
 }
 
 /* ═══════════════════════════════════════════════════════════
