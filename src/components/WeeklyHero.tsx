@@ -521,9 +521,10 @@ export function WeeklyHero({
         // does not shift when fillViewport turns off.
         // Always clip to the rounded frame; expand panels scroll inside the
         // body below so card edges stay visible.
+        // flex-1 (not h-full %) so the card always consumes the shell height —
+        // percentage heights can stay short until a scroll reflow on mobile.
         "flex min-h-0 flex-col overflow-hidden !rounded-[1.35rem] border border-white/[0.09] p-4 transition-opacity duration-700 max-lg:p-3 lg:p-5",
-        fillViewport && expanded == null && "max-lg:min-h-full max-lg:h-full max-lg:min-h-0",
-        fillViewport && expanded != null && "h-full min-h-0",
+        fillViewport && "min-h-0 flex-1",
         loading ? "opacity-50" : "opacity-100",
       )}
     >
