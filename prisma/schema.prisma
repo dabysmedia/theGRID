@@ -394,7 +394,7 @@ model VitalDailyEntry {
 /// Heart-rate sample bucketed to ~5 minute resolution, backing the all-day HR chart.
 model HeartRateSample {
   id         String   @id @default(cuid())
-  /// Calendar day this sample belongs to (UTC-noon stored, matches other daily rows).
+  /// Tracking day key (local 5am→5am), stored as UTC-noon like other daily rows.
   date       DateTime
   /// Bucket start timestamp (physical time).
   time       DateTime

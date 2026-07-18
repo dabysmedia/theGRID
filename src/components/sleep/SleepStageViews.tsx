@@ -1,7 +1,8 @@
 "use client"
 
-import { useId, useState, type PointerEvent as ReactPointerEvent } from "react"
+import { useCallback, useId, useState } from "react"
 import { format } from "date-fns"
+import { useAxisLockedScrub } from "@/components/charts/useAxisLockedScrub"
 import { cn } from "@/lib/utils"
 
 export type SleepStageSegment = { type: string; startTime: string; endTime: string }
@@ -35,12 +36,6 @@ const STAGE_Y: Record<SleepStageKey, number> = {
 function asStageKey(value: string): SleepStageKey | null {
   const key = value.toUpperCase()
   return STAGE_ORDER.includes(key as SleepStageKey) ? (key as SleepStageKey) : null
-}
-
-function pointerRatio(event: ReactPointerEvent<SVGSVGElement>): number {
-  const rect = event.currentTarget.getBoundingClientRect()
-  if (rect.width <= 0) return 0
-  return Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
 }
 
 export function parseStages(json: string | null | undefined): SleepStageSegment[] {
@@ -84,10 +79,32 @@ export function StageTimeline({
     )
     .sort((a, b) => a.start - b.start)
 
-  if (normalized.length === 0) return null
-  const start = normalized[0].start
-  const end = normalized[normalized.length - 1].end
+  const start = normalized[0]?.start ?? 0
+  const end = normalized[normalized.length - 1]?.end ?? 0
   const total = end - start
+
+  const clearScrub = useCallback(() => {
+    setActiveStageIndex(null)
+    setScrubRatio(null)
+  }, [])
+
+  const applyScrub = useCallback(
+    (ratio: number) => {
+      if (!Number.isFinite(total) || total <= 0 || normalized.length === 0) return
+      const time = start + ratio * total
+      setScrubRatio(ratio)
+      const index = normalized.findIndex((stage) => time >= stage.start && time <= stage.end)
+      if (index >= 0) setActiveStageIndex(index)
+    },
+    [normalized, start, total],
+  )
+
+  const scrubHandlers = useAxisLockedScrub({
+    onScrub: applyScrub,
+    onClear: clearScrub,
+  })
+
+  if (normalized.length === 0) return null
   if (!Number.isFinite(total) || total <= 0) return null
 
   const xFor = (time: number) => ((time - start) / total) * 1000
@@ -103,14 +120,6 @@ export function StageTimeline({
   const activeStageX =
     scrubRatio ??
     (activeStage ? ((activeStage.start + activeStage.end) / 2 - start) / total : 0)
-
-  const updateActiveStage = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const ratio = pointerRatio(event)
-    const time = start + ratio * total
-    setScrubRatio(ratio)
-    const index = normalized.findIndex((stage) => time >= stage.start && time <= stage.end)
-    if (index >= 0) setActiveStageIndex(index)
-  }
 
   return (
     <div className={cn("chart-touch-safe select-none rounded-2xl border border-white/[0.07] bg-black/10 px-4 py-4 [-webkit-touch-callout:none] sm:px-5", className)}>
@@ -154,22 +163,11 @@ export function StageTimeline({
           ) : null}
           <svg
             viewBox="0 0 1000 121"
-            className="h-[190px] w-full cursor-crosshair touch-none overflow-visible sm:h-[210px]"
+            className="h-[190px] w-full cursor-crosshair overflow-visible sm:h-[210px]"
             role="img"
             aria-label="Layered sleep stages from bedtime to wake time"
             preserveAspectRatio="none"
-            onPointerDown={(event) => {
-              event.preventDefault()
-              event.currentTarget.setPointerCapture(event.pointerId)
-              updateActiveStage(event)
-            }}
-            onPointerMove={updateActiveStage}
-            onPointerLeave={(event) => {
-              if (event.pointerType === "mouse") {
-                setActiveStageIndex(null)
-                setScrubRatio(null)
-              }
-            }}
+            {...scrubHandlers}
             onContextMenu={(event) => event.preventDefault()}
           >
             <defs>
@@ -335,6 +333,12 @@ export function SleepHeartRateChart({
     .filter((sample) => Number.isFinite(sample.time) && Number.isFinite(sample.bpm) && sample.time >= start && sample.time <= end)
     .sort((a, b) => a.time - b.time)
 
+  const clearScrub = useCallback(() => setScrubRatio(null), [])
+  const scrubHandlers = useAxisLockedScrub({
+    onScrub: setScrubRatio,
+    onClear: clearScrub,
+  })
+
   if (points.length < 2 || end <= start) return null
   const bpms = points.map((point) => point.bpm)
   const low = Math.max(30, Math.floor(Math.min(...bpms) / 5) * 5 - 5)
@@ -364,10 +368,6 @@ export function SleepHeartRateChart({
       bpm: left.bpm + (right.bpm - left.bpm) * ratio,
     }
   })()
-
-  const updateActivePoint = (event: ReactPointerEvent<SVGSVGElement>) => {
-    setScrubRatio(pointerRatio(event))
-  }
 
   return (
     <div className={cn("chart-touch-safe sleep-focus-reveal rounded-2xl border border-white/[0.07] bg-black/10 p-4 sm:p-5", className)} style={{ animationDelay: "120ms" }}>
@@ -410,19 +410,11 @@ export function SleepHeartRateChart({
           ) : null}
           <svg
             viewBox="0 0 1000 210"
-            className="h-[230px] w-full cursor-crosshair touch-none overflow-visible sm:h-[260px]"
+            className="h-[230px] w-full cursor-crosshair overflow-visible sm:h-[260px]"
             role="img"
             aria-label={`Sleep heart rate averaged ${avg} beats per minute`}
             preserveAspectRatio="none"
-            onPointerDown={(event) => {
-              event.preventDefault()
-              event.currentTarget.setPointerCapture(event.pointerId)
-              updateActivePoint(event)
-            }}
-            onPointerMove={updateActivePoint}
-            onPointerLeave={(event) => {
-              if (event.pointerType === "mouse") setScrubRatio(null)
-            }}
+            {...scrubHandlers}
             onContextMenu={(event) => event.preventDefault()}
           >
             <defs>

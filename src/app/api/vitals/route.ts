@@ -8,6 +8,7 @@ import {
   utcCalendarDayRangeInclusive,
   utcRangeWhereForCalendarDay,
 } from "@/lib/dateStorage"
+import { getStepsDayRange, resolveStepsTimezone } from "@/lib/steps-day"
 
 type ZoneMinutes = { zone: string; minutes: number }
 type ZoneThreshold = { zone: string; minBpm: number | null; maxBpm: number | null }
@@ -42,6 +43,13 @@ export async function GET(req: NextRequest) {
     const trendStartYmd = formatDate(subDays(refDate, 13))
     const trendRange = utcCalendarDayRangeInclusive(trendStartYmd, dateYmd)
 
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { timeZone: true },
+    })
+    const stepsTz = resolveStepsTimezone(user?.timeZone)
+    const hrRange = getStepsDayRange(dateYmd, stepsTz)
+
     const [today, trendEntries, samples, connection] = await Promise.all([
       prisma.vitalDailyEntry.findFirst({
         where: { userId, date: utcRangeWhereForCalendarDay(dateYmd) },
@@ -50,8 +58,13 @@ export async function GET(req: NextRequest) {
         where: { userId, date: trendRange },
         orderBy: { date: "asc" },
       }),
+      // Prefer physical 5am→5am window so the chart matches steps tracking day,
+      // even for samples still labeled with a legacy midnight calendar date.
       prisma.heartRateSample.findMany({
-        where: { userId, date: utcRangeWhereForCalendarDay(dateYmd) },
+        where: {
+          userId,
+          time: { gte: hrRange.start, lt: hrRange.end },
+        },
         orderBy: { time: "asc" },
       }),
       prisma.googleHealthConnection.findUnique({

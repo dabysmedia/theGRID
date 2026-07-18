@@ -3,6 +3,7 @@ import "server-only"
 import { GOOGLE_HEALTH_API } from "@/lib/google-health/config"
 import { getValidAccessToken } from "@/lib/google-health/tokens"
 import { optionalNonNegativeInt } from "@/lib/google-health/normalize"
+import { getStepsDayRange } from "@/lib/steps-day"
 
 type CivilDate = { year?: number; month?: number; day?: number }
 type CivilTime = { hours?: number; minutes?: number; seconds?: number }
@@ -575,14 +576,19 @@ export async function fetchTimeInHeartRateZoneDailyRollup(
   return out
 }
 
-/** Raw bpm samples for one calendar day, bucketed to `bucketMinutes` resolution (default ~5 min). */
+/**
+ * Raw bpm samples for one tracking day (local 5am → next 5am), bucketed to
+ * `bucketMinutes` resolution (default ~5 min). Matches the steps-day window.
+ */
 export async function fetchHeartRateSamplesBucketed(
   userId: string,
-  dayYmd: string,
+  dayKey: string,
   bucketMinutes = 5,
+  timeZone?: string | null,
 ): Promise<HeartRateSampleBucket[]> {
-  const startIso = `${dayYmd}T00:00:00Z`
-  const endIso = `${addDaysYmd(dayYmd, 1)}T00:00:00Z`
+  const { start, end } = getStepsDayRange(dayKey, timeZone)
+  const startIso = start.toISOString()
+  const endIso = end.toISOString()
   const filter = `heart_rate.sample_time.physical_time >= "${startIso}" AND heart_rate.sample_time.physical_time < "${endIso}"`
   const buckets = new Map<number, { sum: number; count: number }>()
   const bucketMs = bucketMinutes * 60_000

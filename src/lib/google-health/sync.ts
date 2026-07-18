@@ -142,7 +142,8 @@ export async function syncGoogleHealthForUser(
   const endYmd = formatDate(new Date())
   const startYmd = formatDate(subDays(new Date(), days - 1))
   const endExclusive = addDaysYmd(endYmd, 1)
-  const hrSampleStartYmd = formatDate(subDays(new Date(), HR_SAMPLE_SYNC_DAYS - 1))
+  const hrSampleEndKey = endStepsKey
+  const hrSampleStartKey = addDaysYmd(endStepsKey, -(HR_SAMPLE_SYNC_DAYS - 1))
 
   const fetchWarnings: string[] = []
   let fetchAttempts = 0
@@ -223,10 +224,10 @@ export async function syncGoogleHealthForUser(
 
   const hrSampleDays: Array<{ ymd: string; samples: Array<{ time: string; bpm: number }> }> = []
   if (metrics.vitals) {
-    let cursor = hrSampleStartYmd
-    while (cursor <= endYmd) {
+    let cursor = hrSampleStartKey
+    while (cursor <= hrSampleEndKey) {
       try {
-        const samples = await fetchHeartRateSamplesBucketed(userId, cursor)
+        const samples = await fetchHeartRateSamplesBucketed(userId, cursor, 5, stepsTz)
         if (samples.length > 0) hrSampleDays.push({ ymd: cursor, samples })
       } catch {
         // Some accounts/devices don't have intraday HR — skip that day rather than fail the sync.
