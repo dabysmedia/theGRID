@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label"
 
 export function WorkCycleSettings() {
   const { user, refreshUsers } = useUser()
-  const [enabled, setEnabled] = useState(true)
+  const [enabled, setEnabled] = useState(false)
   const [anchorDate, setAnchorDate] = useState(DEFAULT_WORK_CYCLE_ANCHOR)
   const [goal, setGoal] = useState(3)
   const [busy, setBusy] = useState(false)
@@ -56,7 +56,11 @@ export function WorkCycleSettings() {
         return
       }
       await refreshUsers()
-      setMessage(enabled ? "Workout tracking now follows your 8-day rotation." : "Workout tracking now uses calendar weeks.")
+      setMessage(
+        enabled
+          ? `Training target saved: ${goal} sessions per 8-day rotation.`
+          : `Training target saved: ${goal} sessions per calendar week.`,
+      )
     } finally {
       setBusy(false)
     }
@@ -71,9 +75,9 @@ export function WorkCycleSettings() {
           <CalendarRange className="h-4 w-4 text-muted-foreground/70" />
         </div>
         <div className="min-w-0 space-y-1">
-          <h3 className="text-sm font-semibold tracking-wide text-foreground">Work rotation</h3>
+          <h3 className="text-sm font-semibold tracking-wide text-foreground">Training cadence</h3>
           <p className="text-[11px] leading-relaxed text-muted-foreground/80">
-            Counts workouts and training load across Day 1, Day 2, Night 1, Night 2, then four off days.
+            Set session volume for a calendar week or align it to your repeating work rotation.
           </p>
         </div>
       </div>
@@ -110,12 +114,12 @@ export function WorkCycleSettings() {
             type="date"
             value={anchorDate}
             onChange={(event) => setAnchorDate(event.target.value)}
-            disabled={busy}
+            disabled={busy || !enabled}
           />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="work-cycle-goal" className="text-xs uppercase tracking-wider text-muted-foreground">
-            Workout goal
+            Sessions / {enabled ? "8-day cycle" : "week"}
           </Label>
           <Input
             id="work-cycle-goal"

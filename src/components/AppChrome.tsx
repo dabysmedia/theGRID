@@ -30,7 +30,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
           isHub
             ? [
                 "h-full max-h-full overflow-hidden",
-                "pt-[max(0.5rem,env(safe-area-inset-top,0px))] pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]",
+                "py-0",
                 "ps-[max(0.5rem,env(safe-area-inset-left,0px))] pe-[max(0.5rem,env(safe-area-inset-right,0px))]",
                 "sm:p-3 md:max-w-2xl lg:max-w-3xl xl:max-w-5xl",
               ]
@@ -51,7 +51,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
       >
         <div
           key={pathname}
-          className="route-enter flex min-h-0 flex-1 flex-col"
+          className={cn(
+            "flex min-h-0 flex-1 flex-col",
+            isHub ? "hub-route-enter" : "route-enter",
+          )}
         >
           {children}
           {!fullscreen && !agentPublic && !isHub && <PageFooter />}

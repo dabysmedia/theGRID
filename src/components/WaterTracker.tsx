@@ -1,9 +1,10 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Check, Droplets, Pencil, Plus, RotateCcw } from "lucide-react"
+import { Check, Droplets, Pencil, Plus, RotateCcw, X } from "lucide-react"
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -15,9 +16,9 @@ import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
 import { apiFetch } from "@/lib/api-fetch"
 import { cn, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
 
 const DEFAULT_BOTTLE_OZ = 32
-const DEFAULT_GOAL_OZ = 32
 const QUICK_AMOUNTS = [8, 16, 32] as const
 
 interface WaterEntry {
@@ -81,8 +82,8 @@ export function WaterTracker() {
   const [entries, setEntries] = useState<WaterEntry[]>([])
   const [totalOz, setTotalOz] = useState(0)
   const [bottleOz, setBottleOz] = useState(DEFAULT_BOTTLE_OZ)
-  const [goalOz, setGoalOz] = useState(DEFAULT_GOAL_OZ)
-  const [goalInput, setGoalInput] = useState(String(DEFAULT_GOAL_OZ))
+  const [goalOz, setGoalOz] = useState<number>(TRACKING_TARGET_DEFAULTS.water)
+  const [goalInput, setGoalInput] = useState(String(TRACKING_TARGET_DEFAULTS.water))
   const [editingGoal, setEditingGoal] = useState(false)
   const [goalBusy, setGoalBusy] = useState(false)
   const [customAmount, setCustomAmount] = useState("")
@@ -107,7 +108,7 @@ export function WaterTracker() {
       setEntries(Array.isArray(data.entries) ? data.entries : [])
       setTotalOz(Number.isFinite(data.totalOz) ? data.totalOz : 0)
       setBottleOz(Number.isFinite(data.bottleOz) ? data.bottleOz : DEFAULT_BOTTLE_OZ)
-      const nextGoal = Number.isFinite(data.goalOz) ? data.goalOz : DEFAULT_GOAL_OZ
+      const nextGoal = Number.isFinite(data.goalOz) ? data.goalOz : TRACKING_TARGET_DEFAULTS.water
       setGoalOz(nextGoal)
       setGoalInput(formatOunces(nextGoal))
     } finally {
@@ -223,7 +224,7 @@ export function WaterTracker() {
         <div className="pointer-events-none absolute inset-y-0 left-0 w-36 bg-[radial-gradient(circle_at_40%_50%,rgba(34,211,238,0.13),transparent_68%)]" />
 
         <div className="relative flex h-[4.25rem] w-[4.75rem] shrink-0 items-center justify-center overflow-visible sm:w-[5.25rem]">
-          <div className="translate-y-1.5 scale-[0.68] sm:scale-[0.74]">
+          <div className="translate-y-2.5 scale-[0.68] sm:scale-[0.74]">
             <LiquidBottle ounces={totalOz} capacity={goalOz} compact />
           </div>
         </div>
@@ -264,7 +265,23 @@ export function WaterTracker() {
         </div>
       </DialogTrigger>
 
-      <DialogContent className="water-tracker-dialog min-h-0 overflow-hidden p-0 sm:max-w-[31rem]">
+      <DialogContent
+        showCloseButton={false}
+        className="water-tracker-dialog min-h-0 overflow-hidden p-0 sm:max-w-[31rem]"
+      >
+        <DialogClose
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="absolute right-3 top-3 z-30 border border-white/[0.08] bg-black/20 text-muted-foreground backdrop-blur-sm hover:bg-white/[0.08] hover:text-foreground"
+            />
+          }
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close water tracker</span>
+        </DialogClose>
         <DialogHeader className="relative z-10 px-5 pt-5 text-left">
           <div className="flex items-center gap-2 text-cyan-200/80">
             <Droplets className="h-4 w-4" aria-hidden />

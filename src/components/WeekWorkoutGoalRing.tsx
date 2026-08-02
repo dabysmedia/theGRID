@@ -3,8 +3,9 @@
 import { useId } from "react"
 import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { DEFAULT_WORKOUT_GOAL_PER_CYCLE } from "@/lib/work-cycle"
 
-export const WEEKLY_WORKOUT_GOAL = 3
+export const WEEKLY_WORKOUT_GOAL = DEFAULT_WORKOUT_GOAL_PER_CYCLE
 export const WORKOUT_RING_COLOR = "#c4d632"
 
 type WeekWorkoutGoalRingProps = {
