@@ -94,11 +94,20 @@ interface WorkoutCycleSummary {
   count: number
 }
 
+interface PlannedWorkoutSummary {
+  id: string
+  name: string
+  exercises: string
+}
+
 interface DashboardData {
   calories: CategorySummary
   steps: CategorySummary
   running: CategorySummary
-  workouts: CategorySummary & { cycle?: WorkoutCycleSummary }
+  workouts: CategorySummary & {
+    cycle?: WorkoutCycleSummary
+    planned?: PlannedWorkoutSummary[]
+  }
   sleep: CategorySummary
   peptides: CategorySummary
   alcohol: CategorySummary
@@ -331,6 +340,7 @@ export function HubDashboard() {
             periodEndDate: data.workouts.cycle?.endDate ?? activeDate,
             nextPeriodStartDate: data.workouts.cycle?.nextStartDate ?? activeDate,
             todayCount: data.workouts.todayValue,
+            plannedToday: data.workouts.planned ?? [],
             recoveryScore:
               data.recovery.todayValue > 0 ? data.recovery.todayValue : null,
           }}

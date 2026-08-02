@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { AlertTriangle, HeartPulse, HelpCircle, TrendingUp, X } from "lucide-react"
+import { AlertTriangle, HeartPulse, HelpCircle, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils"
 import {
   COACH_STATUS_LABELS,
   REASON_CODE_LABELS,
-  RIR_CHOICES,
   calculateNextSetRecommendation,
   compareCompletedSets,
   getComparableExerciseHistory,
@@ -33,6 +32,11 @@ import {
   saveProgressionPrefs,
   type ProgressionPrefs,
 } from "@/lib/workouts/progression-settings"
+import {
+  progressionOverridesForStyle,
+  TRAINING_STYLE_DEFINITIONS,
+  type TrainingStyle,
+} from "@/lib/workouts/training-style"
 
 export interface SetEffortPatch {
   rir?: number | null
@@ -55,6 +59,13 @@ const REP_RANGE_PRESETS: Array<{ repMin: number; repMax: number; label: string }
   { repMin: 8, repMax: 12, label: "8–12" },
   { repMin: 10, repMax: 15, label: "10–15" },
 ]
+
+const EFFORT_CHOICES = [
+  { rir: 0, label: "Failure", hint: "No reps left" },
+  { rir: 1, label: "RPE 9", hint: "1 rep left" },
+  { rir: 2, label: "RPE 8", hint: "2 reps left" },
+  { rir: 3, label: "RPE 7", hint: "3 reps left" },
+] as const
 
 /** Fire-and-forget audit event; recommendations must never block logging. */
 function postRecommendationEvent(
@@ -89,6 +100,7 @@ export function ProgressiveOverloadCoach({
   exercise,
   sessions,
   sessionId,
+  trainingStyle,
   setCount = exercise.sets.length,
   className,
   onApplyToNextSet,
@@ -98,6 +110,7 @@ export function ProgressiveOverloadCoach({
   exercise: PoExercise
   sessions: PoSession[]
   sessionId: string
+  trainingStyle: TrainingStyle
   setCount?: number
   className?: string
   onApplyToNextSet: (weight: number | null, reps: number | null, onlyEmpty?: boolean) => void
@@ -110,7 +123,6 @@ export function ProgressiveOverloadCoach({
      (flags, dismissal) resets naturally between movements. */
   const [prefs, setPrefs] = useState<ProgressionPrefs>(() => loadProgressionPrefs())
   const [whyOpen, setWhyOpen] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
   const [effortFlags, setEffortFlags] = useState<{ technique: boolean; pain: boolean }>({
     technique: false,
     pain: false,
@@ -119,6 +131,10 @@ export function ProgressiveOverloadCoach({
   const autoAppliedKeyRef = useRef<string | null>(null)
 
   const overrides = prefs.exercises[normalizeExerciseKey(exercise.name)]
+  const effectiveOverrides = useMemo(
+    () => progressionOverridesForStyle(trainingStyle, overrides),
+    [trainingStyle, overrides],
+  )
   const disabled = !prefs.coachEnabled || overrides?.disabled === true
 
   const rec = useMemo(
@@ -126,10 +142,10 @@ export function ProgressiveOverloadCoach({
       calculateNextSetRecommendation({
         exercise,
         sessions,
-        overrides,
+        overrides: effectiveOverrides,
         excludeSessionId: sessionId,
       }),
-    [exercise, sessions, overrides, sessionId],
+    [exercise, sessions, effectiveOverrides, sessionId],
   )
 
   /** Most recently completed hard set still awaiting an effort rating. */
@@ -146,7 +162,7 @@ export function ProgressiveOverloadCoach({
 
   /* Auto-plug suggested weight/reps into the next open set — no Accept tap. */
   useEffect(() => {
-    if (disabled || dismissed || pendingEffortSet != null) return
+    if (disabled || pendingEffortSet != null) return
     const apply = rec.apply
     if (!apply || apply.addSet) return
     if (apply.weight == null && apply.reps == null) return
@@ -156,7 +172,7 @@ export function ProgressiveOverloadCoach({
     onApplyToNextSet(apply.weight, apply.reps, true)
     postRecommendationEvent(rec, sessionId, exercise.name, "applied")
     // eslint-disable-next-line react-hooks/exhaustive-deps -- apply once per recommendation fingerprint
-  }, [disabled, dismissed, pendingEffortSet, rec.action, rec.apply?.weight, rec.apply?.reps, sessionId, exercise.id])
+  }, [disabled, pendingEffortSet, rec.action, rec.apply?.weight, rec.apply?.reps, sessionId, exercise.id])
 
   /* Audit "shown" once per movement per session (after data settles). */
   useEffect(() => {
@@ -170,11 +186,11 @@ export function ProgressiveOverloadCoach({
 
   const scale = prefs.effortScale
 
-  const recordEffort = (rir: number | null, skipped: boolean) => {
+  const recordEffort = (rir: (typeof EFFORT_CHOICES)[number]["rir"]) => {
     if (pendingEffortSet == null) return
     onSetEffort(pendingEffortSet.id, {
       rir,
-      rirSkipped: skipped,
+      rirSkipped: false,
       techniqueFlag: effortFlags.technique || undefined,
       painFlag: effortFlags.pain || undefined,
     })
@@ -184,8 +200,8 @@ export function ProgressiveOverloadCoach({
   const effortDialog = pendingEffortSet ? (
     <EffortRatingDialog
       set={pendingEffortSet}
-      scale={scale}
       targetRir={rec.targetRir}
+      trainingStyle={trainingStyle}
       flags={effortFlags}
       onFlagsChange={setEffortFlags}
       onRecord={recordEffort}
@@ -193,7 +209,7 @@ export function ProgressiveOverloadCoach({
   ) : null
 
   /* Effort is useful training data even when recommendation cards are hidden. */
-  if (disabled || dismissed) return effortDialog
+  if (disabled) return effortDialog
 
   /* ── Flat recommendation strip (no nested card) ───────────────── */
   const apply = rec.apply
@@ -218,7 +234,7 @@ export function ProgressiveOverloadCoach({
           <div className="flex min-w-0 items-center gap-1.5">
             <TrendingUp className="size-3.5 shrink-0 text-primary/80" aria-hidden />
             <h4 className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
-              Progress & next step
+              {trainingStyle === "classic" ? "Classic overload" : "Progress & next step"}
             </h4>
             <span
               className={cn(
@@ -229,7 +245,7 @@ export function ProgressiveOverloadCoach({
               {COACH_STATUS_LABELS[rec.status]}
             </span>
           </div>
-          <div className="flex shrink-0 items-center gap-0.5">
+          <div className="flex shrink-0 items-center">
             <button
               type="button"
               onClick={() => setWhyOpen(true)}
@@ -237,17 +253,6 @@ export function ProgressiveOverloadCoach({
               aria-label="Why this recommendation?"
             >
               <HelpCircle className="size-3.5" aria-hidden />
-            </button>
-            <button
-              type="button"
-              aria-label="Dismiss recommendations for this movement"
-              className="flex size-8 items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:bg-glass-highlight/25 hover:text-foreground touch-manipulation"
-              onClick={() => {
-                setDismissed(true)
-                postRecommendationEvent(rec, sessionId, exercise.name, "dismissed")
-              }}
-            >
-              <X className="size-3.5" aria-hidden />
             </button>
           </div>
         </div>
@@ -340,6 +345,7 @@ export function ProgressiveOverloadCoach({
         exercise={exercise}
         sessions={sessions}
         sessionId={sessionId}
+        trainingStyle={trainingStyle}
         prefs={prefs}
         onPrefsChange={setPrefs}
       />
@@ -350,18 +356,18 @@ export function ProgressiveOverloadCoach({
 
 function EffortRatingDialog({
   set,
-  scale,
   targetRir,
+  trainingStyle,
   flags,
   onFlagsChange,
   onRecord,
 }: {
   set: PoSet
-  scale: ProgressionPrefs["effortScale"]
   targetRir: number
+  trainingStyle: TrainingStyle
   flags: { technique: boolean; pain: boolean }
   onFlagsChange: (flags: { technique: boolean; pain: boolean }) => void
-  onRecord: (rir: number | null, skipped: boolean) => void
+  onRecord: (rir: (typeof EFFORT_CHOICES)[number]["rir"]) => void
 }) {
   return (
     <Dialog open>
@@ -379,46 +385,38 @@ function EffortRatingDialog({
             How hard was that set?
           </DialogTitle>
           <DialogDescription className="mt-1 text-xs">
-            {scale === "rpe"
-              ? "Choose RPE 5–10. RPE 10 means no reps left."
-              : "Choose reps in reserve. 0 means no reps left."}
+            {trainingStyle === "classic"
+              ? "RPE 9 is the usual target. Failure is optional—not required—and only while technique stays controlled."
+              : "Pick the closest effort. RPE 7 means you had about 3 reps left; Failure means no reps left."}
           </DialogDescription>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 px-4">
-          {[...RIR_CHOICES].reverse().map((choice) => {
-            const label =
-              scale === "rpe"
-                ? choice.rir === 5
-                  ? "5"
-                  : String(rirToRpe(choice.rir))
-                : choice.label
+        <div className="grid grid-cols-2 gap-2 px-4">
+          {EFFORT_CHOICES.map((choice) => {
             const selectedTarget = choice.rir === targetRir
-            const plainHint =
-              choice.rir === 0
-                ? "Max effort"
-                : choice.rir === 2
-                  ? "Target effort"
-                  : choice.rir === 5
-                    ? "Easy"
-                    : `${choice.rir} rep${choice.rir === 1 ? "" : "s"} left`
+            const classicPrimary = trainingStyle === "classic" && choice.rir === 1
+            const classicSecondary = trainingStyle === "classic" && choice.rir === 0
             return (
               <button
                 key={choice.rir}
                 type="button"
-                onClick={() => onRecord(choice.rir, false)}
+                onClick={() => onRecord(choice.rir)}
                 className={cn(
                   "flex min-h-16 flex-col items-center justify-center rounded-xl border px-2 font-bold tabular-nums transition-all touch-manipulation active:scale-[0.96]",
-                  selectedTarget
+                  classicPrimary || (trainingStyle !== "classic" && selectedTarget)
                     ? "border-primary/55 bg-primary/15 text-primary ring-1 ring-primary/30"
+                    : classicSecondary
+                      ? "border-primary/40 bg-transparent text-primary/80"
                     : "border-glass-border/35 bg-glass-highlight/[0.07] text-foreground hover:border-primary/35",
                 )}
               >
-                <span className="text-lg leading-none">
-                  {scale === "rpe" ? `RPE ${label}` : `${label} RIR`}
-                </span>
+                <span className="text-lg leading-none">{choice.label}</span>
                 <span className="mt-1 text-[9px] font-medium text-muted-foreground/70">
-                  {plainHint}
+                  {classicPrimary || (trainingStyle !== "classic" && selectedTarget)
+                    ? "Target effort"
+                    : classicSecondary
+                      ? "Optional target"
+                      : choice.hint}
                 </span>
               </button>
             )
@@ -456,13 +454,7 @@ function EffortRatingDialog({
           </button>
         </div>
 
-        <button
-          type="button"
-          className="mx-4 my-3 min-h-10 text-xs font-semibold text-muted-foreground/60 touch-manipulation"
-          onClick={() => onRecord(null, true)}
-        >
-          Skip effort rating
-        </button>
+        <div className="h-4" aria-hidden />
       </DialogContent>
     </Dialog>
   )
@@ -476,6 +468,7 @@ function CoachWhyDialog({
   sessions,
   sessionId,
   prefs,
+  trainingStyle,
   onPrefsChange,
 }: {
   open: boolean
@@ -485,6 +478,7 @@ function CoachWhyDialog({
   sessions: PoSession[]
   sessionId: string
   prefs: ProgressionPrefs
+  trainingStyle: TrainingStyle
   onPrefsChange: (p: ProgressionPrefs) => void
 }) {
   const key = normalizeExerciseKey(exercise.name)
@@ -498,6 +492,23 @@ function CoachWhyDialog({
     })
   }, [sessions, exercise.name, rec.sourceExerciseKey, sessionId])
 
+  const plainReasons = rec.reasonCodes
+    .map((code) => REASON_CODE_LABELS[code])
+    .filter((reason): reason is string => Boolean(reason))
+    .slice(0, 2)
+  const effortTarget =
+    rec.targetRir === 0
+      ? `Aim for ${rec.repMin}–${rec.repMax} controlled reps, reaching failure only when you choose.`
+      : `Aim for ${rec.repMin}–${rec.repMax} reps with about ${rec.targetRir} ${rec.targetRir === 1 ? "rep" : "reps"} left.`
+  const modeContext =
+    trainingStyle === "classic"
+      ? "Classic favors heavier, near-failure work with two working sets per exercise."
+      : "Science-Based balances load, reps, and effort across an adaptive number of sets."
+  const recommendationBasis =
+    rec.basedOn?.replace(/^Based on:\s*/i, "") ??
+    rec.sourceLabel ??
+    "No comparable workout history yet; this is a starting target."
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -509,66 +520,45 @@ function CoachWhyDialog({
         )}
       >
         <div className="max-h-[80dvh] overflow-y-auto overscroll-contain">
-          <div className="space-y-1 px-4 pb-2 pt-4 pr-12">
+          <div className="space-y-1 px-4 pb-3 pt-4 pr-12">
             <DialogHeader className="space-y-1 text-left">
-              <DialogTitle>Why this recommendation?</DialogTitle>
+              <DialogTitle>{COACH_STATUS_LABELS[rec.status]}: {rec.headline}</DialogTitle>
               <DialogDescription>
-                {exercise.name} · confidence {rec.confidence}
+                {exercise.name} · {TRAINING_STYLE_DEFINITIONS[trainingStyle].label}
               </DialogDescription>
             </DialogHeader>
           </div>
 
-          <div className="space-y-3 px-4 pb-4">
-            <div className="flex flex-wrap gap-1.5">
-              <span
-                className={cn(
-                  "rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
-                  STATUS_BADGE_CLASSES[rec.status],
-                )}
-              >
-                {COACH_STATUS_LABELS[rec.status]}
-              </span>
-              <span className="rounded-md border border-glass-border/40 bg-glass-highlight/15 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-muted-foreground/70">
-                {rec.repMin}–{rec.repMax} · {rec.targetRir} RIR
-              </span>
-            </div>
-
-            {rec.reasonCodes.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {rec.reasonCodes.slice(0, 4).map((code) => (
-                  <span
-                    key={code}
-                    className="rounded-md bg-muted/30 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground/75"
-                  >
-                    {REASON_CODE_LABELS[code] ?? code}
-                  </span>
-                ))}
+          <div className="space-y-2.5 px-4 pb-4">
+            <dl className="overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.025]">
+              <div className="border-b border-glass-border/20 px-3 py-2.5">
+                <dt className="text-[10px] font-semibold uppercase tracking-wider text-primary/75">Why</dt>
+                <dd className="mt-0.5 text-xs leading-relaxed text-foreground/85">
+                  {plainReasons.length > 0 ? plainReasons.join(". ") : rec.explanation[0] ?? "This best matches your current target."}
+                </dd>
               </div>
-            ) : null}
+              <div className="border-b border-glass-border/20 px-3 py-2.5">
+                <dt className="text-[10px] font-semibold uppercase tracking-wider text-primary/75">Effort</dt>
+                <dd className="mt-0.5 text-xs leading-relaxed text-foreground/85">{effortTarget}</dd>
+              </div>
+              <div className="px-3 py-2.5">
+                <dt className="text-[10px] font-semibold uppercase tracking-wider text-primary/75">Based on</dt>
+                <dd className="mt-0.5 text-xs leading-relaxed text-foreground/85">{recommendationBasis}</dd>
+              </div>
+            </dl>
 
-            <ul className="space-y-1.5">
-              {rec.explanation.map((line, i) => (
-                <li
-                  key={i}
-                  className="flex gap-2 text-xs leading-relaxed text-muted-foreground"
-                >
-                  <span className="mt-1.5 size-1 shrink-0 rounded-full bg-primary/60" aria-hidden />
-                  {line}
-                </li>
-              ))}
-            </ul>
+            <p className="px-1 text-[10px] leading-relaxed text-muted-foreground/60">{modeContext}</p>
 
             {history.length > 0 ? (
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                  Sessions considered
-                  {rec.sourceExerciseKey ? ` (${rec.sourceExerciseKey})` : ""}
-                </p>
-                <div className="glass-subtle divide-y divide-glass-border/20 rounded-lg">
+              <details className="group rounded-xl border border-glass-border/30 bg-white/[0.02]">
+                <summary className="cursor-pointer list-none px-3 py-2.5 text-[11px] font-semibold text-muted-foreground/75 touch-manipulation">
+                  Recent workout data <span className="font-normal text-muted-foreground/45">({history.length})</span>
+                </summary>
+                <div className="divide-y divide-glass-border/20 border-t border-glass-border/20">
                   {history.map((exp) => (
                     <div
                       key={exp.sessionId}
-                      className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] tabular-nums"
+                      className="flex items-center justify-between gap-2 px-3 py-1.5 text-[11px] tabular-nums"
                     >
                       <span className="text-muted-foreground/70">{exp.dateKey}</span>
                       <span className="text-foreground/85">
@@ -581,16 +571,20 @@ function CoachWhyDialog({
                     </div>
                   ))}
                 </div>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground/60">
-                No usable history yet — recommendations sharpen after the first logged
-                session.
-              </p>
-            )}
+              </details>
+            ) : null}
 
-            {/* Per-movement settings */}
-            <div className="space-y-2 border-t border-glass-border/25 pt-3">
+            {/* Keep movement controls available without crowding the explanation. */}
+            <details className="group rounded-xl border border-glass-border/30 bg-white/[0.02]">
+              <summary className="cursor-pointer list-none px-3 py-2.5 touch-manipulation">
+                <span className="block text-[11px] font-semibold text-muted-foreground/80">
+                  Customize recommendation
+                </span>
+                <span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground/50">
+                  Change this exercise’s rep range, effort target, or coach visibility.
+                </span>
+              </summary>
+              <div className="space-y-2 border-t border-glass-border/20 px-3 pb-3 pt-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
                 Settings for this movement
               </p>
@@ -624,7 +618,7 @@ function CoachWhyDialog({
                 })}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {[1, 2, 3].map((rir) => {
+                {(trainingStyle === "classic" ? [0, 1, 2, 3] : [1, 2, 3]).map((rir) => {
                   const active = (override?.targetRir ?? rec.targetRir) === rir
                   return (
                     <button
@@ -642,7 +636,7 @@ function CoachWhyDialog({
                           : "glass-subtle text-muted-foreground/75 hover:text-foreground",
                       )}
                     >
-                      {rir} RIR
+                      {rir} RIR{rir === 0 ? " · failure" : ""}
                     </button>
                   )
                 })}
@@ -677,7 +671,8 @@ function CoachWhyDialog({
               >
                 {override?.disabled ? "Re-enable coach for this movement" : "Hide coach for this movement"}
               </button>
-            </div>
+              </div>
+            </details>
           </div>
         </div>
       </DialogContent>

@@ -59,7 +59,9 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
   const { activeDate } = useActiveDate()
   const state = useLogFoodDialog(props)
   const [screen, setScreen] = useState<ComposerScreen>(() =>
-    props.editingMeal || props.initialMealType ? "meal" : "foods",
+    props.editingMeal || (props.initialMealType && !props.startInFoodSearch)
+      ? "meal"
+      : "foods",
   )
   const editingEntry = Boolean(state.editingEntry)
   const editingMeal = Boolean(state.editingMeal)
@@ -70,7 +72,9 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
 
   function handleOpenChange(next: boolean) {
     if (!next) {
-      setScreen(props.initialMealType ? "meal" : "foods")
+      setScreen(
+        props.initialMealType && !props.startInFoodSearch ? "meal" : "foods",
+      )
       state.resetRecipeCreator()
     }
     props.onOpenChange(next)
@@ -172,8 +176,10 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
             <UnifiedFoodSearch
               savedMeals={state.savedMeals}
               recipes={state.recipes}
+              mealType={state.mealType}
               onAddCatalog={state.handleFoodSelect}
               onAddSaved={state.handleUseSavedMeal}
+              onAddFrequent={state.handleUseFrequentFood}
               onAddRecipe={(recipe) => {
                 state.handleUseRecipe(recipe)
                 setScreen("meal")

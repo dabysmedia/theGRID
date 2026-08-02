@@ -27,6 +27,7 @@ import {
 } from "@/lib/calories/log-food"
 import { isFoodMeasurementUnit } from "@/lib/calories/measurements"
 import type { SavedFoodCategory } from "@/lib/calories/saved-food-category"
+import type { FrequentFoodSuggestion } from "@/lib/calories/frequent-foods"
 import type {
   CatalogFoodResult,
   PortionSelection,
@@ -48,6 +49,8 @@ export interface EditingMeal {
 export interface UseLogFoodDialogOptions {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** New, empty meal slots begin in food search instead of an empty review. */
+  startInFoodSearch?: boolean
   editingEntry?: CalorieEntry | null
   onEditingEntryChange?: (entry: CalorieEntry | null) => void
   editingMeal?: EditingMeal | null
@@ -551,6 +554,36 @@ export function useLogFoodDialog({
       .catch(() => {})
   }
 
+  function handleUseFrequentFood(
+    food: FrequentFoodSuggestion,
+    portion: PortionSelection,
+  ) {
+    if (vacationBlocksLog) return
+    const effectiveMealType = mealType || mealTypes[0]
+    pushDraftItem(
+      createDraftItem({
+        mealType: effectiveMealType,
+        description: food.name,
+        unitCalories: Math.round(food.calories * portion.multiplier),
+        unitProtein:
+          food.protein != null
+            ? Math.round(food.protein * portion.multiplier * 10) / 10
+            : null,
+        unitCarbs:
+          food.carbs != null
+            ? Math.round(food.carbs * portion.multiplier * 10) / 10
+            : null,
+        unitFat:
+          food.fat != null
+            ? Math.round(food.fat * portion.multiplier * 10) / 10
+            : null,
+        imageUrl: food.imageUrl,
+        portionAmount: portion.amount,
+        portionUnit: portion.unit,
+      }),
+    )
+  }
+
   function handleUseRecipe(recipe: Recipe) {
     if (vacationBlocksLog) return
     const recipeTags = savedMealTagList(recipe)
@@ -1022,6 +1055,7 @@ export function useLogFoodDialog({
     addCalories,
     handleSubmit,
     handleUseSavedMeal,
+    handleUseFrequentFood,
     handleUseRecipe,
     openEditSavedMeal,
     cancelEditSavedMeal,

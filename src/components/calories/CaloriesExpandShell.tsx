@@ -175,6 +175,14 @@ export function CaloriesExpandShell({
   }
 
   function chooseMeal(mealType: (typeof mealTypes)[number]) {
+    const existingMealEntries = entries.filter(
+      (entry) => entry.mealType.trim().toLowerCase() === mealType,
+    )
+    if (existingMealEntries.length > 0) {
+      setMealPickerOpen(false)
+      startEditMeal(mealType, existingMealEntries)
+      return
+    }
     setPreferredMealType(mealType)
     setDraftMealItems([])
     setComposerSession((session) => session + 1)
@@ -505,6 +513,16 @@ export function CaloriesExpandShell({
           }
         }}
         initialMealType={preferredMealType}
+        startInFoodSearch={
+          editingEntry == null &&
+          editingMeal == null &&
+          preferredMealType != null &&
+          !entries.some(
+            (entry) =>
+              entry.mealType.trim().toLowerCase() ===
+              preferredMealType.trim().toLowerCase(),
+          )
+        }
         editingEntry={editingEntry}
         onEditingEntryChange={setEditingEntry}
         editingMeal={editingMeal}

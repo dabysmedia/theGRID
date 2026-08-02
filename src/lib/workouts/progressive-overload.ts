@@ -221,6 +221,7 @@ export interface ExerciseProfile {
   repMin: number
   repMax: number
   targetRir: number
+  calibrationRir: number
   incrementLb: number
   maxWorkingSets: number
   allowExtraSets: boolean
@@ -230,6 +231,7 @@ export interface ProfileOverrides {
   repMin?: number
   repMax?: number
   targetRir?: number
+  calibrationRir?: number
   incrementLb?: number
   maxWorkingSets?: number
   allowExtraSets?: boolean
@@ -356,6 +358,7 @@ export function buildExerciseProfile(
     repMin: overrides?.repMin ?? range.repMin,
     repMax: overrides?.repMax ?? range.repMax,
     targetRir: overrides?.targetRir ?? range.targetRir,
+    calibrationRir: overrides?.calibrationRir ?? 3,
     incrementLb:
       overrides?.incrementLb ??
       (loadBasis === "bodyweight" ? 0 : DEFAULT_INCREMENTS[equipment]),
@@ -761,7 +764,7 @@ export function calculateInitialPrescription(
   /* ── No relevant history: calibration ───────────── */
   if (source.kind === "none") {
     reasons.push("INSUFFICIENT_DATA", "FIRST_SET_CALIBRATION")
-    const calibRir = 3
+    const calibRir = profile.calibrationRir
     explanation.push(
       "No history found for this movement or a credible similar one.",
       `Pick a load you could comfortably do for ${profile.repMax}+ reps, then treat set 1 as a calibration set.`,
@@ -805,7 +808,7 @@ export function calculateInitialPrescription(
       estimate = roundToIncrement(srcLoad * source.loadRatio, profile.incrementLb, "down")
       reasons.push("EQUIPMENT_INCREMENT_ROUNDED")
     }
-    const calibRir = 3
+    const calibRir = profile.calibrationRir
     explanation.push(
       `No history for ${input.exercise.name}; estimated from ${source.sourceExerciseName} (similarity ${(100 * (source.similarity ?? 0)).toFixed(0)}%).`,
       `Last ${source.sourceExerciseName}: ${describeExposure(latest, basis)} on ${latest.dateKey}.`,

@@ -9,6 +9,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react"
+import type { TrainingStyle } from "@/lib/workouts/training-style"
 
 const STORAGE_KEY = "theGRID_activeUser"
 
@@ -25,6 +26,7 @@ export interface UserProfile {
   workCycleLength?: number
   workCyclePatternJson?: string
   workoutGoalPerCycle?: number
+  trainingStyle?: TrainingStyle
 }
 
 interface UserContextValue {
@@ -123,7 +125,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       (f.workCycleLength ?? 8) === (user.workCycleLength ?? 8) &&
       (f.workCyclePatternJson ?? "") === (user.workCyclePatternJson ?? "") &&
       (f.workoutGoalPerCycle ?? 3) === (user.workoutGoalPerCycle ?? 3)
-    if (nameSame && colorSame && urlSame && vacationSame && workCycleSame) return
+    const trainingStyleSame =
+      (f.trainingStyle ?? "science_based") === (user.trainingStyle ?? "science_based")
+    if (nameSame && colorSame && urlSame && vacationSame && workCycleSame && trainingStyleSame) return
     setUser(f)
     storeUser(f)
   }, [users, user])

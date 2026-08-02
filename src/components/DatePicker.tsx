@@ -1,26 +1,17 @@
 "use client"
 
-import { useRef } from "react"
-import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react"
+import { CalendarDays, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react"
 import { useActiveDate } from "@/context/DateContext"
+import { useWorkoutPlanner } from "@/context/WorkoutPlannerContext"
 import { cn, parseLocalDate } from "@/lib/utils"
 import { format } from "date-fns"
 
 export function DatePicker({ compact = false }: { compact?: boolean }) {
-  const { activeDate, setActiveDate, isToday, goToday, goPrev, goNext } =
-    useActiveDate()
-  const inputRef = useRef<HTMLInputElement>(null)
+  const { activeDate, isToday, goToday, goPrev, goNext } = useActiveDate()
+  const { openPlanner } = useWorkoutPlanner()
 
   const dateObj = parseLocalDate(activeDate)
   const display = format(dateObj, "EEEE, MMMM d").toUpperCase()
-
-  function openPicker() {
-    inputRef.current?.showPicker?.()
-  }
-
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (e.target.value) setActiveDate(e.target.value)
-  }
 
   return (
     <div className={cn("flex items-center gap-1", compact ? "min-w-0 flex-nowrap" : "flex-wrap")}>
@@ -40,9 +31,10 @@ export function DatePicker({ compact = false }: { compact?: boolean }) {
       {/* Date display — clickable */}
       <button
         type="button"
-        onClick={openPicker}
+        onClick={() => openPlanner(activeDate)}
+        aria-label={`Open workout planner for ${format(dateObj, "EEEE, MMMM d")}`}
         className={cn(
-          "group relative touch-manipulation rounded-xl uppercase transition-all",
+          "group relative inline-flex touch-manipulation items-center rounded-xl uppercase transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
           compact
             ? "min-h-8 min-w-0 truncate whitespace-nowrap px-1.5 py-1 text-[9px] tracking-[0.07em] sm:px-2 sm:text-[10px]"
             : "min-h-11 px-3 py-2.5 text-xs tracking-[0.1em] sm:min-h-0 sm:py-1.5",
@@ -54,19 +46,14 @@ export function DatePicker({ compact = false }: { compact?: boolean }) {
         <span className="text-muted-foreground/40 mr-1.5 group-hover:text-muted-foreground/60 transition-colors">
           {"//"}
         </span>
-        {display}
+        <span className="truncate">{display}</span>
+        <CalendarDays
+          className="ml-1.5 size-3 shrink-0 opacity-45 transition-opacity group-hover:opacity-80"
+          aria-hidden
+        />
         {!isToday && (
           <span className="absolute -top-px -right-px w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
         )}
-        {/* Hidden native date input */}
-        <input
-          ref={inputRef}
-          type="date"
-          value={activeDate}
-          onChange={handleChange}
-          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full pointer-events-none"
-          tabIndex={-1}
-        />
       </button>
 
       {/* Next day */}

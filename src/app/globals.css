@@ -308,10 +308,6 @@ html {
     filter: drop-shadow(0 0.45rem 0.5rem rgb(0 0 0 / 38%));
   }
 
-  .water-bottle-scene--compact .water-bottle-cap {
-    top: -0.55rem;
-  }
-
   .water-bottle-shadow {
     position: absolute;
     left: 50%;
@@ -334,7 +330,7 @@ html {
 
   .water-bottle-cap {
     z-index: 3;
-    top: 0;
+    top: -0.2rem;
     width: 48%;
     height: 8%;
     border: 1px solid rgb(186 230 253 / 32%);
@@ -343,6 +339,16 @@ html {
       repeating-linear-gradient(90deg, transparent 0 0.28rem, rgb(255 255 255 / 12%) 0.3rem 0.34rem),
       linear-gradient(100deg, rgb(8 47 73 / 95%), rgb(14 116 144 / 86%) 50%, rgb(8 47 73 / 95%));
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 22%), 0 0.25rem 0.8rem rgb(34 211 238 / 10%);
+  }
+
+  .water-bottle-scene--compact .water-bottle-cap {
+    top: -0.55rem;
+  }
+
+  /* Keep this after the base cap rule so CSS optimization preserves the
+     preview-only seating adjustment. The expanded bottle remains at top: 0. */
+  .water-bottle-scene--compact .water-bottle-cap {
+    top: -0.55rem;
   }
 
   .water-bottle-neck {

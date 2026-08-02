@@ -22,9 +22,11 @@ import { Button } from "@/components/ui/button"
 import { BarcodeScanner } from "@/components/calories/BarcodeScanner"
 import { FoodFallbackIcon } from "@/components/calories/FoodFallbackIcon"
 import type { Recipe, SavedMeal } from "@/lib/calories/log-food"
+import type { FrequentFoodSuggestion } from "@/lib/calories/frequent-foods"
 import {
   availableFoodUnits,
   foodPortionMultiplier,
+  isFoodMeasurementUnit,
   measurementUnitLabel,
   type FoodMeasurementUnit,
 } from "@/lib/calories/measurements"
@@ -38,21 +40,26 @@ export type { CatalogFoodResult, PortionSelection } from "@/components/calories/
 type SelectedFood =
   | { kind: "catalog"; food: CatalogFoodResult }
   | { kind: "saved"; food: SavedMeal }
+  | { kind: "frequent"; food: FrequentFoodSuggestion }
 
 type LibraryFilter = "all" | "saved" | "recipes"
 
 export function UnifiedFoodSearch({
   savedMeals,
   recipes,
+  mealType,
   onAddCatalog,
   onAddSaved,
+  onAddFrequent,
   onAddRecipe,
   onSaveCatalog,
 }: {
   savedMeals: SavedMeal[]
   recipes: Recipe[]
+  mealType: string | null
   onAddCatalog: (food: CatalogFoodResult, portion: PortionSelection) => void
   onAddSaved: (food: SavedMeal, portion: PortionSelection) => void
+  onAddFrequent: (food: FrequentFoodSuggestion, portion: PortionSelection) => void
   onAddRecipe: (recipe: Recipe) => void
   onSaveCatalog?: (food: CatalogFoodResult) => Promise<boolean>
 }) {
@@ -67,7 +74,27 @@ export function UnifiedFoodSearch({
   const [scannerOpen, setScannerOpen] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set())
+  const [frequentFoods, setFrequentFoods] = useState<FrequentFoodSuggestion[]>([])
   const requestRef = useRef(0)
+  const frequentRequestRef = useRef(0)
+
+  useEffect(() => {
+    const normalizedMeal = mealType?.trim().toLowerCase() ?? ""
+    const requestId = ++frequentRequestRef.current
+    if (!normalizedMeal) {
+      setFrequentFoods([])
+      return
+    }
+    void apiFetch(`/api/calories/frequent?mealType=${encodeURIComponent(normalizedMeal)}`)
+      .then(async (response) => {
+        const data = await response.json()
+        if (requestId !== frequentRequestRef.current) return
+        setFrequentFoods(response.ok && Array.isArray(data) ? data : [])
+      })
+      .catch(() => {
+        if (requestId === frequentRequestRef.current) setFrequentFoods([])
+      })
+  }, [mealType])
 
   const searchCatalog = useCallback(async (value: string, barcode = false) => {
     const trimmed = value.trim()
@@ -149,9 +176,17 @@ export function UnifiedFoodSearch({
       }
     }
     return {
-      amount: selected.food.servingAmount || 1,
-      unit: selected.food.servingUnit || ("serving" as const),
-      weightG: selected.food.servingWeightG,
+      amount:
+        selected.kind === "frequent"
+          ? selected.food.portionAmount || 1
+          : selected.food.servingAmount || 1,
+      unit:
+        selected.kind === "frequent"
+          ? isFoodMeasurementUnit(selected.food.portionUnit)
+            ? selected.food.portionUnit
+            : "serving"
+          : selected.food.servingUnit || ("serving" as const),
+      weightG: selected.kind === "frequent" ? null : selected.food.servingWeightG,
       calories: selected.food.calories,
       protein: selected.food.protein,
       carbs: selected.food.carbs,
@@ -175,12 +210,18 @@ export function UnifiedFoodSearch({
     : []
 
   function chooseFood(next: SelectedFood) {
-    const basisUnit =
-      next.kind === "catalog"
-        ? "serving"
+    const basisUnit = next.kind === "catalog"
+      ? "serving"
+      : next.kind === "frequent"
+        ? isFoodMeasurementUnit(next.food.portionUnit)
+          ? next.food.portionUnit
+          : "serving"
         : next.food.servingUnit || "serving"
-    const basisAmount =
-      next.kind === "catalog" ? 1 : next.food.servingAmount || 1
+    const basisAmount = next.kind === "catalog"
+      ? 1
+      : next.kind === "frequent"
+        ? next.food.portionAmount || 1
+        : next.food.servingAmount || 1
     setSelected(next)
     setUnit(basisUnit)
     setAmount(String(basisAmount))
@@ -190,7 +231,8 @@ export function UnifiedFoodSearch({
     if (!selected || multiplier == null || multiplier <= 0) return
     const portion = { amount: numericAmount, unit, multiplier }
     if (selected.kind === "catalog") onAddCatalog(selected.food, portion)
-    else onAddSaved(selected.food, portion)
+    else if (selected.kind === "saved") onAddSaved(selected.food, portion)
+    else onAddFrequent(selected.food, portion)
     setSelected(null)
     setQuery("")
   }
@@ -227,7 +269,9 @@ export function UnifiedFoodSearch({
     const subtitle =
       selected.kind === "catalog"
         ? selected.food.brand_name || selected.food.serving_description
-        : "Saved food"
+        : selected.kind === "frequent"
+          ? `${selected.food.logCount} ${mealType ?? "meal"} logs`
+          : "Saved food"
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col py-1 motion-safe:animate-fade-up">
         <button
@@ -334,7 +378,8 @@ export function UnifiedFoodSearch({
     !loading &&
     catalog.length === 0 &&
     (!showSaved || matchingSaved.length === 0) &&
-    (!showRecipes || matchingRecipes.length === 0)
+    (!showRecipes || matchingRecipes.length === 0) &&
+    (localQuery.length > 0 || filter !== "all" || frequentFoods.length === 0)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -393,6 +438,26 @@ export function UnifiedFoodSearch({
       </div>
 
       <div className="space-y-6 pb-5">
+        {!localQuery && filter === "all" && frequentFoods.length > 0 ? (
+          <ResultSection
+            icon={Utensils}
+            title={`Frequently logged for ${mealType ? mealType[0].toUpperCase() + mealType.slice(1) : "this meal"}`}
+            caption="Learned from your history"
+          >
+            {frequentFoods.map((food) => (
+              <FoodResultRow
+                key={food.id}
+                name={food.name}
+                subtitle={`${food.logCount} logs for this meal`}
+                calories={food.calories}
+                protein={food.protein}
+                image={food.imageUrl}
+                onClick={() => chooseFood({ kind: "frequent", food })}
+              />
+            ))}
+          </ResultSection>
+        ) : null}
+
         {showRecipes && matchingRecipes.length > 0 ? (
           <ResultSection
             icon={BookOpen}
@@ -408,7 +473,7 @@ export function UnifiedFoodSearch({
         {showSaved && matchingSaved.length > 0 ? (
           <ResultSection
             icon={Bookmark}
-            title={localQuery ? "Saved foods" : "Frequently logged"}
+            title="Saved foods"
             caption="Your private library"
           >
             {matchingSaved.map((food) => (

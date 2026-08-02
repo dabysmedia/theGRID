@@ -20,6 +20,7 @@ const workCycleSelect = {
   workCycleLength: true,
   workCyclePatternJson: true,
   workoutGoalPerCycle: true,
+  trainingStyle: true,
 } as const
 
 export async function GET() {
@@ -46,6 +47,7 @@ export async function GET() {
           workCycleLength: 8,
           workCyclePatternJson: '["day","day","night","night","off","off","off","off"]',
           workoutGoalPerCycle: 3,
+          trainingStyle: "science_based",
         }))
       )
     } catch (e2) {

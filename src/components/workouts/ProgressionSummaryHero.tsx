@@ -10,7 +10,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { apiFetch } from "@/lib/api-fetch"
+import { useUser } from "@/context/UserContext"
 import { cn } from "@/lib/utils"
+import {
+  normalizeTrainingStyle,
+  TRAINING_STYLE_DEFINITIONS,
+} from "@/lib/workouts/training-style"
 import type {
   WorkoutMovementReport,
   WorkoutProgressionSummaryData,
@@ -50,6 +55,9 @@ export function ProgressionSummaryHero({
   const [data, setData] = useState<WorkoutProgressionSummaryData | null>(null)
   const [reportOpen, setReportOpen] = useState(false)
   const isHud = variant === "hud"
+  const { user } = useUser()
+  const trainingStyle = normalizeTrainingStyle(user?.trainingStyle)
+  const trainingStyleDefinition = TRAINING_STYLE_DEFINITIONS[trainingStyle]
 
   useEffect(() => {
     let cancelled = false
@@ -208,7 +216,21 @@ export function ProgressionSummaryHero({
             ) : null}
           </div>
 
-          {data.nextPriority ? (
+          {trainingStyle === "classic" ? (
+            <p
+              className={cn(
+                "mt-2",
+                isHud
+                  ? "type-hud-caption normal-case tracking-normal text-muted-foreground/70"
+                  : "text-xs text-muted-foreground/75",
+              )}
+            >
+              <span className={isHud ? "text-foreground/80" : "font-semibold text-foreground/85"}>
+                Current coach:
+              </span>{" "}
+              Classic uses two hard sets, 6–10 reps, and a 1 RIR target. The report above remains a record of that completed session.
+            </p>
+          ) : data.nextPriority ? (
             <p
               className={cn(
                 "mt-2 truncate",
@@ -268,6 +290,16 @@ export function ProgressionSummaryHero({
               </DialogHeader>
             </div>
             <div className="space-y-0 px-4 pb-4">
+              <div className="mb-3 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  Current coach · {trainingStyleDefinition.label}
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/70">
+                  {trainingStyle === "classic"
+                    ? "New workouts use two hard sets, 6–10 reps, and a 1 RIR target. The movement recommendations below are preserved from this completed session."
+                    : trainingStyleDefinition.description}
+                </p>
+              </div>
               {data.movements.map((m, i) => {
                 const meta = OUTCOME_META[m.outcome]
                 return (

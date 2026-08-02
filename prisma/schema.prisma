@@ -25,6 +25,8 @@ model User {
   /// Ordered JSON array of day, night, or off phase names.
   workCyclePatternJson String  @default("[\"day\",\"day\",\"night\",\"night\",\"off\",\"off\",\"off\",\"off\"]")
   workoutGoalPerCycle  Int     @default(3)
+  /// Per-profile progressive-overload model: science_based or classic.
+  trainingStyle        String  @default("science_based")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

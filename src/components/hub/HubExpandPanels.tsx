@@ -85,6 +85,10 @@ import {
   muscleStatsToSegmentScores,
   type WorkoutSessionLike,
 } from "@/lib/workouts/muscle-volume"
+import {
+  normalizeTrainingStyle,
+  TRAINING_STYLE_DEFINITIONS,
+} from "@/lib/workouts/training-style"
 import { cn, parseLocalDate } from "@/lib/utils"
 
 export type HubExpandedPanel =
@@ -393,6 +397,7 @@ export function HubWeightExpand() {
 /* ─── Vitals ─────────────────────────────────────────────── */
 
 const VITALS_COLOR = "#f43f5e"
+const HRV_TREND_COLOR = "#d8e84c"
 
 type ZoneMinutes = { zone: string; minutes: number }
 type HrSample = { time: string; bpm: number }
@@ -612,6 +617,18 @@ export function HubVitalsExpand({
   const hasTrend = (data?.trend14 ?? []).some(
     (d) => d.restingHeartRate != null || d.hrvMs != null,
   )
+  const hrvTrendPoints = trendChartData.filter(
+    (point): point is typeof point & { hrv: number } =>
+      point.hrv != null && Number.isFinite(point.hrv),
+  )
+  const latestTrendHrv = hrvTrendPoints.at(-1)?.hrv ?? null
+  const hrvTrendAverage = hrvTrendPoints.length
+    ? hrvTrendPoints.reduce((sum, point) => sum + point.hrv, 0) / hrvTrendPoints.length
+    : null
+  const hrvTrendDelta =
+    latestTrendHrv != null && hrvTrendAverage != null
+      ? latestTrendHrv - hrvTrendAverage
+      : null
   const zones = data?.zones ?? []
   const totalZoneMinutes = zones.reduce((s, z) => s + z.minutes, 0)
   const readinessScore =
@@ -627,6 +644,191 @@ export function HubVitalsExpand({
     [completedSessions, trainingPeriod.endDate, trainingPeriod.startDate],
   )
   const trainedSegmentCount = Object.keys(segmentScores ?? {}).length
+
+  const trendPanel = (
+    <section
+      aria-labelledby="hrv-trend-heading"
+      className="space-y-3.5 rounded-2xl border border-[#d8e84c]/15 bg-gradient-to-br from-[#d8e84c]/[0.065] via-white/[0.02] to-transparent p-3.5 sm:p-4"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p id="hrv-trend-heading" className="text-sm font-semibold text-foreground/95">
+            HRV recovery trend
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/65">
+            Nightly variability with resting heart rate for context · last 14 days
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full border border-[#d8e84c]/20 bg-[#d8e84c]/[0.08] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#e7f474]/80">
+          Recovery
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2" aria-label="HRV trend summary">
+        {[
+          {
+            label: "Latest",
+            value: latestTrendHrv != null ? Math.round(latestTrendHrv) : null,
+            suffix: "ms",
+          },
+          {
+            label: "14d avg",
+            value: hrvTrendAverage != null ? Math.round(hrvTrendAverage) : null,
+            suffix: "ms",
+          },
+          {
+            label: "vs avg",
+            value: hrvTrendDelta != null ? Math.round(hrvTrendDelta) : null,
+            suffix: "ms",
+            signed: true,
+          },
+        ].map((item) => (
+          <div
+            key={item.label}
+            className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 px-2.5 py-2.5"
+          >
+            <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">
+              {item.label}
+            </p>
+            <p className="mt-1 truncate font-heading text-base leading-none tabular-nums text-foreground/90 sm:text-lg">
+              {item.value != null
+                ? `${item.signed && item.value > 0 ? "+" : ""}${item.value}`
+                : "—"}
+              {item.value != null ? (
+                <span className="ml-0.5 text-[9px] font-medium text-muted-foreground/55">
+                  {item.suffix}
+                </span>
+              ) : null}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground/70">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0.5 w-5 rounded-full bg-[#d8e84c] shadow-[0_0_8px_rgba(216,232,76,0.35)]" />
+          HRV <span className="text-muted-foreground/45">(ms, right axis)</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0 w-5 border-t border-dashed border-[#fb7185]/75" />
+          Resting HR <span className="text-muted-foreground/45">(bpm, left axis)</span>
+        </span>
+      </div>
+
+      {status === "loading" ? (
+        <div className="grid h-56 place-items-center rounded-xl border border-dashed border-white/[0.08] bg-black/10 text-[12px] text-muted-foreground/55 sm:h-60">
+          Loading recovery trend…
+        </div>
+      ) : status === "error" ? (
+        <p className="rounded-xl border border-white/[0.06] bg-black/10 px-3 py-4 text-center text-[12px] text-muted-foreground/65">
+          Couldn&apos;t load HRV history. Sync Google Health below, then try again.
+        </p>
+      ) : !hasTrend ? (
+        <p className="rounded-xl border border-dashed border-white/[0.08] bg-black/10 px-3 py-5 text-center text-[12px] leading-relaxed text-muted-foreground/65">
+          Sync a couple of nights to see your HRV recovery trend.
+        </p>
+      ) : (
+        <div
+          className="chart-touch-safe h-56 min-w-0 select-none [-webkit-touch-callout:none] sm:h-60"
+          onPointerUp={() => setTrendTipActive(false)}
+          onPointerCancel={() => setTrendTipActive(false)}
+          onPointerLeave={() => setTrendTipActive(false)}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={trendChartData}
+              margin={{ top: 14, right: 0, left: 0, bottom: 2 }}
+              onMouseMove={() => setTrendTipActive(true)}
+              onMouseLeave={() => setTrendTipActive(false)}
+            >
+              <CartesianGrid
+                strokeDasharray="3 4"
+                stroke="oklch(1 0 0 / 8%)"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 10, fill: "oklch(0.76 0.01 250 / 75%)" }}
+                axisLine={false}
+                tickLine={false}
+                interval="preserveStartEnd"
+                minTickGap={28}
+                tickMargin={8}
+              />
+              <YAxis
+                yAxisId="rhr"
+                tick={{ fontSize: 10, fill: "oklch(0.74 0.09 15 / 80%)" }}
+                axisLine={false}
+                tickLine={false}
+                width={34}
+                tickMargin={4}
+                domain={["dataMin - 3", "dataMax + 3"]}
+              />
+              <YAxis
+                yAxisId="hrv"
+                orientation="right"
+                tick={{ fontSize: 10, fill: "oklch(0.84 0.14 112 / 85%)" }}
+                axisLine={false}
+                tickLine={false}
+                width={34}
+                tickMargin={4}
+                domain={["dataMin - 4", "dataMax + 4"]}
+              />
+              {hrvTrendAverage != null ? (
+                <ReferenceLine
+                  yAxisId="hrv"
+                  y={hrvTrendAverage}
+                  stroke="oklch(0.84 0.14 112 / 38%)"
+                  strokeDasharray="3 5"
+                />
+              ) : null}
+              <Tooltip
+                active={trendTipActive}
+                contentStyle={{
+                  background: "oklch(0.16 0.012 250 / 98%)",
+                  border: "1px solid oklch(1 0 0 / 12%)",
+                  borderRadius: "10px",
+                  fontSize: "12px",
+                  backdropFilter: "blur(12px)",
+                  boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
+                }}
+                labelStyle={{ color: "oklch(0.82 0.01 250)", marginBottom: 4 }}
+                formatter={(value, name) => [
+                  `${value}${name === "HRV" ? " ms" : " bpm"}`,
+                  name,
+                ]}
+              />
+              <Line
+                yAxisId="rhr"
+                type="monotone"
+                dataKey="rhr"
+                name="RHR"
+                stroke="#fb7185"
+                strokeOpacity={0.72}
+                strokeWidth={1.75}
+                strokeDasharray="5 4"
+                dot={{ r: 2, fill: "#fb7185", fillOpacity: 0.75 }}
+                activeDot={{ r: 4 }}
+                connectNulls
+              />
+              <Line
+                yAxisId="hrv"
+                type="monotone"
+                dataKey="hrv"
+                name="HRV"
+                stroke={HRV_TREND_COLOR}
+                strokeWidth={3}
+                dot={{ r: 2.5, fill: HRV_TREND_COLOR, strokeWidth: 0 }}
+                activeDot={{ r: 5, strokeWidth: 2, stroke: "#11150a" }}
+                connectNulls
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </section>
+  )
 
   return (
     <div className="space-y-5 px-0.5 sm:space-y-6">
@@ -662,23 +864,6 @@ export function HubVitalsExpand({
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
-        <button
-          type="button"
-          disabled={syncing}
-          onClick={() => void syncNow()}
-          className="inline-flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-[#f43f5e]/20 bg-[#f43f5e]/[0.07] px-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-100/80 transition-colors hover:border-[#f43f5e]/35 hover:bg-[#f43f5e]/[0.11] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f43f5e]/30 disabled:opacity-50 sm:w-auto"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} aria-hidden />
-          {syncing ? "Syncing…" : "Sync Google Health"}
-        </button>
-        {syncMessage ? (
-          <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/60">
-            {syncMessage}
-          </p>
-        ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
@@ -718,6 +903,25 @@ export function HubVitalsExpand({
             </p>
           </div>
         ))}
+      </div>
+
+      {trendPanel}
+
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
+        <button
+          type="button"
+          disabled={syncing}
+          onClick={() => void syncNow()}
+          className="inline-flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-[#f43f5e]/20 bg-[#f43f5e]/[0.07] px-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-100/80 transition-colors hover:border-[#f43f5e]/35 hover:bg-[#f43f5e]/[0.11] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f43f5e]/30 disabled:opacity-50 sm:w-auto"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} aria-hidden />
+          {syncing ? "Syncing…" : "Sync Google Health"}
+        </button>
+        {syncMessage ? (
+          <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/60">
+            {syncMessage}
+          </p>
+        ) : null}
       </div>
 
       <div
@@ -933,94 +1137,6 @@ export function HubVitalsExpand({
                     </div>
                   )
                 })}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-3 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
-            <div>
-              <p className="text-sm font-semibold text-foreground/90">Recovery trend</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground/55">Resting heart rate and HRV · 14 days</p>
-            </div>
-            {!hasTrend ? (
-              <p className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] px-3 py-3 text-center text-[12px] text-muted-foreground/60">
-                Sync a couple of days to unlock trends
-              </p>
-            ) : (
-              <div
-                className="chart-touch-safe h-48 min-w-0 select-none [-webkit-touch-callout:none] sm:h-52"
-                onPointerUp={() => setTrendTipActive(false)}
-                onPointerCancel={() => setTrendTipActive(false)}
-                onPointerLeave={() => setTrendTipActive(false)}
-                onContextMenu={(event) => event.preventDefault()}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={trendChartData}
-                    margin={{ top: 6, right: 4, left: -18, bottom: 0 }}
-                    onMouseMove={() => setTrendTipActive(true)}
-                    onMouseLeave={() => setTrendTipActive(false)}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="oklch(1 0 0 / 5%)"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      yAxisId="rhr"
-                      tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={28}
-                    />
-                    <YAxis
-                      yAxisId="hrv"
-                      orientation="right"
-                      tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={28}
-                    />
-                    <Tooltip
-                      active={trendTipActive}
-                      contentStyle={{
-                        background: "oklch(0.19 0.012 250 / 98%)",
-                        border: "1px solid oklch(1 0 0 / 8%)",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                        backdropFilter: "blur(8px)",
-                      }}
-                    />
-                    <Line
-                      yAxisId="rhr"
-                      type="monotone"
-                      dataKey="rhr"
-                      name="RHR"
-                      stroke={VITALS_COLOR}
-                      strokeWidth={2.25}
-                      dot={{ r: 2 }}
-                      activeDot={{ r: 4 }}
-                      connectNulls
-                    />
-                    <Line
-                      yAxisId="hrv"
-                      type="monotone"
-                      dataKey="hrv"
-                      name="HRV"
-                      stroke="oklch(0.72 0.04 250)"
-                      strokeWidth={2.25}
-                      dot={{ r: 2 }}
-                      activeDot={{ r: 4 }}
-                      connectNulls
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
               </div>
             )}
           </div>
@@ -1585,6 +1701,7 @@ export function HubWorkoutsExpand({
   periodEndDate,
   nextPeriodStartDate,
   recoveryScore,
+  plannedToday,
   hideHero = false,
 }: {
   periodCount: number
@@ -1599,16 +1716,22 @@ export function HubWorkoutsExpand({
   periodEndDate: string
   nextPeriodStartDate: string
   recoveryScore: number | null
+  plannedToday: Array<{ id: string; name: string; exercises: string }>
   /** When true, omit ring/title hero — overview rail owns that morph. */
   hideHero?: boolean
 }) {
   const router = useRouter()
+  const { isToday } = useActiveDate()
+  const { user } = useUser()
   const [templates, setTemplates] = useState<HubRoutineTemplate[]>([])
   const [templatesStatus, setTemplatesStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   )
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [startingId, setStartingId] = useState<string | null>(null)
+  const primaryPlan = plannedToday[0] ?? null
+  const trainingStyle = normalizeTrainingStyle(user?.trainingStyle)
+  const trainingStyleDefinition = TRAINING_STYLE_DEFINITIONS[trainingStyle]
 
   useEffect(() => {
     let cancelled = false
@@ -1726,9 +1849,16 @@ export function HubWorkoutsExpand({
           <Dumbbell className="size-4 text-[#dce95c]" aria-hidden />
         </div>
         <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-foreground/90">{lastCue}</p>
+          <p className={cn(
+            "truncate text-[13px] font-semibold",
+            primaryPlan ? "text-[#e8f07a]" : "text-foreground/90",
+          )}>
+            {primaryPlan ? primaryPlan.name : lastCue}
+          </p>
           <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground/55">
-            {todayCount > 0
+            {primaryPlan
+              ? `${plannedToday.length} workout${plannedToday.length === 1 ? "" : "s"} planned ${isToday ? "today" : "for this day"}`
+              : todayCount > 0
               ? `${todayCount} session${todayCount === 1 ? "" : "s"} logged today`
               : "No session logged today"}
           </p>
@@ -1751,9 +1881,9 @@ export function HubWorkoutsExpand({
   )
 
   return (
-    <div className="space-y-4 px-0.5">
+    <div className="flex flex-col gap-4 px-0.5">
       {!hideHero ? (
-        <div className="workout-focus-section space-y-3">
+        <div className="workout-focus-section order-1 space-y-3">
           <div className="min-w-0">
             <p className="type-hud-subsection">Workouts</p>
             <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
@@ -1770,18 +1900,34 @@ export function HubWorkoutsExpand({
           </div>
         </div>
       ) : (
-        <div className="workout-focus-section">{workoutStats}</div>
+        <div className="workout-focus-section order-1">{workoutStats}</div>
       )}
 
+      <div className="workout-focus-section flex items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] px-3.5 py-3">
+        <div className="grid size-8 shrink-0 place-items-center rounded-lg border border-[#c4d632]/15 bg-[#c4d632]/[0.07]">
+          <Dumbbell className="size-3.5 text-[#dce95c]/80" aria-hidden />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[12px] font-semibold text-foreground/90">
+            {trainingStyleDefinition.label} training
+          </p>
+          <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground/60">
+            {trainingStyleDefinition.activeWorkoutCue}
+          </p>
+        </div>
+      </div>
+
       <div
-        className="workout-focus-section overflow-hidden rounded-2xl border border-[#c4d632]/15 bg-gradient-to-br from-[#c4d632]/[0.09] via-white/[0.025] to-transparent p-4"
+        className="workout-focus-section order-2 overflow-hidden rounded-2xl border border-[#c4d632]/15 bg-gradient-to-br from-[#c4d632]/[0.09] via-white/[0.025] to-transparent p-4"
         style={{ animationDelay: "80ms" }}
       >
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[15px] font-semibold text-foreground/95">Start training</p>
             <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted-foreground/60">
-              Get a recovery-aware recommendation or build the session as you go.
+              {trainingStyle === "classic"
+                ? "Start a focused session with two heavy working sets per exercise and clear near-failure guidance."
+                : "Get a recovery-aware recommendation or build the session as you go."}
             </p>
           </div>
           <button
@@ -1797,7 +1943,7 @@ export function HubWorkoutsExpand({
       </div>
 
       <div
-        className="workout-focus-section space-y-3 rounded-2xl border border-white/[0.065] bg-white/[0.02] p-4"
+        className="workout-focus-section order-4 space-y-3 rounded-2xl border border-white/[0.065] bg-white/[0.02] p-4"
         style={{ animationDelay: "150ms" }}
       >
         <div className="flex items-end justify-between gap-3">
@@ -1851,11 +1997,11 @@ export function HubWorkoutsExpand({
 
       <ProgressionSummaryHero
         variant="hud"
-        className="workout-focus-section rounded-2xl border border-white/[0.065] bg-white/[0.02] p-4"
+        className="workout-focus-section order-5 rounded-2xl border border-white/[0.065] bg-white/[0.02] p-4"
       />
 
       <div
-        className="workout-focus-section space-y-2.5"
+        className="workout-focus-section order-3 space-y-2.5"
         style={{ animationDelay: "280ms" }}
       >
         <div className="flex items-baseline justify-between gap-2">
@@ -1919,13 +2065,29 @@ export function HubWorkoutsExpand({
               const tags = parseHubRoutineTags(tmpl.tags)
               const cover = tmpl.coverImageUrl?.trim()
               const preview = hubRoutinePreview(exs)
-              const setCount = exs.reduce((sum, exercise) => sum + hubRoutineSetCount(exercise), 0)
+              const setCount = trainingStyleDefinition.workingSetTarget != null
+                ? exs.length * trainingStyleDefinition.workingSetTarget
+                : exs.reduce((sum, exercise) => sum + hubRoutineSetCount(exercise), 0)
               const busy = startingId === tmpl.id
+              const isPlanned = plannedToday.some((plan) => {
+                const planExercises = plan.exercises.trim()
+                if (planExercises && planExercises !== "[]") {
+                  const templateExercises =
+                    typeof tmpl.exercises === "string"
+                      ? tmpl.exercises.trim()
+                      : JSON.stringify(tmpl.exercises)
+                  return planExercises === templateExercises
+                }
+                return false
+              })
               return (
                 <div
                   key={tmpl.id}
                   data-routine-tile={tmpl.id}
-                  className="group flex min-h-[8.25rem] overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.022] transition-colors hover:border-[#c4d632]/20 hover:bg-white/[0.035]"
+                  className={cn(
+                    "group flex min-h-[8.25rem] overflow-hidden rounded-2xl border bg-white/[0.022] transition-colors hover:border-[#c4d632]/20 hover:bg-white/[0.035]",
+                    isPlanned ? "border-[#dce95c]/30 ring-1 ring-[#c4d632]/10" : "border-white/[0.07]",
+                  )}
                 >
                   <div className="relative w-[7.25rem] shrink-0 border-r border-white/[0.07] bg-white/[0.03] sm:w-[7.75rem]">
                     <button
@@ -1968,8 +2130,13 @@ export function HubWorkoutsExpand({
                     >
                       {tmpl.name}
                     </button>
-                    {tags.length > 0 ? (
+                    {isPlanned || tags.length > 0 ? (
                       <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1">
+                        {isPlanned ? (
+                          <span className="inline-flex max-w-[7rem] truncate rounded-md border border-[#dce95c]/30 bg-[#c4d632]/[0.13] px-1.5 py-0.5 text-[9px] font-semibold text-[#e8f07a]">
+                            Planned {isToday ? "today" : "this day"}
+                          </span>
+                        ) : null}
                         {tags.slice(0, 2).map((tag, index) => (
                           <span
                             key={`${tag}-${index}`}
@@ -1995,10 +2162,15 @@ export function HubWorkoutsExpand({
                       type="button"
                       disabled={startingId != null}
                       onClick={() => goStartRoutine(tmpl.id)}
-                      className="mt-2 inline-flex h-9 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.035] px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/85 transition-colors hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation"
+                      className={cn(
+                        "mt-2 inline-flex h-9 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2 text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50 touch-manipulation",
+                        isPlanned
+                          ? "border-[#dce95c]/30 bg-[#c4d632]/[0.12] text-[#e8f07a] hover:bg-[#c4d632]/[0.18]"
+                          : "border-white/10 bg-white/[0.035] text-muted-foreground/85 hover:border-[#c4d632]/35 hover:bg-[#c4d632]/[0.06] hover:text-[#e8f07a]",
+                      )}
                     >
                       <Play className="size-3 shrink-0" aria-hidden />
-                      {busy ? "…" : "Start"}
+                      {busy ? "…" : isPlanned ? "Start planned" : "Start"}
                     </button>
                   </div>
                 </div>

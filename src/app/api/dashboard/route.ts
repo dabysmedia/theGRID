@@ -7,6 +7,7 @@ import { startOfISOWeek } from "date-fns"
 import {
   utcCalendarDayKeyFromIso,
   utcCalendarDayRangeInclusive,
+  utcRangeWhereForCalendarDay,
 } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
 import { dailySleepDurationHours, pickPrimarySleepEntry } from "@/lib/sleepDuration"
@@ -283,11 +284,23 @@ export async function GET(req: NextRequest) {
     }
 
     let workoutSessions: DatedRow[] = []
+    let plannedWorkoutSessions: Array<{ id: string; name: string; exercises: string }> = []
     try {
-      workoutSessions = await prisma.workoutSession.findMany({
-        where: { date: dateInRange, status: "completed", userId },
-        select: { date: true },
-      })
+      ;[workoutSessions, plannedWorkoutSessions] = await Promise.all([
+        prisma.workoutSession.findMany({
+          where: { date: dateInRange, status: "completed", userId },
+          select: { date: true },
+        }),
+        prisma.workoutSession.findMany({
+          where: {
+            date: utcRangeWhereForCalendarDay(refDayStr),
+            status: "planned",
+            userId,
+          },
+          select: { id: true, name: true, exercises: true },
+          orderBy: { createdAt: "asc" },
+        }),
+      ])
     } catch (err) {
       console.warn(
         "[dashboard] workoutSession query failed, falling back to legacy workouts only:",
@@ -512,6 +525,7 @@ export async function GET(req: NextRequest) {
         direction: woG?.direction ?? "up",
         unit: "sessions",
         last7: workoutLast7,
+        planned: plannedWorkoutSessions,
         cycle: {
           ...trackingPeriod,
           values: workoutCycle,

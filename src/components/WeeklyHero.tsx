@@ -335,6 +335,7 @@ interface WeeklyHeroProps {
     periodEndDate: string
     nextPeriodStartDate: string
     todayCount: number
+    plannedToday: Array<{ id: string; name: string; exercises: string }>
     recoveryScore: number | null
   }
 }
@@ -508,11 +509,14 @@ export function WeeklyHero({
   const workoutGoal = workoutSummary?.periodGoal ?? 3
   const workoutPeriodLabel = workoutSummary?.periodMode === "rotation" ? "this rotation" : "this week"
   const woMet = periodWo >= workoutGoal
-  const workoutCue = woMet
-    ? "Goal met"
-    : periodWo === 0
-      ? "Not yet"
-      : `${periodWo}/${workoutGoal} ${workoutPeriodLabel}`
+  const primaryPlan = workoutSummary?.plannedToday[0] ?? null
+  const workoutCue = primaryPlan
+    ? primaryPlan.name
+    : woMet
+      ? "Goal met"
+      : periodWo === 0
+        ? "Not yet"
+        : `${periodWo}/${workoutGoal} ${workoutPeriodLabel}`
 
   return (
     <div
@@ -524,7 +528,7 @@ export function WeeklyHero({
         // body below so card edges stay visible.
         // flex-1 (not h-full %) so the card always consumes the shell height —
         // percentage heights can stay short until a scroll reflow on mobile.
-        "flex min-h-0 flex-col overflow-hidden !rounded-[1.35rem] border border-white/[0.09] p-4 transition-opacity duration-700 max-lg:px-3 max-lg:pt-[max(0.75rem,env(safe-area-inset-top,0px))] max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] lg:p-5",
+        "flex min-h-0 flex-col overflow-hidden !rounded-[1.35rem] border border-white/[0.09] p-4 transition-opacity duration-700 max-sm:!rounded-b-[2.65rem] max-lg:px-3 max-lg:pt-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] lg:p-5",
         fillViewport && "min-h-0 flex-1",
         loading ? "opacity-50" : "opacity-100",
       )}
@@ -797,7 +801,9 @@ export function WeeklyHero({
                         : "No dose today"
                       : workoutSummary?.todayCount
                         ? `${workoutSummary.todayCount} today`
-                        : "No session today"}
+                        : primaryPlan
+                          ? `${primaryPlan.name} planned`
+                          : "No session today"}
                   </p>
                 </div>
               </div>
@@ -913,6 +919,7 @@ export function WeeklyHero({
               periodEndDate={workoutSummary?.periodEndDate ?? activeDate}
               nextPeriodStartDate={workoutSummary?.nextPeriodStartDate ?? activeDate}
               recoveryScore={workoutSummary?.recoveryScore ?? null}
+              plannedToday={workoutSummary?.plannedToday ?? []}
               hideHero
             />
           </div>
@@ -1037,7 +1044,7 @@ export function WeeklyHero({
                 <button
                   type="button"
                   onClick={() => toggleExpand("workouts")}
-                  aria-label="Expand workouts"
+                  aria-label={primaryPlan ? `Expand workouts, ${primaryPlan.name} planned` : "Expand workouts"}
                   aria-expanded={false}
                   className="group relative flex min-h-[var(--hub-protocol-min-h)] min-w-0 items-center py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem] sm:py-3.5"
                 >
@@ -1059,7 +1066,9 @@ export function WeeklyHero({
                       {workoutCue}
                     </p>
                     <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground/55">
-                      {workoutSummary?.periodMode === "rotation"
+                      {primaryPlan
+                        ? `${workoutSummary?.plannedToday.length ?? 1} planned ${isToday ? "today" : "this day"}`
+                        : workoutSummary?.periodMode === "rotation"
                         ? `Day ${workoutSummary.periodDayNumber} · ${workoutSummary.periodPhaseLabel}`
                         : workoutSummary?.recoveryScore != null
                           ? `Recovery ${workoutSummary.recoveryScore}/10`

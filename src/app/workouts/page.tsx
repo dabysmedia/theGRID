@@ -48,7 +48,10 @@ import {
   type SetEffortPatch,
 } from "@/components/workouts/ProgressiveOverloadCoach"
 import { MovementCompleteOverview } from "@/components/workouts/MovementCompleteOverview"
-import { summarizeWorkoutProgression } from "@/lib/workouts/progressive-overload"
+import {
+  normalizeExerciseKey,
+  summarizeWorkoutProgression,
+} from "@/lib/workouts/progressive-overload"
 import {
   getPreferredSubstitute,
   getRecentSubstitutes,
@@ -63,7 +66,13 @@ import {
   topFrequentExercises,
   type BodySplit,
 } from "@/lib/workouts/free-form-recommender"
-import { normalizeExerciseKey } from "@/lib/workouts/progressive-overload"
+import {
+  normalizeTrainingStyle,
+  progressionOverridesForStyle,
+  TRAINING_STYLE_DEFINITIONS,
+  type TrainingStyle,
+} from "@/lib/workouts/training-style"
+import { deferExercise } from "@/lib/workouts/active-queue"
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Types
@@ -288,8 +297,11 @@ function parseTemplateRepsToNumber(s: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function sessionSetsFromTemplate(m: TemplateExercise): ExerciseSet[] {
-  return m.setRows.map((row, i) => ({
+function sessionSetsFromTemplate(
+  m: TemplateExercise,
+  trainingStyle: TrainingStyle,
+): ExerciseSet[] {
+  const sets = m.setRows.map((row, i) => ({
     id: uid(),
     setNumber: i + 1,
     weight: parseTemplateWeightToNumber(row.weight),
@@ -297,6 +309,22 @@ function sessionSetsFromTemplate(m: TemplateExercise): ExerciseSet[] {
     type: "working" as const,
     completed: false,
   }))
+  const target = TRAINING_STYLE_DEFINITIONS[trainingStyle].workingSetTarget
+  if (target == null) return sets
+
+  const adjusted = sets.slice(0, target)
+  const fallback = adjusted.at(-1) ?? sets.at(-1)
+  while (adjusted.length < target) {
+    adjusted.push({
+      id: uid(),
+      setNumber: adjusted.length + 1,
+      weight: fallback?.weight ?? null,
+      reps: fallback?.reps ?? null,
+      type: "working",
+      completed: false,
+    })
+  }
+  return adjusted.map((set, index) => ({ ...set, setNumber: index + 1 }))
 }
 
 function applyPrefillFromPrevious(
@@ -451,6 +479,7 @@ function getActiveWorkoutQueue(
   return {
     totalSets,
     completedSets,
+    completedMovements,
     current,
     next,
     remaining,
@@ -1507,6 +1536,7 @@ function ActiveWorkout({
   onRememberSubstitution,
   weekStart,
   weekEnd,
+  trainingStyle,
 }: {
   session: WorkoutSession
   onUpdate: (
@@ -1525,6 +1555,7 @@ function ActiveWorkout({
   }) => void
   weekStart: string
   weekEnd: string
+  trainingStyle: TrainingStyle
 }) {
   const { activeDate } = useActiveDate()
   const { setFullscreen } = useFullscreenOverlay()
@@ -1750,6 +1781,7 @@ function ActiveWorkout({
   }, [session.id, previousByExercise, exerciseCount, setCountSig])
 
   function addExercise(picked: PickedExercise) {
+    const setTarget = TRAINING_STYLE_DEFINITIONS[trainingStyle].workingSetTarget ?? 1
     const updated: SessionExercise[] = [
       ...exercises,
       {
@@ -1759,16 +1791,14 @@ function ActiveWorkout({
         primaryMuscles: picked.primaryMuscles,
         secondaryMuscles: picked.secondaryMuscles,
         category: picked.category,
-        sets: [
-          {
+        sets: Array.from({ length: setTarget }, (_, index) => ({
             id: uid(),
-            setNumber: 1,
+            setNumber: index + 1,
             weight: null,
             reps: null,
             type: "working",
             completed: false,
-          },
-        ],
+          })),
       },
     ]
     onUpdate(updated)
@@ -1810,7 +1840,9 @@ function ActiveWorkout({
         primaryMuscles: r.primaryMuscles,
         secondaryMuscles: r.secondaryMuscles,
         category: r.category,
-        sets: defaultFreeFormSets(3).map((s) => ({ ...s, id: uid() })),
+        sets: defaultFreeFormSets(
+          TRAINING_STYLE_DEFINITIONS[trainingStyle].workingSetTarget ?? 3,
+        ).map((s) => ({ ...s, id: uid() })),
       }))
       onUpdate(next)
     } catch {
@@ -1881,9 +1913,7 @@ function ActiveWorkout({
   }
 
   function skipExercise(exId: string) {
-    setSkippedExerciseIds((prev) =>
-      prev.includes(exId) ? prev : [...prev, exId],
-    )
+    setSkippedExerciseIds((prev) => deferExercise(prev, exId))
   }
 
   function addSet(exId: string) {
@@ -2308,7 +2338,7 @@ function ActiveWorkout({
         />
         <div
           className={cn(
-            "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-[1.65rem] border border-white/[0.1] bg-[#080b10]/95 shadow-[0_26px_90px_rgba(0,0,0,0.72),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-2xl",
+            "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-[1.65rem] rounded-b-[1.65rem] border border-white/[0.1] bg-[#080b10]/95 shadow-[0_26px_90px_rgba(0,0,0,0.72),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-2xl",
             "sm:glass-frost sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:max-w-lg sm:flex-none sm:rounded-[1.65rem]",
           )}
         >
@@ -2337,13 +2367,24 @@ function ActiveWorkout({
           />
           <div className="pointer-events-none absolute inset-x-7 top-0 z-[3] h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" aria-hidden />
           <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-          {/* Compact header + progress + rest */}
+          {/* Compact header + integrated timers */}
           <div className="mx-2 mt-2 shrink-0 space-y-2.5 rounded-[1.25rem] border border-white/[0.07] bg-black/20 px-3 pb-3 pt-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:mx-3 sm:px-4">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <div className="status-dot scale-90" />
                   <p className="type-hud-micro text-primary/70">Live session</p>
+                  <span
+                    className={cn(
+                      "rounded-md border px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.1em]",
+                      trainingStyle === "classic"
+                        ? "border-amber-300/20 bg-amber-300/[0.06] text-amber-100/70"
+                        : "border-primary/15 bg-primary/[0.045] text-primary/65",
+                    )}
+                    aria-label={`${TRAINING_STYLE_DEFINITIONS[trainingStyle].label} training style`}
+                  >
+                    {TRAINING_STYLE_DEFINITIONS[trainingStyle].shortLabel}
+                  </span>
                 </div>
                 <h2
                   id="active-workout-heading"
@@ -2357,51 +2398,24 @@ function ActiveWorkout({
                     : queue.allSetsComplete
                       ? "All sets complete"
                       : queue.current
-                        ? queue.movementTotal > 1
-                          ? `Mov ${queue.movementIndex}/${queue.movementTotal} · Set ${Math.min(queue.currentDone + 1, queue.currentTotal)}/${queue.currentTotal}`
-                          : `Set ${Math.min(queue.currentDone + 1, queue.currentTotal)}/${queue.currentTotal}`
+                        ? `Set ${Math.min(queue.currentDone + 1, queue.currentTotal)}/${queue.currentTotal}`
                         : `${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`}
                   {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-1.5 rounded-xl border border-primary/15 bg-primary/[0.055] px-2.5 py-2 tabular-nums">
-                <Clock className="size-3.5 text-primary/75" aria-hidden />
+              <div className="flex shrink-0 items-center gap-1.5 tabular-nums">
+                <Clock className="size-3.5 text-primary/70" aria-hidden />
                 <span className="font-heading text-lg font-bold leading-none text-primary sm:text-base">
                   {formatTimer(elapsed)}
                 </span>
               </div>
             </div>
 
-            {queue.totalSets > 0 ? (
-              <div className="flex items-center gap-2.5">
-                <div
-                  className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-glass-highlight/15 ring-1 ring-inset ring-glass-border/25"
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={sessionProgressPct}
-                  aria-label={`${queue.completedSets} of ${queue.totalSets} sets complete`}
-                >
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#8f9c17] to-[#dce95c] shadow-[0_0_12px_rgba(196,214,50,0.28)] transition-all duration-500 ease-out"
-                    style={{ width: `${sessionProgressPct}%` }}
-                  />
-                </div>
-                <span className="shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground/70">
-                  {queue.completedSets}/{queue.totalSets}
-                </span>
-              </div>
-            ) : null}
-
             {restCountdownActive && restRemainingSec != null ? (
-              <div
-                className="glass-subtle flex items-center gap-2.5 overflow-hidden rounded-xl border border-primary/25 bg-primary/10 px-2.5 py-2 ring-1 ring-primary/15"
-                aria-live="polite"
-                aria-atomic="true"
-              >
+              <div className="flex w-full items-center gap-2.5 py-1" aria-live="polite" aria-atomic="true">
                 <Timer className="size-3.5 shrink-0 text-primary/85" aria-hidden />
                 <div
-                  className="relative h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-glass-highlight/15 ring-1 ring-inset ring-glass-border/25"
+                  className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-glass-highlight/15 ring-1 ring-inset ring-glass-border/25"
                   role="progressbar"
                   aria-valuemin={0}
                   aria-valuemax={100}
@@ -2409,11 +2423,8 @@ function ActiveWorkout({
                   aria-label={`Rest ${formatRestCountdown(restRemainingSec)} remaining`}
                 >
                   <div
-                    className="will-change-transform absolute inset-y-0 left-0 w-full origin-left rounded-full bg-primary"
-                    style={{
-                      transform: `scaleX(${restProgress})`,
-                      transition: "transform 160ms linear",
-                    }}
+                    className="h-full w-full origin-left rounded-full bg-primary transition-transform duration-150 ease-linear"
+                    style={{ transform: `scaleX(${restProgress})` }}
                   />
                 </div>
                 <span className="shrink-0 font-heading text-sm font-bold tabular-nums text-primary">
@@ -2421,47 +2432,38 @@ function ActiveWorkout({
                 </span>
                 <button
                   type="button"
-                  className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 transition-colors hover:bg-glass-highlight/30 hover:text-foreground touch-manipulation"
+                  className="shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground/65 transition-colors hover:text-foreground touch-manipulation"
                   onClick={() => setRestEndsAt(null)}
                 >
                   Skip
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5">
+              <div className="flex w-full items-center gap-2 py-0.5 text-[10px]">
                 <button
                   type="button"
-                  className="glass-subtle flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border-white/[0.07] bg-white/[0.022] px-3 py-1.5 text-left touch-manipulation"
+                  className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 text-left text-muted-foreground/65 transition-colors hover:text-foreground touch-manipulation"
                   aria-expanded={restSettingsOpen}
-                  aria-label={
-                    restSettingsOpen
-                      ? "Hide rest timer options"
-                      : "Rest timer options"
-                  }
+                  aria-label={restSettingsOpen ? "Hide rest timer options" : "Rest timer options"}
                   onClick={() => setRestSettingsOpen((o) => !o)}
                 >
-                  <Timer className="size-3.5 shrink-0 text-muted-foreground/55" aria-hidden />
-                  <span className="truncate text-[11px] text-muted-foreground/70">
-                    Rest {restConfig.enabled ? formatRestCountdown(restConfig.seconds) : "off"}
-                  </span>
+                  <Timer className="size-3.5 shrink-0" aria-hidden />
+                  Rest {restConfig.enabled ? formatRestCountdown(restConfig.seconds) : "off"}
                 </button>
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-9 min-h-9 shrink-0 px-2.5 text-[10px] font-semibold uppercase tracking-wide touch-manipulation"
+                  className="min-h-8 shrink-0 px-1 font-semibold uppercase text-muted-foreground/65 transition-colors hover:text-foreground touch-manipulation"
                   onClick={() => {
-                    const next = saveWorkoutRestConfig({
-                      enabled: !restConfig.enabled,
-                    })
+                    const next = saveWorkoutRestConfig({ enabled: !restConfig.enabled })
                     setRestConfig(next)
                     if (!next.enabled) setRestEndsAt(null)
                   }}
                 >
                   {restConfig.enabled ? "On" : "Off"}
-                </Button>
+                </button>
               </div>
             )}
+
             {restSettingsOpen && !restCountdownActive ? (
               <div className="flex flex-wrap gap-1.5">
                 {REST_PRESETS.map(({ sec, label }) => (
@@ -2689,6 +2691,7 @@ function ActiveWorkout({
                           exercise={ex}
                           sessions={previousSessions}
                           sessionId={session.id}
+                          trainingStyle={trainingStyle}
                           isLastMovement={queue.remaining.length === 0}
                           onContinue={() =>
                             setAckedSummaryIds((prevIds) =>
@@ -2882,6 +2885,7 @@ function ActiveWorkout({
                             setCount={ex.sets.length}
                             sessions={previousSessions}
                             sessionId={session.id}
+                            trainingStyle={trainingStyle}
                             onApplyToNextSet={(weight, reps, onlyEmpty) =>
                               applyRecToNextSet(ex.id, weight, reps, onlyEmpty)
                             }
@@ -2953,12 +2957,27 @@ function ActiveWorkout({
               </div>
             ) : (
               <div className="flex items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-[11px] tabular-nums text-muted-foreground/55">
-                  {queue.current
-                    ? `${queue.completedSets}/${queue.totalSets}`
-                    : "Logging…"}
-                  {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
-                </p>
+                <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                  <div
+                    className="h-1.5 min-w-12 flex-1 overflow-hidden rounded-full bg-glass-highlight/15 ring-1 ring-inset ring-glass-border/25"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={sessionProgressPct}
+                    aria-label={`${queue.completedSets} of ${queue.totalSets} sets complete`}
+                  >
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#8f9c17] to-[#dce95c] shadow-[0_0_12px_rgba(196,214,50,0.28)] transition-all duration-500 ease-out"
+                      style={{ width: `${sessionProgressPct}%` }}
+                    />
+                  </div>
+                  <p className="shrink-0 text-[10px] tabular-nums text-muted-foreground/60">
+                    {queue.current
+                      ? `${queue.completedMovements}/${queue.movementTotal} complete · ${queue.completedSets}/${queue.totalSets} sets`
+                      : "Logging…"}
+                    {loggedVol > 0 ? ` · ${formatVolumeLb(loggedVol)} lb` : ""}
+                  </p>
+                </div>
                 <button
                   type="button"
                   className="flex h-8 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold text-muted-foreground/70 transition-colors hover:bg-glass-highlight/20 hover:text-foreground touch-manipulation"
@@ -3325,6 +3344,7 @@ function WorkoutsPageInner() {
   const { activeDate } = useActiveDate()
   const { user } = useUser()
   const today = activeDate
+  const trainingStyle = normalizeTrainingStyle(user?.trainingStyle)
 
   useEffect(() => {
     Promise.all([
@@ -3426,7 +3446,7 @@ function WorkoutsPageInner() {
             name: useName,
             notes: m.notes,
             primaryMuscles: m.primaryMuscles,
-            sets: sessionSetsFromTemplate(m),
+            sets: sessionSetsFromTemplate(m, trainingStyle),
             templateExerciseId: m.id,
             originalName: m.name,
           }
@@ -3551,7 +3571,20 @@ function WorkoutsPageInner() {
         prev.map((s) => (s.id === activeSession.id ? updated : s)),
       )
       try {
-        const summary = summarizeWorkoutProgression(updated, completedSessions)
+        const styleOverride = progressionOverridesForStyle(trainingStyle)
+        const styleOverrides = styleOverride
+          ? new Map(
+              exercisesPayload.map((exercise) => [
+                normalizeExerciseKey(exercise.name),
+                styleOverride,
+              ]),
+            )
+          : undefined
+        const summary = summarizeWorkoutProgression(
+          updated,
+          completedSessions,
+          styleOverrides,
+        )
         await apiFetch("/api/workout-progression", {
           ...noStore,
           method: "POST",
@@ -3704,6 +3737,7 @@ function WorkoutsPageInner() {
           }}
           weekStart={weekStart}
           weekEnd={weekEnd}
+          trainingStyle={trainingStyle}
         />
       ) : startError ? (
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-4">

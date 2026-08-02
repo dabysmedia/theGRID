@@ -30,7 +30,9 @@ export function AppChrome({ children }: { children: ReactNode }) {
           isHub
             ? [
                 "h-full max-h-full overflow-hidden",
-                "py-0",
+                // Keep the live-height shell, but let the panel sit inside the
+                // phone's hardware safe bands instead of touching the glass.
+                "pt-[max(0.45rem,env(safe-area-inset-top,0px))] pb-0",
                 "ps-[max(0.5rem,env(safe-area-inset-left,0px))] pe-[max(0.5rem,env(safe-area-inset-right,0px))]",
                 "sm:p-3 md:max-w-2xl lg:max-w-3xl xl:max-w-5xl",
               ]

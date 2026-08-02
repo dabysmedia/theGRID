@@ -15,6 +15,7 @@ import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { ProfileSwitcher } from "@/components/ProfileSwitcher"
 import { ProfilePhotoSettings } from "@/components/ProfilePhotoSettings"
 import { TrackingTargetSettings } from "@/components/TrackingTargetSettings"
+import { TrainingStyleSettings } from "@/components/TrainingStyleSettings"
 import { VacationModeSettings } from "@/components/VacationModeSettings"
 import { WorkCycleSettings } from "@/components/WorkCycleSettings"
 import { GoogleHealthSettings } from "@/components/GoogleHealthSettings"
@@ -77,6 +78,8 @@ export default function MorePage() {
         />
         <div className="hud-divider" />
         <TrackingTargetSettings />
+        <div className="hud-divider" />
+        <TrainingStyleSettings />
         <div className="hud-divider" />
         <WorkCycleSettings />
       </section>
