@@ -30,21 +30,31 @@ export async function POST(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
     const body = await req.json()
+    const category = typeof body.category === "string" ? body.category.trim() : ""
+    const target = Number(body.target)
+    const unit = typeof body.unit === "string" ? body.unit.trim() : ""
 
-    if (body.category) {
+    if (!category || !unit || !Number.isFinite(target) || target <= 0) {
+      return NextResponse.json(
+        { error: "Category, unit, and a positive target are required." },
+        { status: 400 },
+      )
+    }
+
+    if (category) {
       await prisma.goal.updateMany({
-        where: { category: body.category, active: true, userId },
+        where: { category, active: true, userId },
         data: { active: false },
       })
     }
 
     const goal = await prisma.goal.create({
       data: {
-        category: body.category,
+        category,
         goalType: body.goalType || "daily",
         direction: body.direction || "up",
-        target: parseFloat(body.target),
-        unit: body.unit,
+        target,
+        unit,
         deadline: body.deadline ? new Date(body.deadline) : null,
         active: body.active ?? true,
         userId,
@@ -61,6 +71,11 @@ export async function PUT(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
     const body = await req.json()
+    const target = body.target === undefined ? undefined : Number(body.target)
+
+    if (target !== undefined && (!Number.isFinite(target) || target <= 0)) {
+      return NextResponse.json({ error: "Target must be a positive number." }, { status: 400 })
+    }
 
     const existing = await prisma.goal.findFirst({ where: { id: body.id, userId } })
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -70,7 +85,7 @@ export async function PUT(req: NextRequest) {
       data: {
         goalType: body.goalType || undefined,
         direction: body.direction || undefined,
-        target: body.target ? parseFloat(body.target) : undefined,
+        target,
         unit: body.unit || undefined,
         deadline: body.deadline ? new Date(body.deadline) : undefined,
         active: body.active,

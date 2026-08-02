@@ -25,6 +25,7 @@ import {
 } from "@/lib/hub-expand-deep-link"
 import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
 import { countDosedWeeks } from "@/lib/peptides"
+import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
 
 /**
  * Consumes `?expand=<panel>` (+ optional `logFood=1`) once, then strips the query.
@@ -121,24 +122,24 @@ interface DashboardData {
 const emptyLast7 = () => Array.from({ length: 7 }, () => 0)
 
 const defaultData: DashboardData = {
-  calories: { todayValue: 0, goal: 2000, unit: "cal", last7: emptyLast7() },
+  calories: { todayValue: 0, goal: TRACKING_TARGET_DEFAULTS.calories, unit: "cal", last7: emptyLast7() },
   steps: {
     todayValue: 0,
-    goal: 10000,
+    goal: TRACKING_TARGET_DEFAULTS.steps,
     unit: "steps",
     last7: emptyLast7(),
-    remaining: 10000,
+    remaining: TRACKING_TARGET_DEFAULTS.steps,
     hourly: Array.from({ length: 24 }, () => 0),
     hourlyUnbucketed: 0,
     trackingStartHour: 5,
   },
   running: { todayValue: 0, goal: null, unit: "mi", last7: emptyLast7() },
   workouts: { todayValue: 0, goal: null, unit: "sessions", last7: emptyLast7() },
-  sleep: { todayValue: 0, goal: 8, unit: "hrs", last7: emptyLast7() },
+  sleep: { todayValue: 0, goal: TRACKING_TARGET_DEFAULTS.sleep, unit: "hrs", last7: emptyLast7() },
   peptides: { todayValue: 0, goal: null, unit: "mg", last7: emptyLast7() },
   alcohol: { todayValue: 0, goal: null, unit: "units", last7: emptyLast7() },
   bowel: { todayValue: 0, goal: null, unit: "", last7: emptyLast7() },
-  recovery: { todayValue: 0, goal: 7, unit: "/10", last7: emptyLast7() },
+  recovery: { todayValue: 0, goal: TRACKING_TARGET_DEFAULTS.recovery, unit: "/10", last7: emptyLast7() },
   vitals: { todayValue: 0, goal: null, unit: "ms", last7: emptyLast7() },
   readiness: {
     todayValue: null,
@@ -306,7 +307,7 @@ export function HubDashboard() {
       </Suspense>
       <div
         className={cn(
-          "route-enter min-h-0 max-lg:min-h-full",
+          "min-h-0 max-lg:min-h-full",
           overview && "max-lg:flex max-lg:min-h-0 max-lg:flex-1 max-lg:flex-col",
         )}
       >

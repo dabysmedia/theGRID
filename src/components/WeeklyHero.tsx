@@ -29,6 +29,7 @@ import { useActiveDate } from "@/context/DateContext"
 import { ProfileHeaderTrigger } from "@/context/ProfileDialogContext"
 import type { NextInjectionInfo } from "@/lib/hub-tile-prefs"
 import { cn, glassPanelClass, parseLocalDate } from "@/lib/utils"
+import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
 
 /** Single-letter weekday labels indexed by `Date#getDay()` (Sun–Sat). */
 const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"] as const
@@ -447,9 +448,9 @@ export function WeeklyHero({
   const stepsAvg = weekAvgFromLoggedDays(data.steps.last7)
   const sleepAvg = Math.round(weekAvgFromLoggedDays(data.sleep.last7) * 10) / 10
 
-  const calGoal = data.calories.goal ?? 2000
-  const stepsGoal = data.steps.goal ?? 10000
-  const sleepGoal = data.sleep.goal ?? 8
+  const calGoal = data.calories.goal ?? TRACKING_TARGET_DEFAULTS.calories
+  const stepsGoal = data.steps.goal ?? TRACKING_TARGET_DEFAULTS.steps
+  const sleepGoal = data.sleep.goal ?? TRACKING_TARGET_DEFAULTS.sleep
   const caloriePct = calGoal > 0 ? Math.round((data.calories.todayValue / calGoal) * 100) : 0
   const calorieRemaining = Math.max(0, calGoal - data.calories.todayValue)
   const stepRemaining = Math.max(0, stepsGoal - data.steps.todayValue)
@@ -519,7 +520,7 @@ export function WeeklyHero({
         glassPanelClass,
         // Keep mobile padding stable across overview/expand so the card top
         // does not shift when fillViewport turns off.
-        "flex min-h-0 flex-col overflow-hidden !rounded-[1.35rem] border border-white/[0.09] p-4 transition-opacity duration-700 max-lg:p-3 lg:p-5",
+        "flex min-h-0 flex-col overflow-hidden !rounded-[1.35rem] border border-white/[0.09] p-4 transition-opacity duration-700 max-lg:px-3 max-lg:pt-[max(0.75rem,env(safe-area-inset-top,0px))] max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] lg:p-5",
         fillViewport && "max-lg:min-h-full",
         fillViewport && expanded == null && "max-lg:h-full max-lg:min-h-0",
         expanded != null && "!overflow-visible",

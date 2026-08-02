@@ -21,6 +21,7 @@ import {
   stepsRefDayKey,
 } from "@/lib/steps-day"
 import { getTrackingPeriod } from "@/lib/work-cycle"
+import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
 
 interface GoalRow {
   category: string
@@ -480,15 +481,15 @@ export async function GET(req: NextRequest) {
     const body = {
       calories: {
         todayValue: calorieLast7[6],
-        goal: calGoal ?? 2000,
+        goal: calGoal ?? TRACKING_TARGET_DEFAULTS.calories,
         direction: calG?.direction ?? "down",
         unit: "cal",
         last7: calorieLast7,
       },
       steps: {
         todayValue: stepsLast7[6],
-        goal: stepsGoal ?? 10000,
-        remaining: Math.max(0, (stepsGoal ?? 10000) - stepsLast7[6]),
+        goal: stepsGoal ?? TRACKING_TARGET_DEFAULTS.steps,
+        remaining: Math.max(0, (stepsGoal ?? TRACKING_TARGET_DEFAULTS.steps) - stepsLast7[6]),
         direction: stepsG?.direction ?? "up",
         unit: "steps",
         last7: stepsLast7,
@@ -519,7 +520,7 @@ export async function GET(req: NextRequest) {
       },
       sleep: {
         todayValue: Math.round(sleepLast7[6] * 10) / 10,
-        goal: sleepGoal ?? 8,
+        goal: sleepGoal ?? TRACKING_TARGET_DEFAULTS.sleep,
         direction: sleepG?.direction ?? "up",
         unit: "hrs",
         last7: sleepLast7,
@@ -547,7 +548,7 @@ export async function GET(req: NextRequest) {
       },
       recovery: {
         todayValue: Math.round(recoveryLast7[6] * 10) / 10,
-        goal: recoveryGoal ?? 7,
+        goal: recoveryGoal ?? TRACKING_TARGET_DEFAULTS.recovery,
         direction: recoveryG?.direction ?? "up",
         unit: "/10",
         last7: recoveryLast7.map((v) => Math.round(v * 10) / 10),

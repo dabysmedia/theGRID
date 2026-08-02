@@ -292,6 +292,10 @@ html {
     filter: drop-shadow(0 0.45rem 0.5rem rgb(0 0 0 / 38%));
   }
 
+  .water-bottle-scene--compact .water-bottle-cap {
+    top: -0.55rem;
+  }
+
   .water-bottle-shadow {
     position: absolute;
     left: 50%;
@@ -1327,6 +1331,17 @@ html {
     animation: route-enter 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
+  /* A viewport-height hub must not translate below the mobile visual viewport. */
+  .hub-route-enter {
+    animation: none;
+  }
+
+  @media (min-width: 1024px) {
+    .hub-route-enter {
+      animation: route-enter 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+  }
+
   .animate-count-up {
     animation: count-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
@@ -1388,7 +1403,8 @@ html {
       transition: none;
     }
 
-    .route-enter {
+    .route-enter,
+    .hub-route-enter {
       animation: none;
     }
 

@@ -5,9 +5,9 @@ import {
   utcRangeWhereForCalendarDay,
 } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
+import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
 
 const DEFAULT_BOTTLE_OZ = 32
-const DEFAULT_GOAL_OZ = 32
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 export async function GET(req: NextRequest) {
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     const goalOz =
       waterGoal && Number.isFinite(waterGoal.target) && waterGoal.target > 0
         ? waterGoal.target
-        : DEFAULT_GOAL_OZ
+        : TRACKING_TARGET_DEFAULTS.water
 
     return NextResponse.json({
       entries,
