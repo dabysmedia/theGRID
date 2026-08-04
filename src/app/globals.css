@@ -2273,6 +2273,41 @@ html[data-ios-standalone] {
   --hub-collapse-duration: 480ms;
 }
 
+/* Standalone media is known while CSS is parsed, before React can tag iOS.
+   Keep cold launches out of WebKit's high-cost reveal path; spatial Water and
+   Planner dialog motion uses separate selectors and remains enabled. */
+@media (display-mode: standalone) {
+  html .animate-fade-up,
+  html .animate-scale-in,
+  html .animate-bar-grow,
+  html .animate-chart-wipe,
+  html [class*="motion-safe:animate-fade-up"],
+  html [class*="motion-safe:animate-scale-in"] {
+    opacity: 1 !important;
+    transform: none !important;
+    clip-path: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+
+  html .route-enter,
+  html .hub-route-enter,
+  html .animate-ring-pop,
+  html .animate-count-up,
+  html .animate-readiness-bar,
+  html .animate-readiness-marker,
+  html .animate-mesh-heart-pulse,
+  html .animate-mesh-heart-nodes,
+  html [style*="draw-ring"] {
+    animation: none !important;
+  }
+
+  html .glass-panel {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
 html[data-ios-standalone] .glass-panel,
 html[data-ios-standalone] [data-slot="dialog-content"][data-motion-profile="planner"],
 html[data-ios-standalone] .dialog-spatial-overlay--planner {
