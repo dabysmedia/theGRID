@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -61,6 +62,17 @@ interface PlannerResponse {
 
 interface WorkoutPlannerContextValue {
   openPlanner: (date?: string, origin?: HTMLElement | null) => void
+}
+
+function isInstalledIosPwa(): boolean {
+  if (typeof window === "undefined") return false
+  const navigatorWithStandalone = window.navigator as Navigator & {
+    standalone?: boolean
+  }
+  const iosDevice =
+    /iPad|iPhone|iPod/.test(window.navigator.platform) ||
+    (window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1)
+  return iosDevice && Boolean(navigatorWithStandalone.standalone)
 }
 
 const WorkoutPlannerContext = createContext<WorkoutPlannerContextValue | null>(null)
@@ -119,6 +131,7 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
   const [customName, setCustomName] = useState("")
   const [error, setError] = useState("")
   const [motionOrigin, setMotionOrigin] = useState<DialogMotionOrigin>()
+  const deferDataLoadUntil = useRef(0)
 
   const rotation = useMemo(
     () =>
@@ -162,19 +175,35 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!open || !user) return
+    const delayMs = Math.max(0, deferDataLoadUntil.current - performance.now())
+    if (delayMs > 0) {
+      const timer = window.setTimeout(
+        () => void loadPlans(rotation.startDate, rotation.endDate),
+        delayMs,
+      )
+      return () => window.clearTimeout(timer)
+    }
     void loadPlans(rotation.startDate, rotation.endDate)
   }, [open, user, rotation.startDate, rotation.endDate, loadPlans])
 
   useEffect(() => {
     if (!open || !user || templatesLoaded) return
-    void apiFetch(`/api/workout-templates?_=${Date.now()}`, { cache: "no-store" })
-      .then(async (response) => {
-        const data = await response.json().catch(() => [])
-        if (!response.ok) throw new Error("Could not load routines.")
-        setTemplates(Array.isArray(data) ? (data as WorkoutTemplate[]) : [])
-      })
-      .catch(() => setError((value) => value || "Could not load saved routines."))
-      .finally(() => setTemplatesLoaded(true))
+    const loadTemplates = () => {
+      void apiFetch(`/api/workout-templates?_=${Date.now()}`, { cache: "no-store" })
+        .then(async (response) => {
+          const data = await response.json().catch(() => [])
+          if (!response.ok) throw new Error("Could not load routines.")
+          setTemplates(Array.isArray(data) ? (data as WorkoutTemplate[]) : [])
+        })
+        .catch(() => setError((value) => value || "Could not load saved routines."))
+        .finally(() => setTemplatesLoaded(true))
+    }
+    const delayMs = Math.max(0, deferDataLoadUntil.current - performance.now())
+    if (delayMs > 0) {
+      const timer = window.setTimeout(loadTemplates, delayMs)
+      return () => window.clearTimeout(timer)
+    }
+    loadTemplates()
   }, [open, user, templatesLoaded])
 
   useEffect(() => {
@@ -185,6 +214,12 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
   const openPlanner = useCallback(
     (date?: string, origin?: HTMLElement | null) => {
       const nextDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : activeDate
+      // First-open data can substantially change the auto-height dialog while
+      // its source morph is running. In installed iOS, let the compositor own
+      // that opening window; later in-dialog date changes load immediately.
+      deferDataLoadUntil.current = isInstalledIosPwa()
+        ? performance.now() + 820
+        : 0
       setMotionOrigin(getDialogMotionOrigin(origin ?? null))
       setSelectedDate(nextDate)
       setCustomName("")

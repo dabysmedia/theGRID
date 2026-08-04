@@ -495,6 +495,10 @@ export function WeeklyHero({
     expanded == null || expanded === "steps" || expanded === "vitals"
   const showWeighIn = expanded == null || weightFocused
   const showProtocolRail = expanded == null
+  const deferIosVitalsContent =
+    expanded === "vitals" &&
+    typeof document !== "undefined" &&
+    document.documentElement.hasAttribute("data-ios-standalone")
   // A closing focus panel remains a flex item until HubPresence unmounts it.
   // Cancel its mobile gap as it collapses so that final unmount is layout-neutral.
   const returningOverviewGapClass =
@@ -1001,6 +1005,7 @@ export function WeeklyHero({
             readiness={readinessValue}
             fallbackHrvMs={hrvMs}
             fallbackRhr={restingHeartRate}
+            deferHeavyContent={deferIosVitalsContent}
           />
         </HubPresence>
 

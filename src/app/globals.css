@@ -1242,14 +1242,12 @@ html {
 
 @keyframes readiness-marker-slide {
   0% {
-    left: 0;
     opacity: 0;
     transform: translate(-50%, calc(-50% + 6px)) scale(0.65);
   }
   18% { opacity: 1; }
   72% { transform: translate(-50%, calc(-50% + 6px)) scale(1.15); }
   100% {
-    left: var(--readiness-position);
     opacity: 1;
     transform: translate(-50%, calc(-50% + 6px)) scale(1);
   }
@@ -2268,7 +2266,48 @@ html {
   animation-duration: 500ms;
 }
 
+/* Installed iOS WebKit has a single rendering thread for these live layout
+   morphs. Keep cold-launch geometry stable, remove large backdrop readbacks,
+   and shorten layout-bound phases without changing browser/desktop motion. */
+html[data-ios-standalone] {
+  --hub-collapse-duration: 480ms;
+}
+
+html[data-ios-standalone] .glass-panel,
+html[data-ios-standalone] [data-slot="dialog-content"][data-motion-profile="planner"],
+html[data-ios-standalone] .dialog-spatial-overlay--planner {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+html[data-ios-standalone] [data-hub-collapse] > div {
+  contain: paint;
+}
+
+html[data-ios-standalone] [data-steps-motion] {
+  transition-duration: 360ms !important;
+}
+
+html[data-ios-standalone] [data-steps-activity] .animate-pulse {
+  animation: none;
+}
+
+html[data-ios-standalone]
+  [data-slot="dialog-content"][data-motion-profile="planner"] {
+  --planner-safe-block: max(
+    0.75rem,
+    env(safe-area-inset-top, 0px),
+    env(safe-area-inset-bottom, 0px)
+  );
+  height: calc(100vh - var(--planner-safe-block) - var(--planner-safe-block)) !important;
+  max-height: calc(100vh - var(--planner-safe-block) - var(--planner-safe-block)) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  [data-hub-collapse] {
+    transition-duration: 0ms !important;
+  }
+
   [data-slot="dialog-content"][data-spatial-motion],
   .dialog-spatial-overlay {
     animation: none;

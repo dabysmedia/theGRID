@@ -157,6 +157,7 @@ export function StepsActivityBars({
 
   return (
     <div
+      data-steps-activity=""
       className={cn("relative -mx-4 lg:-mx-5", className)}
     >
       {/* Floor grid behind bars — no local steel wash (card wash is continuous) */}
@@ -177,6 +178,7 @@ export function StepsActivityBars({
 
       {/* Readiness — text inset; gradient full-bleed to card edges */}
       <div
+        data-steps-motion=""
         className={cn(
           "grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
           hideReadiness
@@ -199,6 +201,7 @@ export function StepsActivityBars({
         )}
       >
         <div
+          data-steps-motion=""
           className={cn(
             "flex items-center gap-2.5 px-4 py-2 lg:px-5",
             scaleToFit && !expanded && "max-lg:gap-2 max-lg:py-1.5",
@@ -372,6 +375,7 @@ export function StepsActivityBars({
       {/* Steps bars — same instance grows in place on expand (no remount). */}
       {!hideSteps ? (
       <div
+        data-steps-motion=""
         className={cn(
           "relative z-10 px-4 pb-1 pt-2.5 transition-[padding] duration-500 ease-out lg:px-5",
           expanded && "pb-3 pt-3",
@@ -410,6 +414,7 @@ export function StepsActivityBars({
 
         {/* Summary strip — grid-rows collapse so expand grows from the chart */}
         <div
+          data-steps-motion=""
           className={cn(
             "grid transition-[grid-template-rows,opacity,margin] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
             expanded
@@ -482,14 +487,15 @@ export function StepsActivityBars({
             chartExpandsOnTap &&
               "cursor-pointer rounded-lg focus-visible:ring-2 focus-visible:ring-emerald-400/30",
           )}
-          style={{ transformStyle: "preserve-3d" }}
         >
           <div
+            data-steps-motion=""
             className="relative flex items-end justify-between gap-1 px-0.5 transition-[height] duration-500 ease-out motion-reduce:transition-none"
             style={barAreaStyle}
           >
             {goalLineBottomPx != null || goalLineBottomPct != null ? (
               <div
+                data-steps-motion=""
                 className="pointer-events-none absolute inset-x-0 z-20 transition-[bottom] duration-500 ease-out"
                 style={
                   goalLineBottomPct != null
@@ -527,6 +533,7 @@ export function StepsActivityBars({
                 >
                   {/* Per-day step value — fades in as the chart grows */}
                   <div
+                    data-steps-motion=""
                     className={cn(
                       "pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 text-center transition-[opacity,transform] duration-500 ease-out motion-reduce:transition-none",
                       expanded
@@ -562,6 +569,7 @@ export function StepsActivityBars({
 
                   {/* Upright rectangular bars: height morph and entrance grow stay independent. */}
                   <div
+                    data-steps-motion=""
                     className="absolute bottom-0 transition-[height,max-width] duration-500 ease-out motion-reduce:transition-none"
                     style={{
                       width: "72%",
@@ -625,6 +633,7 @@ export function StepsActivityBars({
         </div>
 
         <div
+          data-steps-motion=""
           className={cn(
             "grid transition-[grid-template-rows,opacity,margin] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
             expanded

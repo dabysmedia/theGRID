@@ -30,6 +30,7 @@ export function HubCollapse({
 }) {
   return (
     <div
+      data-hub-collapse=""
       className={cn(
         "grid motion-reduce:transition-none",
         open
@@ -39,7 +40,7 @@ export function HubCollapse({
       )}
       style={{
         transitionProperty: "grid-template-rows, opacity, margin",
-        transitionDuration: `${durationMs}ms`,
+        transitionDuration: `var(--hub-collapse-duration, ${durationMs}ms)`,
         transitionTimingFunction: HUB_MOTION_EASING,
       }}
       aria-hidden={!open}
