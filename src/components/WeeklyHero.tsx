@@ -1058,7 +1058,22 @@ export function WeeklyHero({
                     />
                   </span>
                   <div className="min-w-0 w-full pl-[calc(33.333%+3.25rem)] sm:pl-[calc(33.333%+3.5rem)]">
-                    <p className="type-hud-micro text-muted-foreground/70">Training</p>
+                    <p
+                      className={cn(
+                        "type-hud-micro",
+                        primaryPlan
+                          ? "flex items-center gap-1.5 font-semibold text-[#dce95c]"
+                          : "text-muted-foreground/70",
+                      )}
+                    >
+                      {primaryPlan && (
+                        <span
+                          className="size-1.5 shrink-0 rounded-full bg-[#c4d632] shadow-[0_0_7px_#c4d632]"
+                          aria-hidden
+                        />
+                      )}
+                      {primaryPlan ? `Planned ${isToday ? "today" : "this day"}` : "Training"}
+                    </p>
                     <p
                       className="truncate text-[13px] font-semibold tracking-wide text-foreground/90"
                       style={woMet ? { color: "#c4d632" } : undefined}
@@ -1067,7 +1082,9 @@ export function WeeklyHero({
                     </p>
                     <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground/55">
                       {primaryPlan
-                        ? `${workoutSummary?.plannedToday.length ?? 1} planned ${isToday ? "today" : "this day"}`
+                        ? workoutSummary?.plannedToday.length === 1
+                          ? "1 workout scheduled"
+                          : `${workoutSummary?.plannedToday.length ?? 1} workouts scheduled`
                         : workoutSummary?.periodMode === "rotation"
                         ? `Day ${workoutSummary.periodDayNumber} · ${workoutSummary.periodPhaseLabel}`
                         : workoutSummary?.recoveryScore != null
