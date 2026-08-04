@@ -48,6 +48,10 @@ export async function PUT(
     if (body.name !== undefined) data.name = String(body.name).trim()
     if (body.notes !== undefined) data.notes = body.notes || null
     if (body.status !== undefined) data.status = body.status
+    if (body.startedAt !== undefined) {
+      const startedAt = new Date(body.startedAt)
+      if (Number.isFinite(startedAt.getTime())) data.startedAt = startedAt
+    }
     if (body.duration !== undefined) data.duration = body.duration ? Number(body.duration) : null
     if (body.finishedAt !== undefined)
       data.finishedAt = body.finishedAt ? new Date(body.finishedAt) : null

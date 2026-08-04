@@ -186,7 +186,7 @@ export default function FastingPage() {
                 domain={[0, "auto"]}
               />
               <Tooltip content={<BarTip />} cursor={{ fill: "oklch(0.82 0.18 110 / 6%)" }} />
-              <Bar dataKey="hours" fill={ORANGE} radius={[4, 4, 0, 0]} maxBarSize={28} />
+              <Bar dataKey="hours" fill={ORANGE} radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -222,6 +222,7 @@ export default function FastingPage() {
                 stroke={ORANGE}
                 strokeWidth={1.5}
                 fill="url(#fastArea)"
+                isAnimationActive={false}
               />
             </AreaChart>
           </ResponsiveContainer>

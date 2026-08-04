@@ -301,7 +301,7 @@ export default function AlcoholPage() {
                     return p?.dateKey ? format(parseLocalDate(p.dateKey), "EEE, MMM d") : ""
                   }}
                 />
-                <Bar dataKey="units" fill={AMBER} radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Bar dataKey="units" fill={AMBER} radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>

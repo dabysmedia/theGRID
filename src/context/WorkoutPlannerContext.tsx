@@ -7,6 +7,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react"
 import {
@@ -35,6 +36,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  getDialogMotionOrigin,
+  type DialogMotionOrigin,
 } from "@/components/ui/dialog"
 
 interface WorkoutPlan {
@@ -57,7 +60,7 @@ interface PlannerResponse {
 }
 
 interface WorkoutPlannerContextValue {
-  openPlanner: (date?: string) => void
+  openPlanner: (date?: string, origin?: HTMLElement | null) => void
 }
 
 const WorkoutPlannerContext = createContext<WorkoutPlannerContextValue | null>(null)
@@ -115,6 +118,7 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [customName, setCustomName] = useState("")
   const [error, setError] = useState("")
+  const [motionOrigin, setMotionOrigin] = useState<DialogMotionOrigin>()
 
   const rotation = useMemo(
     () =>
@@ -179,8 +183,9 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
   }, [user?.id])
 
   const openPlanner = useCallback(
-    (date?: string) => {
+    (date?: string, origin?: HTMLElement | null) => {
       const nextDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : activeDate
+      setMotionOrigin(getDialogMotionOrigin(origin ?? null))
       setSelectedDate(nextDate)
       setCustomName("")
       setError("")
@@ -275,13 +280,19 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           showCloseButton
+          motionOrigin={motionOrigin}
+          motionProfile="planner"
+          motionOpen={open}
           className={cn(
             "inset-x-0 bottom-0 top-auto flex max-h-[94dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-b-3xl rounded-t-3xl p-0",
             "sm:inset-0 sm:m-auto sm:h-fit sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-3xl",
             "[&_[data-slot=dialog-close]]:right-3 [&_[data-slot=dialog-close]]:top-3",
           )}
         >
-          <div className="shrink-0 border-b border-border/25 bg-gradient-to-b from-primary/[0.08] to-transparent px-4 pb-3 pt-4 pr-12 sm:px-5 sm:pt-5">
+          <div
+            data-dialog-motion-part="header"
+            className="shrink-0 border-b border-border/25 bg-gradient-to-b from-primary/[0.08] to-transparent px-4 pb-3 pt-4 pr-12 sm:px-5 sm:pt-5"
+          >
             <DialogHeader className="gap-1 text-left">
               <DialogTitle className="flex items-center gap-2 font-heading text-lg tracking-tight">
                 <span className="flex size-8 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
@@ -297,14 +308,21 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
 
           <div className="scrollbar-none min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0 sm:px-5">
             {!user ? (
-              <p className="rounded-xl border border-border/30 bg-muted/15 p-4 text-sm text-muted-foreground">
+              <p
+                data-dialog-motion-part="content"
+                className="rounded-xl border border-border/30 bg-muted/15 p-4 text-sm text-muted-foreground"
+              >
                 Choose a profile to plan workouts.
               </p>
             ) : (
               <>
-                <section aria-labelledby="rotation-heading" className="space-y-3">
+                <section
+                  data-dialog-planner-rotation=""
+                  aria-labelledby="rotation-heading"
+                  className="space-y-3"
+                >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
+                    <div data-dialog-planner-heading="" className="min-w-0">
                       <h2 id="rotation-heading" className="text-sm font-semibold text-foreground">
                         Eight-day rotation
                       </h2>
@@ -312,11 +330,15 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                         {format(parseLocalDate(rotation.startDate), "MMM d")}–{format(parseLocalDate(rotation.endDate), "MMM d, yyyy")}
                       </p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
+                    <div
+                      data-dialog-planner-nav=""
+                      className="flex shrink-0 items-center gap-1"
+                    >
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-sm"
+                        className="transition-[background-color,color,scale] active:scale-[0.9]"
                         onClick={() => moveRotation(-1)}
                         aria-label="Previous eight-day rotation"
                       >
@@ -326,7 +348,7 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-8 gap-1 px-2 text-[10px] uppercase tracking-wider"
+                        className="h-8 gap-1 px-2 text-[10px] uppercase tracking-wider transition-[background-color,color,scale] active:scale-[0.94]"
                         onClick={() => selectDate(stepsDayKey())}
                       >
                         <RotateCcw className="size-3" />
@@ -336,6 +358,7 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                         type="button"
                         variant="ghost"
                         size="icon-sm"
+                        className="transition-[background-color,color,scale] active:scale-[0.9]"
                         onClick={() => moveRotation(1)}
                         aria-label="Next eight-day rotation"
                       >
@@ -353,15 +376,17 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                       return (
                         <button
                           key={date}
+                          data-dialog-rotation-day=""
                           type="button"
                           onClick={() => selectDate(date)}
                           aria-pressed={chosen}
                           aria-label={`${format(dateObject, "EEEE, MMMM d")}, ${rotation.labels[index]}${datePlans.length ? `, ${datePlans.map((plan) => plan.name).join(", ")} planned` : ""}`}
+                          style={{ "--rotation-day-delay": `${340 + index * 72}ms` } as CSSProperties}
                           className={cn(
-                            "relative min-h-[5.75rem] touch-manipulation rounded-xl border px-1.5 py-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                            "relative min-h-[5.75rem] touch-manipulation rounded-xl border px-1.5 py-2 text-center transition-[background-color,border-color,color,box-shadow,scale] duration-300 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                             chosen
-                              ? "border-primary/55 bg-primary/13 text-primary"
-                              : "border-border/30 bg-muted/10 text-muted-foreground hover:border-primary/25 hover:bg-primary/[0.05]",
+                              ? "scale-[1.015] border-primary/55 bg-primary/13 text-primary shadow-[0_8px_24px_-16px_rgba(196,214,50,0.55)]"
+                              : "scale-100 border-border/30 bg-muted/10 text-muted-foreground hover:border-primary/25 hover:bg-primary/[0.05]",
                             past && !chosen && "opacity-55",
                           )}
                         >
@@ -376,6 +401,7 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                           </span>
                           {datePlans.length > 0 ? (
                             <span
+                              data-dialog-day-plan=""
                               className={cn(
                                 "mt-1 block w-full truncate rounded px-1 py-0.5 text-[7px] font-bold uppercase tracking-[0.06em]",
                                 workoutTagTone(datePlans[0].name),
@@ -387,7 +413,10 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                             </span>
                           ) : null}
                           {datePlans.length > 1 ? (
-                            <span className="absolute right-1.5 top-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground">
+                            <span
+                              data-dialog-day-plan=""
+                              className="absolute right-1.5 top-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground"
+                            >
                               {datePlans.length}
                             </span>
                           ) : null}
@@ -396,27 +425,60 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                     })}
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2" aria-label="Rotation training summary">
-                    <div className="rounded-xl border border-border/25 bg-muted/10 px-3 py-2">
+                  <div
+                    data-dialog-rotation-summary=""
+                    className="grid grid-cols-3 gap-2"
+                    aria-label="Rotation training summary"
+                  >
+                    <div
+                      data-dialog-rotation-stat="planned"
+                      style={{ "--rotation-stat-delay": "840ms" } as CSSProperties}
+                      className="rounded-xl border border-border/25 bg-muted/10 px-3 py-2"
+                    >
                       <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/55">Planned</span>
-                      <span className="mt-0.5 block text-base font-semibold tabular-nums text-foreground">{plannedCount}</span>
+                      <span
+                        key={`planned-${plannedCount}`}
+                        className="planner-summary-value-change mt-0.5 block text-base font-semibold tabular-nums text-foreground"
+                      >
+                        {plannedCount}
+                      </span>
                     </div>
-                    <div className="rounded-xl border border-border/25 bg-muted/10 px-3 py-2">
+                    <div
+                      data-dialog-rotation-stat="complete"
+                      style={{ "--rotation-stat-delay": "950ms" } as CSSProperties}
+                      className="rounded-xl border border-border/25 bg-muted/10 px-3 py-2"
+                    >
                       <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/55">Complete</span>
-                      <span className="mt-0.5 block text-base font-semibold tabular-nums text-foreground">{completedCount}</span>
+                      <span
+                        key={`complete-${completedCount}`}
+                        className="planner-summary-value-change mt-0.5 block text-base font-semibold tabular-nums text-foreground"
+                      >
+                        {completedCount}
+                      </span>
                     </div>
-                    <div className="rounded-xl border border-primary/20 bg-primary/[0.06] px-3 py-2">
+                    <div
+                      data-dialog-rotation-stat="target"
+                      style={{ "--rotation-stat-delay": "1060ms" } as CSSProperties}
+                      className="rounded-xl border border-primary/20 bg-primary/[0.06] px-3 py-2"
+                    >
                       <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/55">Target</span>
-                      <span className="mt-0.5 block text-base font-semibold tabular-nums text-primary">
+                      <span
+                        key={`target-${target}-${user.workCycleEnabled ? "cycle" : "week"}`}
+                        className="planner-summary-value-change mt-0.5 block text-base font-semibold tabular-nums text-primary"
+                      >
                         {target}<span className="text-[10px] font-normal text-muted-foreground/65"> / {user.workCycleEnabled ? "8d" : "wk"}</span>
                       </span>
                     </div>
                   </div>
                 </section>
 
-                <section aria-labelledby="selected-day-heading" className="space-y-3 border-t border-border/20 pt-4">
+                <section
+                  data-dialog-motion-part="content"
+                  aria-labelledby="selected-day-heading"
+                  className="space-y-3 border-t border-border/20 pt-4"
+                >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div key={selectedDate} className="planner-context-change">
                       <h2 id="selected-day-heading" className="text-sm font-semibold text-foreground">
                         {selectedLabel}
                       </h2>
@@ -462,7 +524,11 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                   )}
                 </section>
 
-                <section aria-labelledby="routine-heading" className="space-y-3 border-t border-border/20 pt-4">
+                <section
+                  data-dialog-motion-part="controls"
+                  aria-labelledby="routine-heading"
+                  className="space-y-3 border-t border-border/20 pt-4"
+                >
                   <div>
                     <h2 id="routine-heading" className="text-sm font-semibold text-foreground">Add a workout</h2>
                     <p className="mt-0.5 text-[11px] text-muted-foreground/65">
@@ -480,7 +546,7 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                             type="button"
                             disabled={savingKey != null}
                             onClick={() => void schedule({ templateId: template.id, busyKey: template.id })}
-                            className="flex min-h-14 touch-manipulation items-center gap-3 rounded-xl border border-border/30 bg-muted/10 px-3 py-2 text-left transition-colors hover:border-primary/30 hover:bg-primary/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
+                            className="flex min-h-14 touch-manipulation items-center gap-3 rounded-xl border border-border/30 bg-muted/10 px-3 py-2 text-left transition-[background-color,border-color,scale] active:scale-[0.985] hover:border-primary/30 hover:bg-primary/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
                           >
                             <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/25 bg-background/30">
                               {template.coverImageUrl ? (
@@ -540,7 +606,11 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                 </section>
 
                 {error ? (
-                  <p role="alert" className="rounded-xl border border-destructive/25 bg-destructive/[0.06] px-3 py-2 text-xs text-destructive">
+                  <p
+                    data-dialog-motion-part="actions"
+                    role="alert"
+                    className="rounded-xl border border-destructive/25 bg-destructive/[0.06] px-3 py-2 text-xs text-destructive"
+                  >
                     {error}
                   </p>
                 ) : null}

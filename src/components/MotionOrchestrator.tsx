@@ -11,8 +11,10 @@ const REVEAL_SELECTOR = [
 ].join(",")
 
 /**
- * Replays entrance motion when an element actually reaches the viewport.
+ * Reveals entrance motion when an element first reaches the viewport.
  * A MutationObserver also enrolls content revealed by accordions/dialogs after load.
+ * Elements stay revealed after their first entrance so scrolling never restarts a
+ * large batch of transitions or keeps unnecessary intersection targets alive.
  */
 export function MotionOrchestrator({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -31,10 +33,13 @@ export function MotionOrchestrator({ children }: { children: ReactNode }) {
     const intersection = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
+          if (!entry.isIntersecting) continue
           const reveals = revealsByTarget.get(entry.target)
           for (const reveal of reveals ?? [entry.target]) {
-            reveal.toggleAttribute("data-motion-visible", entry.isIntersecting)
+            reveal.setAttribute("data-motion-visible", "")
           }
+          intersection.unobserve(entry.target)
+          observedTargets.delete(entry.target)
         }
       },
       {
@@ -70,16 +75,28 @@ export function MotionOrchestrator({ children }: { children: ReactNode }) {
     enroll(document)
     document.documentElement.dataset.motionReady = "true"
 
+    const pendingRoots = new Set<Element>()
+    let mutationFrame = 0
+    const flushPendingRoots = () => {
+      mutationFrame = 0
+      for (const root of pendingRoots) enroll(root)
+      pendingRoots.clear()
+    }
     const mutations = new MutationObserver((records) => {
       for (const record of records) {
         for (const node of record.addedNodes) {
-          if (node instanceof Element) enroll(node)
+          if (node instanceof Element) pendingRoots.add(node)
         }
+      }
+      if (pendingRoots.size > 0 && !mutationFrame) {
+        mutationFrame = requestAnimationFrame(flushPendingRoots)
       }
     })
     mutations.observe(document.body, { childList: true, subtree: true })
 
     return () => {
+      cancelAnimationFrame(mutationFrame)
+      pendingRoots.clear()
       mutations.disconnect()
       intersection.disconnect()
       delete document.documentElement.dataset.motionReady

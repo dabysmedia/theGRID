@@ -787,6 +787,7 @@ export function WeightCorrelationPanel({
               dot={false}
               connectNulls
               name={active}
+              isAnimationActive={false}
             />
             <Line
               yAxisId={WEIGHT_Y_AXIS}
@@ -797,6 +798,7 @@ export function WeightCorrelationPanel({
               dot={{ r: 2.5, fill: WEIGHT_COLOR, strokeWidth: 0 }}
               connectNulls
               name={weightLineKey === "weightForward" ? "weight_lagged" : "weight_same"}
+              isAnimationActive={false}
             />
           </ComposedChart>
         </ResponsiveContainer>

@@ -10,46 +10,58 @@ import { useEffect } from "react"
  * WebKit can report both 100dvh and visualViewport.height too short on a cold
  * launch until scrolling forces a viewport reflow.
  */
-function isStandalone() {
+function isStandalone(displayMode: MediaQueryList) {
   const navigatorWithStandalone = window.navigator as Navigator & {
     standalone?: boolean
   }
 
   return (
-    window.matchMedia("(display-mode: standalone)").matches ||
+    displayMode.matches ||
     Boolean(navigatorWithStandalone.standalone)
   )
 }
 
-function applyAppHeight() {
-  if (isStandalone()) {
-    document.documentElement.style.setProperty("--app-height", "100vh")
-    return
-  }
-
-  const height = Math.round(window.visualViewport?.height ?? window.innerHeight)
-  if (!Number.isFinite(height) || height <= 0) return
-  document.documentElement.style.setProperty("--app-height", `${height}px`)
-}
-
 export function ViewportHeightSync() {
   useEffect(() => {
-    applyAppHeight()
     const vv = window.visualViewport
-    vv?.addEventListener("resize", applyAppHeight)
-    vv?.addEventListener("scroll", applyAppHeight)
-    window.addEventListener("resize", applyAppHeight)
-    window.addEventListener("orientationchange", applyAppHeight)
     const displayMode = window.matchMedia("(display-mode: standalone)")
-    displayMode.addEventListener("change", applyAppHeight)
-    const raf = requestAnimationFrame(applyAppHeight)
+    let frame = 0
+    let lastHeight = ""
+
+    const applyAppHeight = () => {
+      frame = 0
+      const standalone = isStandalone(displayMode)
+      const measuredHeight = Math.round(vv?.height ?? window.innerHeight)
+      if (!standalone && (!Number.isFinite(measuredHeight) || measuredHeight <= 0)) return
+      const nextHeight = standalone ? "100vh" : `${measuredHeight}px`
+
+      if (nextHeight === lastHeight) return
+      lastHeight = nextHeight
+      document.documentElement.style.setProperty("--app-height", nextHeight)
+    }
+
+    // visualViewport scroll/resize can fire many times per frame while browser
+    // chrome moves. Coalesce reads and avoid rewriting a root layout variable
+    // unless the rounded viewport height actually changed.
+    const scheduleAppHeight = () => {
+      if (frame) return
+      frame = requestAnimationFrame(applyAppHeight)
+    }
+
+    applyAppHeight()
+    vv?.addEventListener("resize", scheduleAppHeight, { passive: true })
+    vv?.addEventListener("scroll", scheduleAppHeight, { passive: true })
+    window.addEventListener("resize", scheduleAppHeight, { passive: true })
+    window.addEventListener("orientationchange", scheduleAppHeight, { passive: true })
+    displayMode.addEventListener("change", scheduleAppHeight)
+    scheduleAppHeight()
     return () => {
-      cancelAnimationFrame(raf)
-      vv?.removeEventListener("resize", applyAppHeight)
-      vv?.removeEventListener("scroll", applyAppHeight)
-      window.removeEventListener("resize", applyAppHeight)
-      window.removeEventListener("orientationchange", applyAppHeight)
-      displayMode.removeEventListener("change", applyAppHeight)
+      cancelAnimationFrame(frame)
+      vv?.removeEventListener("resize", scheduleAppHeight)
+      vv?.removeEventListener("scroll", scheduleAppHeight)
+      window.removeEventListener("resize", scheduleAppHeight)
+      window.removeEventListener("orientationchange", scheduleAppHeight)
+      displayMode.removeEventListener("change", scheduleAppHeight)
     }
   }, [])
 

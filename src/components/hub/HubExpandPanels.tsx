@@ -15,7 +15,6 @@ import {
   Plus,
   RefreshCw,
   Syringe,
-  Waves,
 } from "lucide-react"
 import { HubCollapse } from "@/components/hub/HubMotion"
 import {
@@ -629,6 +628,17 @@ export function HubVitalsExpand({
     latestTrendHrv != null && hrvTrendAverage != null
       ? latestTrendHrv - hrvTrendAverage
       : null
+  const latestHeartRate = hrChartData.at(-1)?.bpm ?? null
+  const sampledHeartRates = hrChartData.map((point) => point.bpm)
+  const heartRateAverage =
+    data?.hrAvg ??
+    (sampledHeartRates.length
+      ? sampledHeartRates.reduce((sum, value) => sum + value, 0) / sampledHeartRates.length
+      : null)
+  const heartRateMin =
+    data?.hrMin ?? (sampledHeartRates.length ? Math.min(...sampledHeartRates) : null)
+  const heartRateMax =
+    data?.hrMax ?? (sampledHeartRates.length ? Math.max(...sampledHeartRates) : null)
   const zones = data?.zones ?? []
   const totalZoneMinutes = zones.reduce((s, z) => s + z.minutes, 0)
   const readinessScore =
@@ -811,6 +821,7 @@ export function HubVitalsExpand({
                 dot={{ r: 2, fill: "#fb7185", fillOpacity: 0.75 }}
                 activeDot={{ r: 4 }}
                 connectNulls
+                isAnimationActive={false}
               />
               <Line
                 yAxisId="hrv"
@@ -822,8 +833,172 @@ export function HubVitalsExpand({
                 dot={{ r: 2.5, fill: HRV_TREND_COLOR, strokeWidth: 0 }}
                 activeDot={{ r: 5, strokeWidth: 2, stroke: "#11150a" }}
                 connectNulls
+                isAnimationActive={false}
               />
             </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </section>
+  )
+
+  const heartRatePanel = (
+    <section
+      aria-labelledby="heart-rate-today-heading"
+      aria-describedby="heart-rate-today-description"
+      className="space-y-3.5 rounded-2xl border border-[#f43f5e]/15 bg-gradient-to-br from-[#f43f5e]/[0.065] via-white/[0.02] to-transparent p-3.5 sm:p-4"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p id="heart-rate-today-heading" className="text-sm font-semibold text-foreground/95">
+            Heart rate today
+          </p>
+          <p
+            id="heart-rate-today-description"
+            className="mt-1 text-[11px] leading-relaxed text-muted-foreground/65"
+          >
+            Five-minute samples across your 5 AM–5 AM tracking day
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full border border-[#f43f5e]/20 bg-[#f43f5e]/[0.08] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#fda4af]/80">
+          {hrChartData.length > 0 ? `${hrChartData.length} samples` : "Today"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2" aria-label="Heart rate summary">
+        {[
+          { label: "Latest", value: latestHeartRate },
+          { label: "Day avg", value: heartRateAverage },
+          { label: "Range", value: heartRateMin, secondaryValue: heartRateMax },
+        ].map((item) => (
+          <div
+            key={item.label}
+            className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 px-2.5 py-2.5"
+          >
+            <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">
+              {item.label}
+            </p>
+            <p className="mt-1 truncate font-heading text-base leading-none tabular-nums text-foreground/90 sm:text-lg">
+              {item.value != null
+                ? item.secondaryValue != null
+                  ? `${Math.round(item.value)}–${Math.round(item.secondaryValue)}`
+                  : Math.round(item.value)
+                : "—"}
+              {item.value != null ? (
+                <span className="ml-0.5 text-[9px] font-medium text-muted-foreground/55">
+                  bpm
+                </span>
+              ) : null}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground/70">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0.5 w-5 rounded-full bg-[#f43f5e] shadow-[0_0_8px_rgba(244,63,94,0.35)]" />
+          Sampled heart rate <span className="text-muted-foreground/45">(bpm)</span>
+        </span>
+        {rhr != null ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-0 w-5 border-t border-dashed border-white/45" />
+            Resting baseline <span className="text-muted-foreground/45">({Math.round(rhr)} bpm)</span>
+          </span>
+        ) : null}
+      </div>
+
+      {status === "loading" ? (
+        <div className="grid h-56 place-items-center rounded-xl border border-dashed border-white/[0.08] bg-black/10 text-[12px] text-muted-foreground/55 sm:h-60">
+          Loading heart-rate samples…
+        </div>
+      ) : status === "error" ? (
+        <p className="rounded-xl border border-white/[0.06] bg-black/10 px-3 py-4 text-center text-[12px] text-muted-foreground/65">
+          Couldn&apos;t load today&apos;s heart rate. Sync Google Health below, then try again.
+        </p>
+      ) : !hasHrChart ? (
+        <p className="rounded-xl border border-dashed border-white/[0.08] bg-black/10 px-3 py-5 text-center text-[12px] leading-relaxed text-muted-foreground/65">
+          Sync Google Health to see five-minute heart-rate samples.
+        </p>
+      ) : (
+        <div
+          role="img"
+          aria-label={`Heart rate chart. Latest ${Math.round(latestHeartRate ?? 0)} beats per minute, average ${Math.round(heartRateAverage ?? 0)}, range ${Math.round(heartRateMin ?? 0)} to ${Math.round(heartRateMax ?? 0)}.`}
+          className="chart-touch-safe h-56 min-w-0 select-none [-webkit-touch-callout:none] sm:h-60"
+          onPointerDown={() => setHrTipActive(true)}
+          onPointerUp={() => setHrTipActive(false)}
+          onPointerCancel={() => setHrTipActive(false)}
+          onPointerLeave={() => setHrTipActive(false)}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={hrChartData}
+              margin={{ top: 14, right: 0, left: 0, bottom: 2 }}
+              onMouseMove={() => setHrTipActive(true)}
+              onMouseLeave={() => setHrTipActive(false)}
+            >
+              <defs>
+                <linearGradient id="hubHrAreaFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={VITALS_COLOR} stopOpacity={0.3} />
+                  <stop offset="72%" stopColor={VITALS_COLOR} stopOpacity={0.08} />
+                  <stop offset="100%" stopColor={VITALS_COLOR} stopOpacity={0.015} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid
+                strokeDasharray="3 4"
+                stroke="oklch(1 0 0 / 8%)"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 10, fill: "oklch(0.76 0.01 250 / 75%)" }}
+                axisLine={false}
+                tickLine={false}
+                interval="preserveStartEnd"
+                minTickGap={36}
+                tickMargin={8}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: "oklch(0.74 0.09 15 / 80%)" }}
+                axisLine={false}
+                tickLine={false}
+                width={34}
+                tickMargin={4}
+                domain={["dataMin - 5", "dataMax + 5"]}
+              />
+              {rhr != null ? (
+                <ReferenceLine
+                  y={rhr}
+                  stroke="oklch(1 0 0 / 32%)"
+                  strokeDasharray="4 5"
+                />
+              ) : null}
+              <Tooltip
+                active={hrTipActive}
+                cursor={{ stroke: "oklch(1 0 0 / 18%)", strokeWidth: 1 }}
+                contentStyle={{
+                  background: "oklch(0.16 0.012 250 / 98%)",
+                  border: "1px solid oklch(1 0 0 / 12%)",
+                  borderRadius: "10px",
+                  fontSize: "12px",
+                  backdropFilter: "blur(12px)",
+                  boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
+                }}
+                labelStyle={{ color: "oklch(0.82 0.01 250)", marginBottom: 4 }}
+                formatter={(value) => [`${value} bpm`, "Heart rate"]}
+              />
+              <Area
+                type="monotone"
+                dataKey="bpm"
+                name="Heart rate"
+                stroke={VITALS_COLOR}
+                strokeWidth={3}
+                fill="url(#hubHrAreaFill)"
+                dot={false}
+                activeDot={{ r: 5, strokeWidth: 2, stroke: "#16090d" }}
+                isAnimationActive={false}
+              />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
@@ -906,6 +1081,8 @@ export function HubVitalsExpand({
       </div>
 
       {trendPanel}
+
+      {heartRatePanel}
 
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
         <button
@@ -1011,96 +1188,6 @@ export function HubVitalsExpand({
         </p>
       ) : (
         <>
-          <div className="space-y-3 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className="grid size-9 place-items-center rounded-xl border border-[#f43f5e]/15 bg-[#f43f5e]/[0.07]">
-                  <Waves className="size-4 text-[#fb7185]/80" aria-hidden />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground/90">Heart rate today</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground/55">
-                    Five-minute samples · tracking day 5 AM–5 AM
-                  </p>
-                </div>
-              </div>
-              <span className="type-hud-micro tabular-nums text-muted-foreground/50">
-                {hrChartData.length > 0 ? `${hrChartData.length} samples` : "No samples"}
-              </span>
-            </div>
-            {!hasHrChart ? (
-              <p className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] px-3 py-4 text-center text-[12px] text-muted-foreground/60">
-                Sync Google Health for 5-minute HR samples
-              </p>
-            ) : (
-              <div
-                className="chart-touch-safe h-52 min-w-0 select-none [-webkit-touch-callout:none] sm:h-56"
-                onPointerUp={() => setHrTipActive(false)}
-                onPointerCancel={() => setHrTipActive(false)}
-                onPointerLeave={() => setHrTipActive(false)}
-                onContextMenu={(event) => event.preventDefault()}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={hrChartData}
-                    margin={{ top: 6, right: 4, left: -18, bottom: 0 }}
-                    onMouseMove={() => setHrTipActive(true)}
-                    onMouseLeave={() => setHrTipActive(false)}
-                  >
-                    <defs>
-                      <linearGradient id="hubHrAreaFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={VITALS_COLOR} stopOpacity={0.35} />
-                        <stop offset="100%" stopColor={VITALS_COLOR} stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="oklch(1 0 0 / 5%)"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 9, fill: "var(--muted-foreground)", fontFamily: "var(--font-mono)" }}
-                      axisLine={false}
-                      tickLine={false}
-                      interval="preserveStartEnd"
-                      minTickGap={36}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={28}
-                      domain={["dataMin - 5", "dataMax + 5"]}
-                    />
-                    {rhr != null ? (
-                      <ReferenceLine y={rhr} stroke="oklch(1 0 0 / 20%)" strokeDasharray="4 4" />
-                    ) : null}
-                    <Tooltip
-                      active={hrTipActive}
-                      contentStyle={{
-                        background: "oklch(0.19 0.012 250 / 98%)",
-                        border: "1px solid oklch(1 0 0 / 8%)",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                        backdropFilter: "blur(8px)",
-                      }}
-                      formatter={(value) => [`${value} bpm`, "Heart rate"]}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="bpm"
-                      stroke={VITALS_COLOR}
-                      strokeWidth={2.5}
-                      fill="url(#hubHrAreaFill)"
-                      activeDot={{ r: 4 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-
           <div className="space-y-3 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
             <div>
               <p className="text-sm font-semibold text-foreground/90">Heart-rate zones</p>
@@ -1696,11 +1783,6 @@ export function HubWorkoutsExpand({
   periodValues,
   periodLabels,
   periodDayIndex,
-  periodDayNumber,
-  periodPhaseLabel,
-  periodEndDate,
-  nextPeriodStartDate,
-  recoveryScore,
   plannedToday,
   hideHero = false,
 }: {
@@ -1711,11 +1793,6 @@ export function HubWorkoutsExpand({
   periodValues: number[]
   periodLabels: string[]
   periodDayIndex: number
-  periodDayNumber: number
-  periodPhaseLabel: string
-  periodEndDate: string
-  nextPeriodStartDate: string
-  recoveryScore: number | null
   plannedToday: Array<{ id: string; name: string; exercises: string }>
   /** When true, omit ring/title hero — overview rail owns that morph. */
   hideHero?: boolean
@@ -1729,6 +1806,7 @@ export function HubWorkoutsExpand({
   )
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [startingId, setStartingId] = useState<string | null>(null)
+  const [plannedStartError, setPlannedStartError] = useState<string | null>(null)
   const primaryPlan = plannedToday[0] ?? null
   const trainingStyle = normalizeTrainingStyle(user?.trainingStyle)
   const trainingStyleDefinition = TRAINING_STYLE_DEFINITIONS[trainingStyle]
@@ -1755,25 +1833,16 @@ export function HubWorkoutsExpand({
   }, [])
 
   const met = periodCount >= periodGoal
-  const remaining = Math.max(0, periodGoal - periodCount)
   const valuesThroughToday = periodValues.slice(0, Math.min(periodValues.length, periodDayIndex + 1))
   const lastSessionIdx = [...valuesThroughToday].reverse().findIndex((v) => v > 0)
   const daysSinceLast =
     lastSessionIdx < 0 ? null : lastSessionIdx === 0 ? 0 : lastSessionIdx
 
   const periodNoun = periodMode === "rotation" ? "rotation" : "week"
-  const nextPeriodLabel = format(parseLocalDate(nextPeriodStartDate), "MMM d")
-  const periodEndLabel = format(parseLocalDate(periodEndDate), "MMM d")
-
   let lastCue = `No sessions this ${periodNoun}`
   if (daysSinceLast === 0) lastCue = "Trained today"
   else if (daysSinceLast === 1) lastCue = "Last session yesterday"
   else if (daysSinceLast != null) lastCue = `Last session ${daysSinceLast}d ago`
-
-  let recoveryCue = "Log recovery when you can"
-  if (recoveryScore != null && recoveryScore >= 7) recoveryCue = "Recovery looking solid"
-  else if (recoveryScore != null && recoveryScore >= 5) recoveryCue = "Moderate recovery — ease in"
-  else if (recoveryScore != null) recoveryCue = "Prioritize recovery today"
 
   const previewTmpl = previewId
     ? templates.find((t) => t.id === previewId) ?? null
@@ -1803,80 +1872,182 @@ export function HubWorkoutsExpand({
     router.push("/workouts?start=free")
   }
 
+  async function goStartPlannedSession(id: string) {
+    const busyKey = `planned:${id}`
+    setStartingId(busyKey)
+    setPlannedStartError(null)
+    try {
+      const response = await apiFetch(`/api/workout-sessions/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "active",
+          startedAt: new Date().toISOString(),
+        }),
+      })
+      if (!response.ok) {
+        const result = (await response.json().catch(() => ({}))) as { error?: string }
+        throw new Error(result.error || "Could not start the scheduled workout.")
+      }
+      router.push("/workouts")
+    } catch (error) {
+      setPlannedStartError(
+        error instanceof Error ? error.message : "Could not start the scheduled workout.",
+      )
+      setStartingId(null)
+    }
+  }
+
+  const primaryPlanExercises = primaryPlan
+    ? parseHubRoutineExercises(primaryPlan.exercises)
+    : []
+  const primaryPlanPreview = hubRoutinePreview(primaryPlanExercises)
+  const primaryPlanSetCount =
+    trainingStyleDefinition.workingSetTarget != null
+      ? primaryPlanExercises.length * trainingStyleDefinition.workingSetTarget
+      : primaryPlanExercises.reduce(
+          (sum, exercise) => sum + hubRoutineSetCount(exercise),
+          0,
+        )
+  const primaryPlanTemplate = primaryPlan
+    ? templates.find((template) => {
+        const templateExercises =
+          typeof template.exercises === "string"
+            ? template.exercises.trim()
+            : JSON.stringify(template.exercises)
+        return templateExercises === primaryPlan.exercises.trim()
+      }) ?? null
+    : null
+  const visibleTemplates = primaryPlanTemplate
+    ? templates.filter((template) => template.id !== primaryPlanTemplate.id)
+    : templates
+
   const workoutStats = (
-    <div className="min-w-0 space-y-2.5">
-      <div className="grid grid-cols-2 gap-2.5">
-        <div className="flex min-h-[6.75rem] min-w-0 flex-col justify-between rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="type-hud-micro text-muted-foreground/55">
-              {periodMode === "rotation" ? "Rotation goal" : "Weekly goal"}
+    <div className="flex min-w-0 flex-col gap-2.5">
+      {!primaryPlan ? (
+        <div className="order-2 flex min-h-[5.75rem] min-w-0 flex-col justify-between gap-2 rounded-2xl border border-[#c4d632]/15 bg-gradient-to-br from-[#c4d632]/[0.09] via-white/[0.025] to-transparent p-3">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-foreground/95">Start training</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/60">
+              {trainingStyle === "classic"
+                ? "Start a focused session with clear working-set guidance."
+                : "Get a recommendation or build the session as you go."}
             </p>
-            <span className="type-hud-micro tabular-nums text-muted-foreground/45">
-              {met ? "Complete" : `${remaining} left`}
-            </span>
           </div>
-          <p
-            className="text-[1.65rem] font-semibold leading-none tabular-nums tracking-tight text-foreground/90"
-            style={met ? { color: "#dce95c", textShadow: "0 0 18px #c4d63233" } : undefined}
+          <button
+            type="button"
+            disabled={startingId != null}
+            onClick={goStartFreeForm}
+            className="inline-flex h-9 w-full touch-manipulation items-center justify-center gap-2 rounded-lg border border-[#dce95c]/30 bg-[#c4d632]/15 px-3 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#e8f07a] transition-colors hover:border-[#dce95c]/50 hover:bg-[#c4d632]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50"
           >
-            {periodCount}
-            <span className="ml-1 text-sm font-medium text-muted-foreground/45">
-              / {periodGoal}
-            </span>
-          </p>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.055]">
+            <Play className="size-3.5" aria-hidden />
+            {startingId === "free" ? "Starting…" : "Start"}
+          </button>
+        </div>
+      ) : null}
+      {primaryPlan ? (
+        <section
+          aria-labelledby="scheduled-workout-heading"
+          className="order-1 relative min-h-[11.5rem] overflow-hidden rounded-2xl border border-[#dce95c]/25 bg-gradient-to-br from-[#c4d632]/[0.15] via-[#c4d632]/[0.055] to-white/[0.02] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_45px_rgba(0,0,0,0.16)] sm:p-5"
+        >
+          {primaryPlanTemplate?.coverImageUrl?.trim() ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={primaryPlanTemplate.coverImageUrl.trim()}
+                alt=""
+                className="pointer-events-none absolute inset-y-0 right-0 h-full w-[48%] object-cover opacity-35 sm:w-[42%]"
+              />
+              <div
+                className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#121509] via-[#121509]/90 to-[#121509]/35"
+                aria-hidden
+              />
+            </>
+          ) : (
             <div
-              className="h-full origin-left rounded-full bg-gradient-to-r from-[#8f9c17] to-[#dce95c] transition-transform duration-700 ease-out"
-              style={{ transform: `scaleX(${Math.min(1, periodCount / periodGoal)})` }}
-            />
+              className="pointer-events-none absolute right-0 -top-12 grid size-44 place-items-center rounded-full border border-[#dce95c]/10 bg-[#c4d632]/[0.035] text-[#dce95c]/10"
+              aria-hidden
+            >
+              <Dumbbell className="size-20" strokeWidth={1.25} />
+            </div>
+          )}
+
+          <div className="relative z-10 flex min-h-[9.5rem] max-w-xl flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="inline-flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.15em] text-[#e8f07a]/80">
+                <span
+                  className="size-1.5 rounded-full bg-[#dce95c] shadow-[0_0_9px_#c4d632]"
+                  aria-hidden
+                />
+                Today&apos;s training
+              </p>
+              <span className="rounded-full border border-[#dce95c]/25 bg-[#c4d632]/[0.1] px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-[#e8f07a]/75">
+                Scheduled
+              </span>
+            </div>
+
+            <div className="mt-3 min-w-0">
+              <h3
+                id="scheduled-workout-heading"
+                className="line-clamp-2 font-heading text-2xl leading-[1.05] tracking-tight text-foreground sm:text-[1.7rem]"
+              >
+                {primaryPlan.name}
+              </h3>
+              <p
+                className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground/65"
+                title={primaryPlanExercises.map((exercise) => exercise.name).join(", ")}
+              >
+                {primaryPlanPreview}
+              </p>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-1.5" aria-label="Scheduled workout summary">
+              <span className="rounded-lg border border-white/[0.08] bg-black/15 px-2 py-1 text-[9px] tabular-nums text-muted-foreground/70">
+                {primaryPlanExercises.length} movement{primaryPlanExercises.length === 1 ? "" : "s"}
+              </span>
+              <span className="rounded-lg border border-white/[0.08] bg-black/15 px-2 py-1 text-[9px] tabular-nums text-muted-foreground/70">
+                {primaryPlanSetCount} working set{primaryPlanSetCount === 1 ? "" : "s"}
+              </span>
+              {plannedToday.length > 1 ? (
+                <span className="rounded-lg border border-white/[0.08] bg-black/15 px-2 py-1 text-[9px] tabular-nums text-muted-foreground/70">
+                  +{plannedToday.length - 1} more scheduled
+                </span>
+              ) : null}
+            </div>
+
+            <div className="mt-auto pt-4">
+              <button
+                type="button"
+                disabled={startingId != null}
+                onClick={() => void goStartPlannedSession(primaryPlan.id)}
+                className="inline-flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-[#e8f07a]/35 bg-[#c4d632]/20 px-5 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#f1f7a3] shadow-[0_0_20px_rgba(196,214,50,0.08)] transition-colors hover:border-[#e8f07a]/55 hover:bg-[#c4d632]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dce95c]/40 disabled:opacity-50 sm:w-auto sm:min-w-48"
+              >
+                <Play className="size-3.5" aria-hidden />
+                {startingId === `planned:${primaryPlan.id}` ? "Starting…" : "Start scheduled workout"}
+              </button>
+              {plannedStartError ? (
+                <p className="mt-2 text-[11px] text-destructive" role="alert">
+                  {plannedStartError}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : (
+        <div className="order-1 flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.018] px-3.5 py-3">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] bg-white/[0.025]">
+            <Dumbbell className="size-4 text-muted-foreground/45" aria-hidden />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-semibold text-foreground/90">{lastCue}</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground/55">
+              {todayCount > 0
+                ? `${todayCount} session${todayCount === 1 ? "" : "s"} logged today`
+                : "No workout scheduled for today"}
+            </p>
           </div>
         </div>
-        <div className="flex min-h-[6.75rem] min-w-0 flex-col justify-between rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
-          <p className="type-hud-micro text-muted-foreground/55">Recovery</p>
-          <p className="text-[1.65rem] font-semibold leading-none tabular-nums tracking-tight text-foreground/90">
-            {recoveryScore != null ? recoveryScore : "—"}
-            <span className="ml-1 text-sm font-medium text-muted-foreground/45">
-              {recoveryScore != null ? "/ 10" : "score"}
-            </span>
-          </p>
-          <p className="text-[11px] leading-snug text-muted-foreground/60">
-            {recoveryCue}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center gap-3 rounded-xl border border-[#c4d632]/[0.11] bg-[#c4d632]/[0.035] px-3.5 py-3">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#c4d632]/20 bg-[#c4d632]/10">
-          <Dumbbell className="size-4 text-[#dce95c]" aria-hidden />
-        </div>
-        <div className="min-w-0">
-          <p className={cn(
-            "truncate text-[13px] font-semibold",
-            primaryPlan ? "text-[#e8f07a]" : "text-foreground/90",
-          )}>
-            {primaryPlan ? primaryPlan.name : lastCue}
-          </p>
-          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground/55">
-            {primaryPlan
-              ? `${plannedToday.length} workout${plannedToday.length === 1 ? "" : "s"} planned ${isToday ? "today" : "for this day"}`
-              : todayCount > 0
-              ? `${todayCount} session${todayCount === 1 ? "" : "s"} logged today`
-              : "No session logged today"}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.018] px-3.5 py-2.5">
-        <div className="min-w-0">
-          <p className="text-[12px] font-semibold text-foreground/85">
-            {periodMode === "rotation" ? `Cycle day ${periodDayNumber} · ${periodPhaseLabel}` : `Week day ${periodDayNumber}`}
-          </p>
-          <p className="mt-0.5 text-[10px] text-muted-foreground/50">
-            Current {periodNoun} ends {periodEndLabel}
-          </p>
-        </div>
-        <p className="shrink-0 text-right type-hud-micro text-[#c4d632]/80">
-          Next {periodMode === "rotation" ? "rotation" : "week"}<br />{nextPeriodLabel}
-        </p>
-      </div>
+      )}
     </div>
   )
 
@@ -1903,47 +2074,8 @@ export function HubWorkoutsExpand({
         <div className="workout-focus-section order-1">{workoutStats}</div>
       )}
 
-      <div className="workout-focus-section flex items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] px-3.5 py-3">
-        <div className="grid size-8 shrink-0 place-items-center rounded-lg border border-[#c4d632]/15 bg-[#c4d632]/[0.07]">
-          <Dumbbell className="size-3.5 text-[#dce95c]/80" aria-hidden />
-        </div>
-        <div className="min-w-0">
-          <p className="text-[12px] font-semibold text-foreground/90">
-            {trainingStyleDefinition.label} training
-          </p>
-          <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground/60">
-            {trainingStyleDefinition.activeWorkoutCue}
-          </p>
-        </div>
-      </div>
-
       <div
-        className="workout-focus-section order-2 overflow-hidden rounded-2xl border border-[#c4d632]/15 bg-gradient-to-br from-[#c4d632]/[0.09] via-white/[0.025] to-transparent p-4"
-        style={{ animationDelay: "80ms" }}
-      >
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[15px] font-semibold text-foreground/95">Start training</p>
-            <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted-foreground/60">
-              {trainingStyle === "classic"
-                ? "Start a focused session with two heavy working sets per exercise and clear near-failure guidance."
-                : "Get a recovery-aware recommendation or build the session as you go."}
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={startingId != null}
-            onClick={goStartFreeForm}
-            className="inline-flex h-10 shrink-0 touch-manipulation items-center justify-center gap-2 rounded-xl border border-[#dce95c]/30 bg-[#c4d632]/15 px-4 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#e8f07a] transition-colors hover:border-[#dce95c]/50 hover:bg-[#c4d632]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50"
-          >
-            <Play className="size-3.5" aria-hidden />
-            {startingId === "free" ? "Starting…" : "Start"}
-          </button>
-        </div>
-      </div>
-
-      <div
-        className="workout-focus-section order-4 space-y-3 rounded-2xl border border-white/[0.065] bg-white/[0.02] p-4"
+        className="workout-focus-section order-2 space-y-3 rounded-2xl border border-white/[0.065] bg-white/[0.02] p-4"
         style={{ animationDelay: "150ms" }}
       >
         <div className="flex items-end justify-between gap-3">
@@ -1997,19 +2129,24 @@ export function HubWorkoutsExpand({
 
       <ProgressionSummaryHero
         variant="hud"
-        className="workout-focus-section order-5 rounded-2xl border border-white/[0.065] bg-white/[0.02] p-4"
+        className="workout-focus-section order-3 rounded-2xl border border-white/[0.065] bg-white/[0.02] p-4"
       />
 
       <div
-        className="workout-focus-section order-3 space-y-2.5"
+        className="workout-focus-section order-4 space-y-2.5"
         style={{ animationDelay: "280ms" }}
       >
         <div className="flex items-baseline justify-between gap-2">
-          <p className="type-hud-caption">Routines</p>
+          <div className="flex min-w-0 items-baseline gap-2">
+            <p className="type-hud-caption">Routines</p>
+            <p className="truncate text-[9px] font-medium text-muted-foreground/45">
+              {trainingStyleDefinition.label} mode
+            </p>
+          </div>
           <div className="flex items-center gap-2">
-            {templatesStatus === "ready" && templates.length > 0 ? (
+            {templatesStatus === "ready" && visibleTemplates.length > 0 ? (
               <span className="type-hud-micro tabular-nums text-muted-foreground/50">
-                {templates.length}
+                {visibleTemplates.length}
               </span>
             ) : null}
             <Link
@@ -2052,15 +2189,15 @@ export function HubWorkoutsExpand({
             </button>
           </p>
         ) : null}
-        {templatesStatus === "ready" && templates.length === 0 ? (
+        {templatesStatus === "ready" && visibleTemplates.length === 0 && templates.length === 0 ? (
           <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/55">
             No routines yet — create one above, or use Start training.
           </p>
         ) : null}
 
-        {templates.length > 0 ? (
+        {visibleTemplates.length > 0 ? (
           <div className="grid grid-cols-1 items-stretch gap-2.5 sm:grid-cols-2 sm:gap-3">
-            {templates.map((tmpl) => {
+            {visibleTemplates.map((tmpl) => {
               const exs = parseHubRoutineExercises(tmpl.exercises)
               const tags = parseHubRoutineTags(tmpl.tags)
               const cover = tmpl.coverImageUrl?.trim()

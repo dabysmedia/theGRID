@@ -69,15 +69,22 @@ export function HubPresence({
 
   useLayoutEffect(() => {
     if (open) {
-      setMounted(true)
-      const id = requestAnimationFrame(() => {
-        requestAnimationFrame(() => setVisible(true))
+      let enterFrame = 0
+      const mountFrame = requestAnimationFrame(() => {
+        setMounted(true)
+        enterFrame = requestAnimationFrame(() => setVisible(true))
       })
-      return () => cancelAnimationFrame(id)
+      return () => {
+        cancelAnimationFrame(mountFrame)
+        cancelAnimationFrame(enterFrame)
+      }
     }
-    setVisible(false)
+    const exitFrame = requestAnimationFrame(() => setVisible(false))
     const t = window.setTimeout(() => setMounted(false), durationMs + 40)
-    return () => clearTimeout(t)
+    return () => {
+      cancelAnimationFrame(exitFrame)
+      clearTimeout(t)
+    }
   }, [open, durationMs])
 
   if (!mounted) return null

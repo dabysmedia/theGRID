@@ -19,6 +19,7 @@ export function useCountUp(
   useEffect(() => {
     let frame = 0
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    const coarsePointer = window.matchMedia("(pointer: coarse)").matches
 
     if (value == null || !enabled || reduceMotion) {
       frame = requestAnimationFrame(() => setDisplayValue(value))
@@ -26,11 +27,20 @@ export function useCountUp(
     }
 
     const startedAt = performance.now()
+    const minimumFrameMs = coarsePointer ? 1000 / 30 : 1000 / 60
+    let lastCommitAt = startedAt - minimumFrameMs
     const tick = (now: number) => {
       const progress = Math.min(1, (now - startedAt) / durationMs)
       const eased = 1 - Math.pow(1 - progress, 3)
-      setDisplayValue(value * eased)
-      if (progress < 1) frame = requestAnimationFrame(tick)
+      if (progress >= 1) {
+        setDisplayValue(value)
+        return
+      }
+      if (now - lastCommitAt >= minimumFrameMs) {
+        lastCommitAt = now
+        setDisplayValue(value * eased)
+      }
+      frame = requestAnimationFrame(tick)
     }
 
     frame = requestAnimationFrame(tick)

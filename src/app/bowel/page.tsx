@@ -334,7 +334,7 @@ export default function BowelPage() {
                     }}
                     formatter={(value) => [`${Number(value ?? 0)}`, "Entries"]}
                   />
-                  <Bar dataKey="count" fill={BOWEL_COLOR} radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="count" fill={BOWEL_COLOR} radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

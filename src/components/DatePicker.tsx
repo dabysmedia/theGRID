@@ -31,7 +31,7 @@ export function DatePicker({ compact = false }: { compact?: boolean }) {
       {/* Date display — clickable */}
       <button
         type="button"
-        onClick={() => openPlanner(activeDate)}
+        onClick={(event) => openPlanner(activeDate, event.currentTarget)}
         aria-label={`Open workout planner for ${format(dateObj, "EEEE, MMMM d")}`}
         className={cn(
           "group relative inline-flex touch-manipulation items-center rounded-xl uppercase transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",

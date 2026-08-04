@@ -471,7 +471,7 @@ export default function StatsPage() {
                 <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval={4} />
                 <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={32} />
                 <Tooltip content={<ChartTooltipContent unit="cal" />} />
-                <Bar dataKey="calories" fill={CATEGORY_THEME.calories.color} radius={[2, 2, 0, 0]} />
+                <Bar dataKey="calories" fill={CATEGORY_THEME.calories.color} radius={[2, 2, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </SectionChart>
@@ -503,6 +503,7 @@ export default function StatsPage() {
                   <Line
                     type="monotone" dataKey="weight" stroke={CATEGORY_THEME.weight.color}
                     strokeWidth={2} dot={false} activeDot={{ r: 4 }} connectNulls
+                    isAnimationActive={false}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -525,7 +526,7 @@ export default function StatsPage() {
                 <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval={4} />
                 <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={32} />
                 <Tooltip content={<ChartTooltipContent unit="steps" />} />
-                <Bar dataKey="steps" fill={CATEGORY_THEME.steps.color} radius={[2, 2, 0, 0]} />
+                <Bar dataKey="steps" fill={CATEGORY_THEME.steps.color} radius={[2, 2, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </SectionChart>
@@ -556,6 +557,7 @@ export default function StatsPage() {
                     <Area
                       type="monotone" dataKey="runMiles" stroke={CATEGORY_THEME.running.color}
                       fill={CATEGORY_THEME.running.color} fillOpacity={0.15} strokeWidth={2}
+                      isAnimationActive={false}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -575,6 +577,7 @@ export default function StatsPage() {
                     <Line
                       type="monotone" dataKey="pace" stroke="oklch(0.82 0.18 110)"
                       strokeWidth={2} dot={false} activeDot={{ r: 4 }} connectNulls
+                      isAnimationActive={false}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -598,7 +601,7 @@ export default function StatsPage() {
                 <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval={4} />
                 <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={20} allowDecimals={false} />
                 <Tooltip content={<ChartTooltipContent unit="sessions" />} />
-                <Bar dataKey="workouts" fill={CATEGORY_THEME.workouts.color} radius={[2, 2, 0, 0]} />
+                <Bar dataKey="workouts" fill={CATEGORY_THEME.workouts.color} radius={[2, 2, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </SectionChart>
@@ -623,6 +626,7 @@ export default function StatsPage() {
                   type="monotone" dataKey="sleepHrs" stroke={CATEGORY_THEME.sleep.color}
                   fill={CATEGORY_THEME.sleep.color} fillOpacity={0.15} strokeWidth={2}
                   connectNulls
+                  isAnimationActive={false}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -644,7 +648,7 @@ export default function StatsPage() {
                 <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval={4} />
                 <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={20} allowDecimals={false} />
                 <Tooltip content={<ChartTooltipContent unit="units" />} />
-                <Bar dataKey="alcohol" fill={CATEGORY_THEME.alcohol.color} radius={[2, 2, 0, 0]} />
+                <Bar dataKey="alcohol" fill={CATEGORY_THEME.alcohol.color} radius={[2, 2, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </SectionChart>
@@ -665,7 +669,7 @@ export default function StatsPage() {
                 <XAxis dataKey="label" tick={chartAxisStyle} tickLine={false} axisLine={false} interval={4} />
                 <YAxis tick={chartAxisStyle} tickLine={false} axisLine={false} width={20} allowDecimals={false} />
                 <Tooltip content={<ChartTooltipContent unit="entries" />} />
-                <Bar dataKey="bowel" fill={CATEGORY_THEME.bowel.color} radius={[2, 2, 0, 0]} />
+                <Bar dataKey="bowel" fill={CATEGORY_THEME.bowel.color} radius={[2, 2, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </SectionChart>

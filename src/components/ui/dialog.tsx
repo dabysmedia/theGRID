@@ -7,6 +7,27 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
+export interface DialogMotionOrigin {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+/** Capture a trigger-relative starting point for an opt-in spatial dialog morph. */
+export function getDialogMotionOrigin(
+  source: HTMLElement | null,
+): DialogMotionOrigin | undefined {
+  if (!source || typeof window === "undefined") return undefined
+  const rect = source.getBoundingClientRect()
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+  }
+}
+
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
 }
@@ -44,18 +65,90 @@ function DialogContent({
   children,
   showCloseButton = true,
   priority = "normal",
+  motionOrigin,
+  motionProfile,
+  motionOpen,
+  style,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
   /** Use above fullscreen overlays (e.g. active workout at z-120). */
   priority?: "normal" | "high"
+  /** Opt into a trigger-origin entrance/exit instead of the generic modal fade. */
+  motionOrigin?: DialogMotionOrigin
+  /** Optional choreography profile layered over the shared source morph. */
+  motionProfile?: "planner"
+  /** Remeasure a dynamic surface before its close animation starts. */
+  motionOpen?: boolean
 }) {
   const layer = priority === "high" ? "z-[130]" : "z-[110]"
+  const motionFrame = React.useRef(0)
+  const motionNode = React.useRef<HTMLDivElement | null>(null)
+  const setMotionGeometry = React.useCallback(
+    (node: HTMLDivElement) => {
+      if (!motionOrigin || typeof window === "undefined") return
+
+      const targetWidth = node.offsetWidth
+      const targetHeight = node.offsetHeight
+      const sourceCenterX = motionOrigin.left + motionOrigin.width / 2
+      const sourceCenterY = motionOrigin.top + motionOrigin.height / 2
+      node.style.setProperty(
+        "--dialog-motion-x",
+        `${sourceCenterX - window.innerWidth / 2}px`,
+      )
+      node.style.setProperty(
+        "--dialog-motion-y",
+        `${sourceCenterY - window.innerHeight / 2}px`,
+      )
+      node.style.setProperty(
+        "--dialog-motion-scale-x",
+        String(Math.max(0.08, Math.min(0.98, motionOrigin.width / targetWidth))),
+      )
+      node.style.setProperty(
+        "--dialog-motion-scale-y",
+        String(Math.max(0.04, Math.min(0.98, motionOrigin.height / targetHeight))),
+      )
+    },
+    [motionOrigin],
+  )
+  const setMotionNode = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      cancelAnimationFrame(motionFrame.current)
+      motionNode.current = node
+      if (!node || !motionOrigin) return
+
+      node.removeAttribute("data-motion-ready")
+      setMotionGeometry(node)
+      motionFrame.current = requestAnimationFrame(() => {
+        node.setAttribute("data-motion-ready", "")
+      })
+    },
+    [motionOrigin, setMotionGeometry],
+  )
+
+  React.useLayoutEffect(() => {
+    if (motionOpen !== false || !motionNode.current) return
+    setMotionGeometry(motionNode.current)
+  }, [motionOpen, setMotionGeometry])
+
+  React.useEffect(
+    () => () => cancelAnimationFrame(motionFrame.current),
+    [],
+  )
+
   return (
     <DialogPortal>
-      <DialogOverlay className={layer} />
+      <DialogOverlay
+        className={cn(
+          layer,
+          motionOrigin && "dialog-spatial-overlay",
+          motionProfile === "planner" && "dialog-spatial-overlay--planner",
+        )}
+      />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
+        data-spatial-motion={motionOrigin ? "" : undefined}
+        data-motion-profile={motionProfile}
         className={cn(
           "glass-frost fixed grid w-full max-w-none gap-4 rounded-2xl p-4 pb-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom)))] text-sm text-foreground outline-none duration-100",
           layer,
@@ -63,7 +156,9 @@ function DialogContent({
           "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
           className
         )}
+        style={style}
         {...props}
+        ref={setMotionNode}
       >
         {children}
         {showCloseButton && (

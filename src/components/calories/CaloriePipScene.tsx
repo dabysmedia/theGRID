@@ -21,11 +21,6 @@ type Props = {
   className?: string
 }
 
-function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined") return false
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
-}
-
 function isCoarsePointer(): boolean {
   if (typeof window === "undefined") return false
   return window.matchMedia("(pointer: coarse)").matches
@@ -50,7 +45,6 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
   const hostRef = useRef<HTMLDivElement>(null)
   const wakeRef = useRef<(() => void) | null>(null)
   const stateRef = useRef({ consumed, target, accent })
-  stateRef.current = { consumed, target, accent }
 
   // Mount WebGL once
   useEffect(() => {
@@ -76,7 +70,7 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       depth: true,
     })
     renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2),
+      Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 2),
     )
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.setClearColor(0x000000, 0)
@@ -186,6 +180,10 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     let dirty = true
     let visible = true
     let running = false
+    let fillSettled = false
+    let lastRender = 0
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)")
+    let reducedMotion = motionQuery.matches
 
     function fitCamera() {
       const el = hostRef.current
@@ -243,6 +241,7 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       material.emissive.copy(litColor)
       material.emissiveIntensity = mobile ? 0.02 : 0.035
       dirty = true
+      fillSettled = false
       return true
     }
     syncTargets(true)
@@ -265,13 +264,19 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
         return
       }
 
+      // Once the fill has settled, the decorative mobile sway does not need a
+      // full-refresh WebGL render loop. Keep entrances responsive at 60fps and
+      // cap only the continuous idle work to ~30fps.
+      if (mobile && fillSettled && now - lastRender < 1000 / 30) {
+        raf = requestAnimationFrame(tick)
+        return
+      }
+      lastRender = now
+
       const dt = Math.min(0.05, (now - last) / 1000)
       last = now
-      const reducedMotion = prefersReducedMotion()
       const waveElapsed = (now - waveStart) / 1000
       const swayAllowed = !reducedMotion
-
-      syncTargets()
 
       // Per-pip fill lerp only while settling; once quiet, skip that work (sway stays cheap).
       let maxDelta = 0
@@ -325,6 +330,8 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
         dirty = false
       }
 
+      fillSettled = !fillBusy && maxDelta <= 0.0015
+
       // Keep RAF for continuous sway; sleep fully only when reduced-motion + settled
       if (swayAllowed || maxDelta > 0.0015 || fillBusy) {
         raf = requestAnimationFrame(tick)
@@ -369,6 +376,13 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
     }
     document.addEventListener("visibilitychange", onVis)
 
+    const onMotionPreference = (event: MediaQueryListEvent) => {
+      reducedMotion = event.matches
+      dirty = true
+      kick()
+    }
+    motionQuery.addEventListener("change", onMotionPreference)
+
     kick()
 
     return () => {
@@ -380,6 +394,7 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
       ro.disconnect()
       io.disconnect()
       document.removeEventListener("visibilitychange", onVis)
+      motionQuery.removeEventListener("change", onMotionPreference)
       geometry.dispose()
       material.dispose()
       floorGeo.dispose()
@@ -394,6 +409,7 @@ export function CaloriePipScene({ consumed, target, accent, className }: Props) 
 
   // Wake sleeping loop when calorie values change
   useEffect(() => {
+    stateRef.current = { consumed, target, accent }
     wakeRef.current?.()
   }, [consumed, target, accent])
 

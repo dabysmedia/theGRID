@@ -100,9 +100,9 @@ export function BottomNav() {
         aria-hidden={!open}
         tabIndex={open ? 0 : -1}
         className={cn(
-          "fixed inset-0 z-40 bg-background/60 backdrop-blur-sm transition-[opacity,backdrop-filter] duration-500 ease-out motion-reduce:transition-none motion-reduce:backdrop-blur-none",
+          "fixed inset-0 z-40 bg-background/60 transition-opacity duration-300 ease-out motion-reduce:transition-none motion-reduce:backdrop-blur-none",
           open
-            ? "pointer-events-auto opacity-100"
+            ? "pointer-events-auto opacity-100 backdrop-blur-sm"
             : "pointer-events-none opacity-0 backdrop-blur-none",
         )}
         onClick={close}

@@ -495,6 +495,12 @@ export function WeeklyHero({
     expanded == null || expanded === "steps" || expanded === "vitals"
   const showWeighIn = expanded == null || weightFocused
   const showProtocolRail = expanded == null
+  // A closing focus panel remains a flex item until HubPresence unmounts it.
+  // Cancel its mobile gap as it collapses so that final unmount is layout-neutral.
+  const returningOverviewGapClass =
+    fillViewport && expanded == null
+      ? "max-lg:-mt-[var(--hub-section-gap)]"
+      : undefined
 
   const peptideNext = peptideSummary?.nextInjection ?? null
   let peptideCue = "Log first shot"
@@ -884,6 +890,7 @@ export function WeeklyHero({
         <HubPresence
           open={expanded === "peptides"}
           durationMs={1000}
+          className={returningOverviewGapClass}
         >
           <div className="pt-3">
             <HubPeptidesExpand
@@ -904,6 +911,7 @@ export function WeeklyHero({
         <HubPresence
           open={expanded === "workouts"}
           durationMs={1000}
+          className={returningOverviewGapClass}
         >
           <div className="pt-3">
             <HubWorkoutsExpand
@@ -914,11 +922,6 @@ export function WeeklyHero({
               periodValues={workoutSummary?.periodValues ?? data.workouts.last7}
               periodLabels={workoutSummary?.periodLabels ?? dayLabels}
               periodDayIndex={workoutSummary?.periodDayIndex ?? 6}
-              periodDayNumber={workoutSummary?.periodDayNumber ?? 7}
-              periodPhaseLabel={workoutSummary?.periodPhaseLabel ?? "Calendar week"}
-              periodEndDate={workoutSummary?.periodEndDate ?? activeDate}
-              nextPeriodStartDate={workoutSummary?.nextPeriodStartDate ?? activeDate}
-              recoveryScore={workoutSummary?.recoveryScore ?? null}
               plannedToday={workoutSummary?.plannedToday ?? []}
               hideHero
             />
@@ -937,7 +940,11 @@ export function WeeklyHero({
           />
         </HubCollapse>
 
-        <HubPresence open={expanded === "sleep"} durationMs={HUB_MOTION_MS}>
+        <HubPresence
+          open={expanded === "sleep"}
+          durationMs={HUB_SECTION_MOTION_MS}
+          className={returningOverviewGapClass}
+        >
           <HubSleepFocus
             hours={data.sleep.todayValue}
             goal={sleepGoal}
@@ -984,8 +991,11 @@ export function WeeklyHero({
 
         <HubPresence
           open={expanded === "vitals"}
-          durationMs={HUB_MOTION_MS}
-          className={expanded === "vitals" ? "mt-4" : undefined}
+          durationMs={HUB_SECTION_MOTION_MS}
+          className={cn(
+            expanded === "vitals" && "mt-4",
+            returningOverviewGapClass,
+          )}
         >
           <HubVitalsExpand
             readiness={readinessValue}
@@ -1075,24 +1085,27 @@ export function WeeklyHero({
                       {primaryPlan ? `Planned ${isToday ? "today" : "this day"}` : "Training"}
                     </p>
                     <p
-                      className="truncate text-[13px] font-semibold tracking-wide text-foreground/90"
+                      className={cn(
+                        "truncate font-semibold tracking-wide text-foreground/90",
+                        primaryPlan
+                          ? "mt-1 text-base leading-tight sm:text-lg"
+                          : "text-[13px]",
+                      )}
                       style={woMet ? { color: "#c4d632" } : undefined}
                     >
                       {workoutCue}
                     </p>
-                    <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground/55">
-                      {primaryPlan
-                        ? workoutSummary?.plannedToday.length === 1
-                          ? "1 workout scheduled"
-                          : `${workoutSummary?.plannedToday.length ?? 1} workouts scheduled`
-                        : workoutSummary?.periodMode === "rotation"
-                        ? `Day ${workoutSummary.periodDayNumber} · ${workoutSummary.periodPhaseLabel}`
-                        : workoutSummary?.recoveryScore != null
-                          ? `Recovery ${workoutSummary.recoveryScore}/10`
-                          : periodWo === 0
-                            ? "No sessions yet"
-                            : `${periodWo} logged`}
-                    </p>
+                    {!primaryPlan && (
+                      <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground/55">
+                        {workoutSummary?.periodMode === "rotation"
+                          ? `Day ${workoutSummary.periodDayNumber} · ${workoutSummary.periodPhaseLabel}`
+                          : workoutSummary?.recoveryScore != null
+                            ? `Recovery ${workoutSummary.recoveryScore}/10`
+                            : periodWo === 0
+                              ? "No sessions yet"
+                              : `${periodWo} logged`}
+                      </p>
+                    )}
                   </div>
                 </button>
             </div>

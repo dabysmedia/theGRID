@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Check, Droplets, Pencil, Plus, RotateCcw, X } from "lucide-react"
 import {
   Dialog,
@@ -10,6 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  getDialogMotionOrigin,
+  type DialogMotionOrigin,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { useActiveDate } from "@/context/DateContext"
@@ -42,10 +44,12 @@ function LiquidBottle({
   ounces,
   capacity,
   compact = false,
+  animateFill = false,
 }: {
   ounces: number
   capacity: number
   compact?: boolean
+  animateFill?: boolean
 }) {
   const percent = Math.min(100, Math.max(0, (ounces / Math.max(capacity, 1)) * 100))
 
@@ -59,7 +63,10 @@ function LiquidBottle({
       <div className="water-bottle-neck" />
       <div className="water-bottle-shell">
         <div
-          className="water-bottle-liquid"
+          className={cn(
+            "water-bottle-liquid",
+            animateFill && "water-bottle-liquid--enter",
+          )}
           style={{ height: `${percent}%` }}
         >
           <div className="water-bottle-surface" />
@@ -89,6 +96,8 @@ export function WaterTracker() {
   const [customAmount, setCustomAmount] = useState("")
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [motionOrigin, setMotionOrigin] = useState<DialogMotionOrigin>()
 
   const loadWater = useCallback(async () => {
     if (!user?.id) {
@@ -193,6 +202,7 @@ export function WaterTracker() {
   }
 
   function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen) setMotionOrigin(getDialogMotionOrigin(triggerRef.current))
     setOpen(nextOpen)
     if (!nextOpen) {
       setEditingGoal(false)
@@ -205,6 +215,7 @@ export function WaterTracker() {
       <DialogTrigger
         render={
           <button
+            ref={triggerRef}
             type="button"
             aria-label={`Open water tracker, ${formatOunces(totalOz)} of ${formatOunces(goalOz)} ounces`}
             className="group relative flex min-h-[4.75rem] w-full items-center overflow-hidden rounded-2xl border border-cyan-200/[0.10] bg-cyan-950/[0.09] px-3 text-left touch-manipulation transition-[border-color,background-color,transform] duration-300 hover:border-cyan-200/20 hover:bg-cyan-900/[0.13] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/40 sm:min-h-[5.25rem] sm:px-4"
@@ -267,6 +278,7 @@ export function WaterTracker() {
 
       <DialogContent
         showCloseButton={false}
+        motionOrigin={motionOrigin}
         className="water-tracker-dialog min-h-0 overflow-hidden p-0 sm:max-w-[31rem]"
       >
         <DialogClose
@@ -282,7 +294,10 @@ export function WaterTracker() {
         >
           <X className="h-4 w-4" />
         </DialogClose>
-        <DialogHeader className="relative z-10 px-5 pt-5 text-left">
+        <DialogHeader
+          data-dialog-motion-part="header"
+          className="relative z-10 px-5 pt-5 text-left"
+        >
           <div className="flex items-center gap-2 text-cyan-200/80">
             <Droplets className="h-4 w-4" aria-hidden />
             <span className="type-hud-label text-cyan-100/70">Hydration</span>
@@ -296,17 +311,24 @@ export function WaterTracker() {
         </DialogHeader>
 
         <div className="relative z-10 grid gap-5 px-5 pb-5 sm:grid-cols-[0.9fr_1.1fr] sm:items-center">
-          <div className="relative flex min-h-[17rem] items-center justify-center overflow-hidden rounded-[1.75rem] border border-cyan-200/[0.10] bg-cyan-950/20">
+          <div
+            data-dialog-motion-part="primary"
+            className="relative flex min-h-[17rem] items-center justify-center overflow-hidden rounded-[1.75rem] border border-cyan-200/[0.10] bg-cyan-950/20"
+          >
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(34,211,238,0.14),transparent_54%)]" />
-            <LiquidBottle ounces={totalOz} capacity={goalOz} />
+            <LiquidBottle ounces={totalOz} capacity={goalOz} animateFill />
           </div>
 
           <div className="space-y-4">
-            <div>
+            <div data-dialog-motion-part="content">
               <div className="flex items-end justify-between gap-3">
                 <div>
                   <p className="type-hud-micro text-cyan-100/55">Today</p>
-                  <p className="mt-1 text-4xl font-bold tabular-nums tracking-tight text-foreground">
+                  <p
+                    key={`${totalOz}-${goalOz}`}
+                    className="water-value-change mt-1 text-4xl font-bold tabular-nums tracking-tight text-foreground"
+                    aria-live="polite"
+                  >
                     {formatOunces(totalOz)}
                     <span className="ml-1 text-sm font-medium text-muted-foreground">oz</span>
                   </p>
@@ -319,7 +341,7 @@ export function WaterTracker() {
               </div>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.55)] transition-[width] duration-700 ease-out"
+                  className="water-dialog-progress h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.55)] transition-[width] duration-700 ease-out"
                   style={{ width: `${percent}%` }}
                 />
               </div>
@@ -374,7 +396,7 @@ export function WaterTracker() {
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div data-dialog-motion-part="controls" className="grid grid-cols-3 gap-2">
               {QUICK_AMOUNTS.map((amount) => (
                 <Button
                   key={amount}
@@ -383,7 +405,7 @@ export function WaterTracker() {
                   disabled={busy || !user}
                   onClick={() => void addWater(amount)}
                   className={cn(
-                    "h-12 rounded-xl border-cyan-200/[0.12] bg-cyan-400/[0.04] text-cyan-50 hover:bg-cyan-400/[0.10]",
+                    "h-12 rounded-xl border-cyan-200/[0.12] bg-cyan-400/[0.04] text-cyan-50 transition-[background-color,border-color,scale] active:scale-[0.96] hover:bg-cyan-400/[0.10]",
                     amount === bottleOz && "border-cyan-300/25 bg-cyan-400/[0.08]",
                   )}
                 >
@@ -399,7 +421,11 @@ export function WaterTracker() {
               ))}
             </div>
 
-            <form onSubmit={submitCustom} className="flex gap-2">
+            <form
+              data-dialog-motion-part="actions"
+              onSubmit={submitCustom}
+              className="flex gap-2"
+            >
               <label className="relative min-w-0 flex-1">
                 <span className="sr-only">Custom water amount in ounces</span>
                 <input
@@ -429,6 +455,7 @@ export function WaterTracker() {
             </form>
 
             <Button
+              data-dialog-motion-part="actions"
               type="button"
               variant="ghost"
               disabled={!entries.length || busy}
