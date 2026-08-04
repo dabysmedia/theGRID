@@ -50,7 +50,7 @@ export function CaloriesFocusPanel({
   const pct = target > 0 ? Math.round((consumed / target) * 100) : 0
   const progressPct = Math.min(100, Math.max(0, pct))
   return (
-    <div className="pointer-events-auto mt-2 motion-safe:animate-fade-up motion-reduce:animate-none">
+    <div className="pointer-events-auto mt-2">
       <section className="relative border-y border-white/[0.07] px-0.5 py-4 sm:px-1 sm:py-5">
         <div className="relative">
           <div className="flex items-start justify-between gap-4">
