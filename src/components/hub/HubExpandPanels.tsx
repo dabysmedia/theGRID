@@ -754,7 +754,7 @@ export function HubVitalsExpand({
         </p>
       ) : (
         <div
-          className="hub-data-reveal chart-touch-safe h-56 min-w-0 select-none [-webkit-touch-callout:none] sm:h-60"
+          className="chart-touch-safe h-56 min-w-0 select-none [-webkit-touch-callout:none] sm:h-60"
           onPointerUp={() => setTrendTipActive(false)}
           onPointerCancel={() => setTrendTipActive(false)}
           onPointerLeave={() => setTrendTipActive(false)}
@@ -938,7 +938,7 @@ export function HubVitalsExpand({
         <div
           role="img"
           aria-label={`Heart rate chart. Latest ${Math.round(latestHeartRate ?? 0)} beats per minute, average ${Math.round(heartRateAverage ?? 0)}, range ${Math.round(heartRateMin ?? 0)} to ${Math.round(heartRateMax ?? 0)}.`}
-          className="hub-data-reveal chart-touch-safe h-56 min-w-0 select-none [-webkit-touch-callout:none] sm:h-60"
+          className="chart-touch-safe h-56 min-w-0 select-none [-webkit-touch-callout:none] sm:h-60"
           onPointerDown={() => setHrTipActive(true)}
           onPointerUp={() => setHrTipActive(false)}
           onPointerCancel={() => setHrTipActive(false)}
@@ -1157,7 +1157,7 @@ export function HubVitalsExpand({
           <>
             <WorkoutMuscleMap
               segmentScores={segmentScores}
-              className="hub-data-reveal [&_.anatomy-figure-chassis]:border-white/[0.06] [&_.anatomy-figure-chassis]:bg-black/10"
+              className="[&_.anatomy-figure-chassis]:border-white/[0.06] [&_.anatomy-figure-chassis]:bg-black/10"
             />
             <div className="grid grid-cols-2 gap-2">
               {topMuscles.slice(0, 4).map((row) => (
@@ -1213,7 +1213,7 @@ export function HubVitalsExpand({
                 No zone data for this day yet
               </p>
             ) : (
-              <div className="hub-data-reveal space-y-2">
+              <div className="space-y-2">
                 {zones.map((z) => {
                   const style = zoneStyle(z.zone)
                   const pct = totalZoneMinutes > 0 ? (z.minutes / totalZoneMinutes) * 100 : 0

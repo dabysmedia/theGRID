@@ -179,7 +179,6 @@ export function StepsActivityBars({
       {/* Readiness — text inset; gradient full-bleed to card edges */}
       <div
         data-steps-motion=""
-        data-hub-motion-group="readiness"
         className={cn(
           "grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
           hideReadiness
@@ -377,7 +376,6 @@ export function StepsActivityBars({
       {!hideSteps ? (
       <div
         data-steps-motion=""
-        data-hub-motion-group="steps-shell"
         className={cn(
           "relative z-10 px-4 pb-1 pt-2.5 transition-[padding] duration-500 ease-out lg:px-5",
           expanded && "pb-3 pt-3",
@@ -417,7 +415,6 @@ export function StepsActivityBars({
         {/* Summary strip — grid-rows collapse so expand grows from the chart */}
         <div
           data-steps-motion=""
-          data-hub-motion-group="steps-summary"
           className={cn(
             "grid transition-[grid-template-rows,opacity,margin] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
             expanded
@@ -471,7 +468,6 @@ export function StepsActivityBars({
         />
 
         <div
-          data-hub-motion-group="steps-chart"
           role={chartExpandsOnTap ? "button" : undefined}
           tabIndex={chartExpandsOnTap ? 0 : undefined}
           aria-label={chartExpandsOnTap ? "Expand steps chart" : undefined}
@@ -638,7 +634,6 @@ export function StepsActivityBars({
 
         <div
           data-steps-motion=""
-          data-hub-motion-group="steps-detail"
           className={cn(
             "grid transition-[grid-template-rows,opacity,margin] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
             expanded

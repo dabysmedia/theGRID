@@ -1,19 +1,20 @@
 "use client"
 
+import { useLayoutEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 
-/** Shared scene duration: deliberate enough to read without feeling delayed. */
-export const HUB_MOTION_MS = 860
+/** Default hub UI morph — short enough to feel snappy, long enough to read. */
+export const HUB_MOTION_MS = 720
 
-/** Larger detail sequence, including its staggered child groups. */
-export const HUB_SECTION_MOTION_MS = 980
+/** Larger overview section morphs (rings / protocol rail / weigh-in). */
+export const HUB_SECTION_MOTION_MS = 900
 
-/** Premium curve shared with the trigger-origin dialogs. */
-export const HUB_MOTION_EASING = "cubic-bezier(0.22, 0.7, 0.18, 1)"
+/** Balanced curve: no abrupt launch, with a soft settled finish. */
+export const HUB_MOTION_EASING = "cubic-bezier(0.4, 0, 0.2, 1)"
 
 /**
- * Height + opacity collapse retained for small nested accordions. Overview scene
- * changes use stable mounts and compositor motion instead.
+ * Height + opacity collapse used across hub expand/collapse and accordions.
+ * Prefer this over mount/unmount snaps so exit motion can play.
  */
 export function HubCollapse({
   open,
@@ -49,7 +50,10 @@ export function HubCollapse({
   )
 }
 
-/** Scene-local presence; WeeklyHero owns the shared entrance choreography. */
+/**
+ * Like HubCollapse, but unmounts children after the exit morph so heavy
+ * panels (WebGL pips, charts) are not kept alive on the overview.
+ */
 export function HubPresence({
   open,
   children,
@@ -61,15 +65,34 @@ export function HubPresence({
   className?: string
   durationMs?: number
 }) {
-  if (!open) return null
+  const [mounted, setMounted] = useState(open)
+  const [visible, setVisible] = useState(open)
+
+  useLayoutEffect(() => {
+    if (open) {
+      let enterFrame = 0
+      const mountFrame = requestAnimationFrame(() => {
+        setMounted(true)
+        enterFrame = requestAnimationFrame(() => setVisible(true))
+      })
+      return () => {
+        cancelAnimationFrame(mountFrame)
+        cancelAnimationFrame(enterFrame)
+      }
+    }
+    const exitFrame = requestAnimationFrame(() => setVisible(false))
+    const t = window.setTimeout(() => setMounted(false), durationMs + 40)
+    return () => {
+      cancelAnimationFrame(exitFrame)
+      clearTimeout(t)
+    }
+  }, [open, durationMs])
+
+  if (!mounted) return null
 
   return (
-    <div
-      data-hub-scene-part=""
-      className={className}
-      style={{ "--hub-part-duration": `${durationMs}ms` } as React.CSSProperties}
-    >
+    <HubCollapse open={visible} durationMs={durationMs} className={className}>
       {children}
-    </div>
+    </HubCollapse>
   )
 }

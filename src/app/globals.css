@@ -1047,162 +1047,8 @@ html {
    SLEEK ANIMATIONS
    ═══════════════════════════════════════════════════════════ */
 
-/* Scene entrances settle on the element's real resting styles. `backwards` applies
-   the opening pose during a stagger delay without retaining a filled WebKit layer. */
-@keyframes hub-scene-part-enter {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 18px, 0) scale(0.985);
-  }
-  72% { opacity: 1; }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes hub-scene-part-return {
-  from {
-    opacity: 0;
-    transform: translate3d(0, -12px, 0) scale(0.99);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes hub-ring-focus-enter {
-  from {
-    opacity: 0.62;
-    translate: var(--hub-ring-focus-shift, 0) 8px;
-    scale: 0.9;
-  }
-  68% {
-    opacity: 1;
-    scale: 1.035;
-  }
-  to {
-    opacity: 1;
-    translate: none;
-    scale: none;
-  }
-}
-
-@keyframes hub-ring-return-enter {
-  from {
-    opacity: 0.72;
-    translate: var(--hub-ring-return-shift, 0) -4px;
-    scale: 1.035;
-  }
-  to {
-    opacity: 1;
-    translate: none;
-    scale: none;
-  }
-}
-
-@keyframes hub-focus-readout-left {
-  from { opacity: 0; transform: translate3d(14px, 5px, 0); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes hub-focus-readout-right {
-  from { opacity: 0; transform: translate3d(-14px, 5px, 0); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes hub-protocol-focus-enter {
-  from { opacity: 0.55; transform: translate3d(0, 48px, 0) scale(0.94); }
-  to { opacity: 1; transform: none; }
-}
-
-.hub-scene > [data-hub-scene-part] {
-  animation: hub-scene-part-enter var(--hub-part-duration, 860ms)
-    cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
-  backface-visibility: hidden;
-}
-
-.hub-scene[data-hub-scene-return] > [data-hub-scene-part] {
-  animation-name: hub-scene-part-return;
-}
-
-.hub-scene > [data-hub-scene-part]:nth-child(1) { animation-delay: 40ms; }
-.hub-scene > [data-hub-scene-part]:nth-child(2) { animation-delay: 130ms; }
-.hub-scene > [data-hub-scene-part]:nth-child(3) { animation-delay: 220ms; }
-.hub-scene > [data-hub-scene-part]:nth-child(4) { animation-delay: 310ms; }
-.hub-scene > [data-hub-scene-part]:nth-child(5) { animation-delay: 400ms; }
-.hub-scene > [data-hub-scene-part]:nth-child(n + 6) { animation-delay: 490ms; }
-
-[data-hub-panel-content] > :first-child > * {
-  animation: hub-scene-part-enter 780ms cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
-}
-
-[data-hub-panel-content] > :first-child > *:nth-child(1) { animation-delay: 190ms; }
-[data-hub-panel-content] > :first-child > *:nth-child(2) { animation-delay: 280ms; }
-[data-hub-panel-content] > :first-child > *:nth-child(3) { animation-delay: 370ms; }
-[data-hub-panel-content] > :first-child > *:nth-child(4) { animation-delay: 460ms; }
-[data-hub-panel-content] > :first-child > *:nth-child(5) { animation-delay: 550ms; }
-[data-hub-panel-content] > :first-child > *:nth-child(n + 6) { animation-delay: 640ms; }
-
-[data-hub-steps-panel="steps"] [data-hub-motion-group],
-[data-hub-steps-panel="vitals"] [data-hub-motion-group] {
-  animation: hub-scene-part-enter 820ms cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
-}
-
-[data-hub-motion-group="readiness"] { animation-delay: 150ms !important; }
-[data-hub-motion-group="steps-shell"] { animation-delay: 180ms !important; }
-[data-hub-motion-group="steps-summary"] { animation-delay: 290ms !important; }
-[data-hub-motion-group="steps-chart"] { animation-delay: 390ms !important; }
-[data-hub-motion-group="steps-detail"] { animation-delay: 500ms !important; }
-
-[data-hub-motion-group][aria-hidden="true"] {
-  animation: none !important;
-}
-
-.hub-data-reveal {
-  animation: hub-scene-part-enter 720ms cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
-}
-
-[data-hub-ring="calories"] {
-  --hub-ring-focus-shift: -33.333cqw;
-  --hub-ring-return-shift: 33.333cqw;
-}
-
-[data-hub-ring="sleep"] {
-  --hub-ring-focus-shift: 33.333cqw;
-  --hub-ring-return-shift: -33.333cqw;
-}
-
-[data-hub-ring-active] {
-  animation: hub-ring-focus-enter 980ms cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
-}
-
-[data-hub-ring-returning] {
-  animation: hub-ring-return-enter 940ms cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
-}
-
-[data-hub-focus-readout="left"] {
-  animation: hub-focus-readout-left 760ms cubic-bezier(0.22, 0.7, 0.18, 1) 360ms backwards;
-}
-
-[data-hub-focus-readout="right"] {
-  animation: hub-focus-readout-right 760ms cubic-bezier(0.22, 0.7, 0.18, 1) 440ms backwards;
-}
-
-[data-hub-protocol-focus] {
-  animation: hub-protocol-focus-enter 980ms cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
-}
-
-[data-hub-focus-glyph] {
-  animation: hub-ring-focus-enter 920ms cubic-bezier(0.22, 0.7, 0.18, 1) 80ms backwards;
-}
-
-[data-hub-ring-active] .animate-ring-pop,
-[data-hub-ring-returning] .animate-ring-pop {
-  animation: none;
-}
-
+/* Transform-only entrances: avoid opacity in keyframes + animation-fill-mode: both,
+   which leaves content invisible on iOS Safari if the animation never completes. */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -2423,6 +2269,10 @@ html {
 /* Installed iOS WebKit has a single rendering thread for these live layout
    morphs. Keep cold-launch geometry stable, remove large backdrop readbacks,
    and shorten layout-bound phases without changing browser/desktop motion. */
+html[data-ios-standalone] {
+  --hub-collapse-duration: 480ms;
+}
+
 html[data-ios-standalone] .glass-panel,
 html[data-ios-standalone] [data-slot="dialog-content"][data-motion-profile="planner"],
 html[data-ios-standalone] .dialog-spatial-overlay--planner {
@@ -2432,6 +2282,10 @@ html[data-ios-standalone] .dialog-spatial-overlay--planner {
 
 html[data-ios-standalone] [data-hub-collapse] > div {
   contain: paint;
+}
+
+html[data-ios-standalone] [data-steps-motion] {
+  transition-duration: 360ms !important;
 }
 
 html[data-ios-standalone] [data-steps-activity] .animate-pulse {
@@ -2450,27 +2304,6 @@ html[data-ios-standalone]
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hub-scene > [data-hub-scene-part],
-  [data-hub-panel-content] > :first-child > *,
-  [data-hub-steps-panel] [data-hub-motion-group],
-  [data-hub-ring-active],
-  [data-hub-ring-returning],
-  [data-hub-focus-readout],
-  [data-hub-protocol-focus],
-  [data-hub-focus-glyph] {
-    opacity: 1;
-    translate: 0 0;
-    scale: 1;
-    transform: none;
-    animation: none !important;
-  }
-
-  .hub-data-reveal {
-    opacity: 1;
-    transform: none;
-    animation: none !important;
-  }
-
   [data-hub-collapse] {
     transition-duration: 0ms !important;
   }

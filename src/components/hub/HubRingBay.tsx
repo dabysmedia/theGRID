@@ -17,14 +17,12 @@ const IDLE_LEFT: Record<HubRingId, string> = {
  */
 export function HubRingBay({
   expanded,
-  returningFrom = null,
   calories,
   steps,
   sleep,
   className,
 }: {
   expanded: HubRingId | null
-  returningFrom?: HubRingId | null
   calories: React.ReactNode
   steps: React.ReactNode
   sleep: React.ReactNode
@@ -34,14 +32,13 @@ export function HubRingBay({
 
   return (
     <div
-      data-hub-ring-bay=""
       className={cn(
         "relative px-0.5 py-0.5 sm:px-1 sm:py-1",
         active && "z-20",
         className,
       )}
     >
-      <div className="relative z-10 h-[calc(var(--hub-ring-size)+3rem)] [container-type:inline-size]">
+      <div className="relative z-10 h-[calc(var(--hub-ring-size)+3rem)]">
         {(
           [
             { id: "calories" as const, node: calories },
@@ -54,11 +51,8 @@ export function HubRingBay({
           return (
             <div
               key={id}
-              data-hub-ring={id}
-              data-hub-ring-active={isActive ? "" : undefined}
-              data-hub-ring-returning={returningFrom === id ? "" : undefined}
               className={cn(
-                "absolute top-0 -translate-x-1/2 motion-reduce:transition-none",
+                "absolute top-0 -translate-x-1/2 transition-[left,opacity,transform] duration-[900ms] ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none",
                 active ? "left-1/2" : IDLE_LEFT[id],
                 isActive && "z-30",
                 hide && "pointer-events-none scale-90 opacity-0",
