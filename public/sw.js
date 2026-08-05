@@ -1,50 +1,23 @@
-const CACHE_NAME = "thegrid-v7"
+const LEGACY_CACHE_PREFIX = "thegrid-"
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll([
-        "/",
-        "/manifest.json",
-        "/icons/icon.svg",
-        "/icons/icon-192.png",
-        "/icons/icon-512.png",
-        "/apple-touch-icon.png",
-      ])
-    )
-  )
-  self.skipWaiting()
+  // THEGRID requires live App Router and API responses. This worker exists for
+  // web push only; activate immediately so it can remove the legacy page cache.
+  event.waitUntil(self.skipWaiting())
 })
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((names) =>
-      Promise.all(
-        names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))
+    caches
+      .keys()
+      .then((names) =>
+        Promise.all(
+          names
+            .filter((name) => name.startsWith(LEGACY_CACHE_PREFIX))
+            .map((name) => caches.delete(name))
+        )
       )
-    )
-  )
-  self.clients.claim()
-})
-
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return
-
-  const url = new URL(event.request.url)
-  // Never cache API routes — stale dashboard JSON on mobile / PWA was showing zeros.
-  if (url.pathname.startsWith("/api/")) {
-    event.respondWith(fetch(event.request))
-    return
-  }
-
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const clone = response.clone()
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
-        return response
-      })
-      .catch(() => caches.match(event.request))
+      .then(() => self.clients.claim())
   )
 })
 
