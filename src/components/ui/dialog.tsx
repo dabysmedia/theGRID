@@ -84,41 +84,21 @@ function DialogContent({
   const layer = priority === "high" ? "z-[130]" : "z-[110]"
   const motionFrame = React.useRef(0)
   const motionNode = React.useRef<HTMLDivElement | null>(null)
-  const motionTargetCenter = React.useRef<{ x: number; y: number } | null>(null)
   const setMotionGeometry = React.useCallback(
-    (node: HTMLDivElement, captureTargetCenter = false) => {
+    (node: HTMLDivElement) => {
       if (!motionOrigin || typeof window === "undefined") return
 
-      const targetWidth = Math.max(1, node.offsetWidth)
-      const targetHeight = Math.max(1, node.offsetHeight)
+      const targetWidth = node.offsetWidth
+      const targetHeight = node.offsetHeight
       const sourceCenterX = motionOrigin.left + motionOrigin.width / 2
       const sourceCenterY = motionOrigin.top + motionOrigin.height / 2
-      let targetCenterX = window.innerWidth / 2
-      let targetCenterY = window.innerHeight / 2
-
-      // A cold installed-iOS launch can briefly disagree about innerHeight,
-      // 100vh, and the fixed containing block. Planner also grows when its
-      // first data requests resolve. Measure the actual resting popup instead
-      // of assuming the CSS-safe-area center equals window.innerHeight / 2.
-      if (motionProfile === "planner") {
-        if (captureTargetCenter || !motionTargetCenter.current) {
-          const targetRect = node.getBoundingClientRect()
-          motionTargetCenter.current = {
-            x: targetRect.left + targetRect.width / 2,
-            y: targetRect.top + targetRect.height / 2,
-          }
-        }
-        targetCenterX = motionTargetCenter.current.x
-        targetCenterY = motionTargetCenter.current.y
-      }
-
       node.style.setProperty(
         "--dialog-motion-x",
-        `${sourceCenterX - targetCenterX}px`,
+        `${sourceCenterX - window.innerWidth / 2}px`,
       )
       node.style.setProperty(
         "--dialog-motion-y",
-        `${sourceCenterY - targetCenterY}px`,
+        `${sourceCenterY - window.innerHeight / 2}px`,
       )
       node.style.setProperty(
         "--dialog-motion-scale-x",
@@ -129,7 +109,7 @@ function DialogContent({
         String(Math.max(0.04, Math.min(0.98, motionOrigin.height / targetHeight))),
       )
     },
-    [motionOrigin, motionProfile],
+    [motionOrigin],
   )
   const setMotionNode = React.useCallback(
     (node: HTMLDivElement | null) => {
@@ -138,22 +118,12 @@ function DialogContent({
       if (!node || !motionOrigin) return
 
       node.removeAttribute("data-motion-ready")
-      setMotionGeometry(node, true)
+      setMotionGeometry(node)
       motionFrame.current = requestAnimationFrame(() => {
-        if (motionProfile === "planner") {
-          // Let WebKit resolve the portal, safe-area height, and flex content
-          // before freezing first-open geometry and starting the compositor
-          // animation. Water's proven single-frame path stays unchanged.
-          motionFrame.current = requestAnimationFrame(() => {
-            setMotionGeometry(node, true)
-            node.setAttribute("data-motion-ready", "")
-          })
-          return
-        }
         node.setAttribute("data-motion-ready", "")
       })
     },
-    [motionOrigin, motionProfile, setMotionGeometry],
+    [motionOrigin, setMotionGeometry],
   )
 
   React.useLayoutEffect(() => {

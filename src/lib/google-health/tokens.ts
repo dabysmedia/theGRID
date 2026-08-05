@@ -6,7 +6,6 @@ import {
   GOOGLE_TOKEN_URL,
   GOOGLE_USERINFO_URL,
 } from "@/lib/google-health/config"
-import { googleFetch } from "@/lib/google-health/fetch"
 
 export type TokenBundle = {
   accessToken: string
@@ -28,7 +27,7 @@ export async function exchangeAuthorizationCode(input: {
     grant_type: "authorization_code",
   })
 
-  const res = await googleFetch(GOOGLE_TOKEN_URL, {
+  const res = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
@@ -52,7 +51,7 @@ export async function exchangeAuthorizationCode(input: {
 
   let googleAccount: string | null = null
   try {
-    const ui = await googleFetch(GOOGLE_USERINFO_URL, {
+    const ui = await fetch(GOOGLE_USERINFO_URL, {
       headers: { Authorization: `Bearer ${data.access_token}` },
     })
     if (ui.ok) {
@@ -80,7 +79,7 @@ async function refreshAccessToken(refreshToken: string): Promise<TokenBundle> {
     refresh_token: refreshToken,
     grant_type: "refresh_token",
   })
-  const res = await googleFetch(GOOGLE_TOKEN_URL, {
+  const res = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
@@ -129,7 +128,7 @@ export async function getValidAccessToken(userId: string): Promise<string> {
 
 export async function revokeGoogleToken(token: string): Promise<void> {
   try {
-    await googleFetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, {
+    await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     })

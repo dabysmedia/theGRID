@@ -19,10 +19,7 @@ const REVEAL_SELECTOR = [
 export function MotionOrchestrator({ children }: { children: ReactNode }) {
   useEffect(() => {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
-    const standalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      document.documentElement.hasAttribute("data-ios-standalone")
-    if (standalone || reducedMotion.matches || !("IntersectionObserver" in window)) {
+    if (reducedMotion.matches || !("IntersectionObserver" in window)) {
       document.querySelectorAll(REVEAL_SELECTOR).forEach((element) => {
         element.setAttribute("data-motion-visible", "")
       })

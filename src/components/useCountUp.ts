@@ -20,18 +20,8 @@ export function useCountUp(
     let frame = 0
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
     const coarsePointer = window.matchMedia("(pointer: coarse)").matches
-    const navigatorWithStandalone = window.navigator as Navigator & {
-      standalone?: boolean
-    }
-    const iosDevice =
-      /iPad|iPhone|iPod/.test(window.navigator.platform) ||
-      (window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1)
-    const iosStandalone = iosDevice && Boolean(navigatorWithStandalone.standalone)
 
-    // A JS-driven count-up commits React state every frame. Installed iOS apps
-    // share that main thread with layout/paint, so prefer the final value while
-    // larger hub transitions are running.
-    if (value == null || !enabled || reduceMotion || iosStandalone) {
+    if (value == null || !enabled || reduceMotion) {
       frame = requestAnimationFrame(() => setDisplayValue(value))
       return () => cancelAnimationFrame(frame)
     }

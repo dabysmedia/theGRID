@@ -16,7 +16,7 @@ import {
   RefreshCw,
   Syringe,
 } from "lucide-react"
-import { HubCollapse, HUB_SECTION_MOTION_MS } from "@/components/hub/HubMotion"
+import { HubCollapse } from "@/components/hub/HubMotion"
 import {
   ResponsiveContainer,
   AreaChart,
@@ -447,13 +447,10 @@ export function HubVitalsExpand({
   readiness,
   fallbackHrvMs,
   fallbackRhr,
-  deferHeavyContent = false,
 }: {
   readiness?: number | null
   fallbackHrvMs?: number | null
   fallbackRhr?: number | null
-  /** Hold data-heavy charts until the surrounding iOS PWA layout has settled. */
-  deferHeavyContent?: boolean
 }) {
   const { activeDate } = useActiveDate()
   const { user } = useUser()
@@ -467,16 +464,6 @@ export function HubVitalsExpand({
   const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading")
   const [loadReloadKey, setLoadReloadKey] = useState(0)
   const [completedSessions, setCompletedSessions] = useState<WorkoutSessionLike[]>([])
-  const [heavyContentReady, setHeavyContentReady] = useState(!deferHeavyContent)
-
-  useEffect(() => {
-    if (!deferHeavyContent) return
-    const timer = window.setTimeout(
-      () => setHeavyContentReady(true),
-      HUB_SECTION_MOTION_MS + 80,
-    )
-    return () => window.clearTimeout(timer)
-  }, [deferHeavyContent])
 
   const trainingPeriod = useMemo(
     () => getTrackingPeriod(activeDate, {
@@ -527,7 +514,6 @@ export function HubVitalsExpand({
   )
 
   useEffect(() => {
-    if (!heavyContentReady) return
     let cancelled = false
     setStatus("loading")
     void (async () => {
@@ -551,10 +537,9 @@ export function HubVitalsExpand({
     return () => {
       cancelled = true
     }
-  }, [activeDate, heavyContentReady, reloadKey])
+  }, [activeDate, reloadKey])
 
   useEffect(() => {
-    if (!heavyContentReady) return
     let cancelled = false
     setLoadStatus("loading")
     void apiFetch(`/api/workout-sessions?status=completed&_=${Date.now()}`, {
@@ -574,7 +559,7 @@ export function HubVitalsExpand({
     return () => {
       cancelled = true
     }
-  }, [activeDate, heavyContentReady, loadReloadKey])
+  }, [activeDate, loadReloadKey])
 
   async function syncNow() {
     setSyncing(true)

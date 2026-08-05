@@ -1,29 +1,58 @@
-const LEGACY_CACHE_PREFIX = "thegrid-"
+const CACHE_NAME = "thegrid-v7"
 
 self.addEventListener("install", (event) => {
-  // THEGRID requires live API data, so this worker exists for web push rather
-  // than offline page caching. Activate the cleanup worker immediately.
-  event.waitUntil(self.skipWaiting())
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll([
+        "/",
+        "/manifest.json",
+        "/icons/icon.svg",
+        "/icons/icon-192.png",
+        "/icons/icon-512.png",
+        "/apple-touch-icon.png",
+      ])
+    )
+  )
+  self.skipWaiting()
 })
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((names) =>
-        Promise.all(
-          names
-            .filter((name) => name.startsWith(LEGACY_CACHE_PREFIX))
-            .map((name) => caches.delete(name))
-        )
+    caches.keys().then((names) =>
+      Promise.all(
+        names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))
       )
-      .then(() => self.clients.claim())
+    )
+  )
+  self.clients.claim()
+})
+
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return
+
+  const url = new URL(event.request.url)
+  // Never cache API routes — stale dashboard JSON on mobile / PWA was showing zeros.
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(fetch(event.request))
+    return
+  }
+
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        const clone = response.clone()
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
+        return response
+      })
+      .catch(() => caches.match(event.request))
   )
 })
 
-// Web Push
+// ─── Web Push ─────────────────────────────────────────────────────────────
 // iOS 16.4+ delivers pushes to PWAs installed to the home screen. Every payload
-// must result in a visible notification or iOS can revoke permission.
+// MUST result in a visible notification or iOS revokes permission, so we always
+// call showNotification() inside event.waitUntil.
+
 self.addEventListener("push", (event) => {
   let payload = {}
   if (event.data) {
@@ -76,7 +105,8 @@ self.addEventListener("notificationclick", (event) => {
 })
 
 // Some browsers fire `pushsubscriptionchange` when the subscription is rotated.
-// The client will create a fresh subscription on its next successful open.
+// We can't get hold of the active user here, so we just clear the subscription
+// client-side. The PushNotificationManager will re-subscribe on next open.
 self.addEventListener("pushsubscriptionchange", (event) => {
   event.waitUntil(
     self.registration.pushManager

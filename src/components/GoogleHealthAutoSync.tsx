@@ -13,24 +13,17 @@ type GoogleHealthStatus = {
   lastSyncAt?: string | null
 }
 
-function isInstalledPwa(): boolean {
-  if (window.matchMedia("(display-mode: standalone)").matches) return true
-  const standaloneNavigator = window.navigator as Navigator & { standalone?: boolean }
-  return Boolean(standaloneNavigator.standalone)
-}
-
 /**
- * Keeps Google Health current while the site is used in a browser. Production
- * also has a server-side 15-minute scheduler. Installed PWAs deliberately rely
- * on that scheduler (plus manual sync) so a cold launch never competes with a
- * multi-metric Google import and SQLite writes.
+ * Keeps Google Health current when the installed web app is opened or resumed.
+ * The server performs the real sync; this client only provides an app-lifecycle
+ * trigger and tells mounted data views to refresh after it completes.
  */
 export function GoogleHealthAutoSync() {
   const { user, loading } = useUser()
   const syncingRef = useRef(false)
 
   useEffect(() => {
-    if (loading || !user || isInstalledPwa()) return
+    if (loading || !user) return
 
     const userId = user.id
     const controller = new AbortController()
