@@ -1,6 +1,7 @@
 import "server-only"
 
 import { GOOGLE_HEALTH_API } from "@/lib/google-health/config"
+import { googleFetch } from "@/lib/google-health/fetch"
 import { getValidAccessToken } from "@/lib/google-health/tokens"
 import { optionalNonNegativeInt } from "@/lib/google-health/normalize"
 import { getStepsDayRange } from "@/lib/steps-day"
@@ -38,7 +39,7 @@ async function healthFetch(
   init?: RequestInit,
 ): Promise<Response> {
   const accessToken = await getValidAccessToken(userId)
-  return fetch(`${GOOGLE_HEALTH_API}${path}`, {
+  return googleFetch(`${GOOGLE_HEALTH_API}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${accessToken}`,
