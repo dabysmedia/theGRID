@@ -47,8 +47,9 @@ export function WeekWorkoutGoalRing({
   const cx = vb / 2
   const cy = vb / 2
   const circumference = 2 * Math.PI * r
-  const pct = capped / goal
+  const pct = goal > 0 ? capped / goal : 0
   const dash = circumference * pct
+  const offset = circumference - dash
 
   const boxClass =
     size === "lg"
@@ -98,18 +99,24 @@ export function WeekWorkoutGoalRing({
           strokeWidth={stroke}
           className="text-muted-foreground/25"
         />
-        {!met && (
-          <circle
-            cx={cx}
-            cy={cy}
-            r={r}
-            fill="none"
-            stroke={`url(#${arcGradId})`}
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={`${dash} ${circumference}`}
-          />
-        )}
+        <circle
+          key={`${count}-${goal}-${size}`}
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke={`url(#${arcGradId})`}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          className="hub-progress-ring-arc motion-reduce:animate-none"
+          style={{
+            // @ts-expect-error CSS custom properties drive the shared ring keyframe.
+            "--ring-circumference": circumference,
+            "--ring-offset": offset,
+          }}
+        />
       </svg>
       {showCenter && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">

@@ -5,7 +5,7 @@ import { MeshHeartSvg } from "@/components/hub/MeshHeartSvg"
 import { useQuickLog } from "@/context/QuickLogContext"
 import { cn } from "@/lib/utils"
 import { useCountUp } from "@/components/useCountUp"
-import type { CSSProperties } from "react"
+import { useHubMeasuredMorph } from "@/components/hub/HubMotion"
 import {
   READINESS_BAND_ACCENT,
   READINESS_BAND_LABEL,
@@ -41,6 +41,143 @@ function formatHour(hour: number): string {
 
 function formatHourLong(hour: number): string {
   return formatHour(hour).replace("a", "am").replace("p", "pm")
+}
+
+function AnimatedHrvValue({
+  value,
+  enabled,
+  fallback,
+}: {
+  value: number | null
+  enabled: boolean
+  fallback: string
+}) {
+  const animated = useCountUp(value, { durationMs: 900, enabled })
+  return <>{animated != null ? Math.round(animated) : fallback}</>
+}
+
+function StepActivityBar({
+  value,
+  index,
+  isToday,
+  hitGoal,
+  expanded,
+  useScaledBars,
+  heightPx,
+  heightPct,
+}: {
+  value: number
+  index: number
+  isToday: boolean
+  hitGoal: boolean
+  expanded: boolean
+  useScaledBars: boolean
+  heightPx: number
+  heightPct: number
+}) {
+  const barRef = useHubMeasuredMorph<HTMLDivElement>(
+    `${expanded ? "expanded" : "compact"}-${heightPx}-${heightPct}`,
+    {
+      durationMs: 720,
+      delayMs: 45 + index * 58,
+      scale: true,
+    },
+  )
+
+  return (
+    <>
+      {expanded ? (
+        <div
+          className="hub-step-value-enter pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 text-center motion-reduce:animate-none"
+          style={{
+            bottom: useScaledBars ? `calc(${heightPct}% + 4px)` : heightPx + 10,
+            minHeight: VALUE_LABEL_SLOT_PX,
+            animationDelay: `${180 + index * 48}ms`,
+          }}
+        >
+          <span
+            className={cn(
+              "block text-[9px] font-semibold tabular-nums leading-none tracking-tight sm:text-[10px]",
+              isToday
+                ? "text-emerald-200"
+                : hitGoal
+                  ? "text-emerald-300/80"
+                  : "text-muted-foreground/70",
+            )}
+            style={isToday ? { textShadow: "0 0 10px #22c55e66" } : undefined}
+          >
+            {formatBarSteps(value)}
+          </span>
+        </div>
+      ) : null}
+
+      <div
+        ref={barRef}
+        className="absolute bottom-0 will-change-transform"
+        style={{
+          width: "72%",
+          maxWidth: expanded ? 36 : 32,
+          height: useScaledBars ? `${heightPct}%` : heightPx,
+          transformOrigin: "bottom center",
+        }}
+      >
+        <div
+          className="absolute inset-0 origin-bottom overflow-hidden rounded-t-[4px] rounded-b-[1px] border border-emerald-200/10"
+          style={{
+            background: isToday
+              ? "linear-gradient(180deg, #86efac 0%, #22c55e 38%, #15803d 100%)"
+              : "linear-gradient(180deg, #4ade80aa 0%, #16a34a88 52%, #14532d77 100%)",
+            boxShadow: isToday
+              ? "inset 0 1px 0 #dcfce7aa, 0 0 14px #22c55e55"
+              : "inset 0 1px 0 #bbf7d044, 0 0 7px #22c55e22",
+          }}
+        >
+          <div
+            className="absolute inset-x-0 top-0 h-1/3 opacity-35"
+            style={{ background: "linear-gradient(180deg, #ffffff55, transparent)" }}
+          />
+          {isToday ? (
+            <div
+              className="absolute inset-0 animate-pulse opacity-25 motion-reduce:animate-none"
+              style={{
+                background:
+                  "linear-gradient(105deg, transparent 35%, #ffffff66 50%, transparent 65%)",
+              }}
+            />
+          ) : null}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function StepsGoalLine({
+  bottom,
+  motionKey,
+}: {
+  bottom: string | number
+  motionKey: string
+}) {
+  const lineRef = useHubMeasuredMorph<HTMLDivElement>(motionKey, {
+    durationMs: 640,
+  })
+
+  return (
+    <div
+      ref={lineRef}
+      className="pointer-events-none absolute inset-x-0 z-20 h-px will-change-transform"
+      style={{ bottom }}
+      aria-hidden
+    >
+      <div
+        className="mx-0.5 h-0 border-t-[1.5px] border-dashed border-amber-300/90"
+        style={{ boxShadow: "0 0 8px #fbbf2466" }}
+      />
+      <span className="absolute -top-3 right-0 text-[8px] font-semibold uppercase tracking-[0.14em] text-amber-300/85">
+        Goal
+      </span>
+    </div>
+  )
 }
 
 type Props = {
@@ -121,10 +258,6 @@ export function StepsActivityBars({
       : null
   const readinessLabel = readinessScore != null ? String(readinessScore) : "—"
   const highReadinessPulse = band === "peak" || band === "high"
-  const animatedHrv = useCountUp(
-    hrvMs != null && Number.isFinite(hrvMs) ? Math.round(hrvMs) : null,
-    { durationMs: 1100, enabled: !hideReadiness },
-  )
   const hrvLabel =
     hrvMs != null && Number.isFinite(hrvMs) ? String(Math.round(hrvMs)) : "—"
   const goalLineBottomPx =
@@ -154,10 +287,23 @@ export function StepsActivityBars({
   const stepsInteractive = Boolean(onStepsClick) && !hideSteps
   /** Chart surface expands when collapsed; collapse via ring / back / title. */
   const chartExpandsOnTap = stepsInteractive && !expanded
+  const sceneKey = hideReadiness
+    ? "steps"
+    : hideSteps
+      ? "vitals"
+      : expanded
+        ? "steps"
+        : "overview"
+  const panelRef = useHubMeasuredMorph<HTMLDivElement>(sceneKey, {
+    durationMs: 760,
+  })
 
   return (
     <div
-      className={cn("relative -mx-4 lg:-mx-5", className)}
+      ref={panelRef}
+      data-steps-activity=""
+      data-hub-steps-scene={sceneKey}
+      className={cn("relative -mx-4 will-change-transform lg:-mx-5", className)}
     >
       {/* Floor grid behind bars — no local steel wash (card wash is continuous) */}
       <div
@@ -176,22 +322,13 @@ export function StepsActivityBars({
       />
 
       {/* Readiness — text inset; gradient full-bleed to card edges */}
-      <div
-        className={cn(
-          "grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-          hideReadiness
-            ? "pointer-events-none grid-rows-[0fr] opacity-0"
-            : "grid-rows-[1fr] opacity-100",
-        )}
-        aria-hidden={hideReadiness}
-      >
-      <div className="min-h-0 overflow-hidden">
+      {!hideReadiness ? (
+      <div className="hub-readiness-enter motion-reduce:animate-none">
       <button
         type="button"
         onClick={onReadinessClick}
         aria-label={readinessSelected ? "Collapse vitals" : "Expand vitals"}
         aria-expanded={readinessSelected}
-        tabIndex={hideReadiness ? -1 : undefined}
         className={cn(
           "relative z-10 block w-full text-left transition-colors hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25",
           readinessSelected && "bg-muted/10",
@@ -236,7 +373,13 @@ export function StepsActivityBars({
                   textShadow: `0 0 12px ${accent}66`,
                 }}
               >
-                {animatedHrv != null ? Math.round(animatedHrv) : hrvLabel}
+                <AnimatedHrvValue
+                  value={
+                    hrvMs != null && Number.isFinite(hrvMs) ? Math.round(hrvMs) : null
+                  }
+                  enabled
+                  fallback={hrvLabel}
+                />
               </span>
               <span className="mt-px text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/65">
                 ms
@@ -303,12 +446,9 @@ export function StepsActivityBars({
           {readinessScore != null ? (
             <>
               <div
-                className={cn(
-                  "absolute inset-0 origin-left",
-                  !hideReadiness &&
-                    "animate-readiness-bar motion-reduce:animate-none",
-                )}
+                className="hub-readiness-fill absolute inset-y-0 left-0 origin-left motion-reduce:animate-none"
                 style={{
+                  width: `${readinessScore}%`,
                   background: `linear-gradient(90deg, ${accent}55 0%, ${accent} 42%, ${accent}cc 100%)`,
                   boxShadow: band
                     ? `inset 0 1px 0 #ffffff44, 0 0 10px ${accent}55`
@@ -323,19 +463,11 @@ export function StepsActivityBars({
               />
               {/* Soft score-position tick so /100 isn't only a number on the right */}
               <div
-                className={cn(
-                  "pointer-events-none absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2",
-                  !hideReadiness &&
-                    "animate-readiness-marker motion-reduce:animate-none",
-                )}
-                style={
-                  {
-                    left: `${readinessScore}%`,
-                    "--readiness-position": `${readinessScore}%`,
-                  } as CSSProperties
-                }
+                className="hub-readiness-marker absolute inset-y-0 left-0 z-10 motion-reduce:animate-none"
+                style={{ width: `${readinessScore}%` }}
                 aria-hidden
               >
+                <div className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2">
                 <div
                   className="h-3 w-px rounded-full"
                   style={{
@@ -350,19 +482,20 @@ export function StepsActivityBars({
                     boxShadow: `0 0 8px ${accent}`,
                   }}
                 />
+                </div>
               </div>
             </>
           ) : null}
         </div>
       </button>
       </div>
-      </div>
+      ) : null}
 
       {/* Soft seam only — no opaque cut between readiness and steps */}
       {!hideSteps ? (
         <div
           className={cn(
-            "pointer-events-none bg-gradient-to-r from-transparent via-white/5 to-transparent transition-[height,opacity] duration-500",
+            "pointer-events-none bg-gradient-to-r from-transparent via-white/5 to-transparent",
             hideReadiness ? "h-0 opacity-0" : "h-px opacity-100",
           )}
           aria-hidden
@@ -373,7 +506,7 @@ export function StepsActivityBars({
       {!hideSteps ? (
       <div
         className={cn(
-          "relative z-10 px-4 pb-1 pt-2.5 transition-[padding] duration-500 ease-out lg:px-5",
+          "relative z-10 px-4 pb-1 pt-2.5 lg:px-5",
           expanded && "pb-3 pt-3",
           scaleToFit && !expanded && "max-lg:pt-1.5",
         )}
@@ -408,17 +541,8 @@ export function StepsActivityBars({
           </p>
         </div>
 
-        {/* Summary strip — grid-rows collapse so expand grows from the chart */}
-        <div
-          className={cn(
-            "grid transition-[grid-template-rows,opacity,margin] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-            expanded
-              ? "mb-3 grid-rows-[1fr] opacity-100"
-              : "pointer-events-none mb-0 grid-rows-[0fr] opacity-0",
-          )}
-          aria-hidden={!expanded}
-        >
-          <div className="min-h-0 overflow-hidden">
+        {expanded ? (
+        <div className="hub-step-detail-enter mb-3 motion-reduce:animate-none">
             <div className="grid grid-cols-4 gap-2">
               <div className="min-w-0">
                 <p className="type-hud-micro text-muted-foreground/55">Today</p>
@@ -454,8 +578,8 @@ export function StepsActivityBars({
                 ) : null}
               </div>
             </div>
-          </div>
         </div>
+        ) : null}
 
         <div
           className="pointer-events-none absolute inset-x-4 bottom-[2.15rem] h-px bg-gradient-to-r from-transparent via-white/8 to-transparent lg:inset-x-5"
@@ -485,27 +609,18 @@ export function StepsActivityBars({
           style={{ transformStyle: "preserve-3d" }}
         >
           <div
-            className="relative flex items-end justify-between gap-1 px-0.5 transition-[height] duration-500 ease-out motion-reduce:transition-none"
+            className="relative flex items-end justify-between gap-1 px-0.5"
             style={barAreaStyle}
           >
             {goalLineBottomPx != null || goalLineBottomPct != null ? (
-              <div
-                className="pointer-events-none absolute inset-x-0 z-20 transition-[bottom] duration-500 ease-out"
-                style={
+              <StepsGoalLine
+                bottom={
                   goalLineBottomPct != null
-                    ? { bottom: `${goalLineBottomPct}%` }
-                    : { bottom: goalLineBottomPx! }
+                    ? `${goalLineBottomPct}%`
+                    : goalLineBottomPx!
                 }
-                aria-hidden
-              >
-                <div
-                  className="mx-0.5 h-0 border-t-[1.5px] border-dashed border-amber-300/90"
-                  style={{ boxShadow: "0 0 8px #fbbf2466" }}
-                />
-                <span className="absolute -top-3 right-0 text-[8px] font-semibold uppercase tracking-[0.14em] text-amber-300/85">
-                  Goal
-                </span>
-              </div>
+                motionKey={`${sceneKey}-${goalLineBottomPct ?? goalLineBottomPx}`}
+              />
             ) : null}
 
             {values.map((val, i) => {
@@ -516,7 +631,6 @@ export function StepsActivityBars({
                 pct * barFillRatio * 100,
               )
               const isToday = i === todayIdx
-              const delay = 60 + i * 95
               const hitGoal = goalValue != null && val >= goalValue
 
               return (
@@ -525,80 +639,16 @@ export function StepsActivityBars({
                   className="relative flex min-w-0 flex-1 justify-center"
                   style={barAreaStyle}
                 >
-                  {/* Per-day step value — fades in as the chart grows */}
-                  <div
-                    className={cn(
-                      "pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 text-center transition-[opacity,transform] duration-500 ease-out motion-reduce:transition-none",
-                      expanded
-                        ? "translate-y-0 opacity-100"
-                        : "translate-y-1 opacity-0",
-                    )}
-                    style={{
-                      bottom: useScaledBars
-                        ? `calc(${heightPct}% + 4px)`
-                        : heightPx + (expanded ? 10 : 4),
-                      minHeight: VALUE_LABEL_SLOT_PX,
-                    }}
-                    aria-hidden={!expanded}
-                  >
-                    <span
-                      className={cn(
-                        "block text-[9px] font-semibold tabular-nums leading-none tracking-tight sm:text-[10px]",
-                        isToday
-                          ? "text-emerald-200"
-                          : hitGoal
-                            ? "text-emerald-300/80"
-                            : "text-muted-foreground/70",
-                      )}
-                      style={
-                        isToday
-                          ? { textShadow: "0 0 10px #22c55e66" }
-                          : undefined
-                      }
-                    >
-                      {formatBarSteps(val)}
-                    </span>
-                  </div>
-
-                  {/* Upright rectangular bars: height morph and entrance grow stay independent. */}
-                  <div
-                    className="absolute bottom-0 transition-[height,max-width] duration-500 ease-out motion-reduce:transition-none"
-                    style={{
-                      width: "72%",
-                      maxWidth: expanded ? 36 : 32,
-                      height: useScaledBars ? `${heightPct}%` : heightPx,
-                    }}
-                  >
-                    <div
-                      className="absolute inset-0 origin-bottom overflow-hidden rounded-t-[4px] rounded-b-[1px] border border-emerald-200/10 animate-bar-grow motion-reduce:animate-none"
-                      style={{
-                        transitionDelay: `${delay}ms`,
-                        background: isToday
-                          ? "linear-gradient(180deg, #86efac 0%, #22c55e 38%, #15803d 100%)"
-                          : "linear-gradient(180deg, #4ade80aa 0%, #16a34a88 52%, #14532d77 100%)",
-                        boxShadow: isToday
-                          ? "inset 0 1px 0 #dcfce7aa, 0 0 14px #22c55e55"
-                          : "inset 0 1px 0 #bbf7d044, 0 0 7px #22c55e22",
-                      }}
-                    >
-                      <div
-                        className="absolute inset-x-0 top-0 h-1/3 opacity-35"
-                        style={{
-                          background:
-                            "linear-gradient(180deg, #ffffff55, transparent)",
-                        }}
-                      />
-                      {isToday ? (
-                        <div
-                          className="absolute inset-0 animate-pulse opacity-25"
-                          style={{
-                            background:
-                              "linear-gradient(105deg, transparent 35%, #ffffff66 50%, transparent 65%)",
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                  </div>
+                  <StepActivityBar
+                    value={val}
+                    index={i}
+                    isToday={isToday}
+                    hitGoal={hitGoal}
+                    expanded={expanded}
+                    useScaledBars={useScaledBars}
+                    heightPx={heightPx}
+                    heightPct={heightPct}
+                  />
                 </div>
               )
             })}
@@ -624,16 +674,8 @@ export function StepsActivityBars({
           </div>
         </div>
 
-        <div
-          className={cn(
-            "grid transition-[grid-template-rows,opacity,margin] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-            expanded
-              ? "mt-3 grid-rows-[1fr] opacity-100"
-              : "pointer-events-none mt-0 grid-rows-[0fr] opacity-0",
-          )}
-          aria-hidden={!expanded}
-        >
-          <div className="min-h-0 overflow-hidden">
+        {expanded ? (
+        <div className="hub-step-detail-enter mt-3 motion-reduce:animate-none [animation-delay:280ms]">
             <div className="mb-3 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.035] px-3 pb-2.5 pt-3">
               <div className="mb-2 flex items-baseline justify-between gap-2">
                 <div>
@@ -663,14 +705,17 @@ export function StepsActivityBars({
                     >
                       <div
                         className={cn(
-                          "w-full rounded-t-sm transition-[height] duration-500",
+                          "hub-hour-bar-enter w-full origin-bottom rounded-t-sm motion-reduce:animate-none",
                           value > 0
                             ? "bg-gradient-to-t from-emerald-700 to-emerald-300 shadow-[0_0_6px_rgba(52,211,153,0.25)]"
                             : "h-px bg-white/10",
                         )}
                         style={
                           value > 0
-                            ? { height: `${Math.max(5, (value / hourlyMax) * 100)}%` }
+                            ? {
+                                height: `${Math.max(5, (value / hourlyMax) * 100)}%`,
+                                animationDelay: `${360 + index * 22}ms`,
+                              }
                             : undefined
                         }
                       />
@@ -711,8 +756,8 @@ export function StepsActivityBars({
               <Plus className="h-3.5 w-3.5" aria-hidden />
               Log steps
             </button>
-          </div>
         </div>
+        ) : null}
       </div>
       ) : null}
     </div>

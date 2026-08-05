@@ -1,6 +1,6 @@
 "use client"
 
-import { useLayoutEffect, useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import {
   Flame,
   Footprints,
@@ -20,7 +20,14 @@ import {
   type HubExpandedPanel,
 } from "@/components/hub/HubExpandPanels"
 import { HubSleepFocus } from "@/components/sleep/HubSleepFocus"
-import { HubCollapse, HubPresence, HUB_MOTION_MS, HUB_SECTION_MOTION_MS } from "@/components/hub/HubMotion"
+import {
+  HubPresence,
+  HUB_MOTION_MS,
+  HUB_SECTION_MOTION_MS,
+  readHubMotionRect,
+  type HubMotionRect,
+  useHubOriginMorph,
+} from "@/components/hub/HubMotion"
 import { HubRingBay } from "@/components/hub/HubRingBay"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { WeekWorkoutGoalRing } from "@/components/WeekWorkoutGoalRing"
@@ -200,6 +207,7 @@ function ProgressRing({
             className="text-muted/25"
           />
           <circle
+            key={`${label}-${offset.toFixed(2)}`}
             cx="44"
             cy="44"
             r={radius}
@@ -209,12 +217,12 @@ function ProgressRing({
             strokeLinecap="butt"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
+            className="hub-progress-ring-arc motion-reduce:animate-none"
             style={
               disabled
                 ? undefined
                 : {
                     filter: `drop-shadow(0 0 10px ${color}55)`,
-                    animation: `draw-ring 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both`,
                     // @ts-expect-error CSS custom properties
                     "--ring-circumference": circumference,
                     "--ring-offset": offset,
@@ -358,10 +366,11 @@ function FadeSection({
   children: React.ReactNode
   className?: string
 }) {
+  if (!show) return null
   return (
-    <HubCollapse open={show} durationMs={HUB_SECTION_MOTION_MS} className={className}>
+    <div className={className}>
       {children}
-    </HubCollapse>
+    </div>
   )
 }
 
@@ -409,6 +418,39 @@ function FocusDialReadouts({
   )
 }
 
+type ProtocolMotionOrigin = {
+  panel: "peptides" | "workouts"
+  rect: HubMotionRect
+}
+
+function ProtocolGlyphMorph({
+  origin,
+  motionKey,
+  captureRef,
+  children,
+}: {
+  origin: HubMotionRect | null
+  motionKey: string
+  captureRef: { current: HTMLDivElement | null }
+  children: React.ReactNode
+}) {
+  const morphRef = useHubOriginMorph<HTMLDivElement>(origin, motionKey, {
+    durationMs: HUB_SECTION_MOTION_MS,
+  })
+
+  return (
+    <div
+      ref={(node) => {
+        morphRef.current = node
+        captureRef.current = node
+      }}
+      className="flex size-full items-center justify-center will-change-transform"
+    >
+      {children}
+    </div>
+  )
+}
+
 export function WeeklyHero({
   data,
   loading,
@@ -422,6 +464,11 @@ export function WeeklyHero({
   const { activeDate, isToday } = useActiveDate()
   const [viewMode, setViewMode] = useState<OverviewView>("today")
   const [expandedLocal, setExpandedLocal] = useState<HubExpandedPanel | null>(null)
+  const [protocolMotionOrigin, setProtocolMotionOrigin] =
+    useState<ProtocolMotionOrigin | null>(null)
+  const peptideRailGlyphRef = useRef<HTMLDivElement>(null)
+  const workoutRailGlyphRef = useRef<HTMLDivElement>(null)
+  const protocolFocusGlyphRef = useRef<HTMLDivElement>(null)
   const expanded = expandedProp !== undefined ? expandedProp : expandedLocal
   const setExpanded = (panel: HubExpandedPanel | null) => {
     onExpandedChange?.(panel)
@@ -429,7 +476,29 @@ export function WeeklyHero({
   }
 
   const toggleExpand = (panel: HubExpandedPanel) => {
-    setExpanded(expanded === panel ? null : panel)
+    const closing = expanded === panel
+    if (panel === "peptides" || panel === "workouts") {
+      const source = closing
+        ? protocolFocusGlyphRef.current
+        : panel === "peptides"
+          ? peptideRailGlyphRef.current
+          : workoutRailGlyphRef.current
+      const rect = readHubMotionRect(source)
+      setProtocolMotionOrigin(rect ? { panel, rect } : null)
+    } else {
+      setProtocolMotionOrigin(null)
+    }
+    setExpanded(closing ? null : panel)
+  }
+
+  const returnToOverview = () => {
+    if (expanded === "peptides" || expanded === "workouts") {
+      const rect = readHubMotionRect(protocolFocusGlyphRef.current)
+      setProtocolMotionOrigin(rect ? { panel: expanded, rect } : null)
+    } else {
+      setProtocolMotionOrigin(null)
+    }
+    setExpanded(null)
   }
 
   const refDate = parseLocalDate(activeDate)
@@ -441,6 +510,7 @@ export function WeeklyHero({
 
   // Collapse when the active day changes
   useLayoutEffect(() => {
+    setProtocolMotionOrigin(null)
     setExpanded(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset on date change
   }, [activeDate])
@@ -495,13 +565,6 @@ export function WeeklyHero({
     expanded == null || expanded === "steps" || expanded === "vitals"
   const showWeighIn = expanded == null || weightFocused
   const showProtocolRail = expanded == null
-  // A closing focus panel remains a flex item until HubPresence unmounts it.
-  // Cancel its mobile gap as it collapses so that final unmount is layout-neutral.
-  const returningOverviewGapClass =
-    fillViewport && expanded == null
-      ? "max-lg:-mt-[var(--hub-section-gap)]"
-      : undefined
-
   const peptideNext = peptideSummary?.nextInjection ?? null
   let peptideCue = "Log first shot"
   if (peptideNext) {
@@ -646,7 +709,7 @@ export function WeeklyHero({
           )}
           aria-hidden={expanded == null}
         >
-          <HubBackToOverview onBack={() => setExpanded(null)} />
+          <HubBackToOverview onBack={returnToOverview} />
         </div>
       </div>
 
@@ -771,14 +834,14 @@ export function WeeklyHero({
 
             <button
               type="button"
-              onClick={() => setExpanded(null)}
+              onClick={returnToOverview}
               aria-label={expanded === "peptides" ? "Collapse peptides" : "Collapse workouts"}
               aria-hidden={!protocolFocused}
               tabIndex={protocolFocused ? undefined : -1}
               className={cn(
                 // Top-align like HubRingBay rings (not items-center) so the dial
                 // sits under Overview with the same gap as calories/steps/sleep.
-                "absolute inset-x-0 top-0 z-20 grid h-[calc(var(--hub-ring-size)+3rem)] grid-cols-[1fr_var(--hub-ring-size)_1fr] items-start gap-2 px-1 transition-[opacity,transform] duration-[900ms] ease-[cubic-bezier(0.4,0,0.2,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/20 sm:px-2 lg:grid-cols-[1fr_124px_1fr]",
+                "absolute inset-x-0 top-0 z-20 grid h-[calc(var(--hub-ring-size)+3rem)] grid-cols-[1fr_var(--hub-ring-size)_1fr] items-start gap-2 px-1 transition-[opacity,transform] duration-[620ms] ease-[cubic-bezier(0.22,0.7,0.18,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/20 sm:px-2 lg:grid-cols-[1fr_124px_1fr]",
                 protocolFocused
                   ? "translate-y-0 scale-100 opacity-100"
                   : "pointer-events-none -translate-y-1 scale-[0.985] opacity-0",
@@ -815,22 +878,32 @@ export function WeeklyHero({
               </div>
 
               <div className="flex size-[var(--hub-ring-size)] items-center justify-center lg:h-[124px] lg:w-[124px]">
-                {expanded === "peptides" ? (
-                  <PeptideVialGraphic
-                    color="#94a3b8"
-                    doseMg={peptideSummary?.lastDoseMg ?? null}
-                    size="md"
-                    className="shrink-0"
-                  />
-                ) : (
-                  <WeekWorkoutGoalRing
-                    count={periodWo}
-                    goal={workoutGoal}
-                    size="md"
-                    color="#c4d632"
-                    className="shrink-0"
-                  />
-                )}
+                <ProtocolGlyphMorph
+                  origin={
+                    protocolFocused && protocolMotionOrigin?.panel === expanded
+                      ? protocolMotionOrigin.rect
+                      : null
+                  }
+                  motionKey={`focus-${expanded ?? "none"}`}
+                  captureRef={protocolFocusGlyphRef}
+                >
+                  {expanded === "peptides" ? (
+                    <PeptideVialGraphic
+                      color="#94a3b8"
+                      doseMg={peptideSummary?.lastDoseMg ?? null}
+                      size="md"
+                      className="shrink-0"
+                    />
+                  ) : (
+                    <WeekWorkoutGoalRing
+                      count={periodWo}
+                      goal={workoutGoal}
+                      size="md"
+                      color="#c4d632"
+                      className="shrink-0"
+                    />
+                  )}
+                </ProtocolGlyphMorph>
               </div>
 
               <div className="flex min-w-0 items-start justify-start pt-1 pl-1.5 text-left sm:pt-1.5 sm:pl-3">
@@ -869,8 +942,8 @@ export function WeeklyHero({
             </div>
           </FadeSection>
 
-          {/* Expand chrome outside HubCollapse — absolute intake/food must not be clipped.
-              Positions from this relative top (= rings-row Y under Overview). */}
+          {/* Expand chrome stays outside the ring scene so absolute intake/food is
+              never clipped. Positions resolve from this rings-row origin. */}
           {expanded === "calories" ? (
             <HubCaloriesExpand
               consumed={data.calories.todayValue}
@@ -890,7 +963,6 @@ export function WeeklyHero({
         <HubPresence
           open={expanded === "peptides"}
           durationMs={1000}
-          className={returningOverviewGapClass}
         >
           <div className="pt-3">
             <HubPeptidesExpand
@@ -911,7 +983,6 @@ export function WeeklyHero({
         <HubPresence
           open={expanded === "workouts"}
           durationMs={1000}
-          className={returningOverviewGapClass}
         >
           <div className="pt-3">
             <HubWorkoutsExpand
@@ -928,22 +999,16 @@ export function WeeklyHero({
           </div>
         </HubPresence>
 
-        <HubCollapse
-          open={
-            expanded === "sleep" || expanded === "vitals"
-          }
-          durationMs={HUB_MOTION_MS}
-        >
+        {expanded === "sleep" || expanded === "vitals" ? (
           <div
             className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/7 to-transparent"
             aria-hidden
           />
-        </HubCollapse>
+        ) : null}
 
         <HubPresence
           open={expanded === "sleep"}
           durationMs={HUB_SECTION_MOTION_MS}
-          className={returningOverviewGapClass}
         >
           <HubSleepFocus
             hours={data.sleep.todayValue}
@@ -955,8 +1020,8 @@ export function WeeklyHero({
 
         <FadeSection
           show={showStepsBars}
-          /* Never flex-shrink the steps chart — HubCollapse clips with overflow:hidden,
-             so min-h-0 shrink made the bars disappear on short phones. */
+          /* Never flex-shrink the compact steps chart; short phones still need a
+             stable measured source before the focused scene is mounted. */
           className={fillViewport && expanded == null ? "shrink-0" : undefined}
         >
           {expanded == null ? (
@@ -985,17 +1050,14 @@ export function WeeklyHero({
             hideReadiness={expanded === "steps"}
             hideSteps={expanded === "vitals"}
             scaleToFit={fillViewport && expanded == null}
-            className="animate-fade-up stagger-3 motion-safe:animate-fade-up motion-reduce:animate-none"
+            className=""
           />
         </FadeSection>
 
         <HubPresence
           open={expanded === "vitals"}
           durationMs={HUB_SECTION_MOTION_MS}
-          className={cn(
-            expanded === "vitals" && "mt-4",
-            returningOverviewGapClass,
-          )}
+          className={expanded === "vitals" ? "mt-4" : undefined}
         >
           <HubVitalsExpand
             readiness={readinessValue}
@@ -1019,13 +1081,23 @@ export function WeeklyHero({
                   aria-expanded={false}
                   className="group relative flex min-h-[var(--hub-protocol-min-h)] min-w-0 items-center py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem] sm:py-3.5"
                 >
-                  <span className="pointer-events-none absolute left-2/3 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
-                    <PeptideVialGraphic
-                      color="#94a3b8"
-                      doseMg={peptideSummary?.lastDoseMg ?? null}
-                      size="md"
-                      className="mx-0 shrink-0 opacity-90"
-                    />
+                  <span className="pointer-events-none absolute left-2/3 top-1/2 z-10 size-[var(--hub-protocol-glyph)] -translate-x-1/2 -translate-y-1/2 sm:size-24">
+                    <ProtocolGlyphMorph
+                      origin={
+                        expanded == null && protocolMotionOrigin?.panel === "peptides"
+                          ? protocolMotionOrigin.rect
+                          : null
+                      }
+                      motionKey="rail-peptides"
+                      captureRef={peptideRailGlyphRef}
+                    >
+                      <PeptideVialGraphic
+                        color="#94a3b8"
+                        doseMg={peptideSummary?.lastDoseMg ?? null}
+                        size="md"
+                        className="mx-0 shrink-0 opacity-90"
+                      />
+                    </ProtocolGlyphMorph>
                   </span>
                   <div className="min-w-0 w-[calc(66.666%-3.25rem)] pr-1 text-right sm:w-[calc(66.666%-3.5rem)]">
                     <p className="type-hud-micro text-muted-foreground/70">Protocol</p>
@@ -1058,14 +1130,24 @@ export function WeeklyHero({
                   aria-expanded={false}
                   className="group relative flex min-h-[var(--hub-protocol-min-h)] min-w-0 items-center py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem] sm:py-3.5"
                 >
-                  <span className="pointer-events-none absolute left-1/3 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
-                    <WeekWorkoutGoalRing
-                      count={periodWo}
-                      goal={workoutGoal}
-                      size="md"
-                      color="#c4d632"
-                      className="shrink-0"
-                    />
+                  <span className="pointer-events-none absolute left-1/3 top-1/2 z-10 size-[var(--hub-protocol-glyph)] -translate-x-1/2 -translate-y-1/2 sm:size-24">
+                    <ProtocolGlyphMorph
+                      origin={
+                        expanded == null && protocolMotionOrigin?.panel === "workouts"
+                          ? protocolMotionOrigin.rect
+                          : null
+                      }
+                      motionKey="rail-workouts"
+                      captureRef={workoutRailGlyphRef}
+                    >
+                      <WeekWorkoutGoalRing
+                        count={periodWo}
+                        goal={workoutGoal}
+                        size="md"
+                        color="#c4d632"
+                        className="shrink-0"
+                      />
+                    </ProtocolGlyphMorph>
                   </span>
                   <div className="min-w-0 w-full pl-[calc(33.333%+3.25rem)] sm:pl-[calc(33.333%+3.5rem)]">
                     <p
@@ -1116,16 +1198,11 @@ export function WeeklyHero({
         <FadeSection show={showWeighIn} className={fillViewport ? "shrink-0" : undefined}>
           <div
             className={cn(
-              "relative z-10 space-y-3 rounded-2xl border px-0.5 py-0.5 motion-reduce:transition-none",
+              "relative z-10 space-y-3 rounded-2xl border px-0.5 py-0.5 transition-[background-color,border-color] duration-[520ms] motion-reduce:transition-none",
               expanded === "weight"
-                ? "border-white/[0.08] bg-white/[0.02] p-2.5 sm:p-3"
+                ? "border-white/[0.08] bg-white/[0.02]"
                 : "border-transparent bg-transparent",
             )}
-            style={{
-              transitionProperty: "background-color, border-color, padding",
-              transitionDuration: `${HUB_MOTION_MS}ms`,
-              transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
-            }}
           >
             <DailyWeighIn
               embedded

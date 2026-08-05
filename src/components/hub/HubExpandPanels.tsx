@@ -343,7 +343,7 @@ export function HubWeightExpand() {
         : ""
 
   return (
-    <div className="space-y-3 px-0.5">
+    <div className="hub-detail-sequence space-y-3 px-0.5">
       <div className="min-w-0">
           <p className="type-hud-subsection">Weight correlation</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
@@ -645,6 +645,11 @@ export function HubVitalsExpand({
     readiness != null && Number.isFinite(readiness)
       ? Math.max(0, Math.min(100, Math.round(readiness)))
       : null
+  const readinessRadius = 35
+  const readinessCircumference = 2 * Math.PI * readinessRadius
+  const readinessOffset =
+    readinessCircumference -
+    readinessCircumference * ((readinessScore ?? 0) / 100)
   const loadSessionCount = useMemo(
     () =>
       completedSessions.filter((session) => {
@@ -1006,7 +1011,7 @@ export function HubVitalsExpand({
   )
 
   return (
-    <div className="space-y-5 px-0.5 sm:space-y-6">
+    <div className="hub-detail-sequence space-y-5 px-0.5 sm:space-y-6">
       <div className="relative min-w-0 overflow-hidden rounded-2xl border border-[#f43f5e]/15 bg-gradient-to-br from-[#f43f5e]/[0.09] via-white/[0.025] to-transparent p-4 sm:p-5">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
@@ -1020,14 +1025,46 @@ export function HubVitalsExpand({
             </p>
           </div>
           <div
-            className="grid size-[4.75rem] shrink-0 place-items-center rounded-full p-[2px]"
+            className="relative grid size-[4.75rem] shrink-0 place-items-center rounded-full"
             style={{
-              background: `conic-gradient(${accent} ${(readinessScore ?? 0) * 3.6}deg, rgba(255,255,255,0.07) 0deg)`,
               boxShadow: `0 0 24px ${accent}20`,
             }}
             aria-label={readinessScore != null ? `Readiness ${readinessScore} out of 100` : "Readiness unavailable"}
           >
-            <div className="grid size-full place-items-center rounded-full border border-white/[0.06] bg-[#0a0d12]/95 text-center">
+            <svg
+              viewBox="0 0 76 76"
+              className="absolute inset-0 size-full -rotate-90"
+              aria-hidden
+            >
+              <circle
+                cx="38"
+                cy="38"
+                r={readinessRadius}
+                fill="none"
+                stroke="rgba(255,255,255,0.07)"
+                strokeWidth="3"
+              />
+              <circle
+                key={`readiness-${readinessScore ?? "none"}`}
+                cx="38"
+                cy="38"
+                r={readinessRadius}
+                fill="none"
+                stroke={accent}
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeDasharray={readinessCircumference}
+                strokeDashoffset={readinessOffset}
+                className="hub-progress-ring-arc motion-reduce:animate-none"
+                style={{
+                  filter: `drop-shadow(0 0 7px ${accent}66)`,
+                  // @ts-expect-error CSS custom properties drive the shared ring keyframe.
+                  "--ring-circumference": readinessCircumference,
+                  "--ring-offset": readinessOffset,
+                }}
+              />
+            </svg>
+            <div className="absolute inset-[3px] grid place-items-center rounded-full border border-white/[0.06] bg-[#0a0d12]/95 text-center">
               <div>
                 <p className="font-heading text-2xl leading-none tabular-nums" style={{ color: accent }}>
                   {readinessScore ?? "—"}
@@ -1383,7 +1420,7 @@ export function HubPeptidesExpand({
   )
 
   return (
-    <div className="space-y-4 px-0.5">
+    <div className="hub-detail-sequence space-y-4 px-0.5">
       {!hideHero ? (
         <>
           <div className="min-w-0">

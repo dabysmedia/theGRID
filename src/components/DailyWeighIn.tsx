@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef, useCallback, useMemo } from "react"
+import { forwardRef, useEffect, useState, useRef, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { ArrowDown, ArrowUp, ChevronRight, Minus, TrendingDown, TrendingUp } from "lucide-react"
 import { apiFetch } from "@/lib/api-fetch"
@@ -14,6 +14,7 @@ import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 import { format } from "date-fns"
 import { parseLocalDate } from "@/lib/utils"
 import { useCountUp } from "@/components/useCountUp"
+import { useHubMeasuredMorph } from "@/components/hub/HubMotion"
 
 type Status = "loading" | "ready"
 
@@ -120,6 +121,46 @@ interface DailyWeighInProps {
   graphFocused?: boolean
 }
 
+const AnimatedWeightInput = forwardRef<
+  HTMLInputElement,
+  {
+    value: string
+    animate: boolean
+    placeholder: string
+    readOnly: boolean
+    required: boolean
+    className: string
+    onChange: React.ChangeEventHandler<HTMLInputElement>
+  }
+>(function AnimatedWeightInput(
+  { value, animate, placeholder, readOnly, required, className, onChange },
+  ref,
+) {
+  const numericValue = value.trim() === "" ? null : Number(value)
+  const animated = useCountUp(
+    numericValue != null && Number.isFinite(numericValue) ? numericValue : null,
+    { durationMs: 1000, enabled: animate },
+  )
+  const displayed =
+    animate && animated != null
+      ? animated.toFixed(value.includes(".") ? 1 : 0)
+      : value
+
+  return (
+    <Input
+      ref={ref}
+      type="number"
+      step="0.1"
+      placeholder={placeholder}
+      value={displayed}
+      onChange={onChange}
+      readOnly={readOnly}
+      className={className}
+      required={required}
+    />
+  )
+})
+
 export function DailyWeighIn({
   embedded = false,
   weightTrend = null,
@@ -138,6 +179,10 @@ export function DailyWeighIn({
   const [submitting, setSubmitting] = useState(false)
   const [weightEditing, setWeightEditing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const formMotionRef = useHubMeasuredMorph<HTMLFormElement>(
+    graphFocused ? "focused" : "overview",
+    { durationMs: 760 },
+  )
 
   const vacationBlocksLog = useMemo(
     () => isVacationBlockingCalendarDay(user?.vacationResumeDate, activeDate),
@@ -202,16 +247,6 @@ export function DailyWeighIn({
     !logged &&
     latestWeight != null &&
     sameNumber(value, latestWeight)
-  const numericWeight = value.trim() === "" ? null : Number(value)
-  const animatedWeight = useCountUp(
-    numericWeight != null && Number.isFinite(numericWeight) ? numericWeight : null,
-    { durationMs: 1150, enabled: !weightEditing && !submitting },
-  )
-  const displayedWeight =
-    !weightEditing && animatedWeight != null
-      ? animatedWeight.toFixed(value.includes(".") ? 1 : 0)
-      : value
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (logged) return
@@ -347,17 +382,13 @@ export function DailyWeighIn({
 
   const weekSparkline = spark ? (
     <span
+      key={graphFocused ? "focused" : "preview"}
       className={cn(
-        "relative mx-1 block min-w-[4.5rem] flex-1 origin-center overflow-visible motion-reduce:transition-none",
+        "relative mx-1 block min-w-[4.5rem] flex-1 origin-center overflow-visible",
         graphFocused
           ? "h-10 max-w-none scale-x-110 opacity-0"
-          : "h-6 w-[5.5rem] max-w-[6.5rem] scale-x-100 opacity-100",
+          : "hub-weight-spark-reveal h-6 w-[5.5rem] max-w-[6.5rem] scale-x-100 opacity-100 motion-reduce:animate-none",
       )}
-      style={{
-        transitionProperty: "width, max-width, height, opacity, transform",
-        transitionDuration: "720ms",
-        transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
-      }}
     >
       <svg
         viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
@@ -444,12 +475,11 @@ export function DailyWeighIn({
             embedded ? "border-b border-white/[0.06]" : "border-b border-white/10",
           )}
         >
-          <Input
+          <AnimatedWeightInput
             ref={inputRef}
-            type="number"
-            step="0.1"
             placeholder={latestWeight != null ? `${latestWeight}` : "—"}
-            value={displayedWeight}
+            value={value}
+            animate={!weightEditing && !submitting}
             onChange={(e) => {
               setWeightEditing(true)
               setValue(e.target.value)
@@ -512,8 +542,9 @@ export function DailyWeighIn({
   if (embedded) {
     return (
       <form
+        ref={formMotionRef}
         onSubmit={handleSubmit}
-        className="animate-in fade-in slide-in-from-bottom-1 duration-300"
+        className="will-change-transform"
       >
         {formInner}
       </form>
@@ -522,6 +553,7 @@ export function DailyWeighIn({
 
   return (
     <form
+      ref={formMotionRef}
       onSubmit={handleSubmit}
       className="glass-panel p-4 animate-in fade-in slide-in-from-top-2 duration-300"
     >

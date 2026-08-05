@@ -1255,6 +1255,32 @@ html {
   }
 }
 
+@keyframes hub-readiness-enter {
+  from { opacity: 0; transform: translate3d(-12px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes hub-readiness-marker-in {
+  from { opacity: 0; transform: translate3d(-100%, 0, 0); }
+  24% { opacity: 1; }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes hub-step-detail-enter {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes hub-hour-bar-enter {
+  from { opacity: 0.4; transform: scaleY(0); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+
+@keyframes hub-weight-spark-reveal {
+  from { opacity: 0; clip-path: inset(0 100% 0 0); }
+  to { opacity: 1; clip-path: inset(0 0 0 0); }
+}
+
 @keyframes chart-wipe {
   from { clip-path: inset(0 100% 0 0); }
   to   { clip-path: inset(0 0 0 0); }
@@ -1367,6 +1393,46 @@ html {
   .workout-focus-section {
     animation: workout-focus-section-in 0.9s cubic-bezier(0.22, 0.7, 0.18, 1) both;
   }
+
+  .hub-progress-ring-arc {
+    animation: draw-ring 0.92s cubic-bezier(0.22, 0.7, 0.18, 1) 90ms backwards;
+  }
+
+  .hub-readiness-enter {
+    animation: hub-readiness-enter 0.58s cubic-bezier(0.22, 0.7, 0.18, 1) both;
+  }
+
+  .hub-readiness-fill {
+    animation: readiness-bar-in 0.88s cubic-bezier(0.22, 0.7, 0.18, 1) 80ms backwards;
+  }
+
+  .hub-readiness-marker {
+    animation: hub-readiness-marker-in 1s cubic-bezier(0.22, 0.7, 0.18, 1) 110ms backwards;
+  }
+
+  .hub-step-detail-enter,
+  .hub-step-value-enter {
+    animation: hub-step-detail-enter 0.62s cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
+  }
+
+  .hub-hour-bar-enter {
+    animation: hub-hour-bar-enter 0.62s cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
+  }
+
+  .hub-weight-spark-reveal {
+    animation: hub-weight-spark-reveal 0.88s cubic-bezier(0.22, 0.7, 0.18, 1) 120ms backwards;
+  }
+
+  .hub-detail-sequence > * {
+    animation: hub-step-detail-enter var(--hub-presence-duration, 680ms)
+      cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
+  }
+
+  .hub-detail-sequence > *:nth-child(1) { animation-delay: 90ms; }
+  .hub-detail-sequence > *:nth-child(2) { animation-delay: 160ms; }
+  .hub-detail-sequence > *:nth-child(3) { animation-delay: 230ms; }
+  .hub-detail-sequence > *:nth-child(4) { animation-delay: 300ms; }
+  .hub-detail-sequence > *:nth-child(n + 5) { animation-delay: 360ms; }
 
   .workout-week-bar {
     transform-origin: center bottom;
@@ -1506,7 +1572,19 @@ html {
     }
 
     .animate-readiness-bar,
-    .animate-readiness-marker {
+    .animate-readiness-marker,
+    .hub-progress-ring-arc,
+    .hub-readiness-enter,
+    .hub-readiness-fill,
+    .hub-readiness-marker,
+    .hub-step-detail-enter,
+    .hub-step-value-enter,
+    .hub-hour-bar-enter,
+    .hub-weight-spark-reveal,
+    .hub-detail-sequence > * {
+      opacity: 1;
+      clip-path: none;
+      transform: none;
       animation: none;
     }
 

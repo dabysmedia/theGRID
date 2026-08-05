@@ -1,21 +1,195 @@
 "use client"
 
-import { useLayoutEffect, useState } from "react"
+import { useEffect, useLayoutEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
 
-/** Default hub UI morph — short enough to feel snappy, long enough to read. */
-export const HUB_MOTION_MS = 720
+/** Default hub UI morph: quick enough for touch, long enough to read. */
+export const HUB_MOTION_MS = 680
 
-/** Larger overview section morphs (rings / protocol rail / weigh-in). */
-export const HUB_SECTION_MOTION_MS = 900
+/** Larger Overview shared-element motion. */
+export const HUB_SECTION_MOTION_MS = 780
 
-/** Balanced curve: no abrupt launch, with a soft settled finish. */
-export const HUB_MOTION_EASING = "cubic-bezier(0.4, 0, 0.2, 1)"
+/** Soft launch with the same settled character as the Water / Planner morphs. */
+export const HUB_MOTION_EASING = "cubic-bezier(0.22, 0.7, 0.18, 1)"
+
+export type HubMotionRect = Pick<DOMRect, "left" | "top" | "width" | "height">
+
+type HubMotionDelta = {
+  x: number
+  y: number
+  scaleX: number
+  scaleY: number
+}
+
+/** Pure FLIP geometry, exported so the no-layout-per-frame contract is testable. */
+export function getHubMotionDelta(
+  from: HubMotionRect,
+  to: HubMotionRect,
+): HubMotionDelta {
+  return {
+    x: from.left - to.left,
+    y: from.top - to.top,
+    scaleX: to.width > 0 ? from.width / to.width : 1,
+    scaleY: to.height > 0 ? from.height / to.height : 1,
+  }
+}
+
+export function readHubMotionRect(node: Element | null): HubMotionRect | null {
+  if (!node) return null
+  const { left, top, width, height } = node.getBoundingClientRect()
+  if (width <= 0 || height <= 0) return null
+  return { left, top, width, height }
+}
+
+function reducedMotionRequested(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
+}
+
+function playMeasuredMotion(
+  node: HTMLElement,
+  from: HubMotionRect,
+  to: HubMotionRect,
+  {
+    durationMs,
+    delayMs,
+    scale,
+  }: {
+    durationMs: number
+    delayMs: number
+    scale: boolean
+  },
+): Animation | null {
+  if (reducedMotionRequested()) return null
+  const delta = getHubMotionDelta(from, to)
+  if (
+    Math.abs(delta.x) < 0.5 &&
+    Math.abs(delta.y) < 0.5 &&
+    (!scale ||
+      (Math.abs(delta.scaleX - 1) < 0.005 &&
+        Math.abs(delta.scaleY - 1) < 0.005))
+  ) {
+    return null
+  }
+
+  if (typeof node.animate !== "function") return null
+  const animation = node.animate(
+    [
+      {
+        transform: `translate3d(${delta.x}px, ${delta.y}px, 0)${
+          scale ? ` scale(${delta.scaleX}, ${delta.scaleY})` : ""
+        }`,
+      },
+      { transform: "translate3d(0, 0, 0) scale(1, 1)" },
+    ],
+    {
+      duration: durationMs,
+      delay: delayMs,
+      easing: HUB_MOTION_EASING,
+      fill: "both",
+    },
+  )
+  animation.addEventListener("finish", () => animation.cancel(), { once: true })
+  return animation
+}
 
 /**
- * Height + opacity collapse used across hub expand/collapse and accordions.
- * Prefer this over mount/unmount snaps so exit motion can play.
+ * FLIP a persistent hub element between two stable layouts. Layout changes once;
+ * the visible movement is then handled entirely by the compositor.
  */
+export function useHubMeasuredMorph<T extends HTMLElement>(
+  layoutKey: string,
+  {
+    durationMs = HUB_SECTION_MOTION_MS,
+    delayMs = 0,
+    scale = false,
+  }: {
+    durationMs?: number
+    delayMs?: number
+    scale?: boolean
+  } = {},
+) {
+  const nodeRef = useRef<T>(null)
+  const previousRectRef = useRef<HubMotionRect | null>(null)
+  const animationRef = useRef<Animation | null>(null)
+  const previousKeyRef = useRef<string | null>(null)
+
+  useLayoutEffect(() => {
+    const node = nodeRef.current
+    const keyChanged =
+      previousKeyRef.current != null && previousKeyRef.current !== layoutKey
+
+    // Data can resolve while a first-open morph is still running. Preserve the
+    // compositor animation instead of treating that unrelated render as a new
+    // geometry change.
+    if (!keyChanged && animationRef.current?.playState === "running") return
+
+    const nextRect = readHubMotionRect(node)
+    if (!node || !nextRect) return
+
+    const previousRect = previousRectRef.current
+    previousRectRef.current = nextRect
+    previousKeyRef.current = layoutKey
+    if (keyChanged) {
+      animationRef.current?.cancel()
+      animationRef.current = previousRect
+        ? playMeasuredMotion(node, previousRect, nextRect, {
+            durationMs,
+            delayMs,
+            scale,
+          })
+        : null
+    }
+  }, [delayMs, durationMs, layoutKey, scale])
+
+  useEffect(() => {
+    const node = nodeRef.current
+    if (!node || typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(() => {
+      if (animationRef.current?.playState === "running") return
+      previousRectRef.current = readHubMotionRect(node)
+    })
+    observer.observe(node)
+    return () => {
+      observer.disconnect()
+      animationRef.current?.cancel()
+    }
+  }, [])
+
+  return nodeRef
+}
+
+/** Morph a newly mounted element from a captured source rectangle. */
+export function useHubOriginMorph<T extends HTMLElement>(
+  origin: HubMotionRect | null,
+  motionKey: string,
+  {
+    durationMs = HUB_SECTION_MOTION_MS,
+    delayMs = 0,
+    scale = true,
+  }: {
+    durationMs?: number
+    delayMs?: number
+    scale?: boolean
+  } = {},
+) {
+  const nodeRef = useRef<T>(null)
+
+  useLayoutEffect(() => {
+    const node = nodeRef.current
+    const target = readHubMotionRect(node)
+    if (!node || !target || !origin) return
+    const animation = playMeasuredMotion(node, origin, target, {
+      durationMs,
+      delayMs,
+      scale,
+    })
+    return () => animation?.cancel()
+  }, [delayMs, durationMs, motionKey, origin, scale])
+
+  return nodeRef
+}
+
+/** Height collapse reserved for small nested accordions, not Overview scenes. */
 export function HubCollapse({
   open,
   children,
@@ -25,7 +199,6 @@ export function HubCollapse({
   open: boolean
   children: React.ReactNode
   className?: string
-  /** Override transition length (ms). */
   durationMs?: number
 }) {
   return (
@@ -50,8 +223,8 @@ export function HubCollapse({
 }
 
 /**
- * Like HubCollapse, but unmounts children after the exit morph so heavy
- * panels (WebGL pips, charts) are not kept alive on the overview.
+ * Heavy focus panels mount directly in their final layout. Their child groups
+ * own entrance choreography; the shared source element carries the exit.
  */
 export function HubPresence({
   open,
@@ -64,34 +237,15 @@ export function HubPresence({
   className?: string
   durationMs?: number
 }) {
-  const [mounted, setMounted] = useState(open)
-  const [visible, setVisible] = useState(open)
-
-  useLayoutEffect(() => {
-    if (open) {
-      let enterFrame = 0
-      const mountFrame = requestAnimationFrame(() => {
-        setMounted(true)
-        enterFrame = requestAnimationFrame(() => setVisible(true))
-      })
-      return () => {
-        cancelAnimationFrame(mountFrame)
-        cancelAnimationFrame(enterFrame)
-      }
-    }
-    const exitFrame = requestAnimationFrame(() => setVisible(false))
-    const t = window.setTimeout(() => setMounted(false), durationMs + 40)
-    return () => {
-      cancelAnimationFrame(exitFrame)
-      clearTimeout(t)
-    }
-  }, [open, durationMs])
-
-  if (!mounted) return null
+  if (!open) return null
 
   return (
-    <HubCollapse open={visible} durationMs={durationMs} className={className}>
+    <div
+      data-hub-presence=""
+      className={className}
+      style={{ "--hub-presence-duration": `${durationMs}ms` } as React.CSSProperties}
+    >
       {children}
-    </HubCollapse>
+    </div>
   )
 }
