@@ -84,21 +84,37 @@ function DialogContent({
   const layer = priority === "high" ? "z-[130]" : "z-[110]"
   const motionFrame = React.useRef(0)
   const motionNode = React.useRef<HTMLDivElement | null>(null)
+  const motionTargetCenter = React.useRef<{ x: number; y: number } | null>(null)
   const setMotionGeometry = React.useCallback(
-    (node: HTMLDivElement) => {
+    (node: HTMLDivElement, captureTargetCenter = false) => {
       if (!motionOrigin || typeof window === "undefined") return
 
-      const targetWidth = node.offsetWidth
-      const targetHeight = node.offsetHeight
+      const targetWidth = Math.max(1, node.offsetWidth)
+      const targetHeight = Math.max(1, node.offsetHeight)
       const sourceCenterX = motionOrigin.left + motionOrigin.width / 2
       const sourceCenterY = motionOrigin.top + motionOrigin.height / 2
+      let targetCenterX = window.innerWidth / 2
+      let targetCenterY = window.innerHeight / 2
+
+      if (motionProfile === "planner") {
+        if (captureTargetCenter || !motionTargetCenter.current) {
+          const targetRect = node.getBoundingClientRect()
+          motionTargetCenter.current = {
+            x: targetRect.left + targetRect.width / 2,
+            y: targetRect.top + targetRect.height / 2,
+          }
+        }
+        targetCenterX = motionTargetCenter.current.x
+        targetCenterY = motionTargetCenter.current.y
+      }
+
       node.style.setProperty(
         "--dialog-motion-x",
-        `${sourceCenterX - window.innerWidth / 2}px`,
+        `${sourceCenterX - targetCenterX}px`,
       )
       node.style.setProperty(
         "--dialog-motion-y",
-        `${sourceCenterY - window.innerHeight / 2}px`,
+        `${sourceCenterY - targetCenterY}px`,
       )
       node.style.setProperty(
         "--dialog-motion-scale-x",
@@ -109,7 +125,7 @@ function DialogContent({
         String(Math.max(0.04, Math.min(0.98, motionOrigin.height / targetHeight))),
       )
     },
-    [motionOrigin],
+    [motionOrigin, motionProfile],
   )
   const setMotionNode = React.useCallback(
     (node: HTMLDivElement | null) => {
@@ -118,12 +134,21 @@ function DialogContent({
       if (!node || !motionOrigin) return
 
       node.removeAttribute("data-motion-ready")
-      setMotionGeometry(node)
+      setMotionGeometry(node, true)
       motionFrame.current = requestAnimationFrame(() => {
+        if (motionProfile === "planner") {
+          // Give the portal and safe-area layout one additional frame to settle
+          // before the compositor starts the first-open source morph.
+          motionFrame.current = requestAnimationFrame(() => {
+            setMotionGeometry(node, true)
+            node.setAttribute("data-motion-ready", "")
+          })
+          return
+        }
         node.setAttribute("data-motion-ready", "")
       })
     },
-    [motionOrigin, setMotionGeometry],
+    [motionOrigin, motionProfile, setMotionGeometry],
   )
 
   React.useLayoutEffect(() => {
