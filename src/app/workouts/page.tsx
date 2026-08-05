@@ -73,6 +73,7 @@ import {
   type TrainingStyle,
 } from "@/lib/workouts/training-style"
 import { deferExercise } from "@/lib/workouts/active-queue"
+import { normalizeWorkoutSessionExercises } from "@/lib/workouts/session-exercises"
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Types
@@ -1531,6 +1532,7 @@ function ActiveWorkout({
   onUpdate,
   onFinish,
   onDiscard,
+  actionError,
   previousSessions,
   templateId,
   onRememberSubstitution,
@@ -1546,6 +1548,7 @@ function ActiveWorkout({
   ) => void
   onFinish: () => void
   onDiscard: () => void
+  actionError?: string | null
   previousSessions: WorkoutSession[]
   templateId?: string | null
   onRememberSubstitution?: (input: {
@@ -1559,7 +1562,8 @@ function ActiveWorkout({
 }) {
   const { activeDate } = useActiveDate()
   const { setFullscreen } = useFullscreenOverlay()
-  const exercises = parseExercises<SessionExercise>(session.exercises)
+  const router = useRouter()
+  const exercises = normalizeWorkoutSessionExercises<SessionExercise>(session.exercises)
   const exercisesRef = useRef(exercises)
   exercisesRef.current = exercises
   const [showPicker, setShowPicker] = useState(false)
@@ -1636,25 +1640,6 @@ function ActiveWorkout({
     return () => setFullscreen(false)
   }, [setFullscreen])
 
-  /** Trap browser Back so the user cannot leave until finish/discard. */
-  useEffect(() => {
-    const sentinel = { theGRIDActiveWorkout: true }
-    window.history.pushState(sentinel, "")
-    const onPopState = () => {
-      window.history.pushState(sentinel, "")
-    }
-    window.addEventListener("popstate", onPopState)
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-      e.returnValue = ""
-    }
-    window.addEventListener("beforeunload", onBeforeUnload)
-    return () => {
-      window.removeEventListener("popstate", onPopState)
-      window.removeEventListener("beforeunload", onBeforeUnload)
-    }
-  }, [])
-
   useEffect(() => {
     setRestConfig(loadWorkoutRestConfig())
   }, [])
@@ -1672,7 +1657,7 @@ function ActiveWorkout({
   }, [restEndsAt])
 
   useEffect(() => {
-    const list = parseExercises<SessionExercise>(session.exercises)
+    const list = normalizeWorkoutSessionExercises<SessionExercise>(session.exercises)
     const c = new Set<string>()
     for (const ex of list) {
       if (ex.sets.length > 0 && ex.sets.every((s) => s.completed)) c.add(ex.id)
@@ -1736,7 +1721,7 @@ function ActiveWorkout({
         return tb - ta
       })
     for (const s of completed) {
-      const exs = parseExercises<SessionExercise>(s.exercises)
+      const exs = normalizeWorkoutSessionExercises<SessionExercise>(s.exercises)
       for (const ex of exs) {
         const key = ex.name.toLowerCase()
         if (!map.has(key)) {
@@ -1762,7 +1747,7 @@ function ActiveWorkout({
 
   // onUpdate omitted from deps: parent passes a new function each render; session.exercises omitted to avoid re-running on every keystroke.
   useEffect(() => {
-    const list = parseExercises<SessionExercise>(session.exercises)
+    const list = normalizeWorkoutSessionExercises<SessionExercise>(session.exercises)
     const { updated, ghost } = applyPrefillFromPrevious(
       list,
       previousByExercise,
@@ -2408,6 +2393,15 @@ function ActiveWorkout({
                 <span className="font-heading text-lg font-bold leading-none text-primary sm:text-base">
                   {formatTimer(elapsed)}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => router.push("/")}
+                  className="ml-1 flex size-9 items-center justify-center rounded-xl border border-white/[0.08] text-muted-foreground/70 transition-colors hover:bg-white/[0.06] hover:text-foreground touch-manipulation"
+                  aria-label="Leave workout and return to dashboard"
+                  title="Leave workout"
+                >
+                  <X className="size-4" aria-hidden />
+                </button>
               </div>
             </div>
 
@@ -2928,6 +2922,15 @@ function ActiveWorkout({
               </div>
             ) : null}
           </div>
+
+          {actionError ? (
+            <p
+              role="alert"
+              className="mx-3 mb-1 shrink-0 text-center text-xs text-red-400"
+            >
+              {actionError}
+            </p>
+          ) : null}
 
           {/* Thin action bar â€” More menu holds Add / Finish / Discard */}
           <div className="relative mx-2 mb-2 shrink-0 rounded-xl border border-white/[0.07] bg-black/25 px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] backdrop-blur-xl sm:mx-3 sm:px-4">
@@ -3541,6 +3544,7 @@ function WorkoutsPageInner() {
 
   async function finishActiveSession() {
     if (!activeSession) return
+    setStartError(null)
     if (saveTimer.current) {
       clearTimeout(saveTimer.current)
       saveTimer.current = null
@@ -3549,22 +3553,33 @@ function WorkoutsPageInner() {
     const duration = Math.round((Date.now() - startMs) / 60000)
 
     const sess = sessions.find((s) => s.id === activeSession.id)
-    const exercisesPayload = parseExercises<SessionExercise>(
+    const exercisesPayload = normalizeWorkoutSessionExercises<SessionExercise>(
       sess?.exercises ?? activeSession.exercises,
     )
 
-    const res = await apiFetch(`/api/workout-sessions/${activeSession.id}`, {
-      ...noStore,
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: "completed",
-        finishedAt: new Date().toISOString(),
-        duration,
-        exercises: exercisesPayload,
-        bodyWeightLb: sess?.bodyWeightLb ?? null,
-      }),
-    })
+    let res: Response
+    try {
+      res = await apiFetch(`/api/workout-sessions/${activeSession.id}`, {
+        ...noStore,
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "completed",
+          finishedAt: new Date().toISOString(),
+          duration,
+          exercises: exercisesPayload,
+          bodyWeightLb: sess?.bodyWeightLb ?? null,
+        }),
+      })
+    } catch {
+      setStartError("Could not finish the workout. Check your connection and try again.")
+      return
+    }
+    if (!res.ok) {
+      const result = (await res.json().catch(() => ({}))) as { error?: string }
+      setStartError(result.error || "Could not finish the workout. Try again.")
+      return
+    }
     if (res.ok) {
       const updated = (await res.json()) as WorkoutSession
       setSessions((prev) =>
@@ -3602,10 +3617,22 @@ function WorkoutsPageInner() {
 
   async function discardActiveSession() {
     if (!activeSession) return
-    const res = await apiFetch(`/api/workout-sessions/${activeSession.id}`, {
-      ...noStore,
-      method: "DELETE",
-    })
+    setStartError(null)
+    let res: Response
+    try {
+      res = await apiFetch(`/api/workout-sessions/${activeSession.id}`, {
+        ...noStore,
+        method: "DELETE",
+      })
+    } catch {
+      setStartError("Could not discard the workout. Check your connection and try again.")
+      return
+    }
+    if (!res.ok) {
+      const result = (await res.json().catch(() => ({}))) as { error?: string }
+      setStartError(result.error || "Could not discard the workout. Try again.")
+      return
+    }
     if (res.ok) {
       setSessions((prev) => prev.filter((s) => s.id !== activeSession.id))
       setActiveTemplateId(null)
@@ -3730,6 +3757,7 @@ function WorkoutsPageInner() {
           onUpdate={(ex, name, bw) => void updateActiveSession(ex, name, bw)}
           onFinish={finishActiveSession}
           onDiscard={discardActiveSession}
+          actionError={startError}
           previousSessions={completedSessions}
           templateId={activeTemplateId}
           onRememberSubstitution={(input) => {

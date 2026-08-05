@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { normalizeRoutineCoverUrl } from "@/lib/routine-cover-url"
 import { resolveUserId, UserError } from "@/lib/current-user"
+import { normalizeWorkoutSessionExercises } from "@/lib/workouts/session-exercises"
 
 export async function GET(
   req: NextRequest,
@@ -57,6 +58,14 @@ export async function PUT(
       data.finishedAt = body.finishedAt ? new Date(body.finishedAt) : null
     if (body.exercises !== undefined)
       data.exercises = JSON.stringify(Array.isArray(body.exercises) ? body.exercises : [])
+    else if (
+      String(body.status ?? "").trim().toLowerCase() === "active" &&
+      String(existing.status).trim().toLowerCase() !== "active"
+    ) {
+      // Planned sessions contain routine-template `setRows`. Convert them at
+      // the status boundary so every newly active workout has live `sets`.
+      data.exercises = JSON.stringify(normalizeWorkoutSessionExercises(existing.exercises))
+    }
     if (Object.prototype.hasOwnProperty.call(body, "bodyWeightLb")) {
       const raw = body.bodyWeightLb
       if (raw === null || raw === "" || raw === undefined) {
