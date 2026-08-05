@@ -79,7 +79,18 @@ export async function PUT(
       data.coverImageUrl = normalizeRoutineCoverUrl(body.coverImageUrl) ?? null
     }
 
-    const session = await prisma.workoutSession.update({ where: { id }, data })
+    const startsSelectedSession =
+      body.supersedeActive === true &&
+      String(data.status ?? "").trim().toLowerCase() === "active"
+    const session = startsSelectedSession
+      ? await prisma.$transaction(async (tx) => {
+          await tx.workoutSession.updateMany({
+            where: { userId, status: "active", id: { not: id } },
+            data: { status: "superseded" },
+          })
+          return tx.workoutSession.update({ where: { id }, data })
+        })
+      : await prisma.workoutSession.update({ where: { id }, data })
     return NextResponse.json(session, {
       headers: { "Cache-Control": "no-store, must-revalidate" },
     })

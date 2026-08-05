@@ -74,17 +74,27 @@ export async function POST(req: NextRequest) {
 
     const coverImageUrl = normalizeRoutineCoverUrl(body.coverImageUrl)
 
-    const session = await prisma.workoutSession.create({
-      data: {
-        name: (name || "Workout").trim(),
-        date: storedDate,
-        exercises: JSON.stringify(Array.isArray(exercises) ? exercises : []),
-        bodyWeightLb: bw,
-        status: "active",
-        userId,
-        ...(coverImageUrl != null ? { coverImageUrl } : {}),
-      },
-    })
+    const sessionData = {
+      name: (name || "Workout").trim(),
+      date: storedDate,
+      exercises: JSON.stringify(Array.isArray(exercises) ? exercises : []),
+      bodyWeightLb: bw,
+      status: "active",
+      userId,
+      ...(coverImageUrl != null ? { coverImageUrl } : {}),
+    }
+
+    const session = body.supersedeActive === true
+      ? await prisma.$transaction(async (tx) => {
+          // An explicit launch replaces the live workout while preserving it
+          // as recoverable history. Both writes commit or roll back together.
+          await tx.workoutSession.updateMany({
+            where: { userId, status: "active" },
+            data: { status: "superseded" },
+          })
+          return tx.workoutSession.create({ data: sessionData })
+        })
+      : await prisma.workoutSession.create({ data: sessionData })
     return NextResponse.json(session, {
       status: 201,
       headers: { "Cache-Control": "no-store, must-revalidate" },

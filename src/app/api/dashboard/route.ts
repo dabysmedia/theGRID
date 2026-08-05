@@ -17,10 +17,12 @@ import {
   DEFAULT_STEPS_TIMEZONE,
   STEPS_DAY_BOUNDARY_HOUR,
   addDaysYmd,
+  localCalendarDayKey,
   resolveStepsTimezone,
   stepsDayKey,
   stepsRefDayKey,
 } from "@/lib/steps-day"
+import { resolveWorkoutPlanDayKey } from "@/lib/workouts/planned-workout-match"
 import { getTrackingPeriod } from "@/lib/work-cycle"
 import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
 
@@ -205,6 +207,11 @@ export async function GET(req: NextRequest) {
     // A tracking day runs 5am→5am. This also remaps calendar "today" sent by
     // older clients to the previous key during the early-morning window.
     const refDayStr = stepsRefDayKey(requestedRefDayStr, now, trackingTz)
+    const workoutPlanDayStr = resolveWorkoutPlanDayKey({
+      requestedDay: requestedRefDayStr,
+      trackingDay: stepsDayKey(now, trackingTz),
+      calendarDay: localCalendarDayKey(now, trackingTz),
+    })
     const refDate = parseLocalDate(refDayStr)
     const weekStartStr = formatDate(subDays(refDate, 6))
     const trackingPeriod = getTrackingPeriod(refDayStr, {
@@ -293,7 +300,7 @@ export async function GET(req: NextRequest) {
         }),
         prisma.workoutSession.findMany({
           where: {
-            date: utcRangeWhereForCalendarDay(refDayStr),
+            date: utcRangeWhereForCalendarDay(workoutPlanDayStr),
             status: "planned",
             userId,
           },

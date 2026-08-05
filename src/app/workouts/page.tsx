@@ -1900,7 +1900,7 @@ function ActiveWorkout({
           TRAINING_STYLE_DEFINITIONS[trainingStyle].workingSetTarget ?? 3,
         ).map((s) => ({ ...s, id: uid() })),
       }))
-      onUpdate(next)
+      onUpdate(next, split === "upper" ? "Upper workout" : "Lower workout")
     } catch {
       setFreeFormError("Something went wrong building this workout. Try again.")
     } finally {
@@ -2382,10 +2382,11 @@ function ActiveWorkout({
   return (
     <>
       <div
+        data-active-workout-shell=""
         role="dialog"
         aria-modal="true"
         aria-labelledby="active-workout-heading"
-        className="fixed inset-0 z-[120] flex flex-col overflow-hidden bg-[#030507] p-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:justify-center sm:bg-background/55 sm:p-4 sm:backdrop-blur-xl sm:supports-backdrop-filter:backdrop-blur-xl"
+        className="fixed inset-0 z-[120] flex h-[100dvh] min-h-[100svh] w-full flex-col overflow-hidden bg-[#030507] sm:items-center sm:justify-center sm:bg-background/55 sm:p-4 sm:backdrop-blur-xl sm:supports-backdrop-filter:backdrop-blur-xl"
       >
         <div
           className="pointer-events-none absolute inset-0 opacity-60"
@@ -2398,21 +2399,22 @@ function ActiveWorkout({
           aria-hidden
         />
         <div
+          data-active-workout-surface=""
           className={cn(
-            "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-[1.65rem] rounded-b-[1.65rem] border border-white/[0.1] bg-[#080b10]/95 shadow-[0_26px_90px_rgba(0,0,0,0.72),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-2xl",
-            "sm:glass-frost sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:max-w-lg sm:flex-none sm:rounded-[1.65rem]",
+            "relative flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#080b10]/95 backdrop-blur-2xl",
+            "sm:glass-frost sm:max-h-[min(92dvh,calc(100dvh-2rem))] sm:max-w-lg sm:flex-none sm:rounded-[1.65rem] sm:border sm:border-white/[0.1] sm:shadow-[0_26px_90px_rgba(0,0,0,0.72),inset_0_1px_0_rgba(255,255,255,0.055)]",
           )}
         >
           {heroCover ? (
             <>
               {/* Full-bleed hero band sized for large phones */}
               <div
-                className="pointer-events-none absolute left-0 right-0 top-0 z-0 h-[min(28dvh,11.5rem)] rounded-t-[1.65rem] bg-cover bg-[center_20%] bg-no-repeat opacity-[0.28] dark:opacity-[0.34]"
+                className="pointer-events-none absolute left-0 right-0 top-0 z-0 h-[min(28dvh,11.5rem)] bg-cover bg-[center_20%] bg-no-repeat opacity-[0.28] dark:opacity-[0.34] sm:rounded-t-[1.65rem]"
                 style={{ backgroundImage: `url(${heroCover})` }}
                 aria-hidden
               />
               <div
-                className="pointer-events-none absolute left-0 right-0 top-0 z-[1] h-[min(28dvh,11.5rem)] rounded-t-[1.65rem] bg-gradient-to-b from-[#11151b]/45 via-[#080b10]/78 to-[#080b10]"
+                className="pointer-events-none absolute left-0 right-0 top-0 z-[1] h-[min(28dvh,11.5rem)] bg-gradient-to-b from-[#11151b]/45 via-[#080b10]/78 to-[#080b10] sm:rounded-t-[1.65rem]"
                 aria-hidden
               />
             </>
@@ -2429,7 +2431,10 @@ function ActiveWorkout({
           <div className="pointer-events-none absolute inset-x-7 top-0 z-[3] h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" aria-hidden />
           <div className="relative z-10 flex min-h-0 w-full flex-1 flex-col overflow-hidden">
           {/* Compact header + integrated timers */}
-          <div className="mx-2 mt-2 shrink-0 space-y-2.5 rounded-[1.25rem] border border-white/[0.07] bg-black/20 px-3 pb-3 pt-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:mx-3 sm:px-4">
+          <div
+            data-active-workout-header=""
+            className="ml-[max(0.5rem,env(safe-area-inset-left))] mr-[max(0.5rem,env(safe-area-inset-right))] mt-[max(0.5rem,env(safe-area-inset-top))] shrink-0 space-y-2.5 rounded-[1.25rem] border border-white/[0.07] bg-black/20 px-3 pb-3 pt-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:mx-3 sm:mt-2 sm:px-4"
+          >
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
@@ -2559,7 +2564,10 @@ function ActiveWorkout({
           </div>
 
           {/* One movement at a time â€” edge-to-edge on mobile */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-2 py-2 sm:px-4 sm:py-3">
+          <div
+            data-active-workout-content=""
+            className="flex min-h-0 flex-1 flex-col overflow-hidden py-2 pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] sm:px-4 sm:py-3"
+          >
             {exercises.length === 0 ? (
               <div className="relative my-auto flex flex-col gap-4 overflow-hidden rounded-[1.45rem] border border-white/[0.075] bg-gradient-to-br from-white/[0.045] via-white/[0.018] to-transparent px-4 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] sm:px-5">
                 <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:linear-gradient(to_right,rgba(255,255,255,.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,.03)_1px,transparent_1px)] [background-size:20px_20px]" aria-hidden />
@@ -3009,7 +3017,10 @@ function ActiveWorkout({
           ) : null}
 
           {/* Thin action bar â€” More menu holds Add / Finish / Discard */}
-          <div className="relative mx-2 mb-2 shrink-0 rounded-xl border border-white/[0.07] bg-black/25 px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] backdrop-blur-xl sm:mx-3 sm:px-4">
+          <div
+            data-active-workout-actions=""
+            className="relative mb-[max(0.5rem,env(safe-area-inset-bottom))] ml-[max(0.5rem,env(safe-area-inset-left))] mr-[max(0.5rem,env(safe-area-inset-right))] shrink-0 rounded-xl border border-white/[0.07] bg-black/25 px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] backdrop-blur-xl sm:mx-3 sm:mb-2 sm:px-4"
+          >
             {queue.allSetsComplete ? (
               <div className="flex items-stretch gap-2">
                 <Button
@@ -3279,14 +3290,12 @@ function clearHubStartIntent() {
 function HubStartFromQuery({
   templatesLoaded,
   templates,
-  hasActiveSession,
   startingWorkout,
   onStartRoutine,
   onStartFree,
 }: {
   templatesLoaded: boolean
   templates: WorkoutTemplate[]
-  hasActiveSession: boolean
   startingWorkout: boolean
   onStartRoutine: (tmpl: WorkoutTemplate) => void
   onStartFree: () => void
@@ -3313,12 +3322,6 @@ function HubStartFromQuery({
       if (fromQuery) router.replace("/workouts", { scroll: false })
     }
 
-    // Resume existing active session instead of starting another.
-    if (hasActiveSession) {
-      finish()
-      return
-    }
-
     if (start === "free" || start === "empty") {
       finish()
       onStartFreeRef.current()
@@ -3332,7 +3335,6 @@ function HubStartFromQuery({
     searchParams,
     templatesLoaded,
     templates,
-    hasActiveSession,
     startingWorkout,
     router,
   ])
@@ -3543,6 +3545,7 @@ function WorkoutsPageInner() {
           date: today,
           exercises,
           coverImageUrl: routineCoverUrl ?? null,
+          supersedeActive: true,
         }),
       })
 
@@ -3862,7 +3865,6 @@ function WorkoutsPageInner() {
         <HubStartFromQuery
           templatesLoaded={templatesLoaded}
           templates={templates}
-          hasActiveSession={activeSession != null}
           startingWorkout={startingWorkout}
           onStartFree={() => {
             void startSession("Workout")

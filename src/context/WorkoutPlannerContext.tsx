@@ -22,7 +22,8 @@ import {
 } from "lucide-react"
 import { format } from "date-fns"
 import { apiFetch } from "@/lib/api-fetch"
-import { addDaysYmd, stepsDayKey } from "@/lib/steps-day"
+import { addDaysYmd, localCalendarDayKey, stepsDayKey } from "@/lib/steps-day"
+import { resolveWorkoutPlanDayKey } from "@/lib/workouts/planned-workout-match"
 import { cn, parseLocalDate } from "@/lib/utils"
 import { getTrackingPeriod } from "@/lib/work-cycle"
 import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
@@ -109,6 +110,9 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
   const { activeDate, setActiveDate } = useActiveDate()
   const { user } = useUser()
   const [open, setOpen] = useState(false)
+  const [calendarToday, setCalendarToday] = useState(() =>
+    localCalendarDayKey(new Date()),
+  )
   const [selectedDate, setSelectedDate] = useState(activeDate)
   const [plans, setPlans] = useState<WorkoutPlan[]>([])
   const [completedCount, setCompletedCount] = useState(0)
@@ -184,7 +188,15 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
 
   const openPlanner = useCallback(
     (date?: string, origin?: HTMLElement | null) => {
-      const nextDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : activeDate
+      const now = new Date()
+      const today = localCalendarDayKey(now)
+      const requestedDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : activeDate
+      const nextDate = resolveWorkoutPlanDayKey({
+        requestedDay: requestedDate,
+        trackingDay: stepsDayKey(now),
+        calendarDay: today,
+      })
+      setCalendarToday(today)
       setMotionOrigin(getDialogMotionOrigin(origin ?? null))
       setSelectedDate(nextDate)
       setCustomName("")
@@ -268,7 +280,7 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
   }, [plans])
 
   const selectedPlans = plansByDate.get(selectedDate) ?? []
-  const isPast = selectedDate < stepsDayKey()
+  const isPast = selectedDate < calendarToday
   const selectedLabel = format(parseLocalDate(selectedDate), "EEEE, MMMM d")
   const plannedCount = plans.length
   const target = user?.workoutGoalPerCycle ?? 3
@@ -349,7 +361,7 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                         variant="ghost"
                         size="sm"
                         className="h-8 gap-1 px-2 text-[10px] uppercase tracking-wider transition-[background-color,color,scale] active:scale-[0.94]"
-                        onClick={() => selectDate(stepsDayKey())}
+                        onClick={() => selectDate(calendarToday)}
                       >
                         <RotateCcw className="size-3" />
                         Today
@@ -371,7 +383,7 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                     {rotation.dates.map((date, index) => {
                       const datePlans = plansByDate.get(date) ?? []
                       const chosen = date === selectedDate
-                      const past = date < stepsDayKey()
+                      const past = date < calendarToday
                       const dateObject = parseLocalDate(date)
                       return (
                         <button

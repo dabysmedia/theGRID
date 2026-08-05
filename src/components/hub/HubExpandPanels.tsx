@@ -88,6 +88,10 @@ import {
   normalizeTrainingStyle,
   TRAINING_STYLE_DEFINITIONS,
 } from "@/lib/workouts/training-style"
+import {
+  findTemplateForPlannedWorkout,
+  plannedWorkoutMatchesTemplate,
+} from "@/lib/workouts/planned-workout-match"
 import { cn, parseLocalDate } from "@/lib/utils"
 
 export type HubExpandedPanel =
@@ -1920,6 +1924,7 @@ export function HubWorkoutsExpand({
         body: JSON.stringify({
           status: "active",
           startedAt: new Date().toISOString(),
+          supersedeActive: true,
         }),
       })
       if (!response.ok) {
@@ -1947,13 +1952,7 @@ export function HubWorkoutsExpand({
           0,
         )
   const primaryPlanTemplate = primaryPlan
-    ? templates.find((template) => {
-        const templateExercises =
-          typeof template.exercises === "string"
-            ? template.exercises.trim()
-            : JSON.stringify(template.exercises)
-        return templateExercises === primaryPlan.exercises.trim()
-      }) ?? null
+    ? findTemplateForPlannedWorkout(primaryPlan, templates)
     : null
   const visibleTemplates = primaryPlanTemplate
     ? templates.filter((template) => template.id !== primaryPlanTemplate.id)
@@ -2243,17 +2242,9 @@ export function HubWorkoutsExpand({
                 ? exs.length * trainingStyleDefinition.workingSetTarget
                 : exs.reduce((sum, exercise) => sum + hubRoutineSetCount(exercise), 0)
               const busy = startingId === tmpl.id
-              const isPlanned = plannedToday.some((plan) => {
-                const planExercises = plan.exercises.trim()
-                if (planExercises && planExercises !== "[]") {
-                  const templateExercises =
-                    typeof tmpl.exercises === "string"
-                      ? tmpl.exercises.trim()
-                      : JSON.stringify(tmpl.exercises)
-                  return planExercises === templateExercises
-                }
-                return false
-              })
+              const isPlanned = plannedToday.some((plan) =>
+                plannedWorkoutMatchesTemplate(plan, tmpl, templates),
+              )
               return (
                 <div
                   key={tmpl.id}
