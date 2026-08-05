@@ -17,9 +17,10 @@ import {
   REASON_CODE_LABELS,
   calculateNextSetRecommendation,
   compareCompletedSets,
+  describeEffortTarget,
+  formatCoachDetail,
   getComparableExerciseHistory,
   normalizeExerciseKey,
-  rirToRpe,
   type CoachRecommendation,
   type CoachStatus,
   type PoExercise,
@@ -160,9 +161,13 @@ export function ProgressiveOverloadCoach({
     return candidates.length > 0 ? candidates[candidates.length - 1] : null
   }, [exercise.sets])
 
-  /* Auto-plug suggested weight/reps into the next open set — no Accept tap. */
+  /* Auto-plug suggested weight/reps into the next open set — no Accept tap.
+     Only live (post-set) recommendations do this: the session planner already
+     wrote per-set targets before the first set, and re-applying the movement-
+     level target here would flatten them back to one number. */
   useEffect(() => {
     if (disabled || pendingEffortSet != null) return
+    if (rec.kind !== "next-set") return
     const apply = rec.apply
     if (!apply || apply.addSet) return
     if (apply.weight == null && apply.reps == null) return
@@ -172,7 +177,7 @@ export function ProgressiveOverloadCoach({
     onApplyToNextSet(apply.weight, apply.reps, true)
     postRecommendationEvent(rec, sessionId, exercise.name, "applied")
     // eslint-disable-next-line react-hooks/exhaustive-deps -- apply once per recommendation fingerprint
-  }, [disabled, pendingEffortSet, rec.action, rec.apply?.weight, rec.apply?.reps, sessionId, exercise.id])
+  }, [disabled, pendingEffortSet, rec.kind, rec.action, rec.apply?.weight, rec.apply?.reps, sessionId, exercise.id])
 
   /* Audit "shown" once per movement per session (after data settles). */
   useEffect(() => {
@@ -296,12 +301,7 @@ export function ProgressiveOverloadCoach({
               {rec.headline}
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground/65">
-              {scale === "rpe"
-                ? rec.detail.replace(
-                    `${rec.targetRir} RIR`,
-                    `RPE ${rirToRpe(rec.targetRir)}`,
-                  )
-                : rec.detail}
+              {formatCoachDetail(rec, scale)}
             </p>
           </div>
           {rec.delta ? (
@@ -498,8 +498,8 @@ function CoachWhyDialog({
     .slice(0, 2)
   const effortTarget =
     rec.targetRir === 0
-      ? `Aim for ${rec.repMin}–${rec.repMax} controlled reps, reaching failure only when you choose.`
-      : `Aim for ${rec.repMin}–${rec.repMax} reps with about ${rec.targetRir} ${rec.targetRir === 1 ? "rep" : "reps"} left.`
+      ? `Aim for ${rec.repMin}–${rec.repMax} controlled reps. Going to failure is your call.`
+      : `Aim for ${rec.repMin}–${rec.repMax} reps a set. ${describeEffortTarget(rec.targetRir, prefs.effortScale)}.`
   const modeContext =
     trainingStyle === "classic"
       ? "Classic favors heavier, near-failure work with two working sets per exercise."
@@ -507,7 +507,7 @@ function CoachWhyDialog({
   const recommendationBasis =
     rec.basedOn?.replace(/^Based on:\s*/i, "") ??
     rec.sourceLabel ??
-    "No comparable workout history yet; this is a starting target."
+    "Nothing comparable logged yet, so this is just a starting point."
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -566,7 +566,7 @@ function CoachWhyDialog({
                           .slice(0, 4)
                           .map((s) => `${s.weight ?? "BW"}×${s.reps ?? 0}`)
                           .join(" · ")}
-                        {exp.medianRir != null ? ` @ ~${exp.medianRir} RIR` : ""}
+                        {exp.medianRir != null ? ` · ~${exp.medianRir} left` : ""}
                       </span>
                     </div>
                   ))}

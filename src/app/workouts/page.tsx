@@ -50,8 +50,14 @@ import {
 import { MovementCompleteOverview } from "@/components/workouts/MovementCompleteOverview"
 import {
   normalizeExerciseKey,
+  planSessionSets,
   summarizeWorkoutProgression,
+  type PoSession,
 } from "@/lib/workouts/progressive-overload"
+import {
+  loadProgressionPrefs,
+  type ProgressionPrefs,
+} from "@/lib/workouts/progression-settings"
 import {
   getPreferredSubstitute,
   getRecentSubstitutes,
@@ -328,29 +334,87 @@ function sessionSetsFromTemplate(
   return adjusted.map((set, index) => ({ ...set, setNumber: index + 1 }))
 }
 
-function applyPrefillFromPrevious(
+/**
+ * Fill every un-logged set with the coach's target for this session.
+ *
+ * This used to copy last session's numbers verbatim, which quietly cancelled
+ * progressive overload: the copied weight made the set "not empty", and the
+ * coach's own auto-fill refused to overwrite a non-empty set, so you were shown
+ * last week's weight forever. The planner now owns those cells — the user's own
+ * typing (tracked in `touched`) still wins, and anything the planner can't
+ * decide is left exactly as it was.
+ */
+function applyCoachPlan(
   list: SessionExercise[],
-  prevMap: Map<string, ExerciseSet[]>,
-  touched: Set<string>,
+  options: {
+    sessions: PoSession[]
+    sessionId: string
+    trainingStyle: TrainingStyle
+    prefs: ProgressionPrefs
+    prevMap: Map<string, ExerciseSet[]>
+    touched: Set<string>
+  },
 ): { updated: SessionExercise[]; ghost: Set<string> } {
+  const { sessions, sessionId, trainingStyle, prefs, prevMap, touched } = options
   const ghost = new Set<string>()
+
   const updated = list.map((ex) => {
-    const prev = prevMap.get(ex.name.toLowerCase())
-    if (!prev) return ex
-    const newSets = ex.sets.map((set, idx) => {
-      if (touched.has(set.id)) return set
-      if (set.weight != null || set.reps != null) return set
-      const p = prev[idx]
-      if (!p || (p.weight == null && p.reps == null)) return set
-      ghost.add(set.id)
+    const overrides = prefs.exercises[normalizeExerciseKey(ex.name)]
+    const coachOff = !prefs.coachEnabled || overrides?.disabled === true
+    /* The planner only sets the table. Once a set is logged the live coach owns
+       the remaining rows — re-planning here would keep stomping the target it
+       just wrote after each set. */
+    if (ex.sets.some((s) => s.completed)) return ex
+    if (ex.sets.length === 0) return ex
+
+    /* Coach turned off for this movement: fall back to the plain copy of last
+       session so the sheet is still pre-filled with something familiar. */
+    if (coachOff) {
+      const prev = prevMap.get(ex.name.toLowerCase())
+      if (!prev) return ex
       return {
-        ...set,
-        weight: p.weight ?? null,
-        reps: p.reps ?? null,
+        ...ex,
+        sets: ex.sets.map((set, idx) => {
+          if (touched.has(set.id) || set.completed) return set
+          if (set.weight != null || set.reps != null) return set
+          const p = prev[idx]
+          if (!p || (p.weight == null && p.reps == null)) return set
+          ghost.add(set.id)
+          return { ...set, weight: p.weight ?? null, reps: p.reps ?? null }
+        }),
       }
+    }
+
+    const plan = planSessionSets({
+      exercise: {
+        name: ex.name,
+        category: ex.category,
+        primaryMuscles: ex.primaryMuscles,
+        secondaryMuscles: ex.secondaryMuscles,
+      },
+      sessions,
+      setCount: ex.sets.length,
+      overrides: progressionOverridesForStyle(trainingStyle, overrides),
+      excludeSessionId: sessionId,
     })
-    return { ...ex, sets: newSets }
+
+    return {
+      ...ex,
+      sets: ex.sets.map((set, idx) => {
+        if (touched.has(set.id) || set.completed) return set
+        const target = plan.sets[idx]
+        if (!target) return set
+        /* Never blank out an existing value — with no history the planner has
+           no weight to offer and a routine template's numbers must survive. */
+        const weight = target.weight ?? set.weight
+        const reps = target.reps ?? set.reps
+        if (weight === set.weight && reps === set.reps) return set
+        ghost.add(set.id)
+        return { ...set, weight, reps }
+      }),
+    }
   })
+
   return { updated, ghost }
 }
 
@@ -1748,11 +1812,16 @@ function ActiveWorkout({
   // onUpdate omitted from deps: parent passes a new function each render; session.exercises omitted to avoid re-running on every keystroke.
   useEffect(() => {
     const list = normalizeWorkoutSessionExercises<SessionExercise>(session.exercises)
-    const { updated, ghost } = applyPrefillFromPrevious(
-      list,
-      previousByExercise,
-      touchedSetIdsRef.current,
-    )
+    const { updated, ghost } = applyCoachPlan(list, {
+      sessions: previousSessions as unknown as PoSession[],
+      sessionId: session.id,
+      trainingStyle,
+      /* Read on the fly rather than from state: the coach writes preference
+         changes straight to localStorage, and this effect re-runs after them. */
+      prefs: loadProgressionPrefs(),
+      prevMap: previousByExercise,
+      touched: touchedSetIdsRef.current,
+    })
     const changed = updated.some((ex, ei) =>
       ex.sets.some(
         (s, si) =>
@@ -1761,9 +1830,11 @@ function ActiveWorkout({
       ),
     )
     if (!changed) return
-    setGhostSetIds(ghost)
+    setGhostSetIds((prev) => new Set([...prev, ...ghost]))
     onUpdate(updated)
-  }, [session.id, previousByExercise, exerciseCount, setCountSig])
+    // previousSessions omitted: previousByExercise is derived from it and memoized,
+    // so depending on the raw array would re-plan on every parent render.
+  }, [session.id, previousByExercise, trainingStyle, exerciseCount, setCountSig])
 
   function addExercise(picked: PickedExercise) {
     const setTarget = TRAINING_STYLE_DEFINITIONS[trainingStyle].workingSetTarget ?? 1
@@ -2115,38 +2186,48 @@ function ActiveWorkout({
   }
 
   /**
-   * Progressive overload coach: prefill the next planned set's load and
-   * rep target. Weight propagates down to later un-logged sets.
-   * When `onlyEmpty` is true (auto-apply), never overwrite values the user
-   * already typed.
+   * Progressive overload coach: write the next planned set's load and rep
+   * target. Weight propagates down to later un-logged sets.
+   *
+   * `auto` marks a recommendation the coach applied on its own. It may overwrite
+   * its own earlier suggestion (that's how a new target reaches the sheet after
+   * you log a set) but never a number the user typed. Checking "is this cell
+   * empty?" instead — the old rule — meant the very first pre-fill locked the
+   * set and every later recommendation was silently dropped.
    */
   function applyRecToNextSet(
     exId: string,
     weight: number | null,
     reps: number | null,
-    onlyEmpty = false,
+    auto = false,
   ) {
     const ex = exercisesRef.current.find((e) => e.id === exId)
     if (!ex) return
     const idx = ex.sets.findIndex((s) => !s.completed)
     if (idx < 0) return
     const target = ex.sets[idx]
-    const nextWeight =
-      weight != null && (!onlyEmpty || target.weight == null) ? weight : null
-    const nextReps =
-      reps != null && (!onlyEmpty || target.reps == null) ? reps : null
+    const writable = (s: ExerciseSet) => !auto || !touchedSetIdsRef.current.has(s.id)
+    if (!writable(target)) return
+    const nextWeight = weight
+    const nextReps = reps
     if (nextWeight == null && nextReps == null) return
 
     const affectedIds =
       nextWeight != null
-        ? ex.sets.slice(idx).filter((s) => !s.completed).map((s) => s.id)
-        : [ex.sets[idx].id]
-    for (const id of affectedIds) touchedSetIdsRef.current.add(id)
-    setGhostSetIds((prev) => {
-      const next = new Set(prev)
-      for (const id of affectedIds) next.delete(id)
-      return next
-    })
+        ? ex.sets.slice(idx).filter((s) => !s.completed && writable(s)).map((s) => s.id)
+        : [target.id]
+    if (auto) {
+      /* Coach-written values stay muted until the user edits them. */
+      setGhostSetIds((prev) => new Set([...prev, ...affectedIds]))
+    } else {
+      for (const id of affectedIds) touchedSetIdsRef.current.add(id)
+      setGhostSetIds((prev) => {
+        const next = new Set(prev)
+        for (const id of affectedIds) next.delete(id)
+        return next
+      })
+    }
+    const affected = new Set(affectedIds)
     onUpdate(
       exercisesRef.current.map((e) => {
         if (e.id !== exId) return e
@@ -2160,12 +2241,7 @@ function ActiveWorkout({
                 ...(nextReps != null ? { reps: nextReps } : {}),
               }
             }
-            if (
-              nextWeight != null &&
-              i > idx &&
-              !s.completed &&
-              (!onlyEmpty || s.weight == null)
-            ) {
+            if (nextWeight != null && i > idx && !s.completed && affected.has(s.id)) {
               return { ...s, weight: nextWeight }
             }
             return s

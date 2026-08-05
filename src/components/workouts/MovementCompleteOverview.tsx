@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
   calculateNextSetRecommendation,
+  formatCoachDetail,
   formatLoad,
   getComparableExerciseHistory,
   rirToRpe,
@@ -288,6 +289,24 @@ export function MovementCompleteOverview({
         ) : null}
       </section>
 
+      {/* Close the loop: the whole point of logging this movement is knowing
+          what to do with it next time, so say it before anything else. */}
+      <section
+        className="rounded-xl border border-primary/20 bg-primary/[0.06] px-3 py-2.5"
+        aria-label="Next time on this exercise"
+      >
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-primary/80">
+          Next time
+        </p>
+        <p className="mt-0.5 text-sm font-semibold text-foreground">
+          {summary.nextSession.headline}
+        </p>
+        <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground/70">
+          {formatCoachDetail(summary.nextSession, effortScale)}
+          {summary.nextSession.goal ? ` · ${summary.nextSession.goal}` : ""}
+        </p>
+      </section>
+
       {summary.flags.pain || summary.flags.technique ? (
         <p className="flex items-center gap-1.5 border-b border-amber-500/20 px-1 pb-2.5 text-[11px] font-medium text-amber-400">
           <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
@@ -304,7 +323,7 @@ export function MovementCompleteOverview({
           className="glass-subtle mt-2 flex min-h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 px-3 text-xs font-semibold text-primary/90 transition-colors hover:bg-glass-highlight/25 touch-manipulation"
         >
           <Plus className="size-3.5" aria-hidden />
-          Optional: add one more set — the last set was easier than planned
+          Optional: one more set — you had reps left on that last one
         </button>
       ) : null}
 

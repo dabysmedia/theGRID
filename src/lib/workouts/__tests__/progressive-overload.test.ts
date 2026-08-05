@@ -8,6 +8,7 @@ import {
   filterOutlierSets,
   getComparableExerciseHistory,
   isValidWorkingSet,
+  planSessionSets,
   rirToRpe,
   roundToIncrement,
   rpeToRir,
@@ -319,7 +320,7 @@ describe("calculateInitialPrescription", () => {
     expect(rec.reasonCodes).toContain("SIMILAR_EXERCISE_FALLBACK")
     expect(rec.confidence).toBe("low")
     expect(rec.sourceLabel).toContain("Barbell Bench Press")
-    expect(rec.detail).toContain("calibration")
+    expect(rec.detail).toContain("test set")
     // 135 × 0.75 = 101.25 → rounded DOWN to the 10 lb machine increment
     expect(rec.loadLb).toBe(100)
     expect(rec.status).toBe("calibration")
@@ -352,7 +353,7 @@ describe("calculateInitialPrescription", () => {
     expect(rec.headline).toContain("Bodyweight")
   })
 
-  it("history without RIR still yields a valid but lower-confidence recommendation", () => {
+  it("adds weight from reps alone when no effort rating was logged", () => {
     const hist = [
       session(2, [
         exercise("Triceps Pushdown", [set(50, 12), set(50, 12)], { category: "Cable" }),
@@ -365,9 +366,187 @@ describe("calculateInitialPrescription", () => {
       exercise: { name: "Triceps Pushdown", category: "Cable" },
       sessions: hist,
     })
-    expect(rec.loadLb).toBe(50)
+    /* Every set at the ceiling earns the weight — requiring an RIR rating here
+       is what used to freeze loads for anyone who skips the effort prompt. */
+    expect(rec.action).toBe("increase_load")
+    expect(rec.loadLb).toBe(55)
     expect(rec.confidence).toBe("medium")
     expect(rec.reasonCodes).toContain("RIR_MISSING")
+  })
+
+  it("progresses from the heaviest weight finished last session, not the most-used one", () => {
+    const hist = session(3, [
+      exercise("Seated Row", [set(45, 10), set(45, 10), set(50, 9)], {
+        category: "Cable",
+      }),
+    ])
+    const rec = calculateInitialPrescription({
+      exercise: { name: "Seated Row", category: "Cable" },
+      sessions: [hist],
+    })
+    expect(rec.loadLb).toBe(50)
+    expect(rec.reasonCodes).toContain("LAST_LOAD_CARRIED")
+    expect(rec.apply?.reps).toBe(10) // beat the 9 done at 50
+  })
+
+  it("ignores a heavier set that never cleared the rep floor", () => {
+    const hist = session(3, [
+      exercise("Seated Row", [set(45, 10), set(45, 10), set(70, 3)], {
+        category: "Cable",
+      }),
+    ])
+    const rec = calculateInitialPrescription({
+      exercise: { name: "Seated Row", category: "Cable" },
+      sessions: [hist],
+    })
+    expect(rec.loadLb).toBe(45)
+  })
+
+  it("targets the weakest set, not the best one", () => {
+    const hist = session(3, [
+      exercise("Lat Pulldown", [
+        set(100, 12, { rir: 2 }),
+        set(100, 9, { rir: 1 }),
+        set(100, 8, { rir: 1 }),
+      ], { category: "Cable" }),
+    ])
+    const rec = calculateInitialPrescription({
+      exercise: { name: "Lat Pulldown", category: "Cable" },
+      sessions: [hist],
+    })
+    expect(rec.action).toBe("add_reps")
+    expect(rec.loadLb).toBe(100)
+    expect(rec.apply?.reps).toBe(9) // weakest set was 8
+    expect(rec.delta).toBe("+1 rep")
+  })
+
+  it("steps an odd starting weight onto the next real rack weight", () => {
+    /* 33 lb dumbbells: the next pair is 35, not 40. Rounding the raw 33 + 5 to
+       the nearest increment used to skip a whole dumbbell. */
+    const hist = session(3, [
+      exercise("Dumbbell Shoulder Press", [
+        set(33, 12, { rir: 2 }),
+        set(33, 12, { rir: 2 }),
+      ], { category: "Dumbbell" }),
+    ])
+    const rec = calculateInitialPrescription({
+      exercise: { name: "Dumbbell Shoulder Press", category: "Dumbbell" },
+      sessions: [hist],
+    })
+    expect(rec.action).toBe("increase_load")
+    expect(rec.loadLb).toBe(35)
+  })
+
+  it("keeps raising the rep target when a big weight jump is deferred", () => {
+    /* 20 lb on a machine that only moves in 10s: a 50% jump, so reps climb
+       first — and the target must stay ahead of what was already done. */
+    const hist = session(3, [
+      exercise("Machine Chest Press", [
+        set(20, 13, { rir: 2 }),
+        set(20, 14, { rir: 2 }),
+      ], { category: "Machine" }),
+    ])
+    const rec = calculateInitialPrescription({
+      exercise: { name: "Machine Chest Press", category: "Machine" },
+      sessions: [hist],
+    })
+    expect(rec.action).toBe("add_reps")
+    expect(rec.loadLb).toBe(20)
+    expect(rec.reasonCodes).toContain("LARGE_INCREMENT_PREFERS_REPS")
+    expect(rec.apply?.reps).toBe(15) // never below what was already done
+  })
+
+  it("takes the big jump anyway once every set is well past the ceiling", () => {
+    const hist = session(3, [
+      exercise("Machine Chest Press", [
+        set(20, 14, { rir: 2 }),
+        set(20, 15, { rir: 2 }),
+      ], { category: "Machine" }),
+    ])
+    const rec = calculateInitialPrescription({
+      exercise: { name: "Machine Chest Press", category: "Machine" },
+      sessions: [hist],
+    })
+    expect(rec.action).toBe("increase_load")
+    expect(rec.loadLb).toBe(30)
+  })
+
+  it("never repeats last session verbatim once history exists", () => {
+    /* The user-visible bug: same weight AND same reps as last time. */
+    const sets = [set(60, 10, { rir: 2 }), set(60, 10, { rir: 2 })]
+    const rec = calculateInitialPrescription({
+      exercise: { name: "Machine Chest Press", category: "Machine" },
+      sessions: [session(4, [exercise("Machine Chest Press", sets, { category: "Machine" })])],
+    })
+    const repeatsLoad = rec.loadLb === 60
+    const repeatsReps = rec.apply?.reps === 10
+    expect(repeatsLoad && repeatsReps).toBe(false)
+  })
+})
+
+/* ── Session planning ──────────────────────────────── */
+
+describe("planSessionSets", () => {
+  it("gives each set its own rep target from the same set last time", () => {
+    const hist = session(3, [
+      exercise("Lat Pulldown", [
+        set(100, 12, { rir: 2 }),
+        set(100, 10, { rir: 2 }),
+        set(100, 8, { rir: 1 }),
+      ], { category: "Cable" }),
+    ])
+    const plan = planSessionSets({
+      exercise: { name: "Lat Pulldown", category: "Cable" },
+      sessions: [hist],
+      setCount: 3,
+    })
+    expect(plan.recommendation.action).toBe("add_reps")
+    expect(plan.sets.map((s) => s.weight)).toEqual([100, 100, 100])
+    /* Set 1 already owns the ceiling; sets 2 and 3 each get asked for one more. */
+    expect(plan.sets.map((s) => s.reps)).toEqual([12, 11, 9])
+    expect(plan.sets[1].hint).toBe("Beat 10")
+    expect(plan.sets[0].previous).toEqual({ weight: 100, reps: 12 })
+  })
+
+  it("restarts every set at the rep floor when the weight goes up", () => {
+    const hist = session(3, [
+      exercise("Lat Pulldown", [
+        set(100, 12, { rir: 2 }),
+        set(100, 12, { rir: 2 }),
+      ], { category: "Cable" }),
+    ])
+    const plan = planSessionSets({
+      exercise: { name: "Lat Pulldown", category: "Cable" },
+      sessions: [hist],
+      setCount: 3,
+    })
+    expect(plan.recommendation.action).toBe("increase_load")
+    expect(plan.sets.map((s) => s.weight)).toEqual([105, 105, 105])
+    expect(plan.sets.map((s) => s.reps)).toEqual([8, 8, 8])
+    expect(plan.sets[0].hint).toBe("+5 lb")
+  })
+
+  it("leaves the weight for the user to pick when there is no history", () => {
+    const plan = planSessionSets({
+      exercise: { name: "Machine Chest Press", category: "Machine" },
+      sessions: [],
+      setCount: 2,
+    })
+    expect(plan.sets.every((s) => s.weight == null)).toBe(true)
+    expect(plan.sets.every((s) => s.reps == null)).toBe(true)
+  })
+
+  it("adds a rep to every bodyweight set", () => {
+    const hist = session(3, [
+      exercise("Push Up", [set(null, 15), set(null, 12)], { category: "Body weight" }),
+    ])
+    const plan = planSessionSets({
+      exercise: { name: "Push Up", category: "Body weight" },
+      sessions: [hist],
+      setCount: 2,
+    })
+    expect(plan.sets.map((s) => s.reps)).toEqual([16, 13])
+    expect(plan.sets.every((s) => s.weight == null)).toBe(true)
   })
 })
 
@@ -414,6 +593,22 @@ describe("calculateNextSetRecommendation", () => {
     expect(rec.loadLb! % 5).toBe(0)
     expect(rec.apply?.weight).toBe(55)
     expect(rec.reasonCodes).toContain("ABOVE_TARGET_RIR")
+  })
+
+  it("steps up mid-session when a set tops the range at the target effort", () => {
+    /* The effort prompt only offers 0–3 reps in reserve, so "easier than a
+       2 RIR target" (4+) is unloggable — hitting the ceiling has to count. */
+    const rec = calculateNextSetRecommendation({
+      exercise: liveExercise([
+        set(50, 12, { rir: 2 }),
+        set(50, null, { completed: false }),
+        set(50, null, { completed: false }),
+      ]),
+      sessions,
+    })
+    expect(rec.action).toBe("increase_load")
+    expect(rec.loadLb).toBe(55)
+    expect(rec.reasonCodes).toContain("UPPER_REP_RANGE_REACHED")
   })
 
   it("holds the load when the set lands on target", () => {

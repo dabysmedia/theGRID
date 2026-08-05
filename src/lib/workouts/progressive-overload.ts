@@ -84,6 +84,7 @@ export type ReasonCode =
   | "BODYWEIGHT_REPS_ONLY"
   | "NEW_BEST_DETECTED"
   | "REPEATED_BELOW_TARGET"
+  | "LAST_LOAD_CARRIED"
 
 export type Confidence = "high" | "medium" | "low"
 
@@ -105,8 +106,8 @@ export type CoachAction =
   | "choose_load"
 
 export const COACH_STATUS_LABELS: Record<CoachStatus, string> = {
-  calibration: "Find your load",
-  push: "Progress",
+  calibration: "Find your weight",
+  push: "Move up",
   hold: "Build reps",
   "back-off": "Ease up",
   "on-track": "On track",
@@ -115,27 +116,31 @@ export const COACH_STATUS_LABELS: Record<CoachStatus, string> = {
 
 /** Plain-language labels for reason codes shown in the Why? sheet. */
 export const REASON_CODE_LABELS: Partial<Record<ReasonCode, string>> = {
-  EXACT_HISTORY_FOUND: "Matched your recent history on this movement",
-  SIMILAR_EXERCISE_FALLBACK: "Estimated from a similar movement",
-  FIRST_SET_CALIBRATION: "First exposure — pick a confident starting load",
-  ABOVE_TARGET_RIR: "Left more reps in reserve than the target",
-  BELOW_TARGET_RIR: "Closer to failure than planned",
-  ON_TARGET_RIR: "Effort landed on the target RIR",
-  RIR_MISSING: "No effort rating logged — confidence is lower",
-  UPPER_REP_RANGE_REACHED: "Top of the rep range hit on most sets",
-  IN_REP_RANGE: "Inside the target rep range",
-  MISSED_MINIMUM_REPS: "Fell short of the minimum reps",
-  SHARP_REP_DECLINE: "Reps dropped sharply between sets",
-  EQUIPMENT_INCREMENT_ROUNDED: "Rounded to the next equipment increment",
-  LARGE_INCREMENT_PREFERS_REPS: "Next weight jump is large — add reps first",
-  TECHNIQUE_FLAGGED: "Technique broke down",
-  PAIN_FLAGGED: "Pain or discomfort flagged",
-  OPTIONAL_VOLUME_APPROPRIATE: "Room for an optional extra set",
-  VOLUME_CAP_REACHED: "Volume cap reached for this movement",
+  EXACT_HISTORY_FOUND: "Based on your last workouts with this exercise",
+  SIMILAR_EXERCISE_FALLBACK: "Estimated from a similar exercise you've done",
+  PERSONAL_RATIO_APPLIED: "Scaled using your own numbers on both exercises",
+  FIRST_SET_CALIBRATION: "First time here — start light and find your weight",
+  ABOVE_TARGET_RIR: "You had reps to spare",
+  BELOW_TARGET_RIR: "That was closer to failure than planned",
+  ON_TARGET_RIR: "Effort landed right where you want it",
+  RIR_MISSING: "No effort rating logged, so this goes off your reps",
+  UPPER_REP_RANGE_REACHED: "You hit the top of your rep range",
+  IN_REP_RANGE: "You're inside your rep range",
+  MISSED_MINIMUM_REPS: "You came up short of the rep target",
+  SHARP_REP_DECLINE: "Your reps dropped off sharply",
+  EQUIPMENT_INCREMENT_ROUNDED: "Rounded to the next weight you can actually load",
+  LARGE_INCREMENT_PREFERS_REPS: "The next weight up is a big jump — add reps first",
+  TECHNIQUE_FLAGGED: "Your form slipped",
+  PAIN_FLAGGED: "You flagged pain",
+  OPTIONAL_VOLUME_APPROPRIATE: "You had enough left for one more set",
+  VOLUME_CAP_REACHED: "That's enough sets on this exercise today",
   INSUFFICIENT_DATA: "Not enough history yet",
-  BODYWEIGHT_REPS_ONLY: "Bodyweight — progress with reps",
-  NEW_BEST_DETECTED: "New best performance",
-  REPEATED_BELOW_TARGET: "Below target across multiple sessions",
+  OUTLIER_SETS_EXCLUDED: "One set looked like a typo and was ignored",
+  ASSISTED_INVERTED: "Here you progress by using less assistance",
+  BODYWEIGHT_REPS_ONLY: "Bodyweight move — you progress by adding reps",
+  NEW_BEST_DETECTED: "That was a personal best",
+  REPEATED_BELOW_TARGET: "You've come up short several sessions in a row",
+  LAST_LOAD_CARRIED: "Picked up from the heaviest weight you finished on",
 }
 
 export interface ApplyPayload {
@@ -370,6 +375,27 @@ export function buildExerciseProfile(
 /* ──────────────────────────────────────────────────────────
    Load rounding
    ────────────────────────────────────────────────────────── */
+
+/**
+ * The next real load above (or below, when assisted) `from`.
+ *
+ * Rounding the raw sum to the *nearest* increment overshoots whenever the
+ * current load isn't a clean multiple: 33 lb dumbbells + 5 became 40, skipping
+ * the 35s that were sitting right there. Rounding toward the smaller change
+ * always lands on a rack weight and is still guaranteed to be a real step.
+ */
+export function nextLoadStep(
+  from: number,
+  incrementLb: number,
+  direction: 1 | -1 = 1,
+): number {
+  if (incrementLb <= 0) return from
+  return roundToIncrement(
+    from + direction * incrementLb,
+    incrementLb,
+    direction === 1 ? "down" : "up",
+  )
+}
 
 export function roundToIncrement(
   value: number,
@@ -719,15 +745,102 @@ export function formatEffort(rir: number, scale: "rir" | "rpe"): string {
   return `${rir} RIR`
 }
 
+/**
+ * "100 lb × 12, 12, 10" — the actual sets, which reads far better than a single
+ * best set plus an RIR number most people never learn to parse.
+ */
 function describeExposure(exp: Exposure, basis: LoadBasis): string {
-  const top = exp.bestSet
-  const load = top ? fmtLb(top.weight, basis) : "—"
-  const rir = exp.medianRir != null ? ` @ ${formatRoundedRir(exp.medianRir)} RIR` : ""
-  return `${load} × ${top?.reps ?? 0}${rir}`
+  const weights = new Set(
+    exp.sets.filter((s) => s.weight != null).map((s) => s.weight as number),
+  )
+  const reps = exp.sets.map((s) => s.reps ?? 0)
+  if (weights.size === 1) {
+    return `${fmtLb([...weights][0], basis)} × ${reps.join(", ")}`
+  }
+  if (weights.size === 0) {
+    return `${basis === "bodyweight" ? "Bodyweight" : "—"} × ${reps.join(", ")}`
+  }
+  return exp.sets
+    .map((s) => `${fmtLb(s.weight, basis)} × ${s.reps ?? 0}`)
+    .join(", ")
 }
 
-function formatRoundedRir(rir: number): string {
-  return Number.isInteger(rir) ? String(rir) : rir.toFixed(1)
+/**
+ * Plain-English effort cue. RIR/RPE are jargon, so the number is always spelled
+ * out as "reps left" and the scale name only tags along for people who use it.
+ */
+export function describeEffortTarget(
+  targetRir: number,
+  scale: "rir" | "rpe" = "rir",
+): string {
+  if (targetRir <= 0) {
+    return scale === "rpe" ? "Take it to failure (RPE 10)" : "Take it to failure"
+  }
+  const reps = targetRir === 1 ? "1 rep" : `${targetRir} reps`
+  return scale === "rpe"
+    ? `Stop with about ${reps} left (RPE ${rirToRpe(targetRir)})`
+    : `Stop with about ${reps} left in the tank`
+}
+
+/**
+ * The detail line rendered for a user's chosen effort scale. Detail strings are
+ * always built from `describeEffortTarget`, so swapping the phrase is exact.
+ */
+export function formatCoachDetail(
+  rec: Pick<CoachRecommendation, "detail" | "targetRir">,
+  scale: "rir" | "rpe",
+): string {
+  if (scale === "rir") return rec.detail
+  return rec.detail.replace(
+    describeEffortTarget(rec.targetRir, "rir"),
+    describeEffortTarget(rec.targetRir, "rpe"),
+  )
+}
+
+/* ──────────────────────────────────────────────────────────
+   Working baseline (which load do we progress from?)
+   ────────────────────────────────────────────────────────── */
+
+export interface WorkingBaseline {
+  /** The load progression is measured from. Null for pure bodyweight work. */
+  load: number | null
+  /** Sets performed at that load — the reps decision is made on these only. */
+  setsAtLoad: PoSet[]
+  /** True when that load is heavier than the weight used for most of the session. */
+  steppedUp: boolean
+}
+
+/**
+ * The load to progress from is the heaviest weight the user actually *owned*
+ * last time — the heaviest load where at least one set cleared the rep floor.
+ *
+ * Using the most-used weight instead (the old behaviour) silently threw away
+ * mid-session progress: someone who went 45, 45, 50 got recommended 45 again
+ * the next week, which reads as the coach ignoring their last set.
+ */
+export function deriveWorkingBaseline(
+  exposure: Exposure,
+  profile: Pick<ExerciseProfile, "repMin" | "loadBasis">,
+): WorkingBaseline {
+  const dir = profile.loadBasis === "assisted" ? -1 : 1
+  const weighted = exposure.sets.filter((s) => s.weight != null && s.weight > 0)
+  if (weighted.length === 0) {
+    return { load: null, setsAtLoad: exposure.sets, steppedUp: false }
+  }
+  const loads = [...new Set(weighted.map((s) => s.weight as number))]
+  const owned = loads.filter((w) =>
+    weighted.some((s) => s.weight === w && (s.reps ?? 0) >= profile.repMin),
+  )
+  /* Nothing cleared the floor (a genuinely hard session) — fall back to the
+     most-used weight so a failed top set can't inflate the next target. */
+  const pool = owned.length > 0 ? owned : loads
+  const load = pool.reduce((acc, w) => (dir * w > dir * acc ? w : acc), pool[0])
+  const mode = exposure.workingWeight
+  return {
+    load,
+    setsAtLoad: weighted.filter((s) => s.weight === load),
+    steppedUp: mode != null && dir * load > dir * mode,
+  }
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -766,9 +879,9 @@ export function calculateInitialPrescription(
     reasons.push("INSUFFICIENT_DATA", "FIRST_SET_CALIBRATION")
     const calibRir = profile.calibrationRir
     explanation.push(
-      "No history found for this movement or a credible similar one.",
-      `Pick a load you could comfortably do for ${profile.repMax}+ reps, then treat set 1 as a calibration set.`,
-      `Defaults for this movement type: ${fmtRange(profile.repMin, profile.repMax)} reps at ${calibRir} RIR.`,
+      "You haven't logged this exercise — or anything close enough to guess from — yet.",
+      `Pick a weight you could comfortably do for ${profile.repMax}+ reps and treat set 1 as a test set.`,
+      `From then on the coach fills in your weights and reps for you, aiming for ${fmtRange(profile.repMin, profile.repMax)} reps a set.`,
     )
     return {
       kind: "initial",
@@ -782,11 +895,11 @@ export function calculateInitialPrescription(
       headline:
         profile.loadBasis === "bodyweight"
           ? `Bodyweight × ${fmtRange(profile.repMin, profile.repMax)}`
-          : `Pick a light start × ${fmtRange(profile.repMin, profile.repMax)}`,
-      detail: `Stop at ${calibRir} RIR · use set 1 as a calibration set`,
+          : `Start light × ${fmtRange(profile.repMin, profile.repMax)}`,
+      detail: `${describeEffortTarget(calibRir)} · set 1 is a test set`,
       basedOn: null,
-      goal: "Find a load you can repeat with good form, then build from it",
-      sourceLabel: "Low-confidence starting estimate",
+      goal: "Find a weight you can control, then the coach takes it from there",
+      sourceLabel: "First time on this exercise — this is a rough starting point",
       confidence: "low",
       reasonCodes: reasons,
       explanation,
@@ -810,10 +923,10 @@ export function calculateInitialPrescription(
     }
     const calibRir = profile.calibrationRir
     explanation.push(
-      `No history for ${input.exercise.name}; estimated from ${source.sourceExerciseName} (similarity ${(100 * (source.similarity ?? 0)).toFixed(0)}%).`,
+      `You haven't done ${input.exercise.name} before, so this starts from ${source.sourceExerciseName}, the closest thing you've trained.`,
       `Last ${source.sourceExerciseName}: ${describeExposure(latest, basis)} on ${latest.dateKey}.`,
-      `Applied a conservative ${Math.round(source.loadRatio * 100)}% transfer and rounded down to the ${profile.incrementLb} lb increment — machine and cable numbers rarely transfer exactly.`,
-      "Treat set 1 as a calibration set and adjust from how it feels.",
+      `Weights rarely carry over exactly between machines, so this is deliberately light — about ${Math.round(source.loadRatio * 100)}% of that, rounded down to the nearest ${profile.incrementLb} lb.`,
+      "Treat set 1 as a test set and adjust from how it feels.",
     )
     return {
       kind: "initial",
@@ -827,11 +940,11 @@ export function calculateInitialPrescription(
       headline:
         estimate != null
           ? `${fmtLb(estimate, basis)} × ${fmtRange(profile.repMin, profile.repMax)}`
-          : `Conservative start × ${fmtRange(profile.repMin, profile.repMax)}`,
-      detail: `Stop at ${calibRir} RIR · use set 1 as a calibration set`,
-      basedOn: `Based on: ${describeExposure(latest, basis)} (${source.sourceExerciseName})`,
-      goal: "Calibrate today, then progress from a verified baseline",
-      sourceLabel: `Estimated from ${source.sourceExerciseName} · low confidence`,
+          : `Start light × ${fmtRange(profile.repMin, profile.repMax)}`,
+      detail: `${describeEffortTarget(calibRir)} · set 1 is a test set`,
+      basedOn: `Based on your ${source.sourceExerciseName}: ${describeExposure(latest, basis)}`,
+      goal: "Get a real number on the board today — the coach progresses it from here",
+      sourceLabel: `Estimated from ${source.sourceExerciseName} — expect to adjust it`,
       confidence: "low",
       reasonCodes: reasons,
       explanation,
@@ -854,33 +967,35 @@ export function calculateInitialPrescription(
   const confidence = confidenceFromExposures(source.exposures)
   if (confidence === "medium" && latest.medianRir == null) reasons.push("RIR_MISSING")
 
-  const baseWeight = latest.workingWeight ?? latest.topWeight
+  const baseline = deriveWorkingBaseline(latest, profile)
+  const baseWeight = baseline.load
   const lastBest = latest.bestSet
   const medianRir = latest.medianRir
   const sourceIds = source.exposures.map((e) => e.sessionId)
-  const basedOn = `Based on: ${describeExposure(latest, basis)} last session`
+  const basedOn = `Last time: ${describeExposure(latest, basis)}`
 
   explanation.push(
-    `Used your last ${Math.min(source.exposures.length, 5)} session${source.exposures.length === 1 ? "" : "s"} of ${input.exercise.name} (most recent ${latest.dateKey}).`,
-    `Recent repeatable performance is weighted over all-time bests; warm-ups, incomplete and flagged sets are excluded.`,
+    `This comes from your last ${Math.min(source.exposures.length, 5)} ${input.exercise.name} session${source.exposures.length === 1 ? "" : "s"} — most recently ${latest.dateKey}: ${describeExposure(latest, basis)}.`,
+    "Warm-ups, unfinished sets and anything you flagged are left out.",
   )
   if (latest.excludedOutliers > 0) {
     explanation.push(
-      `${latest.excludedOutliers} set${latest.excludedOutliers === 1 ? "" : "s"} excluded as a likely logging mistake.`,
+      `${latest.excludedOutliers} set${latest.excludedOutliers === 1 ? " was" : "s were"} ignored — the weight looked like a typo next to the rest.`,
     )
   }
   if (medianRir == null) {
     explanation.push(
-      "No effort (RIR) data in recent history, so the recommendation leans on reps only — log RIR for sharper targets.",
+      "You didn't rate how hard those sets felt, so this goes purely off your reps. Rating a set sharpens the next target.",
     )
   }
 
   /* Bodyweight: progress through reps. */
   if (basis === "bodyweight" && (baseWeight == null || baseWeight === 0)) {
     reasons.push("BODYWEIGHT_REPS_ONLY")
-    const targetReps = Math.min((lastBest?.reps ?? profile.repMin) + 1, profile.repMax + 3)
+    const lastReps = lastBest?.reps ?? profile.repMin
+    const targetReps = lastReps + 1
     explanation.push(
-      `Bodyweight movement: progression is repetitions. Last best set was ${lastBest?.reps ?? 0} reps.`,
+      `There's no weight to add here, so you progress by reps. Your best set last time was ${lastReps}.`,
     )
     return {
       kind: "initial",
@@ -892,9 +1007,9 @@ export function calculateInitialPrescription(
       targetRir: profile.targetRir,
       delta: "+1 rep",
       headline: `Bodyweight × ${targetReps}`,
-      detail: `Stop at ${profile.targetRir} RIR`,
+      detail: describeEffortTarget(profile.targetRir),
       basedOn,
-      goal: `Goal: beat ${lastBest?.reps ?? 0} reps on your best set`,
+      goal: `Beat ${lastReps} reps on at least one set`,
       sourceLabel: null,
       confidence,
       reasonCodes: reasons,
@@ -907,16 +1022,23 @@ export function calculateInitialPrescription(
 
   const dir = basis === "assisted" ? -1 : 1
   if (basis === "assisted") reasons.push("ASSISTED_INVERTED")
+  if (baseline.steppedUp) reasons.push("LAST_LOAD_CARRIED")
 
-  /* Double progression: was the top of the range reached at/easier than target RIR? */
-  const setsAtBase = latest.sets.filter(
-    (s) => s.weight === baseWeight && s.reps != null,
-  )
-  const mostReachedTop =
-    setsAtBase.length > 0 &&
-    setsAtBase.filter((s) => (s.reps ?? 0) >= profile.repMax).length * 2 >=
-      setsAtBase.length
-  const effortOk = medianRir == null ? false : medianRir >= profile.targetRir
+  /* ── Double progression ───────────────────────────────────
+     Fill the rep range at a given weight, then move the weight up. The rep
+     ceiling is the trigger; effort ratings only break ties. Requiring an RIR
+     rating used to block every weight increase for anyone who skipped the
+     effort prompt, which is why loads could sit still forever. */
+  const setsAtBase = baseline.setsAtLoad.filter((s) => s.reps != null)
+  const repsAtBase = setsAtBase.map((s) => s.reps ?? 0)
+  const topCount = repsAtBase.filter((r) => r >= profile.repMax).length
+  const allReachedTop = repsAtBase.length > 0 && topCount === repsAtBase.length
+  const mostReachedTop = repsAtBase.length > 0 && topCount * 2 >= repsAtBase.length
+  const effortOk = medianRir == null || medianRir >= profile.targetRir
+  /* Every set at the ceiling earns the weight regardless of how hard it felt —
+     that is the whole point of the model. A majority at the ceiling still earns
+     it as long as the effort wasn't past the target. */
+  const earnedLoadJump = allReachedTop || (mostReachedTop && effortOk)
   /* Prefer maximum progressive overload: only treat a session as a struggle when
      every working set missed the floor OR median RIR is clearly past failure
      (target − 2). A single missed-rep set should not trigger a deload. */
@@ -950,27 +1072,31 @@ export function calculateInitialPrescription(
 
   if (
     baseWeight != null &&
-    mostReachedTop &&
-    effortOk &&
+    earnedLoadJump &&
     !latest.hadPainOrTechniqueFlag &&
     profile.incrementLb > 0
   ) {
     /* Increase load */
-    reasons.push("UPPER_REP_RANGE_REACHED", "ABOVE_TARGET_RIR", "EQUIPMENT_INCREMENT_ROUNDED")
-    const nextLoad = roundToIncrement(
-      baseWeight + dir * profile.incrementLb,
-      profile.incrementLb,
-      "nearest",
-    )
+    reasons.push("UPPER_REP_RANGE_REACHED", "EQUIPMENT_INCREMENT_ROUNDED")
+    if (medianRir != null && medianRir >= profile.targetRir) reasons.push("ABOVE_TARGET_RIR")
+    const nextLoad = nextLoadStep(baseWeight, profile.incrementLb, dir)
     /* Assisted loads: the assist number is not the moved load, so the relative
        jump check does not apply (10 lb less assistance is a small change). */
     const jumpPct =
       basis === "assisted" ? 0 : Math.abs(nextLoad - baseWeight) / baseWeight
-    if (jumpPct > 0.12 && profile.repMax - profile.repMin >= 2) {
+    /* Stacking reps to dodge a big jump has to end somewhere: once every set is
+       two clear of the ceiling, take the jump however large it looks. */
+    const wellPastCeiling =
+      repsAtBase.length > 0 && Math.min(...repsAtBase) >= profile.repMax + 2
+    if (jumpPct > 0.12 && profile.repMax - profile.repMin >= 2 && !wellPastCeiling) {
       /* Increment too large relative to load → add reps instead */
       reasons.push("LARGE_INCREMENT_PREFERS_REPS")
+      /* Uncapped: capping at repMax + 2 would ask for fewer reps than the user
+         already did, which reads as the coach going backwards. */
+      const stretchTarget = Math.max(...repsAtBase, profile.repMax) + 1
       explanation.push(
-        `The next available increment (${profile.incrementLb} lb) is a ${(jumpPct * 100).toFixed(0)}% jump, so adding reps first is the safer progression.`,
+        `The smallest jump available here is ${profile.incrementLb} lb — a ${(jumpPct * 100).toFixed(0)}% increase on ${formatLoad(baseWeight)} lb. That's a lot at once, so keep the weight and stack on reps first.`,
+        `Once every set reaches ${profile.repMax + 2} reps, the coach takes the jump to ${fmtLb(nextLoad, basis)} anyway.`,
       )
       return {
         kind: "initial",
@@ -978,31 +1104,40 @@ export function calculateInitialPrescription(
         action: "add_reps",
         loadLb: baseWeight,
         repMin: profile.repMax,
-        repMax: profile.repMax + 2,
+        repMax: Math.max(profile.repMax + 2, stretchTarget),
         targetRir: profile.targetRir,
         delta: "+1 rep",
-        headline: `${fmtLb(baseWeight, basis)} × ${fmtRange(profile.repMax, profile.repMax + 2)}`,
-        detail: `Stop at ${profile.targetRir} RIR`,
+        headline: `${fmtLb(baseWeight, basis)} × ${fmtRange(profile.repMax, Math.max(profile.repMax + 2, stretchTarget))}`,
+        detail: describeEffortTarget(profile.targetRir),
         basedOn,
-        goal: "Goal: outgrow the rep range before taking the big jump",
+        goal: `Get every set to ${profile.repMax + 2} reps and the ${profile.incrementLb} lb jump is on`,
         sourceLabel: null,
         confidence,
         reasonCodes: reasons,
         explanation,
         apply: {
           weight: baseWeight,
-          reps: profile.repMax,
-          label: `Keep ${formatLoad(baseWeight)} lb, aim ${profile.repMax}+`,
+          reps: stretchTarget,
+          label: `Keep ${formatLoad(baseWeight)} lb, aim ${stretchTarget}`,
         },
         sourceSessionIds: sourceIds,
         sourceExerciseKey: null,
       }
     }
     explanation.push(
-      `Most working sets reached ${profile.repMax} reps at ${formatRoundedRir(medianRir ?? profile.targetRir)} RIR, so the double-progression model moves to the next ${profile.incrementLb} lb increment.`,
-      `Reps are expected to drop back toward ${profile.repMin} at the new load.`,
+      allReachedTop
+        ? `You hit ${profile.repMax} reps on every set at ${fmtLb(baseWeight, basis)} — that's the ceiling, so the weight goes up to ${fmtLb(nextLoad, basis)}.`
+        : `You hit ${profile.repMax} reps on most of your sets at ${fmtLb(baseWeight, basis)} and still had something left, so the weight goes up to ${fmtLb(nextLoad, basis)}.`,
+      `Expect reps to drop back toward ${profile.repMin} at ${fmtLb(nextLoad, basis)}. That's normal — climb back to ${profile.repMax} and it goes up again.`,
     )
-    const deltaLb = dir * profile.incrementLb
+    if (baseline.steppedUp) {
+      explanation.push(
+        `You finished last session on ${fmtLb(baseWeight, basis)}, so that's the weight this builds on — not the one you spent most of the session at.`,
+      )
+    }
+    /* Report the change actually being made, not the nominal increment: from an
+       odd 33 lb the real step onto the 35s is +2, and a "+5 lb" chip is a lie. */
+    const deltaLb = Math.abs(nextLoad - baseWeight)
     return {
       kind: "initial",
       status: "push",
@@ -1011,11 +1146,11 @@ export function calculateInitialPrescription(
       repMin: profile.repMin,
       repMax: profile.repMax,
       targetRir: profile.targetRir,
-      delta: basis === "assisted" ? `−${profile.incrementLb} lb assist` : `+${deltaLb} lb`,
+      delta: basis === "assisted" ? `−${deltaLb} lb assist` : `+${formatLoad(deltaLb)} lb`,
       headline: `${fmtLb(nextLoad, basis)} × ${fmtRange(profile.repMin, profile.repMax)}`,
-      detail: `Stop at ${profile.targetRir} RIR`,
+      detail: describeEffortTarget(profile.targetRir),
       basedOn,
-      goal: `Goal: ${fmtRange(profile.repMin, profile.repMax)} clean reps at the new load`,
+      goal: `Get ${profile.repMin}+ reps at ${fmtLb(nextLoad, basis)} today`,
       sourceLabel: null,
       confidence,
       reasonCodes: reasons,
@@ -1023,7 +1158,7 @@ export function calculateInitialPrescription(
       apply: {
         weight: nextLoad,
         reps: profile.repMin,
-        label: `Use ${formatLoad(nextLoad)} lb next set`,
+        label: `Use ${formatLoad(nextLoad)} lb`,
       },
       sourceSessionIds: sourceIds,
       sourceExerciseKey: null,
@@ -1038,7 +1173,9 @@ export function calculateInitialPrescription(
         ? roundToIncrement(baseWeight - dir * profile.incrementLb, profile.incrementLb, "down")
         : Math.round(baseWeight * 0.9)
     explanation.push(
-      "Performance has been below target across three sessions (or pain/technique intervened). Drop one increment, rebuild clean reps, then push again.",
+      repeatedBelow
+        ? `Three sessions in a row have come in under ${profile.repMin} reps at ${fmtLb(baseWeight, basis)}. Take ${profile.incrementLb} lb off, rebuild clean sets, and you'll pass this weight sooner than by grinding it.`
+        : `You flagged pain or form on a session that was already a grind. Take ${profile.incrementLb} lb off and rebuild from a weight you can control.`,
     )
     return {
       kind: "initial",
@@ -1050,9 +1187,9 @@ export function calculateInitialPrescription(
       targetRir: profile.targetRir + 1,
       delta: basis === "assisted" ? `+${profile.incrementLb} lb assist` : `−${profile.incrementLb} lb`,
       headline: `${fmtLb(reduced, basis)} × ${fmtRange(profile.repMin, profile.repMax)}`,
-      detail: `Stop at ${profile.targetRir + 1} RIR · rebuild quality`,
+      detail: `${describeEffortTarget(profile.targetRir + 1)} · rebuild clean reps`,
       basedOn,
-      goal: "Goal: clean sets in range, then resume progressive overload",
+      goal: `Get ${fmtRange(profile.repMin, profile.repMax)} clean reps here, then start climbing again`,
       sourceLabel: null,
       confidence,
       reasonCodes: reasons,
@@ -1071,7 +1208,7 @@ export function calculateInitialPrescription(
   if (baseWeight != null && struggled && !latest.hadPainOrTechniqueFlag) {
     reasons.push("MISSED_MINIMUM_REPS", "BELOW_TARGET_RIR", "IN_REP_RANGE")
     explanation.push(
-      "Last session was tough, but progressive overload stays aggressive: keep the load and rebuild toward the top of the rep range before considering a deload.",
+      `Last session was a grind, but one hard day isn't a reason to go lighter. Stay on ${fmtLb(baseWeight, basis)} and claw back to ${profile.repMin} reps a set — the weight only drops if this keeps happening.`,
     )
     return {
       kind: "initial",
@@ -1083,9 +1220,9 @@ export function calculateInitialPrescription(
       targetRir: profile.targetRir,
       delta: "Same weight",
       headline: `${fmtLb(baseWeight, basis)} × ${fmtRange(profile.repMin, profile.repMax)}`,
-      detail: `Stop at ${profile.targetRir} RIR · rebuild reps`,
+      detail: `${describeEffortTarget(profile.targetRir)} · rebuild reps`,
       basedOn,
-      goal: `Goal: reclaim ${fmtRange(profile.repMin, profile.repMax)} before changing load`,
+      goal: `Get back to ${profile.repMin}+ reps a set before the weight moves`,
       sourceLabel: null,
       confidence,
       reasonCodes: reasons,
@@ -1105,11 +1242,26 @@ export function calculateInitialPrescription(
   if (medianRir != null) {
     reasons.push(medianRir >= profile.targetRir ? "ON_TARGET_RIR" : "BELOW_TARGET_RIR")
   }
-  const repTarget = Math.min((lastBest?.reps ?? profile.repMin) + 1, profile.repMax)
-  explanation.push(
-    `You're inside the ${fmtRange(profile.repMin, profile.repMax)} rep range but haven't topped it on most sets yet, so the load stays and the rep target moves up.`,
-    `Increase to the next increment once most sets reach ${profile.repMax} reps at about ${profile.targetRir} RIR.`,
+  /* The weakest set is what's holding the weight back, so that's what the target
+     chases. Aiming off the *best* set (the old behaviour) let a session like
+     12 / 8 / 8 sit at "aim 12" forever — no push where it was actually needed. */
+  const weakestAtBase = repsAtBase.length > 0 ? Math.min(...repsAtBase) : null
+  const repTarget = Math.min(
+    Math.max((weakestAtBase ?? profile.repMin - 1) + 1, profile.repMin),
+    profile.repMax,
   )
+  const shortBy = repsAtBase.filter((r) => r < profile.repMax).length
+  explanation.push(
+    weakestAtBase != null
+      ? `${shortBy === 1 ? "One set is" : `${shortBy} sets are`} still short of ${profile.repMax} reps at ${fmtLb(baseWeight, basis)}, so the weight stays and the reps go up — your lowest set last time was ${weakestAtBase}.`
+      : `Stay at ${fmtLb(baseWeight, basis)} and add reps.`,
+    `Once every set hits ${profile.repMax} reps, the weight goes up ${profile.incrementLb} lb automatically.`,
+  )
+  if (baseline.steppedUp) {
+    explanation.push(
+      `You finished last session on ${fmtLb(baseWeight, basis)}, so that's the weight this builds on — not the one you spent most of the session at.`,
+    )
+  }
   return {
     kind: "initial",
     status: "on-track",
@@ -1118,11 +1270,11 @@ export function calculateInitialPrescription(
     repMin: profile.repMin,
     repMax: profile.repMax,
     targetRir: profile.targetRir,
-    delta: "Same weight",
+    delta: weakestAtBase != null && repTarget > weakestAtBase ? "+1 rep" : "Same weight",
     headline: `${fmtLb(baseWeight, basis)} × ${fmtRange(Math.min(repTarget, profile.repMax), profile.repMax)}`,
-    detail: `Stop at ${profile.targetRir} RIR`,
+    detail: describeEffortTarget(profile.targetRir),
     basedOn,
-    goal: "Goal: add 1 rep or use the next available weight increment",
+    goal: `Hit ${profile.repMax} reps on every set and the weight goes up`,
     sourceLabel: null,
     confidence,
     reasonCodes: reasons,
@@ -1137,6 +1289,148 @@ export function calculateInitialPrescription(
         : null,
     sourceSessionIds: sourceIds,
     sourceExerciseKey: null,
+  }
+}
+
+/* ──────────────────────────────────────────────────────────
+   Session plan — the coach fills in every set before you start
+   ────────────────────────────────────────────────────────── */
+
+export interface PlannedSet {
+  setNumber: number
+  /** Target load; null means bodyweight or "you still have to pick one". */
+  weight: number | null
+  /** Target reps for this specific set. */
+  reps: number | null
+  /** Short chip for the set row, e.g. "+5 lb", "Beat 10", "Hold 12". */
+  hint: string
+  /** What this same set did last time, for the "previous" column. */
+  previous: { weight: number | null; reps: number | null } | null
+}
+
+export interface SessionPlan {
+  recommendation: CoachRecommendation
+  sets: PlannedSet[]
+  /** One plain line for the whole movement, e.g. "105 lb × 8–12 · +5 lb". */
+  summary: string
+}
+
+/**
+ * Per-set targets for a movement you're about to train.
+ *
+ * The movement-level recommendation decides the weight; this decides each set's
+ * rep target off the same set last time, so every set is asking for either more
+ * weight or one more rep than you managed. Nothing here mutates state — the
+ * caller writes the numbers into the session.
+ */
+export function planSessionSets(input: {
+  exercise: SimilarityInput
+  sessions: PoSession[]
+  setCount: number
+  overrides?: ProfileOverrides
+  excludeSessionId?: string
+  /** Reuse an already-computed recommendation instead of recalculating it. */
+  recommendation?: CoachRecommendation
+}): SessionPlan {
+  const profile = buildExerciseProfile(
+    input.exercise.name,
+    input.exercise.category,
+    input.overrides,
+  )
+  const rec =
+    input.recommendation ??
+    calculateInitialPrescription({
+      exercise: input.exercise,
+      sessions: input.sessions,
+      overrides: input.overrides,
+      excludeSessionId: input.excludeSessionId,
+    })
+
+  const previous =
+    getComparableExerciseHistory(input.sessions, input.exercise.name, {
+      excludeSessionId: input.excludeSessionId,
+      limit: 1,
+    })[0] ?? null
+  const previousSets = previous?.sets ?? []
+  const bodyweight = profile.loadBasis === "bodyweight" && rec.loadLb == null
+  /* The recommendation's range wins over the profile's: when the next weight up
+     is a big jump the coach deliberately shifts the target above the normal
+     ceiling, and clamping back to the profile would ask for last week's reps. */
+  const repMin = rec.repMin
+  const repMax = Math.max(rec.repMax, rec.repMin)
+  /* Only "keep the weight" outcomes chase per-set reps. When the weight moves
+     (up, down, or is still being found) every set restarts at the same target. */
+  const holdingLoad = rec.action === "add_reps" || rec.action === "hold"
+
+  const count = Math.max(1, Math.floor(input.setCount))
+  const sets: PlannedSet[] = []
+  for (let i = 0; i < count; i++) {
+    const prior =
+      previousSets.find((s) => s.setNumber === i + 1) ??
+      previousSets[Math.min(i, previousSets.length - 1)] ??
+      null
+    const priorReps = prior?.reps ?? null
+    const previousEntry = prior
+      ? { weight: prior.weight ?? null, reps: prior.reps ?? null }
+      : null
+
+    if (bodyweight) {
+      const reps = priorReps != null ? priorReps + 1 : (rec.apply?.reps ?? repMin)
+      sets.push({
+        setNumber: i + 1,
+        weight: null,
+        reps,
+        hint: priorReps != null ? `Beat ${priorReps}` : `Aim ${reps}`,
+        previous: previousEntry,
+      })
+      continue
+    }
+
+    if (!holdingLoad) {
+      sets.push({
+        setNumber: i + 1,
+        weight: rec.loadLb,
+        reps: rec.loadLb != null ? repMin : null,
+        hint:
+          rec.action === "increase_load"
+            ? (rec.delta ?? `Aim ${repMin}`)
+            : rec.action === "reduce_load"
+              ? "Lighter — rebuild"
+              : "Find your weight",
+        previous: previousEntry,
+      })
+      continue
+    }
+
+    const sameLoad =
+      prior?.weight != null && rec.loadLb != null && prior.weight === rec.loadLb
+    if (sameLoad && priorReps != null) {
+      const reps = Math.min(Math.max(priorReps + 1, repMin), repMax)
+      sets.push({
+        setNumber: i + 1,
+        weight: rec.loadLb,
+        reps,
+        hint: reps > priorReps ? `Beat ${priorReps}` : `Hold ${reps}`,
+        previous: previousEntry,
+      })
+      continue
+    }
+    /* No matching set at this weight (extra set, or the weight changed since):
+       fall back to the movement-level target. */
+    const reps = rec.apply?.reps ?? repMin
+    sets.push({
+      setNumber: i + 1,
+      weight: rec.loadLb,
+      reps,
+      hint: `Aim ${reps}`,
+      previous: previousEntry,
+    })
+  }
+
+  return {
+    recommendation: rec,
+    sets,
+    summary: rec.delta ? `${rec.headline} · ${rec.delta}` : rec.headline,
   }
 }
 
@@ -1260,7 +1554,7 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
   if (anyPain) {
     reasons.push("PAIN_FLAGGED")
     explanation.push(
-      "Pain was flagged, so the coach will not suggest more load or extra sets. Reduce the load or stop the movement if pain persists.",
+      "You flagged pain, so the coach won't suggest more weight or extra sets. Take some weight off, or stop this exercise if it keeps hurting.",
     )
     const reduced =
       lastWeight != null && profile.incrementLb > 0
@@ -1304,7 +1598,7 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
     ) {
       reasons.push("OPTIONAL_VOLUME_APPROPRIATE", "ABOVE_TARGET_RIR")
       explanation.push(
-        `The final set still had ${lastRir} RIR with steady performance, so one optional set is a productive way to add volume today.`,
+        `You finished with about ${lastRir} reps still in the tank and your reps held up, so there's room for one more set if you want it.`,
       )
       return {
         ...initial,
@@ -1314,7 +1608,7 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
         loadLb: lastWeight,
         delta: "Optional extra set",
         headline: `Optional: ${fmtLb(lastWeight, basis)} × ${fmtRange(initial.repMin, initial.repMax)}`,
-        detail: `Stop at ${initial.targetRir} RIR · skip if you're done`,
+        detail: `${describeEffortTarget(initial.targetRir)} · skip it if you're done`,
         goal: null,
         confidence,
         reasonCodes: [...initial.reasonCodes, ...reasons],
@@ -1328,14 +1622,14 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
       }
     }
     if (!okVolume) reasons.push("VOLUME_CAP_REACHED")
-    return summarizeAsHold(initial, lastWeight, basis, confidence, reasons, explanation, "Planned sets complete", null)
+    return summarizeAsHold(initial, lastWeight, basis, confidence, reasons, explanation, "All sets done", null)
   }
 
   /* ── Technique breakdown ─────────────────────────── */
   if (assess.techniqueFlag || anyTechnique) {
     reasons.push("TECHNIQUE_FLAGGED")
     explanation.push(
-      "Technique broke down, so the load holds. Tighten execution before adding weight or reps.",
+      "Your form slipped, so the weight stays put. Clean up the reps before adding anything.",
     )
     return summarizeAsHold(
       initial,
@@ -1344,7 +1638,7 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
       confidence,
       reasons,
       explanation,
-      "Technique first — keep the load",
+      "Form first — same weight",
       lastWeight != null && !allPlannedDone
         ? { weight: lastWeight, reps: Math.max(initial.repMin, Math.min(last.reps ?? initial.repMin, initial.repMax)), label: `Keep ${formatLoad(lastWeight)} lb` }
         : null,
@@ -1378,8 +1672,8 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
       )
       explanation.push(
         sharpDecline
-          ? `${setLabel} collapsed ~35%+ from the previous set — drop one increment and finish clean.`
-          : `${setLabel} was the second hard set in a row. Drop one increment so the remaining work stays productive.`,
+          ? `${setLabel} dropped off a cliff compared with the set before it. Take ${profile.incrementLb} lb off and finish the rest clean.`
+          : `${setLabel} was your second hard set in a row. Take ${profile.incrementLb} lb off so the sets you have left still count.`,
       )
       return {
         ...initial,
@@ -1392,8 +1686,8 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
             ? `+${profile.incrementLb} lb assist`
             : `−${profile.incrementLb} lb`,
         headline: `${fmtLb(reduced, basis)} × ${fmtRange(initial.repMin, initial.repMax)}`,
-        detail: `Stop at ${initial.targetRir} RIR`,
-        goal: `Or keep ${formatLoad(lastWeight)} lb and target ${lowerRepTarget} reps`,
+        detail: describeEffortTarget(initial.targetRir),
+        goal: `Or stay on ${formatLoad(lastWeight)} lb and get ${lowerRepTarget} reps`,
         confidence,
         reasonCodes: [...initial.reasonCodes, ...reasons],
         explanation,
@@ -1407,7 +1701,7 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
 
     /* Default aggressive path: keep the load, tighten the rep target. */
     explanation.push(
-      `${setLabel} was harder than planned. Keep the load for maximum progressive overload and aim ${lowerRepTarget} clean reps — only deload if the next set also falls apart.`,
+      `${setLabel} was harder than planned. Stay on this weight and get ${lowerRepTarget} clean reps — the weight only comes off if the next set falls apart too.`,
     )
     return {
       ...initial,
@@ -1417,8 +1711,8 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
       loadLb: lastWeight,
       delta: `Aim ${lowerRepTarget} reps`,
       headline: `${fmtLb(lastWeight, basis)} × ${lowerRepTarget}`,
-      detail: `Stop at ${initial.targetRir} RIR · hold the load`,
-      goal: "Goal: finish remaining sets without dropping weight",
+      detail: `${describeEffortTarget(initial.targetRir)} · same weight`,
+      goal: "Finish your remaining sets without dropping the weight",
       confidence,
       reasonCodes: [...initial.reasonCodes, ...reasons],
       explanation,
@@ -1430,26 +1724,35 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
     }
   }
 
-  /* ── Clearly easy: increase next set ─────────────── */
+  /* ── Room to go up: increase the next set ────────────
+     Two ways in. Either the set was clearly easier than planned, or it topped
+     out the rep range with the planned effort still in hand — the second case
+     matters because the effort prompt only offers 0–3 reps in reserve, so
+     "easier than a 2 RIR target" is not something most users can even log. */
+  const toppedRange = (last.reps ?? 0) >= initial.repMax
+  const heldEffort =
+    typeof last.rir === "number"
+      ? last.rir >= initial.targetRir
+      : (last.reps ?? 0) > initial.repMax
   const reachedTarget = (last.reps ?? 0) >= Math.min(initial.repMax, initial.repMin)
   if (
-    assess.vsRir === "easier" &&
+    (assess.vsRir === "easier" || (toppedRange && heldEffort)) &&
     reachedTarget &&
     lastWeight != null &&
     profile.incrementLb > 0
   ) {
-    const nextLoad = roundToIncrement(
-      lastWeight + dir * profile.incrementLb,
-      profile.incrementLb,
-      "nearest",
-    )
+    const nextLoad = nextLoadStep(lastWeight, profile.incrementLb, dir)
     const jumpPct =
       basis === "assisted" ? 0 : Math.abs(nextLoad - lastWeight) / Math.max(1, lastWeight)
     if (jumpPct <= 0.15) {
       reasons.push("ABOVE_TARGET_RIR", "EQUIPMENT_INCREMENT_ROUNDED")
+      if (toppedRange) reasons.push("UPPER_REP_RANGE_REACHED")
       const repLow = Math.max(1, initial.repMin - 1)
+      const stepLb = Math.abs(nextLoad - lastWeight)
       explanation.push(
-        `${setLabel} was easier than planned at ${last.rir} RIR (target ${initial.targetRir}), so the next set moves up one increment.`,
+        toppedRange
+          ? `${setLabel} hit ${last.reps} reps and you still had ${typeof last.rir === "number" ? `about ${last.rir}` : "reps"} left — that's the top of the range, so go up to ${fmtLb(nextLoad, basis)} now instead of waiting for next week.`
+          : `${setLabel} was easier than planned, so the next set goes up to ${fmtLb(nextLoad, basis)}.`,
       )
       return {
         ...initial,
@@ -1457,20 +1760,20 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
         status: "push",
         action: "increase_load",
         loadLb: nextLoad,
-        delta: basis === "assisted" ? `−${profile.incrementLb} lb assist` : `+${profile.incrementLb} lb`,
+        delta: basis === "assisted" ? `−${stepLb} lb assist` : `+${formatLoad(stepLb)} lb`,
         headline: `${fmtLb(nextLoad, basis)} × ${fmtRange(repLow, initial.repMax)}`,
-        detail: `Stop at ${initial.targetRir} RIR`,
+        detail: describeEffortTarget(initial.targetRir),
         goal: null,
         confidence,
         reasonCodes: [...initial.reasonCodes, ...reasons],
         explanation,
-        apply: { weight: nextLoad, reps: null, label: `Use ${formatLoad(nextLoad)} lb next set` },
+        apply: { weight: nextLoad, reps: repLow, label: `Use ${formatLoad(nextLoad)} lb` },
       }
     }
     reasons.push("ABOVE_TARGET_RIR", "LARGE_INCREMENT_PREFERS_REPS")
     const repTarget = Math.min((last.reps ?? initial.repMin) + 1, initial.repMax + 2)
     explanation.push(
-      `${setLabel} was easy, but the next increment is a big jump — adding reps is the better progression here.`,
+      `${setLabel} had more in it, but the next weight up is a big jump on this machine — add a rep instead.`,
     )
     return {
       ...initial,
@@ -1480,7 +1783,7 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
       loadLb: lastWeight,
       delta: "+1 rep",
       headline: `${fmtLb(lastWeight, basis)} × ${repTarget}`,
-      detail: `Stop at ${initial.targetRir} RIR`,
+      detail: describeEffortTarget(initial.targetRir),
       goal: null,
       confidence,
       reasonCodes: [...initial.reasonCodes, ...reasons],
@@ -1492,7 +1795,7 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
   /* ── On target: hold ─────────────────────────────── */
   reasons.push(assess.vsRir === "on" ? "ON_TARGET_RIR" : "IN_REP_RANGE")
   explanation.push(
-    `${setLabel} landed in range${typeof last.rir === "number" ? ` at ${last.rir} RIR` : ""} — normal within-exercise fatigue means holding the load is the right call.`,
+    `${setLabel} landed in range${typeof last.rir === "number" ? ` with about ${last.rir} left in the tank` : ""}. Getting a little tired set to set is normal, so the weight stays where it is.`,
   )
   const aim = Math.max(initial.repMin, Math.min((last.reps ?? initial.repMin), initial.repMax))
   return summarizeAsHold(
@@ -1502,7 +1805,7 @@ export function calculateNextSetRecommendation(input: NextSetInput): CoachRecomm
     confidence,
     reasons,
     explanation,
-    `On target. Keep ${lastWeight != null ? `${formatLoad(lastWeight)} lb` : "the load"} and aim for ${aim}+`,
+    `Match that: ${lastWeight != null ? `${formatLoad(lastWeight)} lb` : "same weight"} for ${aim}+ reps`,
     lastWeight != null
       ? { weight: lastWeight, reps: aim, label: `Keep ${formatLoad(lastWeight)} lb, aim ${aim}` }
       : null,
@@ -1718,10 +2021,10 @@ export function summarizeMovementPerformance(input: {
     const effortNote =
       medianRir != null && prev.medianRir != null
         ? Math.abs(medianRir - prev.medianRir) <= 1
-          ? " at a similar effort"
+          ? " for about the same effort"
           : medianRir > prev.medianRir
-            ? " at an easier effort"
-            : " at a harder effort"
+            ? " and it felt easier"
+            : " and it felt harder"
         : ""
     let text: string
     if (loadDelta != null && dir * loadDelta > 0) {
@@ -1753,8 +2056,8 @@ export function summarizeMovementPerformance(input: {
         kind: "load",
         text:
           basis === "assisted"
-            ? `New best: ${formatLoad(topWeight)} lb assist (less assistance than ever)`
-            : `New load PR: ${formatLoad(topWeight)} lb`,
+            ? `New best — ${formatLoad(topWeight)} lb assist, the least you've ever needed`
+            : `New best weight: ${formatLoad(topWeight)} lb`,
       }
     } else if (topWeight != null) {
       const priorBestRepsAtLoad = history.reduce((accReps, e) => {
@@ -1770,7 +2073,7 @@ export function summarizeMovementPerformance(input: {
       if (priorBestRepsAtLoad > 0 && bestRepsAtLoad > priorBestRepsAtLoad) {
         newBest = {
           kind: "reps",
-          text: `New rep PR: ${bestRepsAtLoad} reps at ${formatLoad(topWeight)} lb`,
+          text: `New best: ${bestRepsAtLoad} reps at ${formatLoad(topWeight)} lb`,
         }
       }
     }
@@ -1859,24 +2162,24 @@ export interface WorkoutProgressionSummaryData {
 function nextRecText(rec: CoachRecommendation): string {
   const range = fmtRange(rec.repMin, rec.repMax)
   if (rec.action === "increase_load" && rec.loadLb != null) {
-    return `Increase to ${formatLoad(rec.loadLb)} lb × ${range} at ${rec.targetRir} RIR`
+    return `Go up to ${formatLoad(rec.loadLb)} lb × ${range} reps`
   }
   if (rec.action === "reduce_load" && rec.loadLb != null) {
-    return `Lighter exposure: ${formatLoad(rec.loadLb)} lb × ${range}, then reassess`
+    return `Drop to ${formatLoad(rec.loadLb)} lb × ${range} reps and rebuild`
   }
   if (rec.action === "add_reps") {
     return rec.loadLb != null
-      ? `Keep ${formatLoad(rec.loadLb)} lb and add reps toward ${rec.repMax} at ${rec.targetRir} RIR`
-      : `Add reps toward ${rec.repMax} at ${rec.targetRir} RIR`
+      ? `Stay on ${formatLoad(rec.loadLb)} lb and push toward ${rec.repMax} reps a set`
+      : `Push toward ${rec.repMax} reps a set`
   }
   if (rec.action === "choose_load" || rec.action === "calibrate") {
     return rec.loadLb != null
-      ? `Calibrate around ${formatLoad(rec.loadLb)} lb × ${range}`
-      : `Calibrate with a conservative load × ${range}`
+      ? `Try ${formatLoad(rec.loadLb)} lb × ${range} reps and see how it feels`
+      : `Start light, ${range} reps, and find your weight`
   }
   return rec.loadLb != null
-    ? `Hold ${formatLoad(rec.loadLb)} lb × ${range} at ${rec.targetRir} RIR`
-    : `Hold steady at ${range} reps`
+    ? `Stay on ${formatLoad(rec.loadLb)} lb × ${range} reps`
+    : `Stay at ${range} reps`
 }
 
 export function summarizeWorkoutProgression(
@@ -1941,8 +2244,8 @@ export function summarizeWorkoutProgression(
           : "Steady session"
   const message =
     total === 0
-      ? "No completed sets to analyze."
-      : `${progressed} of ${total} movement${total === 1 ? "" : "s"} progressed`
+      ? "Nothing logged to compare yet."
+      : `You beat last time on ${progressed} of ${total} exercise${total === 1 ? "" : "s"}`
 
   /* Next priority: the most actionable upcoming change. */
   const priorityMs =
