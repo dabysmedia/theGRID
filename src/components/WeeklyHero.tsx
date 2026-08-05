@@ -597,7 +597,7 @@ export function WeeklyHero({
         // body below so card edges stay visible.
         // flex-1 (not h-full %) so the card always consumes the shell height —
         // percentage heights can stay short until a scroll reflow on mobile.
-        "flex min-h-0 flex-col overflow-hidden !rounded-[1.35rem] border border-white/[0.09] p-4 transition-opacity duration-700 max-sm:!rounded-b-[2.65rem] max-lg:px-3 max-lg:pt-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] lg:p-5",
+        "flex min-h-0 flex-col !overflow-clip !rounded-[1.35rem] border border-white/[0.09] p-4 transition-opacity duration-700 max-sm:!rounded-b-[2.65rem] max-lg:px-3 max-lg:pt-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] lg:p-5",
         fillViewport && "min-h-0 flex-1",
         loading ? "opacity-50" : "opacity-100",
       )}
@@ -718,7 +718,7 @@ export function WeeklyHero({
         className={cn(
           "relative z-10 motion-safe:animate-fade-up motion-reduce:animate-none",
           fillViewport && expanded != null &&
-            "min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]",
+            "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0",
           protocolFocused || weightFocused || expanded === "vitals"
             ? "space-y-0"
             : fillViewport && expanded == null

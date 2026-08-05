@@ -2410,6 +2410,20 @@ html {
   }
 }
 
+/* Scrollbars are hidden app-wide by default; scrolling itself still works.
+   Unlayered + universal so any class-scoped selector (e.g. .food-log-scroll's
+   thin colored bar below) still wins on specificity where a visible bar is wanted. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 /* Nutrition logging — reuse the shared quick-log glass shell with calories accents. */
 .food-log-surface {
   --primary: oklch(0.704 0.191 22.216);
