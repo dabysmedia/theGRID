@@ -34,6 +34,14 @@ describe("stepsDayKey", () => {
     expect(stepsDayKey(atLocal("2026-07-07", 4, 59), TZ)).toBe("2026-07-06")
   })
 
+  it("buckets imported cardio onto the same 5am→5am day as steps", () => {
+    // Late-night ride still counts on the day the user was up (Mon).
+    expect(stepsDayKey(atLocal("2026-07-06", 23, 30), TZ)).toBe("2026-07-06")
+    // Early-morning treadmill before 5am stays on Monday, not Tuesday.
+    expect(stepsDayKey(atLocal("2026-07-07", 1, 15), TZ)).toBe("2026-07-06")
+    expect(stepsDayKey(atLocal("2026-07-07", 5, 0), TZ)).toBe("2026-07-07")
+  })
+
   it("switches to the new steps day exactly at 05:00", () => {
     expect(stepsDayKey(atLocal("2026-07-07", 4, 59), TZ)).toBe("2026-07-06")
     expect(stepsDayKey(atLocal("2026-07-07", 5, 0), TZ)).toBe("2026-07-07")

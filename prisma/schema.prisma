@@ -80,7 +80,7 @@ model WaterEntry {
 /// is deliberately excluded — that already lives in `StepEntry`.
 model CardioEntry {
   id                String   @id @default(cuid())
-  /// Calendar day the session started, in the user's local timezone (stored UTC-noon).
+  /// Tracking day the session started (local 5am→5am, same as steps; stored UTC-noon).
   date              DateTime
   startTime         DateTime
   endTime           DateTime
