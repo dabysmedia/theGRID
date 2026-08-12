@@ -36,15 +36,25 @@ export const CARDIO_ACTIVITY_LABELS: Record<CardioActivity, string> = {
   cardio: "Cardio",
 }
 
-/** Google Health `Exercise.ExerciseType` → normalized cardio activity. */
+/**
+ * Google Health `Exercise.ExerciseType` → normalized cardio activity.
+ * Keys are checked against the v4 `Exercise.ExerciseType` enum reference.
+ *
+ * Types whose effort is mostly strength, mobility, or chores are absent on
+ * purpose, as are the catch-all labels (`WORKOUT`, `SPORT`, `OTHER`): a watch
+ * reports those for lifting sessions too, so counting them would inflate the
+ * ring on days with no conditioning at all.
+ */
 const GOOGLE_EXERCISE_TYPE_TO_ACTIVITY: Record<string, CardioActivity> = {
   ASSAULT_BIKE: "cycling",
   BIKING: "cycling",
+  ELECTRIC_BIKE: "cycling",
   HAND_CYCLING: "cycling",
   MOUNTAIN_BIKE: "cycling",
   OUTDOOR_BIKE: "cycling",
   SPINNING: "cycling",
   STATIONARY_BIKE: "cycling",
+  UNICYCLING: "cycling",
 
   INCLINE_RUN: "running",
   RUNNING: "running",
@@ -61,19 +71,92 @@ const GOOGLE_EXERCISE_TYPE_TO_ACTIVITY: Record<string, CardioActivity> = {
   SWIMMING: "swimming",
   SWIMMING_OPEN_WATER: "swimming",
   SWIMMING_POOL: "swimming",
+  SYNCHRONIZED_SWIMMING: "swimming",
 
   HIIT: "hiit",
   INTERVAL_WORKOUT: "hiit",
   TABATA_WORKOUT: "hiit",
 
   AEROBIC_WORKOUT: "cardio",
+  BOOTCAMP: "cardio",
   BOXING: "cardio",
   CARDIO_SCULPT: "cardio",
   CARDIO_WORKOUT: "cardio",
+  CIRCUIT_TRAINING: "cardio",
+  CROSSFIT: "cardio",
+  CROSS_TRAINING: "cardio",
+  EXERCISE_CLASS: "cardio",
+  FITNESS_GAMING: "cardio",
   JUMPING_ROPE: "cardio",
   KICKBOXING: "cardio",
+  MULTISPORT: "cardio",
+  OUTDOOR_WORKOUT: "cardio",
   STEP_TRAINING: "cardio",
+  TRAMPOLINE: "cardio",
+  WATER_AEROBICS: "cardio",
   WATER_JOGGING: "cardio",
+
+  BALLET: "cardio",
+  BALLROOM_DANCE: "cardio",
+  BREAKDANCING: "cardio",
+  DANCING: "cardio",
+  HIP_HOP: "cardio",
+  JAZZ_DANCE: "cardio",
+  MODERN_DANCE: "cardio",
+  TANGO: "cardio",
+  ZUMBA: "cardio",
+
+  JIU_JITSU: "cardio",
+  KARATE: "cardio",
+  MARTIAL_ARTS: "cardio",
+  MUAY_THAI: "cardio",
+  TAEKWONDO: "cardio",
+  WRESTLING: "cardio",
+
+  BADMINTON: "cardio",
+  BASKETBALL: "cardio",
+  FIELD_HOCKEY: "cardio",
+  FOOTBALL_AMERICAN: "cardio",
+  FOOTBALL_AUSTRALIAN: "cardio",
+  HANDBALL: "cardio",
+  HOCKEY: "cardio",
+  LACROSSE: "cardio",
+  PADEL: "cardio",
+  PICKELBALL: "cardio",
+  RACKET_SPORTS: "cardio",
+  RACQUETBALL: "cardio",
+  RUGBY: "cardio",
+  SOCCER: "cardio",
+  SQUASH: "cardio",
+  TENNIS: "cardio",
+  TRACK_AND_FIELD: "cardio",
+  ULTIMATE_FRISBEE: "cardio",
+  VOLLEYBALL: "cardio",
+  VOLLEYBALL_BEACH: "cardio",
+  WATER_POLO: "cardio",
+
+  CANOEING: "cardio",
+  KAYAKING: "cardio",
+  PADDLEBOARDING: "cardio",
+  SURFING: "cardio",
+
+  CROSS_COUNTRY_SKI: "cardio",
+  ICE_SKATING: "cardio",
+  ROLLERBLADING: "cardio",
+  ROLLER_SKATING: "cardio",
+  SKATING: "cardio",
+  SKIING: "cardio",
+  SNOWBOARDING: "cardio",
+  SNOWSHOEING: "cardio",
+  SPEED_SKATING: "cardio",
+
+  CLIMBING: "cardio",
+  GYMNASTICS: "cardio",
+  INDOOR_CLIMBING: "cardio",
+  PARKOUR: "cardio",
+  ROCK_CLIMBING: "cardio",
+
+  WHEELCHAIR: "cardio",
 }
 
 /** Returns the cardio activity for a Google `exerciseType`, or null if it isn't cardio. */

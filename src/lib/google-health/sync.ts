@@ -58,6 +58,8 @@ export type SyncResult = {
   weightSkippedVacation: number
   vitalsUpserted: number
   cardioUpserted: number
+  /** Google `exerciseType` → session count for activities the allow-list dropped. */
+  cardioSkippedTypes: Record<string, number>
   rangeStart: string
   rangeEnd: string
   warnings: string[]
@@ -156,6 +158,17 @@ export async function syncGoogleHealthForUser(
   /** Guards the stale-row cleanup: a failed fetch returns [] and must not wipe the window. */
   let cardioFetchOk = false
 
+  /**
+   * Google's rollup endpoints run on a 10s server-side deadline and intermittently
+   * return DEADLINE_EXCEEDED under load. Those retry fine; auth and quota failures
+   * do not, so only transient classes are retried.
+   */
+  function isTransientUpstream(message: string): boolean {
+    return /DEADLINE_EXCEEDED|UNAVAILABLE|INTERNAL|ABORTED|ECONNRESET|ETIMEDOUT|timeout|\b(429|500|502|503|504)\b/i.test(
+      message,
+    )
+  }
+
   async function safeFetch<T>(
     label: string,
     enabled: boolean,
@@ -164,15 +177,21 @@ export async function syncGoogleHealthForUser(
   ): Promise<T> {
     if (!enabled) return fallback
     fetchAttempts++
-    try {
-      const value = await load()
-      fetchSuccesses++
-      return value
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "request failed"
-      fetchWarnings.push(`${label}: ${message}`)
-      return fallback
+    const maxAttempts = 3
+    let lastMessage = "request failed"
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const value = await load()
+        fetchSuccesses++
+        return value
+      } catch (error) {
+        lastMessage = error instanceof Error ? error.message : "request failed"
+        if (attempt === maxAttempts || !isTransientUpstream(lastMessage)) break
+        await new Promise((r) => setTimeout(r, 500 * attempt))
+      }
     }
+    fetchWarnings.push(`${label}: ${lastMessage}`)
+    return fallback
   }
 
   const [
@@ -532,10 +551,20 @@ export async function syncGoogleHealthForUser(
 
   let cardioUpserted = 0
   const syncedCardioExternalIds = new Set<string>()
+  /**
+   * Counts sessions dropped by the allow-list, keyed by Google's `exerciseType`.
+   * Reported back so an unmapped activity shows up as "not syncing" rather than
+   * silently reading as "no cardio recorded".
+   */
+  const cardioSkippedTypes: Record<string, number> = {}
   for (const session of exercises) {
     const activityType = cardioActivityForGoogleType(session.exerciseType)
     // Walking, strength, yoga, … aren't cardio — skip rather than store and filter later.
-    if (!activityType) continue
+    if (!activityType) {
+      const key = session.exerciseType || "UNKNOWN"
+      cardioSkippedTypes[key] = (cardioSkippedTypes[key] ?? 0) + 1
+      continue
+    }
     const minutes = Math.round(session.activeMinutes * 10) / 10
     if (minutes < MIN_CARDIO_SESSION_MINUTES) continue
 
@@ -598,6 +627,7 @@ export async function syncGoogleHealthForUser(
     weightSkippedVacation,
     vitalsUpserted,
     cardioUpserted,
+    cardioSkippedTypes,
     rangeStart: startStepsKey,
     rangeEnd: endStepsKey,
     warnings: fetchWarnings,

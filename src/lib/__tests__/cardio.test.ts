@@ -51,6 +51,36 @@ describe("cardioActivityForGoogleType", () => {
     }
   })
 
+  it("excludes catch-all labels a watch also uses for lifting", () => {
+    for (const type of ["WORKOUT", "SPORT", "OTHER"]) {
+      expect(cardioActivityForGoogleType(type)).toBeNull()
+    }
+  })
+
+  it("counts conditioning classes and sport sessions as generic cardio", () => {
+    for (const type of [
+      "CIRCUIT_TRAINING",
+      "CROSSFIT",
+      "EXERCISE_CLASS",
+      "OUTDOOR_WORKOUT",
+      "SOCCER",
+      "TENNIS",
+      "DANCING",
+      "MARTIAL_ARTS",
+      "KAYAKING",
+      "SKIING",
+      "ROCK_CLIMBING",
+    ]) {
+      expect(cardioActivityForGoogleType(type)).toBe("cardio")
+    }
+  })
+
+  it("covers the remaining bike and swim variants", () => {
+    expect(cardioActivityForGoogleType("ELECTRIC_BIKE")).toBe("cycling")
+    expect(cardioActivityForGoogleType("UNICYCLING")).toBe("cycling")
+    expect(cardioActivityForGoogleType("SYNCHRONIZED_SWIMMING")).toBe("swimming")
+  })
+
   it("ignores unknown, empty, and unspecified types", () => {
     expect(cardioActivityForGoogleType("SOMETHING_GOOGLE_ADDS_LATER")).toBeNull()
     expect(cardioActivityForGoogleType("EXERCISE_TYPE_UNSPECIFIED")).toBeNull()
