@@ -100,6 +100,8 @@ model CardioEntry {
   source            String?
   /** Stable external id for upsert (google-health:cardio:{dataPoint name}). */
   externalId        String?
+  /// Soft-delete: hidden from totals; sync keeps the tombstone so Google Health won't recreate it.
+  deletedAt         DateTime?
   userId            String?
   user              User?    @relation(fields: [userId], references: [id])
   createdAt         DateTime @default(now())
@@ -108,6 +110,7 @@ model CardioEntry {
   @@unique([userId, externalId])
   @@index([date])
   @@index([userId])
+  @@index([deletedAt])
 }
 
 model CalorieEntry {
