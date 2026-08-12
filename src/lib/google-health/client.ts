@@ -318,7 +318,10 @@ export type ExerciseSession = {
   displayName: string | null
   startTime: Date
   endTime: Date
-  /** Local calendar day the session started, per Google's civil time. */
+  /**
+   * Local calendar day the session started, per Google's civil time.
+   * Sync re-buckets onto the 5am→5am tracking day via `stepsDayKey(startTime)`.
+   */
   dateYmd: string
   /** Minutes excluding pauses; falls back to wall-clock duration. */
   activeMinutes: number

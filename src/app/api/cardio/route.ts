@@ -7,9 +7,23 @@ import {
 import { resolveUserId, UserError } from "@/lib/current-user"
 import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
 import { isCardioActivity } from "@/lib/cardio"
+import {
+  DEFAULT_STEPS_TIMEZONE,
+  resolveStepsTimezone,
+  stepsRefDayKey,
+} from "@/lib/steps-day"
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const MAX_SESSION_MINUTES = 600
+
+async function resolveCardioDayKey(userId: string, requestedDate: string): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timeZone: true },
+  })
+  const timeZone = resolveStepsTimezone(user?.timeZone ?? DEFAULT_STEPS_TIMEZONE)
+  return stepsRefDayKey(requestedDate, new Date(), timeZone)
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,9 +34,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Valid date required" }, { status: 400 })
     }
 
+    const dayKey = await resolveCardioDayKey(userId, date)
+
     const [sessions, cardioGoal] = await Promise.all([
       prisma.cardioEntry.findMany({
-        where: { userId, date: utcRangeWhereForCalendarDay(date) },
+        where: { userId, date: utcRangeWhereForCalendarDay(dayKey) },
         orderBy: { startTime: "desc" },
         select: {
           id: true,
@@ -82,6 +98,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const dayKey = await resolveCardioDayKey(userId, date)
     const roundedMinutes = Math.round(minutes * 10) / 10
     // Manual logs have no real clock times — anchor the session to "now" so the
     // day list still orders sensibly against synced sessions.
@@ -90,7 +107,7 @@ export async function POST(req: NextRequest) {
 
     const session = await prisma.cardioEntry.create({
       data: {
-        date: parseYyyyMmDdToStoredDate(date),
+        date: parseYyyyMmDdToStoredDate(dayKey),
         startTime,
         endTime,
         activityType,

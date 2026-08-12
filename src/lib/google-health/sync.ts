@@ -255,7 +255,11 @@ export async function syncGoogleHealthForUser(
         "Cardio",
         metrics.cardio,
         async () => {
-          const rows = await fetchExerciseSessions(userId, startYmd, endExclusive)
+          // Civil filter is midnight-aligned; extend one day past endStepsKey so
+          // sessions between midnight and 5am (same tracking day as steps) are included.
+          const cardioStartYmd = startStepsKey
+          const cardioEndExclusive = addDaysYmd(endStepsKey, 2)
+          const rows = await fetchExerciseSessions(userId, cardioStartYmd, cardioEndExclusive)
           cardioFetchOk = true
           return rows
         },
@@ -568,10 +572,14 @@ export async function syncGoogleHealthForUser(
     const minutes = Math.round(session.activeMinutes * 10) / 10
     if (minutes < MIN_CARDIO_SESSION_MINUTES) continue
 
+    // Same 5am→5am tracking day as steps (not Google's midnight civil date).
+    const dateYmd = stepsDayKey(session.startTime, stepsTz)
+    if (dateYmd < startStepsKey || dateYmd > endStepsKey) continue
+
     const externalId = `${GOOGLE_HEALTH_SOURCE}:cardio:${session.externalId}`
     syncedCardioExternalIds.add(externalId)
     const data = {
-      date: parseYyyyMmDdToStoredDate(session.dateYmd),
+      date: parseYyyyMmDdToStoredDate(dateYmd),
       startTime: session.startTime,
       endTime: session.endTime,
       activityType,
@@ -601,7 +609,7 @@ export async function syncGoogleHealthForUser(
       where: {
         userId,
         source: GOOGLE_HEALTH_SOURCE,
-        date: utcCalendarDayRangeInclusive(startYmd, endYmd),
+        date: utcCalendarDayRangeInclusive(startStepsKey, endStepsKey),
       },
       select: { id: true, externalId: true },
     })
