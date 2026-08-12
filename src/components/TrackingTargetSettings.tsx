@@ -9,6 +9,7 @@ import {
   MoonStar,
   RotateCcw,
   Save,
+  Zap,
   type LucideIcon,
 } from "lucide-react"
 import { useUser } from "@/context/UserContext"
@@ -94,6 +95,18 @@ const TARGETS: TargetDefinition[] = [
     color: "#22d3ee",
   },
   {
+    category: "cardio",
+    label: "Daily cardio",
+    description: "Charges the lightning bolt from synced cycling, runs, and stair work.",
+    unit: "min",
+    min: 5,
+    max: 600,
+    step: 5,
+    direction: "up",
+    icon: Zap,
+    color: "#facc15",
+  },
+  {
     category: "recovery",
     label: "Recovery score",
     description: "Sets the daily recovery target on the 10-point scale.",
@@ -116,6 +129,7 @@ function defaultInputs(): TargetInputs {
     steps: String(TRACKING_TARGET_DEFAULTS.steps),
     sleep: String(TRACKING_TARGET_DEFAULTS.sleep),
     water: String(TRACKING_TARGET_DEFAULTS.water),
+    cardio: String(TRACKING_TARGET_DEFAULTS.cardio),
     recovery: String(TRACKING_TARGET_DEFAULTS.recovery),
   }
 }

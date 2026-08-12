@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       try {
         googleHealth = await syncGoogleHealthForAllUsers({
           days: 3,
-          metrics: { steps: true, sleep: true, weight: false, vitals: true },
+          metrics: { steps: true, sleep: true, weight: false, vitals: true, cardio: true },
         })
       } catch (e) {
         console.error("[google-health via notif cron]", e)

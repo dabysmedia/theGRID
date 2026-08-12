@@ -511,6 +511,216 @@ html {
     }
   }
 
+  /* --- Cardio: charge level inside a lightning bolt ---------------------
+     Mirrors the water bottle above (layered divs + a height-percent fill),
+     but the silhouette comes from a clip-path so the "liquid" reads as stored
+     charge. The rim is a second, inset copy of the same polygon; clip-path
+     erases borders, so the outline has to be drawn as a shape behind it. */
+  .cardio-tracker-dialog {
+    background:
+      radial-gradient(circle at 25% 20%, rgb(250 204 21 / 11%), transparent 34%),
+      radial-gradient(circle at 82% 110%, rgb(180 83 9 / 16%), transparent 42%),
+      linear-gradient(165deg, oklch(0.21 0.02 85 / 98%), oklch(0.11 0.014 70 / 98%));
+    border-color: rgb(254 240 138 / 13%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 8%),
+      0 30px 100px rgb(0 0 0 / 62%),
+      0 0 55px rgb(250 204 21 / 8%);
+  }
+
+  .cardio-bolt-scene {
+    --bolt-w: 8.6rem;
+    --bolt-h: 9.6rem;
+    --bolt-path: polygon(55.6% 0%, 0% 60%, 50% 60%, 44.4% 100%, 100% 40%, 50% 40%);
+    position: relative;
+    width: calc(var(--bolt-w) + 1.4rem);
+    height: calc(var(--bolt-h) + 1.6rem);
+    perspective: 34rem;
+    filter:
+      drop-shadow(0 0.9rem 1rem rgb(0 0 0 / 42%))
+      drop-shadow(0 0 0.85rem rgb(250 204 21 / 26%));
+  }
+
+  .cardio-bolt-scene--compact {
+    --bolt-w: 4.3rem;
+    --bolt-h: 4.8rem;
+    width: calc(var(--bolt-w) + 0.7rem);
+    height: calc(var(--bolt-h) + 0.8rem);
+    filter:
+      drop-shadow(0 0.4rem 0.45rem rgb(0 0 0 / 40%))
+      drop-shadow(0 0 0.5rem rgb(250 204 21 / 24%));
+  }
+
+  .cardio-bolt-shadow {
+    position: absolute;
+    left: 44%;
+    bottom: 0.1rem;
+    width: 62%;
+    height: 0.7rem;
+    translate: -50% 0;
+    border-radius: 999px;
+    background: radial-gradient(ellipse, rgb(250 204 21 / 30%), transparent 68%);
+    filter: blur(0.35rem);
+  }
+
+  /* Centering lives inside `transform` on purpose: a sibling `translate` on the
+     same rule gets dropped by the CSS optimizer, which parks the bolt half a box
+     down and to the right. Keep it as one declaration. */
+  .cardio-bolt-shell {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 2;
+    width: var(--bolt-w);
+    height: var(--bolt-h);
+    clip-path: var(--bolt-path);
+    background: linear-gradient(160deg, rgb(254 240 138 / 62%), rgb(180 83 9 / 45%));
+    transform: translate(-50%, -50%) rotateY(-9deg) rotateX(2deg);
+    transform-style: preserve-3d;
+  }
+
+  .cardio-bolt-core {
+    position: absolute;
+    inset: 2px;
+    overflow: hidden;
+    clip-path: var(--bolt-path);
+    background:
+      linear-gradient(105deg, rgb(255 255 255 / 5%), transparent 45%, rgb(120 53 15 / 12%)),
+      linear-gradient(180deg, rgb(41 30 6 / 82%), rgb(12 10 4 / 88%));
+  }
+
+  .cardio-bolt-charge {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    min-height: 0;
+    background:
+      radial-gradient(circle at 32% 22%, rgb(255 255 255 / 30%) 0 2%, transparent 3%),
+      linear-gradient(180deg, rgb(254 249 195 / 95%), rgb(250 204 21 / 92%) 42%, rgb(217 119 6 / 88%));
+    box-shadow:
+      inset 0.5rem 0 0.8rem rgb(255 251 235 / 16%),
+      0 0 1.4rem rgb(250 204 21 / 48%);
+    transition: height 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .cardio-bolt-surface {
+    position: absolute;
+    top: -0.2rem;
+    left: -14%;
+    width: 128%;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: linear-gradient(180deg, rgb(255 251 235 / 95%), rgb(253 224 71 / 45%));
+    box-shadow: 0 -0.14rem 0.6rem rgb(253 224 71 / 60%);
+    animation: cardio-charge-flicker 2.6s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  .cardio-bolt-gloss {
+    position: absolute;
+    z-index: 4;
+    top: 8%;
+    bottom: 10%;
+    left: 26%;
+    width: 9%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgb(255 255 255 / 34%), rgb(255 255 255 / 2%));
+    filter: blur(0.06rem);
+    opacity: 0.6;
+  }
+
+  .cardio-bolt-arc {
+    position: absolute;
+    z-index: 3;
+    inset: 0;
+    background:
+      linear-gradient(118deg, transparent 44%, rgb(255 251 235 / 55%) 49%, transparent 54%);
+    opacity: 0;
+    animation: cardio-arc-strike 5.2s ease-out infinite;
+    will-change: opacity;
+  }
+
+  .cardio-spark {
+    position: absolute;
+    border: 1px solid rgb(255 251 235 / 65%);
+    border-radius: 1px;
+    background: rgb(254 240 138 / 30%);
+    rotate: 45deg;
+    animation: cardio-spark-rise 3.4s ease-in infinite;
+    will-change: translate, opacity;
+  }
+
+  .cardio-spark--one { left: 30%; bottom: 8%; width: 0.3rem; height: 0.3rem; }
+  .cardio-spark--two { left: 58%; bottom: 5%; width: 0.2rem; height: 0.2rem; animation-delay: 1s; }
+  .cardio-spark--three { left: 44%; bottom: 16%; width: 0.16rem; height: 0.16rem; animation-delay: 2.1s; }
+
+  @keyframes cardio-charge-flicker {
+    0%, 100% { transform: translateX(-2%) scaleX(0.98); opacity: 0.85; }
+    38% { opacity: 1; }
+    52% { transform: translateX(2%) scaleX(1.03); opacity: 0.7; }
+  }
+
+  @keyframes cardio-spark-rise {
+    0% { translate: 0 0; opacity: 0; }
+    18% { opacity: 0.85; }
+    80% { opacity: 0.3; }
+    100% { translate: 0 calc(var(--bolt-h) * -0.5); opacity: 0; }
+  }
+
+  @keyframes cardio-arc-strike {
+    0%, 84%, 100% { opacity: 0; }
+    88% { opacity: 0.55; }
+    91% { opacity: 0.1; }
+    94% { opacity: 0.4; }
+  }
+
+  @keyframes cardio-charge-rise {
+    from { clip-path: inset(100% 0 0 0); }
+    to { clip-path: inset(-0.4rem 0 0 0); }
+  }
+
+  @keyframes cardio-goal-pulse {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.22); }
+  }
+
+  .cardio-bolt-charge--enter {
+    animation: cardio-charge-rise 820ms cubic-bezier(0.22, 0.7, 0.18, 1) 620ms both;
+  }
+
+  .cardio-bolt-scene--charged .cardio-bolt-shell {
+    animation: cardio-goal-pulse 2.4s ease-in-out infinite;
+  }
+
+  .cardio-value-change {
+    animation: water-value-change 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .cardio-dialog-progress {
+    transform-origin: left center;
+    animation: water-progress-reveal 620ms cubic-bezier(0.16, 1, 0.3, 1) 560ms both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cardio-bolt-surface,
+    .cardio-bolt-arc,
+    .cardio-spark,
+    .cardio-bolt-charge--enter,
+    .cardio-bolt-scene--charged .cardio-bolt-shell,
+    .cardio-value-change,
+    .cardio-dialog-progress {
+      animation: none;
+    }
+
+    .cardio-bolt-charge--enter {
+      clip-path: none;
+    }
+
+    .cardio-bolt-arc {
+      opacity: 0;
+    }
+  }
+
   /* Google Fonts: Kelly Slab (loaded via link in root layout) */
   .font-kelly-slab {
     font-family: "Kelly Slab", serif;

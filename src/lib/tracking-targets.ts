@@ -3,6 +3,7 @@ export const TRACKING_TARGET_DEFAULTS = {
   steps: 10000,
   sleep: 8,
   water: 32,
+  cardio: 30,
   recovery: 7,
 } as const
 

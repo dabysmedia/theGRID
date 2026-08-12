@@ -32,6 +32,7 @@ import { HubRingBay } from "@/components/hub/HubRingBay"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { WeekWorkoutGoalRing } from "@/components/WeekWorkoutGoalRing"
 import { WaterTracker } from "@/components/WaterTracker"
+import { CardioTracker } from "@/components/CardioTracker"
 import { useActiveDate } from "@/context/DateContext"
 import { ProfileHeaderTrigger } from "@/context/ProfileDialogContext"
 import type { NextInjectionInfo } from "@/lib/hub-tile-prefs"
@@ -957,7 +958,10 @@ export function WeeklyHero({
           show={expanded == null}
           className={fillViewport ? "shrink-0" : undefined}
         >
-          <WaterTracker />
+          <div className="grid grid-cols-2 items-stretch gap-2 sm:gap-2.5">
+            <WaterTracker />
+            <CardioTracker />
+          </div>
         </FadeSection>
 
         <HubPresence

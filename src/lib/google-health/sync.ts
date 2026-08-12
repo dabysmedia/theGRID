@@ -16,6 +16,7 @@ import {
   fetchDailyHeartRateZones,
   fetchDailyRestingHeartRate,
   fetchDailyWeight,
+  fetchExerciseSessions,
   fetchHeartRateDailyRollup,
   fetchHeartRateSamplesBucketed,
   fetchHourlySteps,
@@ -25,6 +26,7 @@ import {
   type HeartRateZoneMinutes,
   type HeartRateZoneThreshold,
 } from "@/lib/google-health/client"
+import { MIN_CARDIO_SESSION_MINUTES, cardioActivityForGoogleType } from "@/lib/cardio"
 import {
   DEFAULT_STEPS_TIMEZONE,
   bucketStepsByStepsDay,
@@ -46,6 +48,7 @@ export type SyncMetrics = {
   sleep?: boolean
   weight?: boolean
   vitals?: boolean
+  cardio?: boolean
 }
 
 export type SyncResult = {
@@ -54,6 +57,7 @@ export type SyncResult = {
   weightUpserted: number
   weightSkippedVacation: number
   vitalsUpserted: number
+  cardioUpserted: number
   rangeStart: string
   rangeEnd: string
   warnings: string[]
@@ -131,6 +135,7 @@ export async function syncGoogleHealthForUser(
     sleep: opts?.metrics?.sleep ?? true,
     weight: opts?.metrics?.weight ?? true,
     vitals: opts?.metrics?.vitals ?? true,
+    cardio: opts?.metrics?.cardio ?? true,
   }
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -148,6 +153,8 @@ export async function syncGoogleHealthForUser(
   const fetchWarnings: string[] = []
   let fetchAttempts = 0
   let fetchSuccesses = 0
+  /** Guards the stale-row cleanup: a failed fetch returns [] and must not wipe the window. */
+  let cardioFetchOk = false
 
   async function safeFetch<T>(
     label: string,
@@ -168,8 +175,17 @@ export async function syncGoogleHealthForUser(
     }
   }
 
-  const [steps, sleep, weights, restingHr, hrv, hrZoneThresholds, hrRollup, timeInZone] =
-    await Promise.all([
+  const [
+    steps,
+    sleep,
+    weights,
+    restingHr,
+    hrv,
+    hrZoneThresholds,
+    hrRollup,
+    timeInZone,
+    exercises,
+  ] = await Promise.all([
       safeFetch(
         "Steps",
         metrics.steps,
@@ -214,6 +230,16 @@ export async function syncGoogleHealthForUser(
         "Time in heart-rate zones",
         metrics.vitals,
         () => fetchTimeInHeartRateZoneDailyRollup(userId, startYmd, endExclusive),
+        [],
+      ),
+      safeFetch(
+        "Cardio",
+        metrics.cardio,
+        async () => {
+          const rows = await fetchExerciseSessions(userId, startYmd, endExclusive)
+          cardioFetchOk = true
+          return rows
+        },
         [],
       ),
     ])
@@ -504,6 +530,59 @@ export async function syncGoogleHealthForUser(
     }
   }
 
+  let cardioUpserted = 0
+  const syncedCardioExternalIds = new Set<string>()
+  for (const session of exercises) {
+    const activityType = cardioActivityForGoogleType(session.exerciseType)
+    // Walking, strength, yoga, … aren't cardio — skip rather than store and filter later.
+    if (!activityType) continue
+    const minutes = Math.round(session.activeMinutes * 10) / 10
+    if (minutes < MIN_CARDIO_SESSION_MINUTES) continue
+
+    const externalId = `${GOOGLE_HEALTH_SOURCE}:cardio:${session.externalId}`
+    syncedCardioExternalIds.add(externalId)
+    const data = {
+      date: parseYyyyMmDdToStoredDate(session.dateYmd),
+      startTime: session.startTime,
+      endTime: session.endTime,
+      activityType,
+      googleType: session.exerciseType,
+      displayName: session.displayName,
+      minutes,
+      calories: session.calories ?? null,
+      distanceMeters: session.distanceMeters ?? null,
+      avgHeartRate: session.avgHeartRate ?? null,
+      activeZoneMinutes: session.activeZoneMinutes ?? null,
+      source: GOOGLE_HEALTH_SOURCE,
+      externalId,
+    }
+    const existing = await prisma.cardioEntry.findFirst({ where: { userId, externalId } })
+    if (existing) {
+      await prisma.cardioEntry.update({ where: { id: existing.id }, data })
+    } else {
+      await prisma.cardioEntry.create({ data: { ...data, userId } })
+    }
+    cardioUpserted++
+  }
+
+  // Drop synced sessions the user has since deleted (or re-typed to a non-cardio
+  // activity) upstream. Manual rows have no `source` and are never touched.
+  if (metrics.cardio && cardioFetchOk) {
+    const existingSynced = await prisma.cardioEntry.findMany({
+      where: {
+        userId,
+        source: GOOGLE_HEALTH_SOURCE,
+        date: utcCalendarDayRangeInclusive(startYmd, endYmd),
+      },
+      select: { id: true, externalId: true },
+    })
+    for (const row of existingSynced) {
+      if (row.externalId && !syncedCardioExternalIds.has(row.externalId)) {
+        await prisma.cardioEntry.delete({ where: { id: row.id } })
+      }
+    }
+  }
+
   await prisma.googleHealthConnection.update({
     where: { userId },
     data: {
@@ -518,6 +597,7 @@ export async function syncGoogleHealthForUser(
     weightUpserted,
     weightSkippedVacation,
     vitalsUpserted,
+    cardioUpserted,
     rangeStart: startStepsKey,
     rangeEnd: endStepsKey,
     warnings: fetchWarnings,

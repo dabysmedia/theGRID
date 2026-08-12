@@ -218,7 +218,7 @@ export function WaterTracker() {
             ref={triggerRef}
             type="button"
             aria-label={`Open water tracker, ${formatOunces(totalOz)} of ${formatOunces(goalOz)} ounces`}
-            className="group relative flex min-h-[4.75rem] w-full items-center overflow-hidden rounded-2xl border border-cyan-200/[0.10] bg-cyan-950/[0.09] px-3 text-left touch-manipulation transition-[border-color,background-color,transform] duration-300 hover:border-cyan-200/20 hover:bg-cyan-900/[0.13] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/40 sm:min-h-[5.25rem] sm:px-4"
+            className="group relative flex min-h-[5.5rem] w-full items-center gap-1.5 overflow-hidden rounded-2xl border border-cyan-200/[0.10] bg-cyan-950/[0.09] px-2 text-left touch-manipulation transition-[border-color,background-color,transform] duration-300 hover:border-cyan-200/20 hover:bg-cyan-900/[0.13] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/40 sm:min-h-[5.75rem] sm:gap-1.5 sm:px-3"
           />
         }
       >
@@ -232,47 +232,45 @@ export function WaterTracker() {
             maskImage: "linear-gradient(90deg, black, transparent 82%)",
           }}
         />
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-36 bg-[radial-gradient(circle_at_40%_50%,rgba(34,211,238,0.13),transparent_68%)]" />
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-28 bg-[radial-gradient(circle_at_40%_50%,rgba(34,211,238,0.13),transparent_68%)]" />
 
-        <div className="relative flex h-[4.25rem] w-[4.75rem] shrink-0 items-center justify-center overflow-visible sm:w-[5.25rem]">
-          <div className="translate-y-1.5 scale-[0.68] sm:scale-[0.74]">
+        <div className="relative flex h-[4rem] w-[2.35rem] shrink-0 items-center justify-center overflow-visible sm:w-[2.8rem]">
+          <div className="translate-y-1 scale-[0.5] sm:scale-[0.58]">
             <LiquidBottle ounces={totalOz} capacity={goalOz} compact />
           </div>
         </div>
 
         <div className="relative min-w-0 flex-1 py-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <Droplets className="h-3.5 w-3.5 text-cyan-300/75" aria-hidden />
-              <p className="type-hud-label text-cyan-100/75">Water</p>
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex min-w-0 items-center gap-1">
+              <Droplets className="h-3.5 w-3.5 shrink-0 text-cyan-300/75" aria-hidden />
+              <p className="type-hud-label truncate tracking-[0.09em] text-cyan-100/75">Water</p>
             </div>
-            <span className="type-hud-micro text-cyan-100/45">
-              {loading ? "Syncing" : `${percent}% full`}
-            </span>
+            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-cyan-200/15 bg-cyan-400/[0.07] text-cyan-200/80 transition-[background-color,color,transform] duration-300 group-hover:scale-105 group-hover:bg-cyan-400/[0.12] group-hover:text-cyan-100 sm:h-6 sm:w-6">
+              <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" aria-hidden />
+            </div>
           </div>
-          <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-lg font-bold tabular-nums tracking-tight text-foreground sm:text-xl">
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="shrink-0 text-lg font-bold tabular-nums tracking-tight text-foreground sm:text-xl">
               {loading ? "—" : formatOunces(totalOz)}
             </span>
-            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/65">
+            <span className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground/65">
               / {formatOunces(goalOz)} oz
             </span>
-            <span className="ml-auto truncate text-[10px] text-muted-foreground/45">
-              {totalOz >= goalOz
-                ? "Goal met"
-                : `${formatOunces(remainingOz)} oz left`}
-            </span>
           </div>
+          <p className="mt-0.5 truncate text-[10px] text-muted-foreground/45">
+            {loading
+              ? "Syncing"
+              : totalOz >= goalOz
+                ? "Goal met"
+                : `${percent}% · ${formatOunces(remainingOz)} oz left`}
+          </p>
           <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/[0.07]">
             <div
               className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.52)] transition-[width] duration-700 ease-out"
               style={{ width: `${percent}%` }}
             />
           </div>
-        </div>
-
-        <div className="relative ml-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-cyan-200/15 bg-cyan-400/[0.07] text-cyan-200/80 transition-[background-color,color,transform] duration-300 group-hover:scale-105 group-hover:bg-cyan-400/[0.12] group-hover:text-cyan-100 sm:ml-4">
-          <Plus className="h-4 w-4" aria-hidden />
         </div>
       </DialogTrigger>
 

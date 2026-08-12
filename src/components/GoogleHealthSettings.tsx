@@ -97,6 +97,7 @@ export function GoogleHealthSettings() {
         sleepUpserted?: number
         weightUpserted?: number
         vitalsUpserted?: number
+        cardioUpserted?: number
         warnings?: string[]
       }
       if (!res.ok) {
@@ -104,7 +105,7 @@ export function GoogleHealthSettings() {
         await load()
         return
       }
-      const summary = `Synced ${data.stepsUpserted ?? 0} step days, ${data.sleepUpserted ?? 0} sleep sessions, ${data.weightUpserted ?? 0} weigh-ins, ${data.vitalsUpserted ?? 0} vitals days.`
+      const summary = `Synced ${data.stepsUpserted ?? 0} step days, ${data.sleepUpserted ?? 0} sleep sessions, ${data.weightUpserted ?? 0} weigh-ins, ${data.vitalsUpserted ?? 0} vitals days, ${data.cardioUpserted ?? 0} cardio sessions.`
       setMessage(
         data.warnings && data.warnings.length > 0
           ? {

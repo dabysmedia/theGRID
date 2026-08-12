@@ -3,6 +3,7 @@ import "server-only"
 import { GOOGLE_HEALTH_API } from "@/lib/google-health/config"
 import { getValidAccessToken } from "@/lib/google-health/tokens"
 import { optionalNonNegativeInt } from "@/lib/google-health/normalize"
+import { durationStringToMinutes } from "@/lib/cardio"
 import { getStepsDayRange } from "@/lib/steps-day"
 
 type CivilDate = { year?: number; month?: number; day?: number }
@@ -302,6 +303,111 @@ export async function fetchSleepSessions(
         deepMinutes: stagesSummary ? stageMinutes(stagesSummary, "DEEP") : undefined,
         awakeMinutes: stagesSummary ? stageMinutes(stagesSummary, "AWAKE") : undefined,
         stages: stages.length > 0 ? stages : undefined,
+      })
+    }
+    pageToken = data.nextPageToken || undefined
+  } while (pageToken)
+
+  return out
+}
+
+export type ExerciseSession = {
+  /** Google data point resource name — stable id for upserts. */
+  externalId: string
+  exerciseType: string
+  displayName: string | null
+  startTime: Date
+  endTime: Date
+  /** Local calendar day the session started, per Google's civil time. */
+  dateYmd: string
+  /** Minutes excluding pauses; falls back to wall-clock duration. */
+  activeMinutes: number
+  calories?: number
+  distanceMeters?: number
+  avgHeartRate?: number
+  activeZoneMinutes?: number
+}
+
+type ExerciseDataPoint = {
+  name?: string
+  exercise?: {
+    interval?: {
+      startTime?: string
+      endTime?: string
+      civilStartTime?: CivilDateTime
+    }
+    exerciseType?: string
+    displayName?: string
+    activeDuration?: string
+    metricsSummary?: {
+      caloriesKcal?: number
+      distanceMillimeters?: number
+      averageHeartRateBeatsPerMinute?: number | string
+      activeZoneMinutes?: number | string
+    }
+  }
+}
+
+/**
+ * Workout/activity sessions for [startYmd, endExclusiveYmd).
+ * Google caps `exercise` pages at 25 data points, so this always paginates.
+ */
+export async function fetchExerciseSessions(
+  userId: string,
+  startYmd: string,
+  endExclusiveYmd: string,
+): Promise<ExerciseSession[]> {
+  const filter =
+    `exercise.interval.civil_start_time >= "${startYmd}T00:00:00"` +
+    ` AND exercise.interval.civil_start_time < "${endExclusiveYmd}T00:00:00"`
+  const out: ExerciseSession[] = []
+  let pageToken: string | undefined
+
+  do {
+    const qs = new URLSearchParams({ filter, pageSize: "25" })
+    if (pageToken) qs.set("pageToken", pageToken)
+    const res = await healthFetch(userId, `/users/me/dataTypes/exercise/dataPoints?${qs.toString()}`)
+    const data = (await res.json().catch(() => ({}))) as {
+      dataPoints?: ExerciseDataPoint[]
+      nextPageToken?: string
+      error?: { message?: string }
+    }
+    if (!res.ok) {
+      throw new Error(data.error?.message || `Exercise list failed (${res.status})`)
+    }
+
+    for (const dp of data.dataPoints ?? []) {
+      const exercise = dp.exercise
+      const start = exercise?.interval?.startTime
+      const end = exercise?.interval?.endTime
+      if (!dp.name || !start || !end || !exercise?.exerciseType) continue
+      const startTime = new Date(start)
+      const endTime = new Date(end)
+      if (Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) continue
+
+      const elapsedMinutes = (endTime.getTime() - startTime.getTime()) / 60000
+      const activeMinutes =
+        durationStringToMinutes(exercise.activeDuration) ?? Math.max(0, elapsedMinutes)
+
+      const metrics = exercise.metricsSummary
+      const distanceMm = Number(metrics?.distanceMillimeters)
+      const calories = Number(metrics?.caloriesKcal)
+
+      out.push({
+        externalId: dp.name,
+        exerciseType: exercise.exerciseType,
+        displayName: exercise.displayName ?? null,
+        startTime,
+        endTime,
+        dateYmd:
+          civilDateToYmd(exercise.interval?.civilStartTime?.date) ||
+          `${startTime.getUTCFullYear()}-${pad2(startTime.getUTCMonth() + 1)}-${pad2(startTime.getUTCDate())}`,
+        activeMinutes,
+        calories: Number.isFinite(calories) && calories > 0 ? calories : undefined,
+        distanceMeters:
+          Number.isFinite(distanceMm) && distanceMm > 0 ? distanceMm / 1000 : undefined,
+        avgHeartRate: optionalNonNegativeInt(metrics?.averageHeartRateBeatsPerMinute),
+        activeZoneMinutes: optionalNonNegativeInt(metrics?.activeZoneMinutes),
       })
     }
     pageToken = data.nextPageToken || undefined

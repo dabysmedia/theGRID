@@ -32,6 +32,7 @@ model User {
 
   calorieEntries  CalorieEntry[]
   waterEntries    WaterEntry[]
+  cardioEntries   CardioEntry[]
   stepEntries     StepEntry[]
   runEntries      RunEntry[]
   workoutEntries  WorkoutEntry[]
@@ -70,6 +71,41 @@ model WaterEntry {
   user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 
+  @@index([date])
+  @@index([userId])
+}
+
+/// One cardio session (cycling, running, stair stepper, …). Synced from Google
+/// Health `exercise` data points or logged by hand. Walking/step-driven activity
+/// is deliberately excluded — that already lives in `StepEntry`.
+model CardioEntry {
+  id                String   @id @default(cuid())
+  /// Calendar day the session started, in the user's local timezone (stored UTC-noon).
+  date              DateTime
+  startTime         DateTime
+  endTime           DateTime
+  /// Normalized activity slug, e.g. "cycling", "running", "stair_stepper".
+  activityType      String
+  /// Raw Google Health exerciseType (e.g. BIKING); null for manual logs.
+  googleType        String?
+  displayName       String?
+  /// Active minutes, excluding paused intervals.
+  minutes           Float
+  calories          Float?
+  distanceMeters    Float?
+  avgHeartRate      Int?
+  activeZoneMinutes Int?
+  notes             String?
+  /** e.g. "google-health" for synced rows; null = manual */
+  source            String?
+  /** Stable external id for upsert (google-health:cardio:{dataPoint name}). */
+  externalId        String?
+  userId            String?
+  user              User?    @relation(fields: [userId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, externalId])
   @@index([date])
   @@index([userId])
 }
