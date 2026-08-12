@@ -538,17 +538,16 @@ export function CardioTracker() {
                   </span>
                   {session.source ? (
                     <span className="type-hud-micro shrink-0 text-amber-200/40">Synced</span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void removeSession(session.id)}
-                      aria-label="Delete cardio session"
-                      className="shrink-0 rounded p-0.5 text-muted-foreground/50 transition-colors hover:text-red-300 disabled:opacity-40"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void removeSession(session.id)}
+                    aria-label="Delete cardio session"
+                    className="shrink-0 rounded p-0.5 text-muted-foreground/50 transition-colors hover:text-red-300 disabled:opacity-40"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </li>
               ))}
             </ul>

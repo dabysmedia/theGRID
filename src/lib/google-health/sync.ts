@@ -561,6 +561,11 @@ export async function syncGoogleHealthForUser(
    * silently reading as "no cardio recorded".
    */
   const cardioSkippedTypes: Record<string, number> = {}
+  // One row per Google data-point id — pagination/overlap must not create duplicates.
+  const cardioByExternalId = new Map<
+    string,
+    (typeof exercises)[number] & { activityType: string; minutes: number; dateYmd: string }
+  >()
   for (const session of exercises) {
     const activityType = cardioActivityForGoogleType(session.exerciseType)
     // Walking, strength, yoga, … aren't cardio — skip rather than store and filter later.
@@ -577,33 +582,68 @@ export async function syncGoogleHealthForUser(
     if (dateYmd < startStepsKey || dateYmd > endStepsKey) continue
 
     const externalId = `${GOOGLE_HEALTH_SOURCE}:cardio:${session.externalId}`
+    cardioByExternalId.set(externalId, { ...session, activityType, minutes, dateYmd })
+  }
+
+  for (const [externalId, session] of cardioByExternalId) {
     syncedCardioExternalIds.add(externalId)
+    const existing = await prisma.cardioEntry.findFirst({
+      where: { userId, externalId },
+      select: { id: true, deletedAt: true },
+    })
+    // User-deleted synced sessions stay tombstoned so they are not recreated.
+    if (existing?.deletedAt) continue
+
     const data = {
-      date: parseYyyyMmDdToStoredDate(dateYmd),
+      date: parseYyyyMmDdToStoredDate(session.dateYmd),
       startTime: session.startTime,
       endTime: session.endTime,
-      activityType,
+      activityType: session.activityType,
       googleType: session.exerciseType,
       displayName: session.displayName,
-      minutes,
+      minutes: session.minutes,
       calories: session.calories ?? null,
       distanceMeters: session.distanceMeters ?? null,
       avgHeartRate: session.avgHeartRate ?? null,
       activeZoneMinutes: session.activeZoneMinutes ?? null,
       source: GOOGLE_HEALTH_SOURCE,
       externalId,
+      deletedAt: null,
     }
-    const existing = await prisma.cardioEntry.findFirst({ where: { userId, externalId } })
+    let keptId: string
     if (existing) {
       await prisma.cardioEntry.update({ where: { id: existing.id }, data })
+      keptId = existing.id
     } else {
-      await prisma.cardioEntry.create({ data: { ...data, userId } })
+      const created = await prisma.cardioEntry.create({
+        data: { ...data, userId },
+        select: { id: true },
+      })
+      keptId = created.id
     }
+
+    // If Google renamed a data-point id, drop any other live row for the same start.
+    // That prevents the same workout from counting on two tracking days.
+    const sameStartDupes = await prisma.cardioEntry.findMany({
+      where: {
+        userId,
+        source: GOOGLE_HEALTH_SOURCE,
+        startTime: session.startTime,
+        deletedAt: null,
+        NOT: { id: keptId },
+      },
+      select: { id: true },
+    })
+    for (const dup of sameStartDupes) {
+      await prisma.cardioEntry.delete({ where: { id: dup.id } })
+    }
+
     cardioUpserted++
   }
 
   // Drop synced sessions the user has since deleted (or re-typed to a non-cardio
-  // activity) upstream. Manual rows have no `source` and are never touched.
+  // activity) upstream. Soft-deleted tombstones stay while Google still returns them.
+  // Manual rows have no `source` and are never touched.
   if (metrics.cardio && cardioFetchOk) {
     const existingSynced = await prisma.cardioEntry.findMany({
       where: {

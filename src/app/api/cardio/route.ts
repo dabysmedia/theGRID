@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
     const [sessions, cardioGoal] = await Promise.all([
       prisma.cardioEntry.findMany({
-        where: { userId, date: utcRangeWhereForCalendarDay(dayKey) },
+        where: { userId, date: utcRangeWhereForCalendarDay(dayKey), deletedAt: null },
         orderBy: { startTime: "desc" },
         select: {
           id: true,
@@ -190,14 +190,23 @@ export async function DELETE(req: NextRequest) {
     const id = new URL(req.url).searchParams.get("id")
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
 
-    // Synced sessions are owned by Google Health — deleting one here just makes it
-    // reappear on the next 15-minute pull, so refuse instead of pretending.
-    const { count } = await prisma.cardioEntry.deleteMany({ where: { id, userId, source: null } })
-    if (!count) {
-      return NextResponse.json(
-        { error: "Only manually logged sessions can be removed" },
-        { status: 404 },
-      )
+    const entry = await prisma.cardioEntry.findFirst({
+      where: { id, userId, deletedAt: null },
+      select: { id: true, externalId: true },
+    })
+    if (!entry) {
+      return NextResponse.json({ error: "Cardio session not found" }, { status: 404 })
+    }
+
+    // Synced rows keep a soft-delete tombstone so the next Google Health pull
+    // does not recreate them. Manual logs have no external id — hard-delete.
+    if (entry.externalId) {
+      await prisma.cardioEntry.update({
+        where: { id: entry.id },
+        data: { deletedAt: new Date() },
+      })
+    } else {
+      await prisma.cardioEntry.delete({ where: { id: entry.id } })
     }
     return NextResponse.json({ success: true })
   } catch (error) {
