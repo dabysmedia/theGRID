@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma"
 import { kmToMiles, runKmToStepsFromRun } from "@/lib/units"
 import { formatDate, parseLocalDate } from "@/lib/utils"
 import { subDays } from "date-fns"
-import { startOfISOWeek } from "date-fns"
 import {
   utcCalendarDayKeyFromIso,
   utcCalendarDayRangeInclusive,
@@ -25,6 +24,15 @@ import {
 import { resolveWorkoutPlanDayKey } from "@/lib/workouts/planned-workout-match"
 import { getTrackingPeriod } from "@/lib/work-cycle"
 import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
+import {
+  buildWeightTrendSeries,
+  resolveRecordLow,
+  sparklineAverages,
+  summarizeWeightTrend,
+  type WeightLog,
+  type WeightRecordLow,
+} from "@/lib/weight-trend"
+import { ensureBodyweightRecordLow } from "@/lib/weight-record-low"
 
 interface GoalRow {
   category: string
@@ -41,7 +49,49 @@ interface DatedRow {
 
 type WeightBaselineTrend = "losing" | "maintaining" | "gaining"
 
-const WEEKLY_WEIGHT_MAINTAIN_LB = 0.45
+function computeHubWeightTrend(
+  entries: { date: Date; value: number }[],
+  refDayStr: string,
+  recordLow: WeightRecordLow | null,
+  vacationResumeDate?: string | null,
+): {
+  baselineTrend: WeightBaselineTrend
+  vsBaselineLb: number
+  last7: (number | null)[]
+  recordLow: number | null
+  recordLowDate: string | null
+  recordLowIsLatest: boolean
+} | null {
+  const logs: WeightLog[] = entries.map((entry) => ({
+    date: utcCalendarDayKeyFromIso(entry.date),
+    value: entry.value,
+  }))
+  const points = buildWeightTrendSeries(logs, {
+    to: refDayStr,
+    vacationResumeDate,
+  })
+  const priorLogs = [...logs]
+    .filter((log) => log.date && log.date <= refDayStr)
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+  const latest = priorLogs[priorLogs.length - 1] ?? null
+  const insight = summarizeWeightTrend(
+    points,
+    resolveRecordLow(logs, recordLow),
+    latest,
+  )
+  const last7 = sparklineAverages(points, 7, refDayStr)
+  if (insight.currentAverage == null && last7.length === 0 && insight.recordLow == null) {
+    return null
+  }
+  return {
+    baselineTrend: insight.direction ?? "maintaining",
+    vsBaselineLb: insight.vsPreviousLb ?? 0,
+    last7,
+    recordLow: insight.recordLow,
+    recordLowDate: insight.recordLowDate,
+    recordLowIsLatest: insight.recordLowIsLatest,
+  }
+}
 
 function parseHourlySteps(raw: string | null | undefined): number[] {
   if (!raw) return Array.from({ length: 24 }, () => 0)
@@ -55,48 +105,6 @@ function parseHourlySteps(raw: string | null | undefined): number[] {
   } catch {
     return Array.from({ length: 24 }, () => 0)
   }
-}
-
-function computeWeeklyWeightTrend(
-  entries: { date: Date; value: number }[],
-  refDayStr: string,
-): {
-  baselineTrend: WeightBaselineTrend
-  vsBaselineLb: number
-  /** Oldest→newest recent weigh-in values (up to 7 logs on/before ref day). */
-  last7: (number | null)[]
-} | null {
-  const byWeekStart = new Map<number, number[]>()
-  for (const entry of entries) {
-    const t = startOfISOWeek(entry.date).getTime()
-    if (!byWeekStart.has(t)) byWeekStart.set(t, [])
-    byWeekStart.get(t)!.push(entry.value)
-  }
-  if (byWeekStart.size === 0) return null
-
-  const weekAverages = [...byWeekStart.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([, vals]) => vals.reduce((s, v) => s + v, 0) / vals.length)
-  if (weekAverages.length === 0) return null
-
-  const lastWeekAverage = weekAverages[weekAverages.length - 1]!
-  const grandMean = weekAverages.reduce((s, v) => s + v, 0) / weekAverages.length
-  const vsBaselineLb = Math.round((lastWeekAverage - grandMean) * 10) / 10
-
-  let baselineTrend: WeightBaselineTrend = "maintaining"
-  if (vsBaselineLb < -WEEKLY_WEIGHT_MAINTAIN_LB) baselineTrend = "losing"
-  else if (vsBaselineLb > WEEKLY_WEIGHT_MAINTAIN_LB) baselineTrend = "gaining"
-
-  // Sparkline: last up to 7 weigh-ins on/before ref day (actual logs, not calendar fill).
-  const sparkEntries = [...entries]
-    .filter((e) => utcCalendarDayKeyFromIso(e.date) <= refDayStr)
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
-    .slice(-7)
-  const last7: (number | null)[] = sparkEntries.map(
-    (e) => Math.round(e.value * 10) / 10,
-  )
-
-  return { baselineTrend, vsBaselineLb, last7 }
 }
 
 function recoveryCompositeFromEntry(e: {
@@ -192,6 +200,7 @@ export async function GET(req: NextRequest) {
       where: { id: userId },
       select: {
         timeZone: true,
+        vacationResumeDate: true,
         workCycleEnabled: true,
         workCycleAnchorDate: true,
         workCycleLength: true,
@@ -259,7 +268,7 @@ export async function GET(req: NextRequest) {
       prisma.goal.findMany({ where: { active: true, userId } }),
       prisma.longGoal.findFirst({
         where: { category: "bodyweight", userId },
-        select: { id: true },
+        select: { id: true, recordLow: true, recordLowDate: true },
       }),
     ])
 
@@ -496,7 +505,21 @@ export async function GET(req: NextRequest) {
     const bowelGoal = bowelG ? dashboardGoalValue(bowelG) : null
     const recoveryGoal = recoveryG ? dashboardGoalValue(recoveryG) : null
 
-    const weightTrend = computeWeeklyWeightTrend(weightEntries, refDayStr)
+    const storedRecordLow =
+      bodyWeightGoal != null
+        ? bodyWeightGoal.recordLow != null && bodyWeightGoal.recordLowDate != null
+          ? {
+              value: bodyWeightGoal.recordLow,
+              date: utcCalendarDayKeyFromIso(bodyWeightGoal.recordLowDate),
+            }
+          : await ensureBodyweightRecordLow(bodyWeightGoal.id)
+        : null
+    const weightTrend = computeHubWeightTrend(
+      weightEntries,
+      refDayStr,
+      storedRecordLow,
+      profile?.vacationResumeDate,
+    )
 
     const body = {
       calories: {

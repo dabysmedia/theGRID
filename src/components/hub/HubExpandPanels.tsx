@@ -38,10 +38,7 @@ import {
   StageTimeline,
   parseStages,
 } from "@/components/sleep/SleepStageViews"
-import {
-  WeightCorrelationPanel,
-  type WeightCorrelationDayData,
-} from "@/components/stats/WeightCorrelationPanel"
+import { WeightTrendPanel } from "@/components/stats/WeightTrendPanel"
 import {
   Dialog,
   DialogContent,
@@ -93,6 +90,7 @@ import {
   plannedWorkoutMatchesTemplate,
 } from "@/lib/workouts/planned-workout-match"
 import { cn, parseLocalDate } from "@/lib/utils"
+import type { WeightTrendInsight, WeightTrendPoint } from "@/lib/weight-trend"
 
 export type HubExpandedPanel =
   | "calories"
@@ -291,34 +289,37 @@ export function HubSleepExpand({
 
 export function HubWeightExpand() {
   const { activeDate } = useActiveDate()
-  const [daily, setDaily] = useState<WeightCorrelationDayData[] | null>(null)
+  const [points, setPoints] = useState<WeightTrendPoint[] | null>(null)
+  const [insight, setInsight] = useState<WeightTrendInsight | null>(null)
+  const [unit, setUnit] = useState("lbs")
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
   const [logOpen, setLogOpen] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
-  const month = useMemo(() => activeDate.slice(0, 7), [activeDate])
+  const [rangeDays, setRangeDays] = useState<number | null>(90)
 
   useEffect(() => {
     let cancelled = false
     setStatus("loading")
     void (async () => {
       try {
-        const res = await apiFetch(`/api/stats/monthly?month=${month}`)
+        const res = await apiFetch("/api/weight")
         if (!res.ok || cancelled) {
           if (!cancelled) setStatus("error")
           return
         }
         const data = await res.json()
         if (cancelled) return
-        const rows = Array.isArray(data?.daily) ? (data.daily as WeightCorrelationDayData[]) : []
-        const daysElapsed =
-          typeof data?.daysElapsed === "number" && Number.isFinite(data.daysElapsed)
-            ? Math.max(0, Math.floor(data.daysElapsed))
-            : rows.length
-        setDaily(data?.isCurrentMonth === true ? rows.slice(0, daysElapsed) : rows)
+        const nextPoints = Array.isArray(data?.trend?.points)
+          ? (data.trend.points as WeightTrendPoint[])
+          : []
+        setPoints(nextPoints)
+        setInsight((data?.trend?.insight as WeightTrendInsight | undefined) ?? null)
+        setUnit(typeof data?.unit === "string" ? data.unit : "lbs")
         setStatus("ready")
       } catch {
         if (!cancelled) {
-          setDaily(null)
+          setPoints(null)
+          setInsight(null)
           setStatus("error")
         }
       }
@@ -326,7 +327,7 @@ export function HubWeightExpand() {
     return () => {
       cancelled = true
     }
-  }, [month, reloadKey])
+  }, [reloadKey])
 
   useEffect(() => {
     const refresh = () => {
@@ -337,22 +338,51 @@ export function HubWeightExpand() {
     return () => window.removeEventListener("grid:log-saved", refresh)
   }, [])
 
-  const hasWeight = daily?.some((d) => d.weight != null || d.weightForward != null) ?? false
-  const todayRow = daily?.find((d) => d.date === activeDate)
+  const hasSeries = (points?.length ?? 0) > 0
+  const todayPoint = points?.find((d) => d.date === activeDate)
+  const latestRaw = [...(points ?? [])].reverse().find((d) => d.raw != null)
   const todayWeight =
-    todayRow?.weight != null
-      ? String(todayRow.weight)
-      : todayRow?.weightForward != null
-        ? String(todayRow.weightForward)
+    todayPoint?.raw != null
+      ? String(todayPoint.raw)
+      : latestRaw?.raw != null
+        ? String(latestRaw.raw)
         : ""
+
+  const rangeOptions: { label: string; days: number | null }[] = [
+    { label: "30d", days: 30 },
+    { label: "90d", days: 90 },
+    { label: "All", days: null },
+  ]
 
   return (
     <div className="hub-detail-sequence space-y-3 px-0.5">
-      <div className="min-w-0">
-          <p className="type-hud-subsection">Weight correlation</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="type-hud-subsection">Weight trend</p>
           <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-            {month} · vs steps, calories, sleep, bowel
+            7-weigh-in average · all-time low saved separately
           </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {rangeOptions.map((option) => {
+            const active = option.days === rangeDays
+            return (
+              <button
+                key={option.label}
+                type="button"
+                onClick={() => setRangeDays(option.days)}
+                className={cn(
+                  "inline-flex items-center rounded-lg px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition-all duration-150",
+                  active
+                    ? "bg-background/80 text-foreground shadow-sm ring-1 ring-teal-400/40"
+                    : "glass-subtle text-muted-foreground/70 hover:bg-glass-highlight/25 hover:text-foreground",
+                )}
+              >
+                {option.label}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       <button
@@ -365,20 +395,25 @@ export function HubWeightExpand() {
       </button>
 
       {status === "loading" ? (
-        <p className="type-hud-caption text-muted-foreground/55">Loading month…</p>
+        <p className="type-hud-caption text-muted-foreground/55">Loading trend…</p>
       ) : status === "error" ? (
         <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-[12px] text-muted-foreground/70">
-          Couldn’t load correlation data. Try again from Stats.
+          Couldn’t load weight trend. Try logging a weigh-in, then reopen.
         </p>
-      ) : !hasWeight ? (
+      ) : !hasSeries || insight == null ? (
         <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-[12px] leading-relaxed text-muted-foreground/70">
-          Log a few weigh-ins this month to unlock weight vs activity correlations.
+          Log a few weigh-ins to unlock the average trend and all-time low.
         </p>
       ) : (
-        <WeightCorrelationPanel
-          daily={daily!}
+        <WeightTrendPanel
+          points={points!}
+          insight={insight}
+          unit={unit}
+          rangeDays={rangeDays}
+          endDate={activeDate}
           embedded
           showTitle={false}
+          animate
           className="min-w-0"
         />
       )}
@@ -387,7 +422,7 @@ export function HubWeightExpand() {
         open={logOpen}
         onOpenChange={setLogOpen}
         initialValue={todayWeight}
-        editing={todayRow?.weight != null}
+        editing={todayPoint?.raw != null}
         onSaved={() => {
           setLogOpen(false)
           window.dispatchEvent(new CustomEvent("grid:log-saved"))

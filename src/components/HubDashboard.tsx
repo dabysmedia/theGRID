@@ -125,6 +125,9 @@ interface DashboardData {
     baselineTrend: "losing" | "maintaining" | "gaining"
     vsBaselineLb: number
     last7: (number | null)[]
+    recordLow?: number | null
+    recordLowDate?: string | null
+    recordLowIsLatest?: boolean
   } | null
 }
 

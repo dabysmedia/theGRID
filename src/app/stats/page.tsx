@@ -32,12 +32,28 @@ import {
 import { cn, formatDate, parseLocalDate } from "@/lib/utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { CATEGORY_THEME } from "@/lib/category-theme"
+import { WeightTrendPanel } from "@/components/stats/WeightTrendPanel"
 import {
-  WeightCorrelationPanel,
-  type WeightCorrelationDayData,
-} from "@/components/stats/WeightCorrelationPanel"
+  buildWeightTrendSeries,
+  resolveRecordLow,
+  summarizeWeightTrend,
+  type WeightRecordLow,
+} from "@/lib/weight-trend"
 
-type DayData = WeightCorrelationDayData
+type DayData = {
+  date: string
+  label: string
+  calories: number
+  steps: number
+  runMiles: number
+  pace: number | null
+  workouts: number
+  sleepHrs: number | null
+  alcohol: number
+  bowel: number
+  weight: number | null
+  weightForward: number | null
+}
 
 
 interface Summary {
@@ -278,13 +294,27 @@ export default function StatsPage() {
   const [month, setMonth] = useState(() => format(new Date(), "yyyy-MM"))
   const [data, setData] = useState<MonthlyData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [recordLow, setRecordLow] = useState<WeightRecordLow | null>(null)
   const touchStart = useRef<{ x: number; y: number } | null>(null)
 
   const fetchMonth = useCallback(async (m: string) => {
     setLoading(true)
     try {
-      const res = await apiFetch(`/api/stats/monthly?month=${m}`)
-      if (res.ok) setData(await res.json())
+      const [monthRes, weightRes] = await Promise.all([
+        apiFetch(`/api/stats/monthly?month=${m}`),
+        apiFetch("/api/weight"),
+      ])
+      if (monthRes.ok) setData(await monthRes.json())
+      if (weightRes.ok) {
+        const payload = await weightRes.json()
+        const value = payload?.trend?.insight?.recordLow
+        const date = payload?.trend?.insight?.recordLowDate
+        setRecordLow(
+          typeof value === "number" && typeof date === "string"
+            ? { value, date }
+            : null,
+        )
+      }
     } finally {
       setLoading(false)
     }
@@ -330,6 +360,22 @@ export default function StatsPage() {
     return isCurrentMonth ? all.slice(0, daysElapsed) : all
   }, [data, isCurrentMonth, daysElapsed])
   const weightChartData = useMemo(() => densifySparseSeries(d, "weight"), [d])
+  const weightTrendLogs = useMemo(
+    () =>
+      d
+        .filter((row) => row.weight != null)
+        .map((row) => ({ date: row.date, value: row.weight as number })),
+    [d],
+  )
+  const weightTrendPoints = useMemo(
+    () => buildWeightTrendSeries(weightTrendLogs),
+    [weightTrendLogs],
+  )
+  const weightTrendInsight = useMemo(() => {
+    const resolved = resolveRecordLow(weightTrendLogs, recordLow)
+    const latest = weightTrendLogs[weightTrendLogs.length - 1] ?? null
+    return summarizeWeightTrend(weightTrendPoints, resolved, latest)
+  }, [weightTrendLogs, weightTrendPoints, recordLow])
   const runChartData = useMemo(
     () => densifySparseSeries(d.filter((row) => row.runMiles > 0), "runMiles"),
     [d],
@@ -452,8 +498,12 @@ export default function StatsPage() {
             </div>
           </div>
 
-          {/* â”€â”€ WEIGHT CORRELATION â”€â”€ */}
-          <WeightCorrelationPanel daily={d} />
+          {weightTrendPoints.length > 0 && (
+            <WeightTrendPanel
+              points={weightTrendPoints}
+              insight={weightTrendInsight}
+            />
+          )}
 
           {/* â”€â”€ CALORIES â”€â”€ */}
           <SectionChart

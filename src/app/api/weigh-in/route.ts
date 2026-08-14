@@ -5,6 +5,7 @@ import { formatDate } from "@/lib/utils"
 import { parseYyyyMmDdToStoredDate } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
 import { assertNotVacationBlocked } from "@/lib/vacation-block-server"
+import { considerBodyweightRecordLow } from "@/lib/weight-record-low"
 
 async function findOrCreateBodyweightGoal(userId: string) {
   let goal = await prisma.longGoal.findFirst({
@@ -117,11 +118,13 @@ export async function POST(req: NextRequest) {
       where: { goalId: goal.id, date: targetDay },
     })
 
+    const value = parseFloat(body.value)
     if (existing) {
       const updated = await prisma.longGoalEntry.update({
         where: { id: existing.id },
-        data: { value: parseFloat(body.value) },
+        data: { value },
       })
+      await considerBodyweightRecordLow(goal.id, value, targetDay)
       return NextResponse.json(updated)
     }
 
@@ -129,10 +132,11 @@ export async function POST(req: NextRequest) {
       data: {
         goalId: goal.id,
         date: targetDay,
-        value: parseFloat(body.value),
+        value,
         notes: null,
       },
     })
+    await considerBodyweightRecordLow(goal.id, value, targetDay)
     return NextResponse.json(entry, { status: 201 })
   } catch (e) {
     if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
