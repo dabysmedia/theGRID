@@ -1491,6 +1491,29 @@ html {
   to { opacity: 1; clip-path: inset(0 0 0 0); }
 }
 
+@keyframes hub-weight-chart-reveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.985);
+    clip-path: inset(0 72% 0 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes hub-weight-trend-enter {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes hub-weight-atl-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.78 0.12 175 / 0%); }
+  45% { box-shadow: 0 0 22px 1px oklch(0.78 0.12 175 / 32%); }
+}
+
 @keyframes chart-wipe {
   from { clip-path: inset(0 100% 0 0); }
   to   { clip-path: inset(0 0 0 0); }
@@ -1631,6 +1654,18 @@ html {
 
   .hub-weight-spark-reveal {
     animation: hub-weight-spark-reveal 0.88s cubic-bezier(0.22, 0.7, 0.18, 1) 120ms backwards;
+  }
+
+  .hub-weight-chart-reveal {
+    animation: hub-weight-chart-reveal 0.92s cubic-bezier(0.22, 0.7, 0.18, 1) 160ms backwards;
+  }
+
+  .hub-weight-trend-enter {
+    animation: hub-weight-trend-enter 0.72s cubic-bezier(0.22, 0.7, 0.18, 1) 80ms backwards;
+  }
+
+  .hub-weight-atl-pulse {
+    animation: hub-weight-atl-pulse 1.4s cubic-bezier(0.22, 0.7, 0.18, 1) 280ms both;
   }
 
   .hub-detail-sequence > * {
@@ -1791,6 +1826,9 @@ html {
     .hub-step-value-enter,
     .hub-hour-bar-enter,
     .hub-weight-spark-reveal,
+    .hub-weight-chart-reveal,
+    .hub-weight-trend-enter,
+    .hub-weight-atl-pulse,
     .hub-detail-sequence > * {
       opacity: 1;
       clip-path: none;

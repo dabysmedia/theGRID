@@ -68,8 +68,10 @@ function applyPayload(
 interface WeightTrendSummary {
   baselineTrend: "losing" | "maintaining" | "gaining"
   vsBaselineLb: number
-  /** Oldest→newest recent weigh-in values (up to 7 logs). */
+  /** Oldest→newest trailing averages (up to 7 points). */
   last7?: (number | null)[]
+  recordLow?: number | null
+  recordLowIsLatest?: boolean
 }
 
 const SPARK_W = 88
@@ -115,7 +117,7 @@ interface DailyWeighInProps {
   embedded?: boolean
   /** Baseline weight trend from the hub dashboard (shown under the large weight). */
   weightTrend?: WeightTrendSummary | null
-  /** Hub: tap the weigh-in header row to expand correlations (does not fire on form controls). */
+  /** Hub: tap the weigh-in header row to expand the average trend (does not fire on form controls). */
   onActivate?: () => void
   /** Hub shared-element state: widen and fade the sparkline into the correlation graph bay. */
   graphFocused?: boolean
@@ -325,9 +327,9 @@ export function DailyWeighIn({
   const trend = weightTrend?.baselineTrend ?? null
   const trendDelta = weightTrend?.vsBaselineLb ?? 0
   const sparkSeries =
-    recentValues.length >= 2
-      ? recentValues
-      : weightTrend?.last7?.filter((v): v is number => v != null) ?? []
+    weightTrend?.last7 && weightTrend.last7.filter((v): v is number => v != null).length >= 2
+      ? weightTrend.last7.filter((v): v is number => v != null)
+      : recentValues
   const spark = weightWeekSpark(sparkSeries)
   const sparkColor =
     trend === "losing"
@@ -367,6 +369,19 @@ export function DailyWeighIn({
         Last <span className="tabular-nums text-foreground/75">{latestWeight}</span> {unit}
       </p>
     ) : null
+  const atlChip =
+    weightTrend?.recordLow != null ? (
+      <p
+        className={cn(
+          "flex shrink-0 items-center gap-1 px-1 py-0.5 tabular-nums",
+          weightTrend.recordLowIsLatest ? "text-teal-200/90" : "text-foreground/75",
+          embedded ? "type-hud-micro normal-case tracking-normal" : "text-[11px] font-medium",
+        )}
+      >
+        <span className="text-muted-foreground/60">Low</span>
+        <span>{weightTrend.recordLow}</span>
+      </p>
+    ) : null
   const trendChip =
     trendIcon && trendValue ? (
       <p
@@ -382,12 +397,12 @@ export function DailyWeighIn({
 
   const weekSparkline = spark ? (
     <span
-      key={graphFocused ? "focused" : "preview"}
       className={cn(
-        "relative mx-1 block min-w-[4.5rem] flex-1 origin-center overflow-visible",
+        "relative mx-1 block min-w-[4.5rem] flex-1 origin-center overflow-visible motion-reduce:transition-none",
+        "transition-[opacity,transform,height,max-width] duration-[680ms] ease-[cubic-bezier(0.22,0.7,0.18,1)]",
         graphFocused
-          ? "h-10 max-w-none scale-x-110 opacity-0"
-          : "hub-weight-spark-reveal h-6 w-[5.5rem] max-w-[6.5rem] scale-x-100 opacity-100 motion-reduce:animate-none",
+          ? "h-10 max-w-none scale-x-[1.4] scale-y-110 opacity-0"
+          : "hub-weight-spark-reveal h-6 w-[5.5rem] max-w-[6.5rem] scale-100 opacity-100",
       )}
     >
       <svg
@@ -438,7 +453,7 @@ export function DailyWeighIn({
         <button
           type="button"
           onClick={onActivate}
-          aria-label="Expand weight correlations"
+          aria-label="Expand weight trend"
           className="group -mx-0.5 flex min-h-11 w-[calc(100%+0.25rem)] touch-manipulation items-center justify-between gap-2 rounded-sm px-0.5 text-left transition-colors hover:bg-white/[0.03] active:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25"
         >
           <div className="min-w-0 shrink-0 space-y-0.5">
@@ -449,6 +464,7 @@ export function DailyWeighIn({
           </div>
           {weekSparkline}
           <div className="flex shrink-0 items-center gap-1.5">
+            {atlChip}
             {trendChip}
             <ChevronRight
               className="h-3.5 w-3.5 shrink-0 text-muted-foreground/55 transition-colors group-hover:text-foreground/80"
@@ -463,7 +479,10 @@ export function DailyWeighIn({
             {lastHint}
           </div>
           {weekSparkline}
-          {trendChip}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {atlChip}
+            {trendChip}
+          </div>
         </div>
       )}
 

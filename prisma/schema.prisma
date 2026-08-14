@@ -363,6 +363,10 @@ model LongGoal {
   unit       String
   direction  String          @default("up")
   startValue Float?
+  /// Lowest logged value, stored independently of rolling averages.
+  /// Not cleared if the matching entry is later edited/deleted; only beaten by a new low.
+  recordLow     Float?
+  recordLowDate DateTime?
   active     Boolean         @default(true)
   userId     String?
   user       User?           @relation(fields: [userId], references: [id])

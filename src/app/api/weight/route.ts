@@ -6,6 +6,16 @@ import { parseYyyyMmDdToStoredDate, utcCalendarDayKeyFromIso } from "@/lib/dateS
 import { resolveUserId, UserError } from "@/lib/current-user"
 import { assertNotVacationBlocked } from "@/lib/vacation-block-server"
 import { normalizeDayKey } from "@/lib/vacation-mode"
+import {
+  considerBodyweightRecordLow,
+  ensureBodyweightRecordLow,
+} from "@/lib/weight-record-low"
+import {
+  buildWeightTrendSeries,
+  resolveRecordLow,
+  summarizeWeightTrend,
+  type WeightLog,
+} from "@/lib/weight-trend"
 
 async function getOrCreateGoal(userId: string) {
   let goal = await prisma.longGoal.findFirst({
@@ -30,7 +40,13 @@ async function getOrCreateGoal(userId: string) {
 export async function GET(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
-    const goal = await getOrCreateGoal(userId)
+    const [goal, profile] = await Promise.all([
+      getOrCreateGoal(userId),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { vacationResumeDate: true },
+      }),
+    ])
     const entries = await prisma.longGoalEntry.findMany({
       where: { goalId: goal.id },
       orderBy: { date: "desc" },
@@ -74,7 +90,6 @@ export async function GET(req: NextRequest) {
         : null
 
     const allTimeHigh = values.length ? Math.max(...values) : null
-    const allTimeLow = values.length ? Math.min(...values) : null
 
     const last7Keys = [...last7Map.keys()].sort()
     const weekChange =
@@ -85,6 +100,17 @@ export async function GET(req: NextRequest) {
               10
           ) / 10
         : null
+
+    const logs: WeightLog[] = [...entries]
+      .reverse()
+      .map((e) => ({ date: utcCalendarDayKeyFromIso(e.date), value: e.value }))
+    const storedLow = await ensureBodyweightRecordLow(goal.id)
+    const recordLow = resolveRecordLow(logs, storedLow)
+    const points = buildWeightTrendSeries(logs, {
+      vacationResumeDate: profile?.vacationResumeDate,
+    })
+    const latestLog = logs.length ? logs[logs.length - 1]! : null
+    const insight = summarizeWeightTrend(points, recordLow, latestLog)
 
     return NextResponse.json({
       goalId: goal.id,
@@ -98,9 +124,14 @@ export async function GET(req: NextRequest) {
         avg7,
         avg30,
         allTimeHigh,
-        allTimeLow,
+        allTimeLow: insight.recordLow,
+        allTimeLowDate: insight.recordLowDate,
         weekChange,
         totalEntries: entries.length,
+      },
+      trend: {
+        points,
+        insight,
       },
     })
   } catch (e) {
@@ -122,11 +153,13 @@ export async function POST(req: NextRequest) {
       where: { goalId: goal.id, date },
     })
 
+    const value = parseFloat(body.value)
     if (existing) {
       const updated = await prisma.longGoalEntry.update({
         where: { id: existing.id },
-        data: { value: parseFloat(body.value), notes: body.notes || null },
+        data: { value, notes: body.notes || null },
       })
+      await considerBodyweightRecordLow(goal.id, value, date)
       return NextResponse.json(updated)
     }
 
@@ -134,10 +167,11 @@ export async function POST(req: NextRequest) {
       data: {
         goalId: goal.id,
         date,
-        value: parseFloat(body.value),
+        value,
         notes: body.notes || null,
       },
     })
+    await considerBodyweightRecordLow(goal.id, value, date)
     return NextResponse.json(entry, { status: 201 })
   } catch (e) {
     if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })
