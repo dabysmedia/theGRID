@@ -80,11 +80,12 @@ export function CardioHeartRateChart({
   const average =
     values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : null
   const latest = points[points.length - 1] ?? null
-  const peak = useMemo(
-    () => points.reduce<typeof latest>((best, point) => {
-      if (!best || point.v > best.v) return point
-      return best
-    }, null),
+  const peak = useMemo<{ t: number; v: number } | null>(
+    () =>
+      points.reduce<{ t: number; v: number } | null>((best, point) => {
+        if (!best || point.v > best.v) return point
+        return best
+      }, null),
     [points],
   )
   const bands = useMemo(
