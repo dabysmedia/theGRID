@@ -198,7 +198,7 @@ export function HeartRateDayChart({
         </p>
       ) : (
         <div className="chart-touch-safe select-none [-webkit-touch-callout:none]">
-          <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-[#07090d]">
+          <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-[#07090d]">
             <svg
               viewBox="0 0 1000 200"
               className="h-64 w-full cursor-crosshair overflow-visible"
@@ -279,37 +279,36 @@ export function HeartRateDayChart({
                 />
               ) : null}
 
-              {active && isScrubbing ? (
-                <g>
-                  <line
-                    x1={xFor(active.t, start, end)}
-                    x2={xFor(active.t, start, end)}
-                    y1={PLOT_TOP}
-                    y2={PLOT_BOTTOM}
-                    stroke="rgba(255,255,255,0.62)"
-                    strokeWidth="1.25"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <circle
-                    cx={xFor(active.t, start, end)}
-                    cy={yFor(active.v, yMin, yMax)}
-                    r="6"
-                    fill={zone?.color ?? HR_COLOR}
-                    stroke="#14080c"
-                    strokeWidth="2"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                </g>
-              ) : latest ? (
-                <circle
-                  cx={xFor(latest.t, start, end)}
-                  cy={yFor(latest.v, yMin, yMax)}
-                  r="3.5"
-                  fill={HR_COLOR}
-                  vectorEffect="non-scaling-stroke"
-                />
-              ) : null}
             </svg>
+            {active && isScrubbing ? (
+              <div
+                className="pointer-events-none absolute inset-0"
+                aria-hidden
+              >
+                <div
+                  className="absolute top-[8%] bottom-[12%] w-px bg-white/65"
+                  style={{ left: `${(xFor(active.t, start, end) / 1000) * 100}%` }}
+                />
+                <div
+                  className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#14080c] shadow-[0_0_10px_rgba(251,113,133,0.45)]"
+                  style={{
+                    left: `${(xFor(active.t, start, end) / 1000) * 100}%`,
+                    top: `${(yFor(active.v, yMin, yMax) / 200) * 100}%`,
+                    background: zone?.color ?? HR_COLOR,
+                  }}
+                />
+              </div>
+            ) : latest ? (
+              <div
+                className="pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{
+                  left: `${(xFor(latest.t, start, end) / 1000) * 100}%`,
+                  top: `${(yFor(latest.v, yMin, yMax) / 200) * 100}%`,
+                  background: HR_COLOR,
+                }}
+                aria-hidden
+              />
+            ) : null}
           </div>
           <div className="mt-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/50">
             {ticks.map((tick) => (

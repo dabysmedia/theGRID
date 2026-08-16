@@ -130,6 +130,7 @@ export function HrvTrendScrubChart({
       <div className="grid grid-cols-3 gap-1.5 sm:gap-2" aria-live="polite">
         {[
           {
+            key: "hrv",
             label: isScrubbing && activeDay?.date
               ? format(parseLocalDate(activeDay.date), "MMM d")
               : "Latest",
@@ -137,11 +138,13 @@ export function HrvTrendScrubChart({
             suffix: "ms",
           },
           {
+            key: "avg",
             label: "14d avg",
             value: hrvAvg != null ? Math.round(hrvAvg) : null,
             suffix: "ms",
           },
           {
+            key: "delta",
             label: "vs avg",
             value: vsAvg,
             suffix: "ms",
@@ -149,7 +152,7 @@ export function HrvTrendScrubChart({
           },
         ].map((item) => (
           <div
-            key={item.label}
+            key={item.key}
             className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 px-2.5 py-2.5"
           >
             <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">
@@ -201,6 +204,7 @@ export function HrvTrendScrubChart({
         </p>
       ) : (
         <div className="chart-touch-safe select-none [-webkit-touch-callout:none]">
+          <div className="relative">
           <svg
             viewBox="0 0 1000 200"
             className="h-56 w-full cursor-crosshair overflow-visible sm:h-60"
@@ -290,43 +294,36 @@ export function HrvTrendScrubChart({
                 />
               )
             })}
-            {isScrubbing ? (
-              <g>
-                <line
-                  x1={x}
-                  x2={x}
-                  y1={PLOT_TOP}
-                  y2={PLOT_BOTTOM}
-                  stroke="rgba(255,255,255,0.55)"
-                  strokeWidth="1.25"
-                  strokeDasharray="3 3"
-                  vectorEffect="non-scaling-stroke"
-                />
-                {scrubHrv != null ? (
-                  <circle
-                    cx={x}
-                    cy={yFor(scrubHrv, hrvMin, hrvMax)}
-                    r="5.5"
-                    fill={HRV_COLOR}
-                    stroke="#11150a"
-                    strokeWidth="2"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ) : null}
-                {scrubRhr != null ? (
-                  <circle
-                    cx={x}
-                    cy={yFor(scrubRhr, rhrMin, rhrMax)}
-                    r="4"
-                    fill={RHR_COLOR}
-                    stroke="#16090d"
-                    strokeWidth="1.5"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ) : null}
-              </g>
-            ) : null}
           </svg>
+          {isScrubbing ? (
+            <div className="pointer-events-none absolute inset-0" aria-hidden>
+              <div
+                className="absolute top-[9%] bottom-[11%] w-px bg-white/55"
+                style={{ left: `${(x / 1000) * 100}%` }}
+              />
+              {scrubHrv != null ? (
+                <div
+                  className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#11150a] shadow-[0_0_10px_rgba(216,232,76,0.4)]"
+                  style={{
+                    left: `${(x / 1000) * 100}%`,
+                    top: `${(yFor(scrubHrv, hrvMin, hrvMax) / 200) * 100}%`,
+                    background: HRV_COLOR,
+                  }}
+                />
+              ) : null}
+              {scrubRhr != null ? (
+                <div
+                  className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#16090d]"
+                  style={{
+                    left: `${(x / 1000) * 100}%`,
+                    top: `${(yFor(scrubRhr, rhrMin, rhrMax) / 200) * 100}%`,
+                    background: RHR_COLOR,
+                  }}
+                />
+              ) : null}
+            </div>
+          ) : null}
+          </div>
           <div className="mt-1 flex justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/50">
             <span>{days[0] ? format(parseLocalDate(days[0].date), "MMM d") : ""}</span>
             <span className={cn(isScrubbing && "text-[#e7f474]/80")}>
