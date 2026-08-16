@@ -135,7 +135,7 @@ export function HeartRateDayChart({
           </p>
         </div>
         <span className="shrink-0 rounded-full border border-[#f43f5e]/20 bg-[#f43f5e]/[0.08] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#fda4af]/80">
-          {points.length > 0 ? `${points.length} samples` : "Today"}
+          {points.length > 0 ? `${points.length} samples` : "Day"}
         </span>
       </div>
 
