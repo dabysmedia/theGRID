@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Check, Pencil, Plus, Trash2, X, Zap } from "lucide-react"
+import { CardioHeartRateChart } from "@/components/cardio/CardioHeartRateChart"
 import {
   Dialog,
   DialogClose,
@@ -23,6 +24,12 @@ import {
   cardioActivityLabel,
   type CardioActivity,
 } from "@/lib/cardio"
+import {
+  pickPrimaryCardioSession,
+  samplesInWindow,
+  type CardioHeartRateThreshold,
+  type CardioHrSample,
+} from "@/lib/cardio-heart-rate"
 import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
 import { cn, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 
@@ -39,13 +46,27 @@ interface CardioSession {
   distanceMeters: number | null
   avgHeartRate: number | null
   startTime: string
+  endTime: string
   source: string | null
+}
+
+interface CardioHeartRatePayload {
+  samples: CardioHrSample[]
+  restingHeartRate: number | null
+  thresholds: CardioHeartRateThreshold[]
+  profile: {
+    ageYears: number
+    weightLb: number | null
+    maxHr: number
+    method: string
+  }
 }
 
 interface CardioResponse {
   sessions: CardioSession[]
   totalMinutes: number
   goalMinutes: number
+  heartRate?: CardioHeartRatePayload
 }
 
 function formatMinutes(value: number): string {
@@ -114,6 +135,9 @@ export function CardioTracker() {
   const [customMinutes, setCustomMinutes] = useState("")
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [heartRate, setHeartRate] = useState<CardioHeartRatePayload | null>(null)
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [loggingMore, setLoggingMore] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [motionOrigin, setMotionOrigin] = useState<DialogMotionOrigin>()
 
@@ -121,6 +145,8 @@ export function CardioTracker() {
     if (!user?.id) {
       setSessions([])
       setTotalMinutes(0)
+      setHeartRate(null)
+      setSelectedSessionId(null)
       setLoading(false)
       return
     }
@@ -132,11 +158,18 @@ export function CardioTracker() {
       })
       if (!response.ok) return
       const data = (await response.json()) as CardioResponse
-      setSessions(Array.isArray(data.sessions) ? data.sessions : [])
+      const nextSessions = Array.isArray(data.sessions) ? data.sessions : []
+      setSessions(nextSessions)
       setTotalMinutes(Number.isFinite(data.totalMinutes) ? data.totalMinutes : 0)
       const nextGoal = Number.isFinite(data.goalMinutes) ? data.goalMinutes : DEFAULT_GOAL_MIN
       setGoalMinutes(nextGoal)
       setGoalInput(formatMinutes(nextGoal))
+      setHeartRate(data.heartRate ?? null)
+      setSelectedSessionId((current) => {
+        if (current && nextSessions.some((session) => session.id === current)) return current
+        return pickPrimaryCardioSession(nextSessions, data.heartRate?.samples ?? [])?.id ?? null
+      })
+      if (nextSessions.length === 0) setLoggingMore(false)
     } finally {
       setLoading(false)
     }
@@ -170,6 +203,17 @@ export function CardioTracker() {
     }
     return [...byActivity.entries()].sort((a, b) => b[1] - a[1])[0][0]
   }, [sessions])
+  const hasLoggedCardio = !loading && sessions.length > 0
+  const selectedSession =
+    sessions.find((session) => session.id === selectedSessionId) ?? sessions[0] ?? null
+  const selectedSamples = useMemo(() => {
+    const all = heartRate?.samples ?? []
+    if (!selectedSession) return all
+    return samplesInWindow(all, selectedSession.startTime, selectedSession.endTime)
+  }, [heartRate?.samples, selectedSession])
+  const sessionLabel = selectedSession
+    ? `${selectedSession.displayName || cardioActivityLabel(selectedSession.activityType)} · ${formatSessionTime(selectedSession.startTime)}`
+    : "Today's cardio"
   const validCustom = useMemo(() => {
     const amount = Number(customMinutes)
     return Number.isFinite(amount) && amount > 0 && amount <= 600
@@ -243,6 +287,7 @@ export function CardioTracker() {
     setOpen(nextOpen)
     if (!nextOpen) {
       setEditingGoal(false)
+      setLoggingMore(false)
       setGoalInput(formatMinutes(goalMinutes))
     }
   }
@@ -316,7 +361,10 @@ export function CardioTracker() {
       <DialogContent
         showCloseButton={false}
         motionOrigin={motionOrigin}
-        className="cardio-tracker-dialog min-h-0 overflow-hidden p-0 sm:max-w-[31rem]"
+        className={cn(
+          "cardio-tracker-dialog min-h-0 overflow-hidden p-0",
+          hasLoggedCardio ? "sm:max-w-[34rem]" : "sm:max-w-[31rem]",
+        )}
       >
         <DialogClose
           render={
@@ -436,83 +484,138 @@ export function CardioTracker() {
               )}
             </div>
 
-            <div data-dialog-motion-part="controls" className="space-y-2">
-              <div
-                role="radiogroup"
-                aria-label="Cardio activity"
-                className="grid grid-cols-4 gap-1.5"
-              >
-                {CARDIO_ACTIVITIES.map((option) => (
+            {!hasLoggedCardio || loggingMore ? (
+              <>
+                <div data-dialog-motion-part="controls" className="space-y-2">
+                  <div
+                    role="radiogroup"
+                    aria-label="Cardio activity"
+                    className="grid grid-cols-4 gap-1.5"
+                  >
+                    {CARDIO_ACTIVITIES.map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        role="radio"
+                        aria-checked={activity === option}
+                        onClick={() => setActivity(option)}
+                        className={cn(
+                          "rounded-lg border px-1 py-1.5 text-[10px] font-medium leading-tight transition-colors",
+                          activity === option
+                            ? "border-amber-300/30 bg-amber-400/[0.12] text-amber-50"
+                            : "border-white/[0.07] bg-white/[0.02] text-muted-foreground hover:bg-amber-400/[0.06]",
+                        )}
+                      >
+                        {CARDIO_ACTIVITY_LABELS[option]}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {QUICK_MINUTES.map((amount) => (
+                      <Button
+                        key={amount}
+                        type="button"
+                        variant="outline"
+                        disabled={busy || !user}
+                        onClick={() => void addCardio(amount)}
+                        className="h-12 rounded-xl border-amber-200/[0.12] bg-amber-400/[0.04] text-amber-50 transition-[background-color,border-color,scale] active:scale-[0.96] hover:bg-amber-400/[0.10]"
+                      >
+                        <span className="flex flex-col items-center leading-none">
+                          <span className="font-semibold">+{amount} min</span>
+                        </span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <form
+                  data-dialog-motion-part="actions"
+                  onSubmit={submitCustom}
+                  className="flex gap-2"
+                >
+                  <label className="relative min-w-0 flex-1">
+                    <span className="sr-only">Custom cardio duration in minutes</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      max="600"
+                      step="1"
+                      value={customMinutes}
+                      onChange={(event) => setCustomMinutes(event.target.value)}
+                      placeholder="Custom min"
+                      className="h-11 w-full rounded-xl border border-white/[0.09] bg-black/15 px-3 pr-11 text-sm tabular-nums outline-none transition-colors placeholder:text-muted-foreground/45 focus:border-amber-300/35"
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
+                      MIN
+                    </span>
+                  </label>
+                  <Button
+                    type="submit"
+                    size="icon"
+                    disabled={!validCustom || busy || !user}
+                    className="h-11 w-11 shrink-0 rounded-xl bg-amber-400 text-amber-950 hover:bg-amber-300"
+                    aria-label="Log custom cardio duration"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </form>
+                {hasLoggedCardio ? (
                   <button
-                    key={option}
                     type="button"
-                    role="radio"
-                    aria-checked={activity === option}
-                    onClick={() => setActivity(option)}
+                    onClick={() => setLoggingMore(false)}
+                    className="w-full text-center text-[11px] text-amber-100/55 hover:text-amber-100/80"
+                  >
+                    Back to heart rate
+                  </button>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </div>
+
+        {hasLoggedCardio && !loggingMore ? (
+          <div className="relative z-10 space-y-2 px-5 pb-4">
+            {sessions.length > 1 ? (
+              <div className="flex gap-1.5 overflow-x-auto">
+                {sessions.map((session) => (
+                  <button
+                    key={session.id}
+                    type="button"
+                    onClick={() => setSelectedSessionId(session.id)}
                     className={cn(
-                      "rounded-lg border px-1 py-1.5 text-[10px] font-medium leading-tight transition-colors",
-                      activity === option
-                        ? "border-amber-300/30 bg-amber-400/[0.12] text-amber-50"
+                      "shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-medium transition-colors",
+                      session.id === selectedSession?.id
+                        ? "border-amber-300/35 bg-amber-400/[0.12] text-amber-50"
                         : "border-white/[0.07] bg-white/[0.02] text-muted-foreground hover:bg-amber-400/[0.06]",
                     )}
                   >
-                    {CARDIO_ACTIVITY_LABELS[option]}
+                    {session.displayName || cardioActivityLabel(session.activityType)}{" "}
+                    {formatSessionTime(session.startTime)}
                   </button>
                 ))}
               </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                {QUICK_MINUTES.map((amount) => (
-                  <Button
-                    key={amount}
-                    type="button"
-                    variant="outline"
-                    disabled={busy || !user}
-                    onClick={() => void addCardio(amount)}
-                    className="h-12 rounded-xl border-amber-200/[0.12] bg-amber-400/[0.04] text-amber-50 transition-[background-color,border-color,scale] active:scale-[0.96] hover:bg-amber-400/[0.10]"
-                  >
-                    <span className="flex flex-col items-center leading-none">
-                      <span className="font-semibold">+{amount} min</span>
-                    </span>
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            <form
-              data-dialog-motion-part="actions"
-              onSubmit={submitCustom}
-              className="flex gap-2"
+            ) : null}
+            <CardioHeartRateChart
+              samples={selectedSamples}
+              thresholds={heartRate?.thresholds ?? []}
+              restingHeartRate={heartRate?.restingHeartRate ?? null}
+              maxHr={heartRate?.profile.maxHr ?? null}
+              ageYears={heartRate?.profile.ageYears ?? null}
+              weightLb={heartRate?.profile.weightLb ?? null}
+              sessionLabel={sessionLabel}
+              status={loading ? "loading" : heartRate ? "ready" : "error"}
+            />
+            <button
+              type="button"
+              onClick={() => setLoggingMore(true)}
+              className="w-full rounded-xl border border-dashed border-amber-200/15 py-2 text-[11px] font-medium text-amber-100/65 transition-colors hover:border-amber-200/25 hover:bg-amber-400/[0.04] hover:text-amber-50"
             >
-              <label className="relative min-w-0 flex-1">
-                <span className="sr-only">Custom cardio duration in minutes</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  max="600"
-                  step="1"
-                  value={customMinutes}
-                  onChange={(event) => setCustomMinutes(event.target.value)}
-                  placeholder="Custom min"
-                  className="h-11 w-full rounded-xl border border-white/[0.09] bg-black/15 px-3 pr-11 text-sm tabular-nums outline-none transition-colors placeholder:text-muted-foreground/45 focus:border-amber-300/35"
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
-                  MIN
-                </span>
-              </label>
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!validCustom || busy || !user}
-                className="h-11 w-11 shrink-0 rounded-xl bg-amber-400 text-amber-950 hover:bg-amber-300"
-                aria-label="Log custom cardio duration"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </form>
+              Log another session
+            </button>
           </div>
-        </div>
+        ) : null}
 
         <div className="relative z-10 max-h-40 overflow-y-auto border-t border-white/[0.06] px-5 py-3">
           {sessions.length === 0 ? (

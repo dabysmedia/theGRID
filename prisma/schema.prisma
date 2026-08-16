@@ -27,6 +27,8 @@ model User {
   workoutGoalPerCycle  Int     @default(3)
   /// Per-profile progressive-overload model: science_based or classic.
   trainingStyle        String  @default("science_based")
+  /// yyyy-MM-dd — used for age-based cardio heart-rate zones.
+  birthDate            String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
