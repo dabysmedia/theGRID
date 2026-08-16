@@ -81,4 +81,22 @@ if (
   }
 }
 
+if (userColumns.has("birthDate")) {
+  const birth = db
+    .prepare(
+      `UPDATE "User"
+       SET "birthDate" = '1999-08-16',
+           "updatedAt" = datetime('now')
+       WHERE (
+         lower("name") = 'carlos'
+         OR "id" = 'carlos'
+         OR (SELECT COUNT(*) FROM "User") = 1
+       ) AND ("birthDate" IS NULL OR "birthDate" = '')`,
+    )
+    .run()
+  if (birth.changes > 0) {
+    console.log("[ensure-default-user] Set Carlos's birth date (age 27)")
+  }
+}
+
 db.close()

@@ -8,6 +8,10 @@ import { resolveUserId, UserError } from "@/lib/current-user"
 import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
 import { isCardioActivity } from "@/lib/cardio"
 import {
+  profileCardioHeartRateZones,
+  resolveCardioAgeYears,
+} from "@/lib/cardio-heart-rate"
+import {
   DEFAULT_STEPS_TIMEZONE,
   resolveStepsTimezone,
   stepsRefDayKey,
@@ -36,7 +40,7 @@ export async function GET(req: NextRequest) {
 
     const dayKey = await resolveCardioDayKey(userId, date)
 
-    const [sessions, cardioGoal] = await Promise.all([
+    const [sessions, cardioGoal, profile, weightGoal, vitals] = await Promise.all([
       prisma.cardioEntry.findMany({
         where: { userId, date: utcRangeWhereForCalendarDay(dayKey), deletedAt: null },
         orderBy: { startTime: "desc" },
@@ -49,6 +53,7 @@ export async function GET(req: NextRequest) {
           distanceMeters: true,
           avgHeartRate: true,
           startTime: true,
+          endTime: true,
           source: true,
         },
       }),
@@ -57,7 +62,54 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
         select: { target: true },
       }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { birthDate: true },
+      }),
+      prisma.longGoal.findFirst({
+        where: { userId, category: "bodyweight" },
+        select: { id: true },
+      }),
+      prisma.vitalDailyEntry.findFirst({
+        where: { userId, date: utcRangeWhereForCalendarDay(dayKey) },
+        select: { restingHeartRate: true },
+      }),
     ])
+
+    const latestWeight = weightGoal
+      ? await prisma.longGoalEntry.findFirst({
+          where: { goalId: weightGoal.id },
+          orderBy: { date: "desc" },
+          select: { value: true },
+        })
+      : null
+
+    let samples: Array<{ time: Date; bpm: number }> = []
+    if (sessions.length > 0) {
+      const windowStart = new Date(
+        Math.min(...sessions.map((session) => session.startTime.getTime())),
+      )
+      const windowEnd = new Date(
+        Math.max(...sessions.map((session) => session.endTime.getTime())),
+      )
+      if (windowEnd > windowStart) {
+        samples = await prisma.heartRateSample.findMany({
+          where: {
+            userId,
+            time: { gte: windowStart, lt: windowEnd },
+          },
+          orderBy: { time: "asc" },
+          select: { time: true, bpm: true },
+        })
+      }
+    }
+
+    const ageYears = resolveCardioAgeYears(profile?.birthDate, dayKey)
+    const zones = profileCardioHeartRateZones({
+      ageYears,
+      weightLb: latestWeight?.value ?? null,
+      restingHeartRate: vitals?.restingHeartRate ?? null,
+    })
 
     const totalMinutes =
       Math.round(sessions.reduce((sum, session) => sum + session.minutes, 0) * 10) / 10
@@ -66,7 +118,25 @@ export async function GET(req: NextRequest) {
         ? cardioGoal.target
         : TRACKING_TARGET_DEFAULTS.cardio
 
-    return NextResponse.json({ sessions, totalMinutes, goalMinutes })
+    return NextResponse.json({
+      sessions,
+      totalMinutes,
+      goalMinutes,
+      heartRate: {
+        samples: samples.map((sample) => ({
+          time: sample.time.toISOString(),
+          bpm: sample.bpm,
+        })),
+        restingHeartRate: vitals?.restingHeartRate ?? zones.restingHeartRate,
+        thresholds: zones.thresholds,
+        profile: {
+          ageYears: zones.ageYears,
+          weightLb: zones.weightLb,
+          maxHr: zones.maxHr,
+          method: zones.method,
+        },
+      },
+    })
   } catch (error) {
     if (error instanceof UserError) {
       return NextResponse.json({ error: error.message }, { status: error.status })
@@ -124,6 +194,7 @@ export async function POST(req: NextRequest) {
         distanceMeters: true,
         avgHeartRate: true,
         startTime: true,
+        endTime: true,
         source: true,
       },
     })
