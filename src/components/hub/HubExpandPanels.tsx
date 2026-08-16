@@ -13,22 +13,9 @@ import {
   Pencil,
   Play,
   Plus,
-  RefreshCw,
   Syringe,
 } from "lucide-react"
 import { HubCollapse } from "@/components/hub/HubMotion"
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceLine,
-} from "recharts"
 import { PeptideVialGraphic } from "@/components/PeptideVialGraphic"
 import { PeptideHalfLifeMeter } from "@/components/PeptideHalfLifeMeter"
 import { PeptideHungerMeter } from "@/components/PeptideHungerMeter"
@@ -92,7 +79,10 @@ import {
   findTemplateForPlannedWorkout,
   plannedWorkoutMatchesTemplate,
 } from "@/lib/workouts/planned-workout-match"
-import { cn, parseLocalDate } from "@/lib/utils"
+import { HeartRateDayChart } from "@/components/vitals/HeartRateDayChart"
+import { HrvTrendScrubChart } from "@/components/vitals/HrvTrendScrubChart"
+import { zoneStyle, type HeartRateZoneThreshold } from "@/lib/heart-rate-zones"
+import { cn } from "@/lib/utils"
 
 export type HubExpandedPanel =
   | "calories"
@@ -400,7 +390,6 @@ export function HubWeightExpand() {
 /* ─── Vitals ─────────────────────────────────────────────── */
 
 const VITALS_COLOR = "#f43f5e"
-const HRV_TREND_COLOR = "#d8e84c"
 
 type ZoneMinutes = { zone: string; minutes: number }
 type HrSample = { time: string; bpm: number }
@@ -417,30 +406,11 @@ type VitalsPayload = {
   hrMin: number | null
   hrMax: number | null
   zones: ZoneMinutes[]
+  thresholds?: HeartRateZoneThreshold[]
   samples: HrSample[]
   trend14: TrendDay[]
   lastSyncAt: string | null
   hasConnection: boolean
-}
-
-const ZONE_STYLE: Record<string, { label: string; color: string }> = {
-  OUT_OF_RANGE: { label: "Out of range", color: "#64748b" },
-  FAT_BURN: { label: "Fat burn", color: "#22c55e" },
-  CARDIO: { label: "Cardio", color: "#f59e0b" },
-  PEAK: { label: "Peak", color: "#ef4444" },
-}
-
-function zoneStyle(zone: string): { label: string; color: string } {
-  const key = zone.toUpperCase().replace(/[^A-Z]/g, "_")
-  return (
-    ZONE_STYLE[key] ?? {
-      label: zone
-        .toLowerCase()
-        .replace(/_/g, " ")
-        .replace(/^\w/, (c) => c.toUpperCase()),
-      color: VITALS_COLOR,
-    }
-  )
 }
 
 function dash(value: number | null | undefined, unit = ""): string {
@@ -460,11 +430,6 @@ export function HubVitalsExpand({
   const { user } = useUser()
   const [data, setData] = useState<VitalsPayload | null>(null)
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
-  const [syncing, setSyncing] = useState(false)
-  const [syncMessage, setSyncMessage] = useState<string | null>(null)
-  const [hrTipActive, setHrTipActive] = useState(false)
-  const [trendTipActive, setTrendTipActive] = useState(false)
-  const [reloadKey, setReloadKey] = useState(0)
   const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading")
   const [loadReloadKey, setLoadReloadKey] = useState(0)
   const [completedSessions, setCompletedSessions] = useState<WorkoutSessionLike[]>([])
@@ -541,7 +506,7 @@ export function HubVitalsExpand({
     return () => {
       cancelled = true
     }
-  }, [activeDate, reloadKey])
+  }, [activeDate])
 
   useEffect(() => {
     let cancelled = false
@@ -565,84 +530,10 @@ export function HubVitalsExpand({
     }
   }, [activeDate, loadReloadKey])
 
-  async function syncNow() {
-    setSyncing(true)
-    setSyncMessage(null)
-    try {
-      const res = await apiFetch("/api/google-health/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ days: 14 }),
-      })
-      const result = (await res.json().catch(() => ({}))) as {
-        error?: string
-        vitalsUpserted?: number
-      }
-      if (!res.ok) {
-        setSyncMessage(result.error || "Sync failed. Connect Google Health in Settings first.")
-      } else {
-        setSyncMessage(`Synced ${result.vitalsUpserted ?? 0} days of vitals.`)
-        setReloadKey((k) => k + 1)
-        window.dispatchEvent(new CustomEvent("grid:log-saved"))
-      }
-    } catch {
-      setSyncMessage("Sync failed.")
-    } finally {
-      setSyncing(false)
-    }
-  }
-
   const hrvMs = data?.hrvMs ?? fallbackHrvMs ?? null
   const rhr = data?.restingHeartRate ?? fallbackRhr ?? null
   const band = readinessBand(readiness ?? null)
   const accent = band ? READINESS_BAND_ACCENT[band] : VITALS_COLOR
-
-  const hrChartData = useMemo(
-    () =>
-      (data?.samples ?? []).map((s) => ({
-        label: format(new Date(s.time), "h:mm a"),
-        bpm: s.bpm,
-      })),
-    [data?.samples],
-  )
-
-  const trendChartData = useMemo(
-    () =>
-      (data?.trend14 ?? []).map((d) => ({
-        label: format(parseLocalDate(d.date), "MMM d"),
-        rhr: d.restingHeartRate,
-        hrv: d.hrvMs,
-      })),
-    [data?.trend14],
-  )
-
-  const hasHrChart = hrChartData.length >= 2
-  const hasTrend = (data?.trend14 ?? []).some(
-    (d) => d.restingHeartRate != null || d.hrvMs != null,
-  )
-  const hrvTrendPoints = trendChartData.filter(
-    (point): point is typeof point & { hrv: number } =>
-      point.hrv != null && Number.isFinite(point.hrv),
-  )
-  const latestTrendHrv = hrvTrendPoints.at(-1)?.hrv ?? null
-  const hrvTrendAverage = hrvTrendPoints.length
-    ? hrvTrendPoints.reduce((sum, point) => sum + point.hrv, 0) / hrvTrendPoints.length
-    : null
-  const hrvTrendDelta =
-    latestTrendHrv != null && hrvTrendAverage != null
-      ? latestTrendHrv - hrvTrendAverage
-      : null
-  const latestHeartRate = hrChartData.at(-1)?.bpm ?? null
-  const sampledHeartRates = hrChartData.map((point) => point.bpm)
-  const heartRateAverage =
-    data?.hrAvg ??
-    (sampledHeartRates.length
-      ? sampledHeartRates.reduce((sum, value) => sum + value, 0) / sampledHeartRates.length
-      : null)
-  const heartRateMin =
-    data?.hrMin ?? (sampledHeartRates.length ? Math.min(...sampledHeartRates) : null)
-  const heartRateMax =
-    data?.hrMax ?? (sampledHeartRates.length ? Math.max(...sampledHeartRates) : null)
   const zones = data?.zones ?? []
   const totalZoneMinutes = zones.reduce((s, z) => s + z.minutes, 0)
   const readinessScore =
@@ -665,353 +556,19 @@ export function HubVitalsExpand({
   const trainedSegmentCount = Object.keys(segmentScores ?? {}).length
 
   const trendPanel = (
-    <section
-      aria-labelledby="hrv-trend-heading"
-      className="space-y-3.5 rounded-2xl border border-[#d8e84c]/15 bg-gradient-to-br from-[#d8e84c]/[0.065] via-white/[0.02] to-transparent p-3.5 sm:p-4"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p id="hrv-trend-heading" className="text-sm font-semibold text-foreground/95">
-            HRV recovery trend
-          </p>
-          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/65">
-            Nightly variability with resting heart rate for context · last 14 days
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full border border-[#d8e84c]/20 bg-[#d8e84c]/[0.08] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#e7f474]/80">
-          Recovery
-        </span>
-      </div>
-
-      <div className="grid grid-cols-3 gap-1.5 sm:gap-2" aria-label="HRV trend summary">
-        {[
-          {
-            label: "Latest",
-            value: latestTrendHrv != null ? Math.round(latestTrendHrv) : null,
-            suffix: "ms",
-          },
-          {
-            label: "14d avg",
-            value: hrvTrendAverage != null ? Math.round(hrvTrendAverage) : null,
-            suffix: "ms",
-          },
-          {
-            label: "vs avg",
-            value: hrvTrendDelta != null ? Math.round(hrvTrendDelta) : null,
-            suffix: "ms",
-            signed: true,
-          },
-        ].map((item) => (
-          <div
-            key={item.label}
-            className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 px-2.5 py-2.5"
-          >
-            <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">
-              {item.label}
-            </p>
-            <p className="mt-1 truncate font-heading text-base leading-none tabular-nums text-foreground/90 sm:text-lg">
-              {item.value != null
-                ? `${item.signed && item.value > 0 ? "+" : ""}${item.value}`
-                : "—"}
-              {item.value != null ? (
-                <span className="ml-0.5 text-[9px] font-medium text-muted-foreground/55">
-                  {item.suffix}
-                </span>
-              ) : null}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground/70">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-0.5 w-5 rounded-full bg-[#d8e84c] shadow-[0_0_8px_rgba(216,232,76,0.35)]" />
-          HRV <span className="text-muted-foreground/45">(ms, right axis)</span>
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-0 w-5 border-t border-dashed border-[#fb7185]/75" />
-          Resting HR <span className="text-muted-foreground/45">(bpm, left axis)</span>
-        </span>
-      </div>
-
-      {status === "loading" ? (
-        <div className="grid h-56 place-items-center rounded-xl border border-dashed border-white/[0.08] bg-black/10 text-[12px] text-muted-foreground/55 sm:h-60">
-          Loading recovery trend…
-        </div>
-      ) : status === "error" ? (
-        <p className="rounded-xl border border-white/[0.06] bg-black/10 px-3 py-4 text-center text-[12px] text-muted-foreground/65">
-          Couldn&apos;t load HRV history. Sync Google Health below, then try again.
-        </p>
-      ) : !hasTrend ? (
-        <p className="rounded-xl border border-dashed border-white/[0.08] bg-black/10 px-3 py-5 text-center text-[12px] leading-relaxed text-muted-foreground/65">
-          Sync a couple of nights to see your HRV recovery trend.
-        </p>
-      ) : (
-        <div
-          className="chart-touch-safe h-56 min-w-0 select-none [-webkit-touch-callout:none] sm:h-60"
-          onPointerUp={() => setTrendTipActive(false)}
-          onPointerCancel={() => setTrendTipActive(false)}
-          onPointerLeave={() => setTrendTipActive(false)}
-          onContextMenu={(event) => event.preventDefault()}
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={trendChartData}
-              margin={{ top: 14, right: 0, left: 0, bottom: 2 }}
-              onMouseMove={() => setTrendTipActive(true)}
-              onMouseLeave={() => setTrendTipActive(false)}
-            >
-              <CartesianGrid
-                strokeDasharray="3 4"
-                stroke="oklch(1 0 0 / 8%)"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 10, fill: "oklch(0.76 0.01 250 / 75%)" }}
-                axisLine={false}
-                tickLine={false}
-                interval="preserveStartEnd"
-                minTickGap={28}
-                tickMargin={8}
-              />
-              <YAxis
-                yAxisId="rhr"
-                tick={{ fontSize: 10, fill: "oklch(0.74 0.09 15 / 80%)" }}
-                axisLine={false}
-                tickLine={false}
-                width={34}
-                tickMargin={4}
-                domain={["dataMin - 3", "dataMax + 3"]}
-              />
-              <YAxis
-                yAxisId="hrv"
-                orientation="right"
-                tick={{ fontSize: 10, fill: "oklch(0.84 0.14 112 / 85%)" }}
-                axisLine={false}
-                tickLine={false}
-                width={34}
-                tickMargin={4}
-                domain={["dataMin - 4", "dataMax + 4"]}
-              />
-              {hrvTrendAverage != null ? (
-                <ReferenceLine
-                  yAxisId="hrv"
-                  y={hrvTrendAverage}
-                  stroke="oklch(0.84 0.14 112 / 38%)"
-                  strokeDasharray="3 5"
-                />
-              ) : null}
-              <Tooltip
-                active={trendTipActive}
-                contentStyle={{
-                  background: "oklch(0.16 0.012 250 / 98%)",
-                  border: "1px solid oklch(1 0 0 / 12%)",
-                  borderRadius: "10px",
-                  fontSize: "12px",
-                  backdropFilter: "blur(12px)",
-                  boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
-                }}
-                labelStyle={{ color: "oklch(0.82 0.01 250)", marginBottom: 4 }}
-                formatter={(value, name) => [
-                  `${value}${name === "HRV" ? " ms" : " bpm"}`,
-                  name,
-                ]}
-              />
-              <Line
-                yAxisId="rhr"
-                type="monotone"
-                dataKey="rhr"
-                name="RHR"
-                stroke="#fb7185"
-                strokeOpacity={0.72}
-                strokeWidth={1.75}
-                strokeDasharray="5 4"
-                dot={{ r: 2, fill: "#fb7185", fillOpacity: 0.75 }}
-                activeDot={{ r: 4 }}
-                connectNulls
-                isAnimationActive={false}
-              />
-              <Line
-                yAxisId="hrv"
-                type="monotone"
-                dataKey="hrv"
-                name="HRV"
-                stroke={HRV_TREND_COLOR}
-                strokeWidth={3}
-                dot={{ r: 2.5, fill: HRV_TREND_COLOR, strokeWidth: 0 }}
-                activeDot={{ r: 5, strokeWidth: 2, stroke: "#11150a" }}
-                connectNulls
-                isAnimationActive={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-    </section>
+    <HrvTrendScrubChart days={data?.trend14 ?? []} status={status} />
   )
 
   const heartRatePanel = (
-    <section
-      aria-labelledby="heart-rate-today-heading"
-      aria-describedby="heart-rate-today-description"
-      className="space-y-3.5 rounded-2xl border border-[#f43f5e]/15 bg-gradient-to-br from-[#f43f5e]/[0.065] via-white/[0.02] to-transparent p-3.5 sm:p-4"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p id="heart-rate-today-heading" className="text-sm font-semibold text-foreground/95">
-            Heart rate today
-          </p>
-          <p
-            id="heart-rate-today-description"
-            className="mt-1 text-[11px] leading-relaxed text-muted-foreground/65"
-          >
-            Five-minute samples across your 5 AM–5 AM tracking day
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full border border-[#f43f5e]/20 bg-[#f43f5e]/[0.08] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#fda4af]/80">
-          {hrChartData.length > 0 ? `${hrChartData.length} samples` : "Today"}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-3 gap-1.5 sm:gap-2" aria-label="Heart rate summary">
-        {[
-          { label: "Latest", value: latestHeartRate },
-          { label: "Day avg", value: heartRateAverage },
-          { label: "Range", value: heartRateMin, secondaryValue: heartRateMax },
-        ].map((item) => (
-          <div
-            key={item.label}
-            className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 px-2.5 py-2.5"
-          >
-            <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">
-              {item.label}
-            </p>
-            <p className="mt-1 truncate font-heading text-base leading-none tabular-nums text-foreground/90 sm:text-lg">
-              {item.value != null
-                ? item.secondaryValue != null
-                  ? `${Math.round(item.value)}–${Math.round(item.secondaryValue)}`
-                  : Math.round(item.value)
-                : "—"}
-              {item.value != null ? (
-                <span className="ml-0.5 text-[9px] font-medium text-muted-foreground/55">
-                  bpm
-                </span>
-              ) : null}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground/70">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-0.5 w-5 rounded-full bg-[#f43f5e] shadow-[0_0_8px_rgba(244,63,94,0.35)]" />
-          Sampled heart rate <span className="text-muted-foreground/45">(bpm)</span>
-        </span>
-        {rhr != null ? (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-0 w-5 border-t border-dashed border-white/45" />
-            Resting baseline <span className="text-muted-foreground/45">({Math.round(rhr)} bpm)</span>
-          </span>
-        ) : null}
-      </div>
-
-      {status === "loading" ? (
-        <div className="grid h-56 place-items-center rounded-xl border border-dashed border-white/[0.08] bg-black/10 text-[12px] text-muted-foreground/55 sm:h-60">
-          Loading heart-rate samples…
-        </div>
-      ) : status === "error" ? (
-        <p className="rounded-xl border border-white/[0.06] bg-black/10 px-3 py-4 text-center text-[12px] text-muted-foreground/65">
-          Couldn&apos;t load today&apos;s heart rate. Sync Google Health below, then try again.
-        </p>
-      ) : !hasHrChart ? (
-        <p className="rounded-xl border border-dashed border-white/[0.08] bg-black/10 px-3 py-5 text-center text-[12px] leading-relaxed text-muted-foreground/65">
-          Sync Google Health to see five-minute heart-rate samples.
-        </p>
-      ) : (
-        <div
-          role="img"
-          aria-label={`Heart rate chart. Latest ${Math.round(latestHeartRate ?? 0)} beats per minute, average ${Math.round(heartRateAverage ?? 0)}, range ${Math.round(heartRateMin ?? 0)} to ${Math.round(heartRateMax ?? 0)}.`}
-          className="chart-touch-safe h-56 min-w-0 select-none [-webkit-touch-callout:none] sm:h-60"
-          onPointerDown={() => setHrTipActive(true)}
-          onPointerUp={() => setHrTipActive(false)}
-          onPointerCancel={() => setHrTipActive(false)}
-          onPointerLeave={() => setHrTipActive(false)}
-          onContextMenu={(event) => event.preventDefault()}
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={hrChartData}
-              margin={{ top: 14, right: 0, left: 0, bottom: 2 }}
-              onMouseMove={() => setHrTipActive(true)}
-              onMouseLeave={() => setHrTipActive(false)}
-            >
-              <defs>
-                <linearGradient id="hubHrAreaFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={VITALS_COLOR} stopOpacity={0.3} />
-                  <stop offset="72%" stopColor={VITALS_COLOR} stopOpacity={0.08} />
-                  <stop offset="100%" stopColor={VITALS_COLOR} stopOpacity={0.015} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid
-                strokeDasharray="3 4"
-                stroke="oklch(1 0 0 / 8%)"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 10, fill: "oklch(0.76 0.01 250 / 75%)" }}
-                axisLine={false}
-                tickLine={false}
-                interval="preserveStartEnd"
-                minTickGap={36}
-                tickMargin={8}
-              />
-              <YAxis
-                tick={{ fontSize: 10, fill: "oklch(0.74 0.09 15 / 80%)" }}
-                axisLine={false}
-                tickLine={false}
-                width={34}
-                tickMargin={4}
-                domain={["dataMin - 5", "dataMax + 5"]}
-              />
-              {rhr != null ? (
-                <ReferenceLine
-                  y={rhr}
-                  stroke="oklch(1 0 0 / 32%)"
-                  strokeDasharray="4 5"
-                />
-              ) : null}
-              <Tooltip
-                active={hrTipActive}
-                cursor={{ stroke: "oklch(1 0 0 / 18%)", strokeWidth: 1 }}
-                contentStyle={{
-                  background: "oklch(0.16 0.012 250 / 98%)",
-                  border: "1px solid oklch(1 0 0 / 12%)",
-                  borderRadius: "10px",
-                  fontSize: "12px",
-                  backdropFilter: "blur(12px)",
-                  boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
-                }}
-                labelStyle={{ color: "oklch(0.82 0.01 250)", marginBottom: 4 }}
-                formatter={(value) => [`${value} bpm`, "Heart rate"]}
-              />
-              <Area
-                type="monotone"
-                dataKey="bpm"
-                name="Heart rate"
-                stroke={VITALS_COLOR}
-                strokeWidth={3}
-                fill="url(#hubHrAreaFill)"
-                dot={false}
-                activeDot={{ r: 5, strokeWidth: 2, stroke: "#16090d" }}
-                isAnimationActive={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-    </section>
+    <HeartRateDayChart
+      samples={data?.samples ?? []}
+      restingHeartRate={rhr}
+      hrAvg={data?.hrAvg ?? null}
+      hrMin={data?.hrMin ?? null}
+      hrMax={data?.hrMax ?? null}
+      thresholds={data?.thresholds}
+      status={status}
+    />
   )
 
   return (
@@ -1125,23 +682,6 @@ export function HubVitalsExpand({
 
       {heartRatePanel}
 
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
-        <button
-          type="button"
-          disabled={syncing}
-          onClick={() => void syncNow()}
-          className="inline-flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-[#f43f5e]/20 bg-[#f43f5e]/[0.07] px-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-100/80 transition-colors hover:border-[#f43f5e]/35 hover:bg-[#f43f5e]/[0.11] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f43f5e]/30 disabled:opacity-50 sm:w-auto"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} aria-hidden />
-          {syncing ? "Syncing…" : "Sync Google Health"}
-        </button>
-        {syncMessage ? (
-          <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/60">
-            {syncMessage}
-          </p>
-        ) : null}
-      </div>
-
       <div
         className="pointer-events-none h-px bg-gradient-to-r from-transparent via-white/8 to-transparent"
         aria-hidden
@@ -1225,7 +765,7 @@ export function HubVitalsExpand({
         <p className="type-hud-caption text-muted-foreground/55">Loading vitals…</p>
       ) : status === "error" ? (
         <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-[12px] text-muted-foreground/70">
-          Couldn’t load vitals. Sync Google Health above, then try again.
+          Couldn’t load vitals. Try again in a moment.
         </p>
       ) : (
         <>
