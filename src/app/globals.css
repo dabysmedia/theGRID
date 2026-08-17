@@ -236,6 +236,7 @@ html {
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
     -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
   }
   button,
   [type="button"],
@@ -249,6 +250,7 @@ html {
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: 0.01em;
     line-height: 1.625;
+    overscroll-behavior-y: contain;
   }
   input[type="number"]::-webkit-inner-spin-button,
   input[type="number"]::-webkit-outer-spin-button {

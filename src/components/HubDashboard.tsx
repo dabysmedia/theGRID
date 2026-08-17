@@ -233,8 +233,8 @@ export function HubDashboard() {
   useEffect(() => {
     let cancelled = false
 
-    async function fetchDashboard() {
-      setLoading(true)
+    async function fetchDashboard(opts?: { silent?: boolean }) {
+      if (!opts?.silent) setLoading(true)
       try {
         const from = formatDate(subDays(parseLocalDate(activeDate), 21))
         const [dashRes, peptideRes, hungerRes] = await Promise.all([
@@ -275,8 +275,11 @@ export function HubDashboard() {
 
     void fetchDashboard()
 
-    function onLogSaved() {
-      void fetchDashboard()
+    function onLogSaved(event: Event) {
+      const silent =
+        event instanceof CustomEvent &&
+        Boolean((event.detail as { silent?: unknown } | undefined)?.silent)
+      void fetchDashboard({ silent })
     }
     window.addEventListener("grid:log-saved", onLogSaved)
     return () => {

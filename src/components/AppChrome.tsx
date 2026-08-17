@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import { usePathname } from "next/navigation"
 import { BottomNav } from "@/components/BottomNav"
 import { PageFooter } from "@/components/PageFooter"
+import { PullToRefresh } from "@/components/PullToRefresh"
 import { useFullscreenOverlay } from "@/context/FullscreenOverlayContext"
 import { isAgentPublicPath } from "@/lib/agent/public-routes"
 import { cn } from "@/lib/utils"
@@ -58,8 +59,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
             isHub ? "hub-route-enter" : "route-enter",
           )}
         >
-          {children}
-          {!fullscreen && !agentPublic && !isHub && <PageFooter />}
+          <PullToRefresh disabled={fullscreen || agentPublic}>
+            {children}
+            {!fullscreen && !agentPublic && !isHub && <PageFooter />}
+          </PullToRefresh>
         </div>
       </main>
       {!fullscreen && !agentPublic && !isHub && <BottomNav />}

@@ -3,6 +3,11 @@
 import { useEffect, useRef } from "react"
 import { useUser } from "@/context/UserContext"
 import { apiFetch } from "@/lib/api-fetch"
+import {
+  notifyAppDataRefreshed,
+  requestGoogleHealthSync,
+  shouldRequestGoogleHealthSync,
+} from "@/lib/google-health-client-sync"
 
 const AUTO_SYNC_WINDOW_MS = 5 * 60 * 1000
 const AUTO_SYNC_DAYS = 7
@@ -40,27 +45,20 @@ export function GoogleHealthAutoSync() {
         if (!statusResponse.ok) return
 
         const status = (await statusResponse.json()) as GoogleHealthStatus
-        if (!status.configured || !status.connected) return
+        if (!shouldRequestGoogleHealthSync(status)) return
 
         const lastSyncMs = status.lastSyncAt ? new Date(status.lastSyncAt).getTime() : 0
         if (Number.isFinite(lastSyncMs) && Date.now() - lastSyncMs < AUTO_SYNC_WINDOW_MS) {
           return
         }
 
-        const syncResponse = await apiFetch("/api/google-health/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ days: AUTO_SYNC_DAYS }),
+        const result = await requestGoogleHealthSync({
+          days: AUTO_SYNC_DAYS,
           signal: controller.signal,
         })
-        if (!syncResponse.ok) return
+        if (!result.synced) return
 
-        window.dispatchEvent(
-          new CustomEvent("grid:google-health-synced", {
-            detail: { userId },
-          }),
-        )
-        window.dispatchEvent(new CustomEvent("grid:log-saved"))
+        notifyAppDataRefreshed({ source: "auto-sync", userId })
       } catch (error) {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
           // The status/settings view surfaces persisted sync failures.
