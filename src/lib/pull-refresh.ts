@@ -3,11 +3,35 @@ export const PULL_REFRESH_THRESHOLD_PX = 64
 /** Rubber-banded travel cap so the sheet cannot be dragged off-screen. */
 export const PULL_REFRESH_MAX_PX = 112
 /** How far content stays offset while the refresh is in flight. */
-export const PULL_REFRESH_HOLD_PX = 52
+export const PULL_REFRESH_HOLD_PX = 64
 /** Ignore tiny movement until the gesture is clearly vertical. */
 export const PULL_REFRESH_AXIS_LOCK_PX = 10
 /** Trailing days fetched on a pull — enough for last night's sleep + today's steps. */
 export const PULL_REFRESH_SYNC_DAYS = 3
+/** Keep the loading circle on screen long enough to read as a spinner, even if sync is instant. */
+export const PULL_REFRESH_MIN_SPINNER_MS = 480
+/** SVG spinner radius used for stroke-dasharray. */
+export const PULL_REFRESH_ARC_RADIUS = 10
+
+export function pullRefreshArcLength(radius = PULL_REFRESH_ARC_RADIUS): number {
+  return 2 * Math.PI * radius
+}
+
+/** Fraction of the circle drawn: grows with the pull, then a tail while spinning. */
+export function pullRefreshArcFraction(progress: number, spinning: boolean): number {
+  if (spinning) return 0.28
+  if (!Number.isFinite(progress) || progress <= 0) return 0.08
+  return Math.max(0.08, Math.min(1, progress))
+}
+
+export function remainingSpinnerMs(
+  startedAt: number,
+  minMs = PULL_REFRESH_MIN_SPINNER_MS,
+  now = Date.now(),
+): number {
+  if (!Number.isFinite(startedAt) || !Number.isFinite(minMs) || !Number.isFinite(now)) return 0
+  return Math.max(0, minMs - (now - startedAt))
+}
 
 const SCROLLABLE_OVERFLOW = new Set(["auto", "scroll", "overlay"])
 

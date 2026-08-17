@@ -26,6 +26,7 @@ import {
 import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
 import { countDosedWeeks } from "@/lib/peptides"
 import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
+import { VIEWS_REFRESHED_EVENT } from "@/lib/google-health-client-sync"
 
 /**
  * Consumes `?expand=<panel>` (+ optional `logFood=1`) once, then strips the query.
@@ -269,7 +270,12 @@ export function HubDashboard() {
       } catch {
         // DB not yet connected
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          if (opts?.silent) {
+            window.dispatchEvent(new CustomEvent(VIEWS_REFRESHED_EVENT))
+          }
+        }
       }
     }
 

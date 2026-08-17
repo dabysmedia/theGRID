@@ -3,6 +3,7 @@ import { PULL_REFRESH_SYNC_DAYS } from "@/lib/pull-refresh"
 
 export const GOOGLE_HEALTH_SYNCED_EVENT = "grid:google-health-synced"
 export const LOG_SAVED_EVENT = "grid:log-saved"
+export const VIEWS_REFRESHED_EVENT = "grid:views-refreshed"
 
 type GoogleHealthStatus = {
   configured?: boolean

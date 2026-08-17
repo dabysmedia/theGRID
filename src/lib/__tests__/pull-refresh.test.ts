@@ -4,7 +4,9 @@ import {
   PULL_REFRESH_MAX_PX,
   PULL_REFRESH_THRESHOLD_PX,
   dampenPullDistance,
+  pullRefreshArcFraction,
   pullRefreshProgress,
+  remainingSpinnerMs,
   shouldArmPullRefresh,
   shouldTriggerPullRefresh,
 } from "@/lib/pull-refresh"
@@ -69,6 +71,22 @@ describe("shouldArmPullRefresh", () => {
     expect(
       shouldArmPullRefresh({ atTop: true, deltaX: 4, deltaY: 24 }),
     ).toBe(true)
+  })
+})
+
+describe("pullRefreshArcFraction", () => {
+  it("keeps a visible tail while spinning and grows with pull progress", () => {
+    expect(pullRefreshArcFraction(0, false)).toBe(0.08)
+    expect(pullRefreshArcFraction(0.5, false)).toBe(0.5)
+    expect(pullRefreshArcFraction(1, false)).toBe(1)
+    expect(pullRefreshArcFraction(0.1, true)).toBe(0.28)
+  })
+})
+
+describe("remainingSpinnerMs", () => {
+  it("holds the loading circle until the minimum visible time has elapsed", () => {
+    expect(remainingSpinnerMs(1000, 480, 1100)).toBe(380)
+    expect(remainingSpinnerMs(1000, 480, 1600)).toBe(0)
   })
 })
 
