@@ -8,6 +8,18 @@ export function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
 }
 
+/** Map a 0–1 hit-target ratio onto the inner plot (viewBox padding). */
+export function plotRatioFromView(
+  ratio: number,
+  plotLeft: number,
+  plotRight: number,
+  viewWidth: number,
+): number {
+  if (viewWidth <= 0 || plotRight <= plotLeft) return clamp01(ratio)
+  const x = clamp01(ratio) * viewWidth
+  return clamp01((x - plotLeft) / (plotRight - plotLeft))
+}
+
 export function ratioToTime(start: number, end: number, ratio: number): number {
   const span = end - start
   if (!Number.isFinite(span) || span <= 0) return start

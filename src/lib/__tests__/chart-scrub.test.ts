@@ -5,9 +5,10 @@ import {
   interpolateSparseByIndex,
   nearestDefinedIndex,
   nearestSeriesPoint,
+  plotRatioFromView,
   ratioToTime,
 } from "@/lib/chart-scrub"
-import { zoneForBpm } from "@/lib/heart-rate-zones"
+import { zoneForBpm, zoneLegend } from "@/lib/heart-rate-zones"
 
 describe("interpolateSeries", () => {
   const points = [
@@ -89,5 +90,26 @@ describe("nearestDefinedIndex / nearestSeriesPoint", () => {
     ]
     expect(nearestSeriesPoint(points, 3)).toEqual({ t: 0, v: 60 })
     expect(nearestSeriesPoint(points, 8)).toEqual({ t: 10, v: 80 })
+  })
+})
+
+describe("plotRatioFromView", () => {
+  it("maps the inner plot so padding does not steal the first/last sample", () => {
+    expect(plotRatioFromView(0, 8, 992, 1000)).toBe(0)
+    expect(plotRatioFromView(8 / 1000, 8, 992, 1000)).toBe(0)
+    expect(plotRatioFromView(992 / 1000, 8, 992, 1000)).toBe(1)
+    expect(plotRatioFromView(0.5, 8, 992, 1000)).toBeCloseTo((500 - 8) / 984)
+  })
+})
+
+describe("zoneLegend", () => {
+  it("lists Zone 1–4 and never Fat burn", () => {
+    const legend = zoneLegend([
+      { zone: "OUT_OF_RANGE", minBpm: 0, maxBpm: 110 },
+      { zone: "FAT_BURN", minBpm: 110, maxBpm: 140 },
+      { zone: "CARDIO", minBpm: 140, maxBpm: 170 },
+      { zone: "PEAK", minBpm: 170, maxBpm: 220 },
+    ])
+    expect(legend.map((zone) => zone.label)).toEqual(["Zone 1", "Zone 2", "Zone 3", "Zone 4"])
   })
 })

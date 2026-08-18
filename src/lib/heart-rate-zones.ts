@@ -99,3 +99,21 @@ export function plottableZoneBands(
     })
     .filter((band) => band.to > band.from)
 }
+
+/** All named zones for legends — not clipped to the day's bpm range. */
+export function zoneLegend(
+  thresholds: HeartRateZoneThreshold[] | null | undefined,
+  restingHeartRate?: number | null,
+): HeartRateZoneInfo[] {
+  const bands =
+    thresholds && thresholds.length > 0 ? thresholds : fallbackHeartRateThresholds(restingHeartRate)
+  const seen = new Set<number>()
+  const legend: HeartRateZoneInfo[] = []
+  for (const band of bands) {
+    const info = zoneStyle(band.zone)
+    if (seen.has(info.number)) continue
+    seen.add(info.number)
+    legend.push(info)
+  }
+  return legend
+}

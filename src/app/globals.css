@@ -1581,13 +1581,14 @@ html {
 
   /*
    * Plots own the gesture so a little vertical finger drift cannot steal
-   * the scrub via page pan. Scroll the page from outside the SVG.
+   * the scrub via page pan. Scroll the page from outside the plot.
    */
   .chart-touch-safe {
     -webkit-user-drag: none;
   }
 
-  .chart-touch-safe svg {
+  .chart-touch-safe svg,
+  .chart-touch-safe .chart-scrub-hit {
     touch-action: none !important;
   }
 

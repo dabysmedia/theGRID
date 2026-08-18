@@ -2,14 +2,15 @@
 
 import { useCallback, useId, useMemo, useState } from "react"
 import { format } from "date-fns"
-import { useAxisLockedScrub } from "@/components/charts/useAxisLockedScrub"
+import { ChartScrubHit, useAxisLockedScrub } from "@/components/charts/useAxisLockedScrub"
 import {
   cardioZoneForBpm,
+  cardioZoneLegend,
   plottableCardioZoneBands,
   type CardioHeartRateThreshold,
   type CardioHrSample,
 } from "@/lib/cardio-heart-rate"
-import { nearestSeriesPoint, ratioToTime, type ScrubPoint } from "@/lib/chart-scrub"
+import { nearestSeriesPoint, plotRatioFromView, ratioToTime, type ScrubPoint } from "@/lib/chart-scrub"
 
 const HR_COLOR = "#fb7185"
 const PLOT_LEFT = 8
@@ -92,8 +93,11 @@ export function CardioHeartRateChart({
     [thresholds, yMin, yMax],
   )
 
+  const legend = useMemo(() => cardioZoneLegend(thresholds), [thresholds])
   const fingerT =
-    scrubRatio == null ? (peak?.t ?? latest?.t ?? start) : ratioToTime(start, end, scrubRatio)
+    scrubRatio == null
+      ? (peak?.t ?? latest?.t ?? start)
+      : ratioToTime(start, end, plotRatioFromView(scrubRatio, PLOT_LEFT, PLOT_RIGHT, 1000))
   const sample = nearestSeriesPoint(points, fingerT) ?? peak ?? latest
   const zone = sample ? cardioZoneForBpm(sample.v, thresholds) : null
   const vsAvg = sample && average != null ? sample.v - average : null
@@ -170,15 +174,13 @@ export function CardioHeartRateChart({
         </p>
       ) : (
         <div className="chart-touch-safe select-none [-webkit-touch-callout:none]">
-          <div className="relative">
+          <ChartScrubHit handlers={scrubHandlers} className="cursor-crosshair">
             <svg
               viewBox="0 0 1000 186"
-              className="h-44 w-full cursor-crosshair overflow-visible"
+              className="pointer-events-none h-44 w-full overflow-visible"
               role="img"
               aria-label="Heart rate during this cardio session. Drag horizontally to inspect time, bpm, and zone."
               preserveAspectRatio="none"
-              {...scrubHandlers}
-              onContextMenu={(event) => event.preventDefault()}
             >
               <defs>
                 <linearGradient id={`${gradientId}-hr`} x1="0" y1="0" x2="0" y2="1">
@@ -241,21 +243,21 @@ export function CardioHeartRateChart({
                 className="pointer-events-none absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
                 style={{
                   left: `${(xFor(latest.t, start, end) / 1000) * 100}%`,
-                  top: `${(yFor(latest.v, yMin, yMax) / 200) * 100}%`,
+                  top: `${(yFor(latest.v, yMin, yMax) / 186) * 100}%`,
                   background: HR_COLOR,
                 }}
                 aria-hidden
               />
             ) : null}
-          </div>
+          </ChartScrubHit>
           <div className="mt-1.5 flex items-center justify-between type-hud-micro text-muted-foreground/45">
             {ticks.map((tick) => (
               <span key={tick.t}>{tick.label}</span>
             ))}
           </div>
           <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 type-hud-micro text-muted-foreground/55">
-            {bands.map((band) => (
-              <span key={band.key} className="inline-flex items-center gap-1.5 normal-case tracking-normal">
+            {legend.map((band) => (
+              <span key={band.label} className="inline-flex items-center gap-1.5 normal-case tracking-normal">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: band.color }} />
                 {band.label}
               </span>

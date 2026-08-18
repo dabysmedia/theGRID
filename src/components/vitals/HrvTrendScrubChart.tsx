@@ -2,8 +2,8 @@
 
 import { useCallback, useId, useMemo, useState } from "react"
 import { format } from "date-fns"
-import { useAxisLockedScrub } from "@/components/charts/useAxisLockedScrub"
-import { clamp01, nearestDefinedIndex } from "@/lib/chart-scrub"
+import { ChartScrubHit, useAxisLockedScrub } from "@/components/charts/useAxisLockedScrub"
+import { nearestDefinedIndex, plotRatioFromView } from "@/lib/chart-scrub"
 import { parseLocalDate } from "@/lib/utils"
 
 const HRV_COLOR = "#d8e84c"
@@ -95,7 +95,9 @@ export function HrvTrendScrubChart({
   }, [days])
 
   const fingerIndex =
-    scrubRatio == null ? latestIndex : clamp01(scrubRatio) * Math.max(0, days.length - 1)
+    scrubRatio == null
+      ? latestIndex
+      : plotRatioFromView(scrubRatio, PLOT_LEFT, PLOT_RIGHT, 1000) * Math.max(0, days.length - 1)
   const sampleIndex = nearestDefinedIndex(hrvValues, fingerIndex) ?? latestIndex
   const rhrIndex = nearestDefinedIndex(rhrValues, sampleIndex)
   const activeDay = days[sampleIndex] ?? days[latestIndex]
@@ -154,15 +156,13 @@ export function HrvTrendScrubChart({
         </p>
       ) : (
         <div className="chart-touch-safe select-none [-webkit-touch-callout:none]">
-          <div className="relative">
+          <ChartScrubHit handlers={scrubHandlers} className="cursor-crosshair">
             <svg
               viewBox="0 0 1000 200"
-              className="h-52 w-full cursor-crosshair overflow-visible sm:h-56"
+              className="pointer-events-none h-52 w-full overflow-visible sm:h-56"
               role="img"
               aria-label="HRV recovery trend for the last 14 days. Drag horizontally to inspect a day."
               preserveAspectRatio="none"
-              {...scrubHandlers}
-              onContextMenu={(event) => event.preventDefault()}
             >
               <defs>
                 <linearGradient id={`${gradientId}-hrv`} x1="0" y1="0" x2="0" y2="1">
@@ -254,7 +254,7 @@ export function HrvTrendScrubChart({
                 ) : null}
               </div>
             ) : null}
-          </div>
+          </ChartScrubHit>
           <div className="mt-1.5 flex justify-between type-hud-micro text-muted-foreground/45">
             <span>{days[0] ? format(parseLocalDate(days[0].date), "MMM d") : ""}</span>
             <span className="inline-flex items-center gap-3 normal-case tracking-normal">

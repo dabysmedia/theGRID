@@ -144,6 +144,20 @@ export function plottableCardioZoneBands(
     .filter((band) => band.to > band.from)
 }
 
+export function cardioZoneLegend(
+  thresholds: CardioHeartRateThreshold[],
+): CardioHeartRateZoneInfo[] {
+  const seen = new Set<string>()
+  const legend: CardioHeartRateZoneInfo[] = []
+  for (const band of thresholds) {
+    const info = cardioZoneStyle(band.zone)
+    if (seen.has(info.label)) continue
+    seen.add(info.label)
+    legend.push(info)
+  }
+  return legend
+}
+
 export type CardioHrSample = { time: string; bpm: number }
 
 export function samplesInWindow(
