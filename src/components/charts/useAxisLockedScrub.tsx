@@ -133,7 +133,11 @@ export function ChartScrubHit({
     <div
       className={cn("chart-scrub-hit relative touch-none select-none", className)}
       style={{ touchAction: "none" }}
-      {...handlers}
+      onPointerDown={handlers.onPointerDown}
+      onPointerMove={handlers.onPointerMove}
+      onPointerUp={handlers.onPointerUp}
+      onPointerCancel={handlers.onPointerCancel}
+      onPointerLeave={handlers.onPointerLeave}
       onContextMenu={(event) => event.preventDefault()}
     >
       {children}
