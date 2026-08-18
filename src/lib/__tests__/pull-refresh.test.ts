@@ -4,7 +4,10 @@ import {
   PULL_REFRESH_MAX_PX,
   PULL_REFRESH_THRESHOLD_PX,
   dampenPullDistance,
+  isScrollOffsetAtTop,
+  pullRefreshArcFraction,
   pullRefreshProgress,
+  remainingSpinnerMs,
   shouldArmPullRefresh,
   shouldTriggerPullRefresh,
 } from "@/lib/pull-refresh"
@@ -79,8 +82,32 @@ describe("shouldTriggerPullRefresh", () => {
     expect(shouldTriggerPullRefresh(PULL_REFRESH_MAX_PX)).toBe(true)
   })
 
-  it("still triggers after rubber-banding a realistic ~100px finger pull", () => {
+  it("still triggers after rubber-banding a realistic ~80px finger pull", () => {
     expect(shouldTriggerPullRefresh(dampenPullDistance(50))).toBe(false)
-    expect(shouldTriggerPullRefresh(dampenPullDistance(100))).toBe(true)
+    expect(shouldTriggerPullRefresh(dampenPullDistance(80))).toBe(true)
+  })
+})
+
+describe("isScrollOffsetAtTop", () => {
+  it("treats iOS rubber-band noise as still at the top", () => {
+    expect(isScrollOffsetAtTop(0)).toBe(true)
+    expect(isScrollOffsetAtTop(12)).toBe(true)
+    expect(isScrollOffsetAtTop(80)).toBe(false)
+  })
+})
+
+describe("pullRefreshArcFraction", () => {
+  it("keeps a visible tail while spinning and grows with pull progress", () => {
+    expect(pullRefreshArcFraction(0, false)).toBe(0.08)
+    expect(pullRefreshArcFraction(0.5, false)).toBe(0.5)
+    expect(pullRefreshArcFraction(1, false)).toBe(1)
+    expect(pullRefreshArcFraction(0.1, true)).toBe(0.28)
+  })
+})
+
+describe("remainingSpinnerMs", () => {
+  it("holds the loading circle until the minimum visible time has elapsed", () => {
+    expect(remainingSpinnerMs(1000, 480, 1100)).toBe(380)
+    expect(remainingSpinnerMs(1000, 480, 1600)).toBe(0)
   })
 })

@@ -7,29 +7,45 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
+  PULL_REFRESH_ARC_RADIUS,
   PULL_REFRESH_HOLD_PX,
   areScrollAncestorsAtTop,
   dampenPullDistance,
   isPullRefreshBlockedTarget,
+  pullRefreshArcFraction,
+  pullRefreshArcLength,
   pullRefreshProgress,
+  remainingSpinnerMs,
   shouldArmPullRefresh,
   shouldTriggerPullRefresh,
 } from "@/lib/pull-refresh"
 import { refreshAppData } from "@/lib/google-health-client-sync"
 
+const ARC_LENGTH = pullRefreshArcLength()
+
 type GestureState = {
-  pointerId: number | null
+  id: number | null
   startX: number
   startY: number
+  atTop: boolean
   pulling: boolean
   raw: number
 }
 
-function isTouchLikePointer(event: PointerEvent): boolean {
-  return event.pointerType === "touch" || event.pointerType === "pen"
+function touchById(touches: TouchList, id: number | null): Touch | null {
+  if (id == null) return null
+  for (let i = 0; i < touches.length; i += 1) {
+    const touch = touches.item(i)
+    if (touch && touch.identifier === id) return touch
+  }
+  return null
+}
+
+function applyArcFraction(arc: SVGCircleElement | null, fraction: number) {
+  if (!arc) return
+  arc.setAttribute("stroke-dasharray", `${ARC_LENGTH * fraction} ${ARC_LENGTH}`)
 }
 
 export function PullToRefresh({
@@ -44,11 +60,14 @@ export function PullToRefresh({
   const rootRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const indicatorRef = useRef<HTMLDivElement>(null)
+  const arcRef = useRef<SVGCircleElement>(null)
+  const hideTimerRef = useRef(0)
   const refreshingRef = useRef(false)
   const gestureRef = useRef<GestureState>({
-    pointerId: null,
+    id: null,
     startX: 0,
     startY: 0,
+    atTop: false,
     pulling: false,
     raw: 0,
   })
@@ -62,26 +81,29 @@ export function PullToRefresh({
     if (content) {
       const offset = dampenedPx > 0.5 ? dampenedPx : 0
       content.style.transition = withTransition
-        ? "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)"
+        ? "transform 320ms cubic-bezier(0.22, 1, 0.36, 1)"
         : "none"
       content.style.transform = offset > 0 ? `translate3d(0, ${offset}px, 0)` : ""
       content.style.willChange = offset > 0 || spinning ? "transform" : "auto"
     }
     if (indicator) {
-      indicator.style.opacity = spinning
-        ? "1"
-        : String(Math.min(1, progress * 1.2))
+      indicator.style.transition = withTransition
+        ? "opacity 280ms ease, transform 280ms ease"
+        : "none"
+      indicator.style.opacity = spinning ? "1" : String(Math.min(1, progress * 1.25))
       indicator.style.transform = spinning
-        ? "translateX(-50%) scale(1)"
-        : `translateX(-50%) scale(${0.55 + progress * 0.45}) rotate(${progress * 180}deg)`
+        ? "scale(1)"
+        : `scale(${0.62 + progress * 0.38})`
     }
+    applyArcFraction(arcRef.current, pullRefreshArcFraction(progress, spinning))
   }, [])
 
   const resetGesture = useCallback(() => {
     gestureRef.current = {
-      pointerId: null,
+      id: null,
       startX: 0,
       startY: 0,
+      atTop: false,
       pulling: false,
       raw: 0,
     }
@@ -89,54 +111,66 @@ export function PullToRefresh({
 
   const finishRefresh = useCallback(() => {
     refreshingRef.current = false
-    setRefreshing(false)
     applyPull(0, true)
-    resetGesture()
+    window.clearTimeout(hideTimerRef.current)
+    hideTimerRef.current = window.setTimeout(() => {
+      setRefreshing(false)
+      resetGesture()
+    }, 300)
   }, [applyPull, resetGesture])
 
   useEffect(() => {
     const root = rootRef.current
     if (!root || disabled) return
+    let cancelled = false
 
-    const onPointerDown = (event: PointerEvent) => {
+    const onTouchStart = (event: TouchEvent) => {
       if (refreshingRef.current) return
-      if (!isTouchLikePointer(event) || event.isPrimary === false) return
+      if (event.touches.length !== 1) {
+        resetGesture()
+        return
+      }
       if (isPullRefreshBlockedTarget(event.target)) return
+      const touch = event.touches[0]
+      if (!touch) return
 
       gestureRef.current = {
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
+        id: touch.identifier,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        // Snapshot now — iOS retargets event.target after the first move.
+        atTop: areScrollAncestorsAtTop(event.target, root),
         pulling: false,
         raw: 0,
       }
     }
 
-    const onPointerMove = (event: PointerEvent) => {
+    const onTouchMove = (event: TouchEvent) => {
       const gesture = gestureRef.current
-      if (gesture.pointerId !== event.pointerId || refreshingRef.current) return
+      if (gesture.id == null || refreshingRef.current) return
+      const touch = touchById(event.touches, gesture.id)
+      if (!touch) return
 
-      const deltaX = event.clientX - gesture.startX
-      const deltaY = event.clientY - gesture.startY
+      const deltaX = touch.clientX - gesture.startX
+      const deltaY = touch.clientY - gesture.startY
+
+      // Steal the gesture from iOS before it treats a top-of-hub pull as a no-op scroll.
+      if (gesture.atTop && deltaY > 2 && deltaY >= Math.abs(deltaX) && event.cancelable) {
+        event.preventDefault()
+      }
 
       if (!gesture.pulling) {
-        const atTop = areScrollAncestorsAtTop(event.target, root)
         if (
           !shouldArmPullRefresh({
-            atTop,
+            atTop: gesture.atTop,
             deltaX,
             deltaY,
           })
         ) {
+          if (!gesture.atTop || deltaY < 0) resetGesture()
           return
         }
         gesture.pulling = true
-        root.style.touchAction = "none"
-        try {
-          root.setPointerCapture(event.pointerId)
-        } catch {
-          /* capture is optional */
-        }
       }
 
       if (event.cancelable) event.preventDefault()
@@ -144,18 +178,10 @@ export function PullToRefresh({
       applyPull(dampenPullDistance(gesture.raw), false)
     }
 
-    const onPointerUp = (event: PointerEvent) => {
+    const endTouch = (event: TouchEvent) => {
       const gesture = gestureRef.current
-      if (gesture.pointerId !== event.pointerId) return
-
-      try {
-        if (root.hasPointerCapture(event.pointerId)) {
-          root.releasePointerCapture(event.pointerId)
-        }
-      } catch {
-        /* already released */
-      }
-      root.style.touchAction = ""
+      if (gesture.id == null) return
+      if (touchById(event.touches, gesture.id)) return
 
       if (!gesture.pulling || refreshingRef.current) {
         resetGesture()
@@ -174,20 +200,31 @@ export function PullToRefresh({
       applyPull(PULL_REFRESH_HOLD_PX, true)
       resetGesture()
 
-      void refreshAppData({ source: "pull-refresh" }).finally(() => {
-        window.setTimeout(finishRefresh, 180)
-      })
+      const startedAt = Date.now()
+      void (async () => {
+        try {
+          await refreshAppData({ source: "pull-refresh" })
+          const leftover = remainingSpinnerMs(startedAt)
+          if (leftover > 0) {
+            await new Promise((resolve) => window.setTimeout(resolve, leftover))
+          }
+        } finally {
+          if (!cancelled) finishRefresh()
+        }
+      })()
     }
 
-    root.addEventListener("pointerdown", onPointerDown)
-    root.addEventListener("pointermove", onPointerMove, { passive: false })
-    root.addEventListener("pointerup", onPointerUp)
-    root.addEventListener("pointercancel", onPointerUp)
+    root.addEventListener("touchstart", onTouchStart, { capture: true, passive: true })
+    root.addEventListener("touchmove", onTouchMove, { capture: true, passive: false })
+    root.addEventListener("touchend", endTouch, { capture: true })
+    root.addEventListener("touchcancel", endTouch, { capture: true })
     return () => {
-      root.removeEventListener("pointerdown", onPointerDown)
-      root.removeEventListener("pointermove", onPointerMove)
-      root.removeEventListener("pointerup", onPointerUp)
-      root.removeEventListener("pointercancel", onPointerUp)
+      cancelled = true
+      window.clearTimeout(hideTimerRef.current)
+      root.removeEventListener("touchstart", onTouchStart, { capture: true })
+      root.removeEventListener("touchmove", onTouchMove, { capture: true })
+      root.removeEventListener("touchend", endTouch, { capture: true })
+      root.removeEventListener("touchcancel", endTouch, { capture: true })
     }
   }, [applyPull, disabled, finishRefresh, resetGesture])
 
@@ -199,30 +236,59 @@ export function PullToRefresh({
     <div
       ref={rootRef}
       className={cn(
-        "relative flex min-h-0 flex-1 flex-col overscroll-y-contain touch-pan-y",
+        "relative flex min-h-0 flex-1 flex-col overscroll-y-contain",
         className,
       )}
       aria-busy={refreshing}
     >
-      <div
-        ref={indicatorRef}
-        className="pointer-events-none absolute left-1/2 top-2 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-background/70 text-primary shadow-[inset_0_1px_0_0_oklch(1_0_0/10%)] backdrop-blur-md"
-        style={{ opacity: 0, transform: "translateX(-50%) scale(0.55)" }}
-        aria-hidden={!refreshing}
-      >
-        <RefreshCw
+      <div className="pointer-events-none absolute inset-x-0 top-2.5 z-50 flex justify-center">
+        <div
+          ref={indicatorRef}
           className={cn(
-            "h-4 w-4",
-            refreshing && "animate-spin motion-reduce:animate-none",
+            "flex h-8 w-8 items-center justify-center rounded-full",
+            "border border-white/12 bg-background/80 text-primary shadow-[inset_0_1px_0_0_oklch(1_0_0/10%)] backdrop-blur-md",
+            refreshing ? "opacity-100" : "opacity-0",
           )}
-          aria-hidden
-        />
-        <span className="sr-only">{refreshing ? "Refreshing" : "Pull to refresh"}</span>
+          role="status"
+          aria-live="polite"
+          aria-hidden={!refreshing}
+        >
+          <div
+            className={cn(
+              "h-7 w-7",
+              refreshing && "animate-spin motion-reduce:animate-none [animation-duration:700ms]",
+            )}
+          >
+            <svg viewBox="0 0 28 28" className="h-7 w-7" aria-hidden>
+              <circle
+                cx="14"
+                cy="14"
+                r={PULL_REFRESH_ARC_RADIUS}
+                fill="none"
+                stroke="currentColor"
+                strokeOpacity="0.22"
+                strokeWidth="2.35"
+              />
+              <circle
+                ref={arcRef}
+                cx="14"
+                cy="14"
+                r={PULL_REFRESH_ARC_RADIUS}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.35"
+                strokeLinecap="round"
+                strokeDasharray={`${ARC_LENGTH * pullRefreshArcFraction(refreshing ? 1 : 0, refreshing)} ${ARC_LENGTH}`}
+                transform="rotate(-90 14 14)"
+              />
+            </svg>
+          </div>
+          <span className="sr-only">
+            {refreshing ? "Syncing Google Health" : "Pull to refresh"}
+          </span>
+        </div>
       </div>
-      <div
-        ref={contentRef}
-        className="flex min-h-0 flex-1 flex-col"
-      >
+      <div ref={contentRef} className="flex min-h-0 flex-1 flex-col">
         {children}
       </div>
     </div>
