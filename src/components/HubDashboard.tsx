@@ -26,6 +26,7 @@ import {
 import { CALORIES_LOG_FOOD_QUERY } from "@/lib/calories-log-deep-link"
 import { countDosedWeeks } from "@/lib/peptides"
 import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
+import { setHubPanelOpen } from "@/lib/edge-back"
 
 /**
  * Consumes `?expand=<panel>` (+ optional `logFood=1`) once, then strips the query.
@@ -229,6 +230,11 @@ export function HubDashboard() {
     window.addEventListener(HUB_RESET_OVERVIEW_EVENT, onResetOverview)
     return () => window.removeEventListener(HUB_RESET_OVERVIEW_EVENT, onResetOverview)
   }, [])
+
+  useEffect(() => {
+    setHubPanelOpen(hubExpanded != null)
+    return () => setHubPanelOpen(false)
+  }, [hubExpanded])
 
   useEffect(() => {
     let cancelled = false

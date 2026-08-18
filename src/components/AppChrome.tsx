@@ -3,6 +3,7 @@
 import type { ReactNode } from "react"
 import { usePathname } from "next/navigation"
 import { BottomNav } from "@/components/BottomNav"
+import { EdgeBackGesture } from "@/components/EdgeBackGesture"
 import { PageFooter } from "@/components/PageFooter"
 import { PullToRefresh } from "@/components/PullToRefresh"
 import { useFullscreenOverlay } from "@/context/FullscreenOverlayContext"
@@ -17,7 +18,8 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const isHub = pathname === "/"
 
   return (
-    <div
+    <EdgeBackGesture
+      disabled={fullscreen || agentPublic}
       className={cn(
         "flex min-h-0 flex-1 flex-col",
         // Pin hub/fullscreen shells to the live visual viewport so the card
@@ -66,6 +68,6 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </div>
       </main>
       {!fullscreen && !agentPublic && !isHub && <BottomNav />}
-    </div>
+    </EdgeBackGesture>
   )
 }
