@@ -18,10 +18,10 @@ export const CARDIO_HEART_RATE_ZONE_STYLE: Record<
   CardioHeartRateZoneKey,
   { label: string; color: string }
 > = {
-  OUT_OF_RANGE: { label: "Easy", color: "#64748b" },
-  FAT_BURN: { label: "Fat burn", color: "#22c55e" },
-  CARDIO: { label: "Cardio", color: "#f59e0b" },
-  PEAK: { label: "Peak", color: "#ef4444" },
+  OUT_OF_RANGE: { label: "Zone 1", color: "#64748b" },
+  FAT_BURN: { label: "Zone 2", color: "#84cc16" },
+  CARDIO: { label: "Zone 3", color: "#f59e0b" },
+  PEAK: { label: "Zone 4", color: "#f43f5e" },
 }
 
 const YMD = /^(\d{4})-(\d{2})-(\d{2})$/
@@ -62,10 +62,10 @@ export function resolveCardioAgeYears(
  * Karvonen zones from age (max HR) and resting HR.
  * Weight is not part of the bpm cutoffs — it is returned for the chart caption.
  *
- *   Easy     < 60% HRR
- *   Fat burn 60–70%
- *   Cardio   70–85%
- *   Peak     85%+
+ *   Zone 1  < 60% HRR
+ *   Zone 2  60–70%
+ *   Zone 3  70–85%
+ *   Zone 4  85%+
  */
 export function profileCardioHeartRateZones(input: {
   ageYears?: number | null

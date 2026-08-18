@@ -1580,12 +1580,15 @@ html {
   }
 
   /*
-   * Prefer vertical page scroll; horizontal scrubbing is handled in JS
-   * (useAxisLockedScrub / chart pointer handlers) once the gesture locks.
+   * Plots own the gesture so a little vertical finger drift cannot steal
+   * the scrub via page pan. Scroll the page from outside the SVG.
    */
   .chart-touch-safe {
-    touch-action: pan-y !important;
     -webkit-user-drag: none;
+  }
+
+  .chart-touch-safe svg {
+    touch-action: none !important;
   }
 
   .chart-touch-safe ::selection {

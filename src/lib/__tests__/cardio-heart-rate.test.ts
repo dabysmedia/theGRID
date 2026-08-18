@@ -36,7 +36,9 @@ describe("profileCardioHeartRateZones", () => {
       ["PEAK", 172, 208],
     ])
     expect(cardioZoneForBpm(160, profile.thresholds).key).toBe("CARDIO")
+    expect(cardioZoneForBpm(160, profile.thresholds).label).toBe("Zone 3")
     expect(cardioZoneForBpm(180, profile.thresholds).key).toBe("PEAK")
+    expect(cardioZoneForBpm(180, profile.thresholds).label).toBe("Zone 4")
   })
 
   it("falls back to age 27 when birth date is missing", () => {

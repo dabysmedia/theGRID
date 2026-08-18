@@ -3,6 +3,8 @@ import {
   hourlyValueRanges,
   interpolateSeries,
   interpolateSparseByIndex,
+  nearestDefinedIndex,
+  nearestSeriesPoint,
   ratioToTime,
 } from "@/lib/chart-scrub"
 import { zoneForBpm } from "@/lib/heart-rate-zones"
@@ -59,6 +61,33 @@ describe("zoneForBpm", () => {
       { zone: "CARDIO", minBpm: 140, maxBpm: 170 },
     ])
     expect(zone.key).toBe("CARDIO")
-    expect(zone.label).toBe("Cardio")
+    expect(zone.label).toBe("Zone 3")
+    expect(zone.number).toBe(3)
+  })
+
+  it("maps Google fat-burn to Zone 2", () => {
+    const zone = zoneForBpm(120, [
+      { zone: "OUT_OF_RANGE", minBpm: 0, maxBpm: 110 },
+      { zone: "FAT_BURN", minBpm: 110, maxBpm: 140 },
+    ])
+    expect(zone.label).toBe("Zone 2")
+  })
+})
+
+describe("nearestDefinedIndex / nearestSeriesPoint", () => {
+  it("keeps the actual nightly HRV instead of blending across gaps", () => {
+    const values = [40, null, null, 70]
+    expect(nearestDefinedIndex(values, 1.5)).toBe(0)
+    expect(values[nearestDefinedIndex(values, 1.5)!]).toBe(40)
+    expect(nearestDefinedIndex(values, 2.2)).toBe(3)
+  })
+
+  it("snaps to the nearest recorded sample", () => {
+    const points = [
+      { t: 0, v: 60 },
+      { t: 10, v: 80 },
+    ]
+    expect(nearestSeriesPoint(points, 3)).toEqual({ t: 0, v: 60 })
+    expect(nearestSeriesPoint(points, 8)).toEqual({ t: 10, v: 80 })
   })
 })

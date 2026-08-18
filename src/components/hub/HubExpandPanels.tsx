@@ -79,7 +79,7 @@ import {
 import { HeartRateDayChart } from "@/components/vitals/HeartRateDayChart"
 import { HrvTrendScrubChart } from "@/components/vitals/HrvTrendScrubChart"
 import { zoneStyle, type HeartRateZoneThreshold } from "@/lib/heart-rate-zones"
-import { cn, parseLocalDate } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import type { WeightTrendInsight, WeightTrendPoint } from "@/lib/weight-trend"
 
 export type HubExpandedPanel =
