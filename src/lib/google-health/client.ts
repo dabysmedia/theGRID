@@ -5,6 +5,10 @@ import { getValidAccessToken } from "@/lib/google-health/tokens"
 import { optionalNonNegativeInt } from "@/lib/google-health/normalize"
 import { durationStringToMinutes } from "@/lib/cardio"
 import { getStepsDayRange } from "@/lib/steps-day"
+import {
+  heartRateRollupPointsToBuckets,
+  type HeartRateSampleBucket,
+} from "@/lib/google-health/hr-buckets"
 
 type CivilDate = { year?: number; month?: number; day?: number }
 type CivilTime = { hours?: number; minutes?: number; seconds?: number }
@@ -448,7 +452,7 @@ export type HeartRateDailyRollup = {
   maxBpm: number | null
 }
 export type TimeInHeartRateZoneRollup = { date: string; zones: HeartRateZoneMinutes[] }
-export type HeartRateSampleBucket = { time: string; bpm: number }
+export type { HeartRateSampleBucket }
 
 function firstNumber(...vals: Array<unknown>): number | null {
   for (const v of vals) {
@@ -688,17 +692,63 @@ export async function fetchTimeInHeartRateZoneDailyRollup(
 /**
  * Raw bpm samples for one tracking day (local 5am → next 5am), bucketed to
  * `bucketMinutes` resolution (default ~5 min). Matches the steps-day window.
+ *
+ * Prefers Google's rollUp (one request per day) over listing every Fitbit beat,
+ * which paginates thousands of points. Falls back to the list path if rollUp
+ * is unavailable for the account.
  */
-export async function fetchHeartRateSamplesBucketed(
+async function fetchHeartRateSamplesViaRollup(
   userId: string,
-  dayKey: string,
-  bucketMinutes = 5,
-  timeZone?: string | null,
+  startTimeIso: string,
+  endTimeIso: string,
+  bucketMinutes: number,
 ): Promise<HeartRateSampleBucket[]> {
-  const { start, end } = getStepsDayRange(dayKey, timeZone)
-  const startIso = start.toISOString()
-  const endIso = end.toISOString()
-  const filter = `heart_rate.sample_time.physical_time >= "${startIso}" AND heart_rate.sample_time.physical_time < "${endIso}"`
+  const out: Array<{ startTime?: string; avgBpm?: number | null }> = []
+  let pageToken: string | undefined
+  do {
+    const res = await healthFetch(userId, "/users/me/dataTypes/heart-rate/dataPoints:rollUp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        range: { startTime: startTimeIso, endTime: endTimeIso },
+        windowSize: `${Math.max(1, bucketMinutes) * 60}s`,
+        ...(pageToken ? { pageToken } : {}),
+      }),
+    })
+    const data = (await res.json().catch(() => ({}))) as {
+      rollupDataPoints?: Array<{
+        startTime?: string
+        heartRate?: {
+          beatsPerMinuteAvg?: number
+          beatsPerMinute?: number
+        }
+      }>
+      nextPageToken?: string
+      error?: { message?: string }
+    }
+    if (!res.ok) {
+      const error = new Error(data.error?.message || `Heart rate rollup failed (${res.status})`)
+      ;(error as Error & { status?: number }).status = res.status
+      throw error
+    }
+    for (const row of data.rollupDataPoints ?? []) {
+      out.push({
+        startTime: row.startTime,
+        avgBpm: firstNumber(row.heartRate?.beatsPerMinuteAvg, row.heartRate?.beatsPerMinute),
+      })
+    }
+    pageToken = data.nextPageToken || undefined
+  } while (pageToken)
+  return heartRateRollupPointsToBuckets(out)
+}
+
+async function fetchHeartRateSamplesViaList(
+  userId: string,
+  startTimeIso: string,
+  endTimeIso: string,
+  bucketMinutes: number,
+): Promise<HeartRateSampleBucket[]> {
+  const filter = `heart_rate.sample_time.physical_time >= "${startTimeIso}" AND heart_rate.sample_time.physical_time < "${endTimeIso}"`
   const buckets = new Map<number, { sum: number; count: number }>()
   const bucketMs = bucketMinutes * 60_000
   let pageToken: string | undefined
@@ -737,4 +787,24 @@ export async function fetchHeartRateSamplesBucketed(
       time: new Date(ms).toISOString(),
       bpm: Math.round(sum / count),
     }))
+}
+
+export async function fetchHeartRateSamplesBucketed(
+  userId: string,
+  dayKey: string,
+  bucketMinutes = 5,
+  timeZone?: string | null,
+): Promise<HeartRateSampleBucket[]> {
+  const { start, end } = getStepsDayRange(dayKey, timeZone)
+  const startIso = start.toISOString()
+  const endIso = end.toISOString()
+  try {
+    return await fetchHeartRateSamplesViaRollup(userId, startIso, endIso, bucketMinutes)
+  } catch (error) {
+    const status = (error as { status?: number }).status
+    if (status === 400 || status === 404) {
+      return fetchHeartRateSamplesViaList(userId, startIso, endIso, bucketMinutes)
+    }
+    throw error
+  }
 }

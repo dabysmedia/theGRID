@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId, UserError } from "@/lib/current-user"
-import { revokeGoogleToken } from "@/lib/google-health/tokens"
+import { clearAccessTokenCache, revokeGoogleToken } from "@/lib/google-health/tokens"
 
 export async function DELETE(req: NextRequest) {
   try {
@@ -12,6 +12,7 @@ export async function DELETE(req: NextRequest) {
     }
     await revokeGoogleToken(conn.refreshToken || conn.accessToken)
     await prisma.googleHealthConnection.delete({ where: { userId } })
+    clearAccessTokenCache(userId)
     return NextResponse.json({ ok: true, disconnected: true })
   } catch (e) {
     if (e instanceof UserError) {

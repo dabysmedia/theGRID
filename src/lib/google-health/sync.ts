@@ -10,6 +10,7 @@ import {
 import { formatDate } from "@/lib/utils"
 import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 import { GOOGLE_HEALTH_SOURCE } from "@/lib/google-health/config"
+import { getValidAccessToken } from "@/lib/google-health/tokens"
 import {
   addDaysYmd,
   fetchDailyHeartRateVariability,
@@ -42,6 +43,8 @@ import { subDays } from "date-fns"
 const GRAMS_PER_LB = 453.59237
 /** How many trailing days get ~5-minute heart-rate sample buckets synced (keeps row counts sane). */
 const HR_SAMPLE_SYNC_DAYS = 2
+/** SQLite bind-variable cap — keep createMany chunks well under 999. */
+const HR_SAMPLE_INSERT_CHUNK = 80
 
 export type SyncMetrics = {
   steps?: boolean
@@ -152,6 +155,9 @@ export async function syncGoogleHealthForUser(
   const hrSampleEndKey = endStepsKey
   const hrSampleStartKey = addDaysYmd(endStepsKey, -(HR_SAMPLE_SYNC_DAYS - 1))
 
+  // Warm the token cache so the parallel Google calls don't each hit SQLite.
+  await getValidAccessToken(userId)
+
   const fetchWarnings: string[] = []
   let fetchAttempts = 0
   let fetchSuccesses = 0
@@ -204,6 +210,7 @@ export async function syncGoogleHealthForUser(
     hrRollup,
     timeInZone,
     exercises,
+    hrSampleDays,
   ] = await Promise.all([
       safeFetch(
         "Steps",
@@ -265,24 +272,30 @@ export async function syncGoogleHealthForUser(
         },
         [],
       ),
+      (async () => {
+        if (!metrics.vitals) return [] as Array<{ ymd: string; samples: Array<{ time: string; bpm: number }> }>
+        const keys: string[] = []
+        let cursor = hrSampleStartKey
+        while (cursor <= hrSampleEndKey) {
+          keys.push(cursor)
+          cursor = addDaysYmd(cursor, 1)
+        }
+        const days = await Promise.all(
+          keys.map(async (ymd) => {
+            try {
+              const samples = await fetchHeartRateSamplesBucketed(userId, ymd, 5, stepsTz)
+              return { ymd, samples }
+            } catch {
+              return { ymd, samples: [] as Array<{ time: string; bpm: number }> }
+            }
+          }),
+        )
+        return days.filter((day) => day.samples.length > 0)
+      })(),
     ])
 
   if (fetchAttempts > 0 && fetchSuccesses === 0) {
     throw new Error(`Google Health sync failed: ${fetchWarnings.join(" | ")}`)
-  }
-
-  const hrSampleDays: Array<{ ymd: string; samples: Array<{ time: string; bpm: number }> }> = []
-  if (metrics.vitals) {
-    let cursor = hrSampleStartKey
-    while (cursor <= hrSampleEndKey) {
-      try {
-        const samples = await fetchHeartRateSamplesBucketed(userId, cursor, 5, stepsTz)
-        if (samples.length > 0) hrSampleDays.push({ ymd: cursor, samples })
-      } catch {
-        // Some accounts/devices don't have intraday HR — skip that day rather than fail the sync.
-      }
-      cursor = addDaysYmd(cursor, 1)
-    }
   }
 
   let stepsUpserted = 0
@@ -534,21 +547,25 @@ export async function syncGoogleHealthForUser(
 
     for (const day of hrSampleDays) {
       const date = parseYyyyMmDdToStoredDate(day.ymd)
-      for (const sample of day.samples) {
-        const externalId = `${GOOGLE_HEALTH_SOURCE}:hr-sample:${sample.time}`
-        const data = {
-          date,
-          time: new Date(sample.time),
-          bpm: sample.bpm,
+      await prisma.heartRateSample.deleteMany({
+        where: {
+          userId,
           source: GOOGLE_HEALTH_SOURCE,
-          externalId,
-        }
-        const existing = await prisma.heartRateSample.findFirst({ where: { userId, externalId } })
-        if (existing) {
-          await prisma.heartRateSample.update({ where: { id: existing.id }, data })
-        } else {
-          await prisma.heartRateSample.create({ data: { ...data, userId } })
-        }
+          date: utcRangeWhereForCalendarDay(day.ymd),
+        },
+      })
+      const rows = day.samples.map((sample) => ({
+        userId,
+        date,
+        time: new Date(sample.time),
+        bpm: sample.bpm,
+        source: GOOGLE_HEALTH_SOURCE,
+        externalId: `${GOOGLE_HEALTH_SOURCE}:hr-sample:${sample.time}`,
+      }))
+      for (let i = 0; i < rows.length; i += HR_SAMPLE_INSERT_CHUNK) {
+        await prisma.heartRateSample.createMany({
+          data: rows.slice(i, i + HR_SAMPLE_INSERT_CHUNK),
+        })
       }
     }
   }

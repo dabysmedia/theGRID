@@ -31,22 +31,14 @@ async function doGoogleHealthSync(opts: {
 }): Promise<GoogleHealthSyncResult> {
   if (opts.signal?.aborted) return { synced: false, reason: "aborted" }
 
-  const statusResponse = await apiFetch("/api/google-health/status", {
-    cache: "no-store",
-    signal: opts.signal,
-  })
-  if (!statusResponse.ok) return { synced: false, reason: "error" }
-
-  const status = (await statusResponse.json()) as GoogleHealthStatus
-  if (!status.configured) return { synced: false, reason: "unconfigured" }
-  if (!status.connected) return { synced: false, reason: "disconnected" }
-
   const syncResponse = await apiFetch("/api/google-health/sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ days: opts.days }),
     signal: opts.signal,
   })
+  if (syncResponse.status === 503) return { synced: false, reason: "unconfigured" }
+  if (syncResponse.status === 400) return { synced: false, reason: "disconnected" }
   if (!syncResponse.ok) return { synced: false, reason: "error" }
   return { synced: true }
 }

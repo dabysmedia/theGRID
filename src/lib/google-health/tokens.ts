@@ -14,6 +14,18 @@ export type TokenBundle = {
   scope?: string | null
 }
 
+const TOKEN_SKEW_MS = 60_000
+const tokenCache = new Map<string, { token: string; expiresAt: number }>()
+const tokenInflight = new Map<string, Promise<string>>()
+
+export function clearAccessTokenCache(userId?: string): void {
+  if (userId) {
+    tokenCache.delete(userId)
+    return
+  }
+  tokenCache.clear()
+}
+
 export async function exchangeAuthorizationCode(input: {
   code: string
   redirectUri: string
@@ -105,25 +117,47 @@ async function refreshAccessToken(refreshToken: string): Promise<TokenBundle> {
 
 /** Returns a valid access token for the user, refreshing if needed. */
 export async function getValidAccessToken(userId: string): Promise<string> {
-  const conn = await prisma.googleHealthConnection.findUnique({ where: { userId } })
-  if (!conn) throw new Error("Google Health is not connected.")
-
-  const skewMs = 60_000
-  if (conn.expiresAt.getTime() - skewMs > Date.now()) {
-    return conn.accessToken
+  const cached = tokenCache.get(userId)
+  if (cached && cached.expiresAt - TOKEN_SKEW_MS > Date.now()) {
+    return cached.token
   }
 
-  const refreshed = await refreshAccessToken(conn.refreshToken)
-  await prisma.googleHealthConnection.update({
-    where: { userId },
-    data: {
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      expiresAt: refreshed.expiresAt,
-      scope: refreshed.scope ?? conn.scope,
-    },
+  const pending = tokenInflight.get(userId)
+  if (pending) return pending
+
+  const load = (async () => {
+    const conn = await prisma.googleHealthConnection.findUnique({ where: { userId } })
+    if (!conn) throw new Error("Google Health is not connected.")
+
+    if (conn.expiresAt.getTime() - TOKEN_SKEW_MS > Date.now()) {
+      tokenCache.set(userId, {
+        token: conn.accessToken,
+        expiresAt: conn.expiresAt.getTime(),
+      })
+      return conn.accessToken
+    }
+
+    const refreshed = await refreshAccessToken(conn.refreshToken)
+    await prisma.googleHealthConnection.update({
+      where: { userId },
+      data: {
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken,
+        expiresAt: refreshed.expiresAt,
+        scope: refreshed.scope ?? conn.scope,
+      },
+    })
+    tokenCache.set(userId, {
+      token: refreshed.accessToken,
+      expiresAt: refreshed.expiresAt.getTime(),
+    })
+    return refreshed.accessToken
+  })().finally(() => {
+    tokenInflight.delete(userId)
   })
-  return refreshed.accessToken
+
+  tokenInflight.set(userId, load)
+  return load
 }
 
 export async function revokeGoogleToken(token: string): Promise<void> {
