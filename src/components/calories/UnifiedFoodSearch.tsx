@@ -8,6 +8,7 @@ import {
   BookOpen,
   Check,
   ChevronLeft,
+  Clock,
   Loader2,
   Plus,
   Search,
@@ -22,7 +23,8 @@ import { Button } from "@/components/ui/button"
 import { BarcodeScanner } from "@/components/calories/BarcodeScanner"
 import { FoodFallbackIcon } from "@/components/calories/FoodFallbackIcon"
 import type { Recipe, SavedMeal } from "@/lib/calories/log-food"
-import type { FrequentFoodSuggestion } from "@/lib/calories/frequent-foods"
+import { matchingFrequentFoods, type FrequentFoodSuggestion } from "@/lib/calories/frequent-foods"
+import { rankByFoodSearch } from "@/lib/calories/food-search-ranking"
 import {
   availableFoodUnits,
   foodPortionMultiplier,
@@ -139,28 +141,32 @@ export function UnifiedFoodSearch({
     return () => window.clearTimeout(timeout)
   }, [filter, query, searchCatalog])
 
-  const localQuery = query.trim().toLowerCase()
-  const matchingSaved = useMemo(
-    () =>
-      savedMeals
-        .filter((food) => !localQuery || food.name.toLowerCase().includes(localQuery))
-        .slice(0, localQuery ? 20 : 8),
-    [localQuery, savedMeals],
-  )
-  const matchingRecipes = useMemo(
-    () =>
-      recipes
-        .filter(
-          (recipe) =>
-            !localQuery ||
-            recipe.name.toLowerCase().includes(localQuery) ||
-            recipe.ingredients.some((ingredient) =>
-              ingredient.name.toLowerCase().includes(localQuery),
-            ),
-        )
-        .slice(0, localQuery ? 20 : 8),
-    [localQuery, recipes],
-  )
+  const localQuery = query.trim()
+  const matchingSaved = useMemo(() => {
+    if (!localQuery) {
+      return [...savedMeals]
+        .sort((left, right) => right.useCount - left.useCount || left.name.localeCompare(right.name))
+        .slice(0, 8)
+    }
+    return rankByFoodSearch(savedMeals, localQuery, (food) => ({ name: food.name }), 20)
+  }, [localQuery, savedMeals])
+  const matchingRecipes = useMemo(() => {
+    if (!localQuery) return recipes.slice(0, 8)
+    return rankByFoodSearch(
+      recipes,
+      localQuery,
+      (recipe) => ({
+        name: recipe.name,
+        extra: recipe.ingredients.map((ingredient) => ingredient.name).join(" "),
+      }),
+      20,
+    )
+  }, [localQuery, recipes])
+  const matchingFrequent = useMemo(() => {
+    if (filter !== "all") return []
+    if (!localQuery) return frequentFoods
+    return matchingFrequentFoods(frequentFoods, localQuery, 8)
+  }, [filter, frequentFoods, localQuery])
 
   const selectedBasis = useMemo(() => {
     if (!selected) return null
@@ -234,6 +240,24 @@ export function UnifiedFoodSearch({
     else if (selected.kind === "saved") onAddSaved(selected.food, portion)
     else onAddFrequent(selected.food, portion)
     setSelected(null)
+    setQuery("")
+  }
+
+  function addSavedNow(food: SavedMeal) {
+    onAddSaved(food, {
+      amount: food.servingAmount || 1,
+      unit: food.servingUnit || "serving",
+      multiplier: 1,
+    })
+    setQuery("")
+  }
+
+  function addFrequentNow(food: FrequentFoodSuggestion) {
+    onAddFrequent(food, {
+      amount: food.portionAmount || 1,
+      unit: isFoodMeasurementUnit(food.portionUnit) ? food.portionUnit : "serving",
+      multiplier: 1,
+    })
     setQuery("")
   }
 
@@ -374,12 +398,15 @@ export function UnifiedFoodSearch({
   const showRecipes = filter === "all" || filter === "recipes"
   const restaurantCatalog = catalog.filter((food) => food.source === "restaurant")
   const generalCatalog = catalog.filter((food) => food.source !== "restaurant")
+  const usualFoods = !localQuery && filter === "all" ? frequentFoods.slice(0, 6) : []
+  const suggestedFoods = localQuery ? matchingFrequent : matchingFrequent.slice(usualFoods.length)
   const noResults =
     !loading &&
     catalog.length === 0 &&
     (!showSaved || matchingSaved.length === 0) &&
     (!showRecipes || matchingRecipes.length === 0) &&
-    (localQuery.length > 0 || filter !== "all" || frequentFoods.length === 0)
+    suggestedFoods.length === 0 &&
+    usualFoods.length === 0
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -391,7 +418,7 @@ export function UnifiedFoodSearch({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search foods, recipes, restaurants…"
+              placeholder="Try chicken, oatmeal, banana…"
               className="food-search-input h-12 rounded-2xl pl-11 pr-10 text-sm"
             />
             {query ? (
@@ -438,21 +465,51 @@ export function UnifiedFoodSearch({
       </div>
 
       <div className="space-y-6 pb-5">
-        {!localQuery && filter === "all" && frequentFoods.length > 0 ? (
+        {usualFoods.length > 0 ? (
+          <section>
+            <div className="flex items-center gap-2 border-b border-white/[0.07] pb-2">
+              <Clock className="size-3.5 text-primary/75" />
+              <h3 className="type-hud-subsection text-foreground/75">Usual portions</h3>
+              <span className="ml-auto text-[9px] text-muted-foreground/45">Tap to add</span>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pt-3 [scrollbar-width:none]">
+              {usualFoods.map((food) => (
+                <button
+                  key={`usual-${food.id}`}
+                  type="button"
+                  onClick={() => addFrequentNow(food)}
+                  className="max-w-[11rem] shrink-0 rounded-2xl border border-white/[0.08] bg-glass-highlight/[0.08] px-3 py-2.5 text-left transition-colors hover:bg-glass-highlight/[0.14]"
+                >
+                  <span className="block truncate text-[12px] font-semibold">{food.name}</span>
+                  <span className="mt-1 block text-[10px] tabular-nums text-muted-foreground/70">
+                    {Math.round(food.calories)} cal
+                    {food.logCount > 1 ? ` · ${food.logCount}x` : ""}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {filter === "all" && suggestedFoods.length > 0 ? (
           <ResultSection
             icon={Utensils}
-            title={`Frequently logged for ${mealType ? mealType[0].toUpperCase() + mealType.slice(1) : "this meal"}`}
-            caption="Learned from your history"
+            title={
+              localQuery
+                ? "From your log"
+                : `Suggested for ${mealType ? mealType[0].toUpperCase() + mealType.slice(1) : "this meal"}`
+            }
+            caption={localQuery ? "Matches from history" : "Learned from your history"}
           >
-            {frequentFoods.map((food) => (
+            {suggestedFoods.map((food) => (
               <FoodResultRow
                 key={food.id}
                 name={food.name}
-                subtitle={`${food.logCount} logs for this meal`}
+                subtitle={suggestionSubtitle(food, mealType)}
                 calories={food.calories}
                 protein={food.protein}
                 image={food.imageUrl}
-                onClick={() => chooseFood({ kind: "frequent", food })}
+                onClick={() => addFrequentNow(food)}
               />
             ))}
           </ResultSection>
@@ -480,11 +537,11 @@ export function UnifiedFoodSearch({
               <FoodResultRow
                 key={food.id}
                 name={food.name}
-                subtitle="Saved food"
+                subtitle={localQuery ? "Saved food" : "Adds your usual serving"}
                 calories={food.calories}
                 protein={food.protein}
                 image={food.imageUrl}
-                onClick={() => chooseFood({ kind: "saved", food })}
+                onClick={() => addSavedNow(food)}
               />
             ))}
           </ResultSection>
@@ -572,7 +629,7 @@ export function UnifiedFoodSearch({
             </p>
             <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
               {localQuery
-                ? "Try a shorter name, a brand, or scan the barcode."
+                ? "Try a shorter name, a brand, or scan the barcode. Spelling does not need to be perfect."
                 : "Search the food database to start building your meal."}
             </p>
           </div>
@@ -583,6 +640,16 @@ export function UnifiedFoodSearch({
       ) : null}
     </div>
   )
+}
+
+function suggestionSubtitle(food: FrequentFoodSuggestion, mealType: string | null) {
+  if (food.kind === "recent") {
+    return food.sameMeal ? "Logged recently for this meal" : "Logged recently"
+  }
+  if (food.sameMeal) {
+    return `${food.logCount} ${mealType ?? "meal"} logs · tap to add`
+  }
+  return `${food.logCount} logs overall · tap to add`
 }
 
 function SaveCatalogButton({

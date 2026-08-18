@@ -12,7 +12,7 @@ export interface CatalogFoodResult {
   carbs: number | null
   fat: number | null
   image_url: string | null
-  source?: "openfoodfacts" | "fatsecret" | "usda" | "restaurant"
+  source?: "catalog" | "openfoodfacts" | "fatsecret" | "usda" | "restaurant"
 }
 
 export interface PortionSelection {

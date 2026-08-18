@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest"
 import {
   foodSearchRelevance,
   rankAndMergeFoodSearchResults,
+  rankByFoodSearch,
 } from "@/lib/calories/food-search-ranking"
+import { correctFoodSearchQuery } from "@/lib/calories/food-search-query"
 import { searchPreparedFoodCatalog } from "@/lib/calories/prepared-food-catalog"
+import { searchStapleFoodCatalog } from "@/lib/calories/staple-food-catalog"
 import type { FoodSearchItem } from "@/lib/calories/open-food-facts"
 
 function food(name: string, brand: string): FoodSearchItem {
@@ -33,6 +36,21 @@ describe("food search ranking", () => {
     const result = food("Rotisserie Chicken", "Costco")
     expect(foodSearchRelevance(result, "costco rotisse")).not.toBeNull()
     expect(foodSearchRelevance(result, "costco rotiserrie chicken")).not.toBeNull()
+    expect(foodSearchRelevance(result, "chiken")).not.toBeNull()
+    expect(foodSearchRelevance(result, "COSTCO CHICKEN")).not.toBeNull()
+  })
+
+  it("allows extra filler words when the food name still matches", () => {
+    const result = food("Rotisserie Chicken", "Costco")
+    expect(foodSearchRelevance(result, "grilled rotisserie chicken")).not.toBeNull()
+    expect(foodSearchRelevance(result, "organic chicken")).not.toBeNull()
+  })
+
+  it("matches abbreviations, plurals, and short prefixes", () => {
+    expect(foodSearchRelevance(food("Peanut Butter", "Generic"), "pb")).not.toBeNull()
+    expect(foodSearchRelevance(food("Egg", "Generic"), "eggs")).not.toBeNull()
+    expect(foodSearchRelevance(food("Egg", "Generic"), "eg")).not.toBeNull()
+    expect(foodSearchRelevance(food("Greek Yogurt", "Chobani"), "yoghurt")).not.toBeNull()
   })
 
   it("ranks the complete brand and product match first across sources", () => {
@@ -48,6 +66,15 @@ describe("food search ranking", () => {
     ])
     expect(ranked.map((result) => result.food_name)).toEqual(["Rotisserie Chicken"])
   })
+
+  it("ranks local library names with the same fuzzy rules", () => {
+    const ranked = rankByFoodSearch(
+      [{ name: "Oatmeal" }, { name: "Greek Yogurt" }, { name: "Chicken Bake" }],
+      "oatmel",
+      (item) => ({ name: item.name }),
+    )
+    expect(ranked.map((item) => item.name)).toEqual(["Oatmeal"])
+  })
 })
 
 describe("prepared food catalog", () => {
@@ -56,6 +83,37 @@ describe("prepared food catalog", () => {
       food_name: "Rotisserie Chicken",
       brand_name: "Costco",
       source: "catalog",
+    })
+  })
+})
+
+describe("staple food catalog", () => {
+  it("surfaces everyday foods from typos and shorthand", () => {
+    expect(searchStapleFoodCatalog("bananna")[0]).toMatchObject({
+      food_name: "Banana",
+      source: "catalog",
+    })
+    expect(searchStapleFoodCatalog("pb")[0]?.food_name).toMatch(/peanut butter/i)
+    expect(searchStapleFoodCatalog("oatmeal")[0]?.food_name).toMatch(/oatmeal/i)
+  })
+})
+
+describe("food search query correction", () => {
+  it("rewrites common misspellings before talking to external databases", () => {
+    expect(correctFoodSearchQuery("Chiken Breast")).toMatchObject({
+      corrected: "chicken breast",
+      didCorrect: true,
+    })
+    expect(correctFoodSearchQuery("bananna")).toMatchObject({
+      corrected: "banana",
+      didCorrect: true,
+    })
+    expect(correctFoodSearchQuery("pb")).toMatchObject({
+      corrected: "peanut butter",
+      didCorrect: true,
+    })
+    expect(correctFoodSearchQuery("chicken")).toMatchObject({
+      didCorrect: false,
     })
   })
 })

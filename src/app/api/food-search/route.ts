@@ -6,8 +6,10 @@ import {
   type OpenFoodFactsProduct,
 } from "@/lib/calories/open-food-facts"
 import { rankAndMergeFoodSearchResults } from "@/lib/calories/food-search-ranking"
+import { correctFoodSearchQuery } from "@/lib/calories/food-search-query"
 import { searchPreparedFoodCatalog } from "@/lib/calories/prepared-food-catalog"
 import { searchRestaurantMenus } from "@/lib/calories/restaurant-menu-catalog"
+import { searchStapleFoodCatalog } from "@/lib/calories/staple-food-catalog"
 
 /** Avoid Next.js caching upstream food API responses (stale/empty in prod). */
 const fetchNoStore: RequestInit = { cache: "no-store" }
@@ -360,11 +362,20 @@ export async function GET(req: NextRequest) {
   }
 
   const preparedFoods = searchPreparedFoodCatalog(query)
+  const stapleFoods = searchStapleFoodCatalog(query)
   const restaurantFoods = searchRestaurantMenus(query)
+  const { corrected, didCorrect } = correctFoodSearchQuery(query)
+  const upstreamQuery = didCorrect ? corrected : query
   let openFoodFactsFailed = false
   try {
-    const foods = await searchOpenFoodFacts(query)
-    const mergedFoods = mergeFoodResults(query, preparedFoods, restaurantFoods, foods)
+    const foods = await searchOpenFoodFacts(upstreamQuery)
+    const mergedFoods = mergeFoodResults(
+      query,
+      preparedFoods,
+      stapleFoods,
+      restaurantFoods,
+      foods,
+    )
     if (mergedFoods.length > 0) {
       return NextResponse.json({
         foods: mergedFoods,
@@ -379,7 +390,7 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const builtInFoods = mergeFoodResults(query, preparedFoods, restaurantFoods)
+  const builtInFoods = mergeFoodResults(query, preparedFoods, stapleFoods, restaurantFoods)
   if (builtInFoods.length > 0) {
     return NextResponse.json({
       foods: builtInFoods,
@@ -392,7 +403,7 @@ export async function GET(req: NextRequest) {
       Boolean(process.env.FATSECRET_CLIENT_SECRET?.trim())) ||
     Boolean(process.env.FDC_API_KEY?.trim())
 
-  if (hasConfiguredFallback) return searchConfiguredFallback(query)
+  if (hasConfiguredFallback) return searchConfiguredFallback(upstreamQuery, query)
 
   return NextResponse.json(
     {
@@ -406,7 +417,7 @@ export async function GET(req: NextRequest) {
   )
 }
 
-async function searchConfiguredFallback(query: string) {
+async function searchConfiguredFallback(upstreamQuery: string, rankQuery = upstreamQuery) {
   const hasFatSecret =
     Boolean(process.env.FATSECRET_CLIENT_ID?.trim()) &&
     Boolean(process.env.FATSECRET_CLIENT_SECRET?.trim())
@@ -427,8 +438,8 @@ async function searchConfiguredFallback(query: string) {
   // Try FatSecret first when credentials are present
   if (hasFatSecret) {
     try {
-      const foods = await searchFatSecret(query)
-      const rankedFoods = mergeFoodResults(query, foods)
+      const foods = await searchFatSecret(upstreamQuery)
+      const rankedFoods = mergeFoodResults(rankQuery, foods)
       if (rankedFoods.length > 0) {
         return NextResponse.json({ foods: rankedFoods, source: "fatsecret" })
       }
@@ -451,9 +462,9 @@ async function searchConfiguredFallback(query: string) {
   }
 
   try {
-    const foods = await searchFDC(query)
+    const foods = await searchFDC(upstreamQuery)
     return NextResponse.json({
-      foods: mergeFoodResults(query, foods),
+      foods: mergeFoodResults(rankQuery, foods),
       source: "usda",
     })
   } catch (err) {
