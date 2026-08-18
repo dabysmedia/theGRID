@@ -2,16 +2,17 @@
 
 import { useCallback, useId, useMemo, useState } from "react"
 import { format } from "date-fns"
-import { useAxisLockedScrub } from "@/components/charts/useAxisLockedScrub"
+import { ChartScrubHit, useAxisLockedScrub } from "@/components/charts/useAxisLockedScrub"
 import {
-  hourlyValueRanges,
-  interpolateSeries,
+  nearestSeriesPoint,
+  plotRatioFromView,
   ratioToTime,
   type ScrubPoint,
 } from "@/lib/chart-scrub"
 import {
   plottableZoneBands,
   zoneForBpm,
+  zoneLegend,
   type HeartRateZoneThreshold,
 } from "@/lib/heart-rate-zones"
 
@@ -82,26 +83,24 @@ export function HeartRateDayChart({
     hrAvg ??
     (values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null)
   const latest = points[points.length - 1] ?? null
-  const hourly = useMemo(() => hourlyValueRanges(points), [points])
   const bands = useMemo(
     () => plottableZoneBands(thresholds, restingHeartRate, yMin, yMax),
     [thresholds, restingHeartRate, yMin, yMax],
   )
 
-  const active = useMemo(() => {
-    if (points.length === 0) return null
-    if (scrubRatio == null) {
-      return latest
-        ? { t: latest.t, v: latest.v }
-        : null
-    }
-    return interpolateSeries(points, ratioToTime(start, end, scrubRatio))
-  }, [latest, points, scrubRatio, start, end])
-
-  const zone = active ? zoneForBpm(active.v, thresholds, restingHeartRate) : null
+  const legend = useMemo(
+    () => zoneLegend(thresholds, restingHeartRate),
+    [restingHeartRate, thresholds],
+  )
+  const fingerT =
+    scrubRatio == null
+      ? (latest?.t ?? start)
+      : ratioToTime(start, end, plotRatioFromView(scrubRatio, PLOT_LEFT, PLOT_RIGHT, 1000))
+  const sample = nearestSeriesPoint(points, fingerT) ?? latest
+  const zone = sample ? zoneForBpm(sample.v, thresholds, restingHeartRate) : null
   const vsRest =
-    active && restingHeartRate != null ? active.v - restingHeartRate : null
-  const vsAvg = active && average != null ? active.v - average : null
+    sample && restingHeartRate != null ? sample.v - restingHeartRate : null
+  const vsAvg = sample && average != null ? sample.v - average : null
   const isScrubbing = scrubRatio != null
   const line = points
     .map((point, index) => {
@@ -121,106 +120,72 @@ export function HeartRateDayChart({
   }, [end, points.length, start])
 
   return (
-    <section
-      aria-labelledby="heart-rate-today-heading"
-      className="space-y-3 rounded-2xl border border-[#f43f5e]/15 bg-gradient-to-br from-[#f43f5e]/[0.07] via-white/[0.02] to-transparent p-3.5 sm:p-4"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p id="heart-rate-today-heading" className="text-sm font-semibold text-foreground/95">
-            Heart rate
-          </p>
-          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/65">
-            Day strip with hourly range and live zone as you scrub
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full border border-[#f43f5e]/20 bg-[#f43f5e]/[0.08] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#fda4af]/80">
-          {points.length > 0 ? `${points.length} samples` : "Day"}
-        </span>
+    <section aria-labelledby="heart-rate-today-heading" className="space-y-3">
+      <div>
+        <p id="heart-rate-today-heading" className="type-hud-subsection">
+          Heart rate
+        </p>
+        <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
+          Tracking day · zones from your profile
+        </p>
       </div>
 
-      <div
-        className="rounded-2xl border border-white/[0.08] bg-black/25 px-3.5 py-3"
-        aria-live="polite"
-      >
-        <div className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/55">
-              {isScrubbing && active
-                ? format(new Date(active.t), "h:mm a")
-                : "Latest"}
+      <div className="flex items-end justify-between gap-4" aria-live="polite">
+        <div className="min-w-0">
+          <p className="type-hud-micro text-muted-foreground/55">
+            {isScrubbing && sample ? format(new Date(sample.t), "h:mm a") : "Latest"}
+          </p>
+          <p className="mt-1 font-heading text-3xl leading-none tabular-nums tracking-tight text-foreground">
+            {sample ? Math.round(sample.v) : "—"}
+            <span className="ml-1 text-[11px] font-medium text-muted-foreground/50">bpm</span>
+          </p>
+        </div>
+        <div className="text-right type-hud-caption normal-case tracking-normal text-muted-foreground/65">
+          {zone ? (
+            <p className="font-semibold tracking-[0.12em]" style={{ color: zone.color }}>
+              {zone.label}
             </p>
-            <p className="mt-1 font-heading text-4xl leading-none tabular-nums tracking-tight text-rose-100">
-              {active ? Math.round(active.v) : "—"}
-              <span className="ml-1 text-[11px] font-medium text-muted-foreground/55">bpm</span>
+          ) : null}
+          {vsRest != null ? (
+            <p className="mt-0.5 tabular-nums">{signed(vsRest)} vs rest</p>
+          ) : min != null && max != null ? (
+            <p className="mt-0.5 tabular-nums">
+              {Math.round(min)}–{Math.round(max)}
             </p>
-          </div>
-          <div className="text-right">
-            {zone ? (
-              <p
-                className="text-[11px] font-semibold uppercase tracking-[0.12em]"
-                style={{ color: zone.color }}
-              >
-                {zone.label}
-              </p>
-            ) : (
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/50">
-                —
-              </p>
-            )}
-            <p className="mt-1 text-[11px] tabular-nums text-muted-foreground/65">
-              {vsRest != null
-                ? `${signed(vsRest)} vs rest`
-                : min != null && max != null
-                  ? `${Math.round(min)}–${Math.round(max)} range`
-                  : "No samples"}
+          ) : null}
+          {vsAvg != null ? (
+            <p className="mt-0.5 tabular-nums text-muted-foreground/50">
+              {signed(vsAvg)} vs avg
             </p>
-            {vsAvg != null ? (
-              <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground/50">
-                {signed(vsAvg)} vs day avg
-              </p>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </div>
 
       {status === "loading" ? (
-        <div className="grid h-64 place-items-center rounded-xl border border-dashed border-white/[0.08] bg-black/10 text-[12px] text-muted-foreground/55">
-          Loading heart-rate samples…
-        </div>
+        <p className="type-hud-caption text-muted-foreground/55">Loading heart-rate samples…</p>
       ) : status === "error" ? (
-        <p className="rounded-xl border border-white/[0.06] bg-black/10 px-3 py-4 text-center text-[12px] text-muted-foreground/65">
+        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/65">
           Couldn&apos;t load today&apos;s heart rate.
         </p>
       ) : points.length < 2 ? (
-        <p className="rounded-xl border border-dashed border-white/[0.08] bg-black/10 px-3 py-5 text-center text-[12px] leading-relaxed text-muted-foreground/65">
+        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/65">
           Heart-rate samples will appear here after Google Health imports the day.
         </p>
       ) : (
         <div className="chart-touch-safe select-none [-webkit-touch-callout:none]">
-          <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-[#07090d]">
+          <ChartScrubHit handlers={scrubHandlers} className="cursor-crosshair">
             <svg
               viewBox="0 0 1000 200"
-              className="h-64 w-full cursor-crosshair overflow-visible"
+              className="pointer-events-none h-56 w-full overflow-visible sm:h-60"
               role="img"
               aria-label="Heart rate across the tracking day. Drag horizontally to inspect time, bpm, and zone."
               preserveAspectRatio="none"
-              {...scrubHandlers}
-              onContextMenu={(event) => event.preventDefault()}
             >
               <defs>
                 <linearGradient id={`${gradientId}-hr`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={HR_COLOR} stopOpacity="0.28" />
-                  <stop offset="70%" stopColor={HR_COLOR} stopOpacity="0.06" />
+                  <stop offset="0%" stopColor={HR_COLOR} stopOpacity="0.22" />
                   <stop offset="100%" stopColor={HR_COLOR} stopOpacity="0" />
                 </linearGradient>
-                <filter id={`${gradientId}-glow`} x="-6%" y="-30%" width="112%" height="160%">
-                  <feGaussianBlur stdDeviation="2.2" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
               </defs>
 
               {bands.map((band) => (
@@ -231,27 +196,9 @@ export function HeartRateDayChart({
                   width={PLOT_WIDTH}
                   height={Math.max(1, yFor(band.from, yMin, yMax) - yFor(band.to, yMin, yMax))}
                   fill={band.color}
-                  opacity="0.07"
+                  opacity="0.08"
                 />
               ))}
-
-              {hourly.map((hour) => {
-                const x = xFor(hour.start + 30 * 60 * 1000, start, end)
-                const width = Math.max(6, PLOT_WIDTH / Math.max(8, hourly.length) * 0.42)
-                const top = yFor(hour.max, yMin, yMax)
-                const bottom = yFor(hour.min, yMin, yMax)
-                return (
-                  <rect
-                    key={hour.start}
-                    x={x - width / 2}
-                    y={top}
-                    width={width}
-                    height={Math.max(3, bottom - top)}
-                    rx="2"
-                    fill="rgba(255,255,255,0.08)"
-                  />
-                )
-              })}
 
               {restingHeartRate != null ? (
                 <line
@@ -271,36 +218,31 @@ export function HeartRateDayChart({
                   d={line}
                   fill="none"
                   stroke={HR_COLOR}
-                  strokeWidth="2.6"
+                  strokeWidth="2.2"
                   strokeLinejoin="round"
                   strokeLinecap="round"
                   vectorEffect="non-scaling-stroke"
-                  filter={`url(#${gradientId}-glow)`}
                 />
               ) : null}
-
             </svg>
-            {active && isScrubbing ? (
-              <div
-                className="pointer-events-none absolute inset-0"
-                aria-hidden
-              >
+            {isScrubbing && sample ? (
+              <div className="pointer-events-none absolute inset-0" aria-hidden>
                 <div
-                  className="absolute top-[8%] bottom-[12%] w-px bg-white/65"
-                  style={{ left: `${(xFor(active.t, start, end) / 1000) * 100}%` }}
+                  className="absolute top-[8%] bottom-[12%] w-px bg-white/50"
+                  style={{ left: `${(xFor(fingerT, start, end) / 1000) * 100}%` }}
                 />
                 <div
-                  className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#14080c] shadow-[0_0_10px_rgba(251,113,133,0.45)]"
+                  className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#14080c]"
                   style={{
-                    left: `${(xFor(active.t, start, end) / 1000) * 100}%`,
-                    top: `${(yFor(active.v, yMin, yMax) / 200) * 100}%`,
+                    left: `${(xFor(sample.t, start, end) / 1000) * 100}%`,
+                    top: `${(yFor(sample.v, yMin, yMax) / 200) * 100}%`,
                     background: zone?.color ?? HR_COLOR,
                   }}
                 />
               </div>
             ) : latest ? (
               <div
-                className="pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                className="pointer-events-none absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
                 style={{
                   left: `${(xFor(latest.t, start, end) / 1000) * 100}%`,
                   top: `${(yFor(latest.v, yMin, yMax) / 200) * 100}%`,
@@ -309,22 +251,22 @@ export function HeartRateDayChart({
                 aria-hidden
               />
             ) : null}
-          </div>
-          <div className="mt-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/50">
+          </ChartScrubHit>
+          <div className="mt-1.5 flex items-center justify-between type-hud-micro text-muted-foreground/45">
             {ticks.map((tick) => (
               <span key={tick.t}>{tick.label}</span>
             ))}
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground/60">
-            {bands.map((band) => (
-              <span key={band.key} className="inline-flex items-center gap-1.5">
+          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 type-hud-micro text-muted-foreground/55">
+            {legend.map((band) => (
+              <span key={band.label} className="inline-flex items-center gap-1.5 normal-case tracking-normal">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: band.color }} />
                 {band.label}
               </span>
             ))}
             {restingHeartRate != null ? (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-0 w-4 border-t border-dashed border-white/40" />
+              <span className="inline-flex items-center gap-1.5 normal-case tracking-normal">
+                <span className="h-0 w-3.5 border-t border-dashed border-white/40" />
                 Rest {Math.round(restingHeartRate)}
               </span>
             ) : null}

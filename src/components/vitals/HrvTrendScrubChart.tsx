@@ -2,9 +2,9 @@
 
 import { useCallback, useId, useMemo, useState } from "react"
 import { format } from "date-fns"
-import { useAxisLockedScrub } from "@/components/charts/useAxisLockedScrub"
-import { clamp01, interpolateSparseByIndex } from "@/lib/chart-scrub"
-import { cn, parseLocalDate } from "@/lib/utils"
+import { ChartScrubHit, useAxisLockedScrub } from "@/components/charts/useAxisLockedScrub"
+import { nearestDefinedIndex, plotRatioFromView } from "@/lib/chart-scrub"
+import { parseLocalDate } from "@/lib/utils"
 
 const HRV_COLOR = "#d8e84c"
 const RHR_COLOR = "#fb7185"
@@ -55,6 +55,11 @@ function signed(value: number): string {
   return value > 0 ? `+${value}` : `${value}`
 }
 
+function xAtIndex(index: number, count: number): number {
+  if (count <= 1) return PLOT_LEFT
+  return PLOT_LEFT + (index / (count - 1)) * PLOT_WIDTH
+}
+
 export function HrvTrendScrubChart({
   days,
   status,
@@ -86,250 +91,187 @@ export function HrvTrendScrubChart({
     for (let i = days.length - 1; i >= 0; i--) {
       if (days[i]?.hrvMs != null || days[i]?.restingHeartRate != null) return i
     }
-    return days.length - 1
+    return Math.max(0, days.length - 1)
   }, [days])
 
-  const activeIndex =
+  const fingerIndex =
     scrubRatio == null
       ? latestIndex
-      : clamp01(scrubRatio) * Math.max(0, days.length - 1)
-  const activeDay = days[Math.round(activeIndex)] ?? days[latestIndex]
-  const scrubHrv = interpolateSparseByIndex(hrvValues, activeIndex)
-  const scrubRhr = interpolateSparseByIndex(rhrValues, activeIndex)
+      : plotRatioFromView(scrubRatio, PLOT_LEFT, PLOT_RIGHT, 1000) * Math.max(0, days.length - 1)
+  const sampleIndex = nearestDefinedIndex(hrvValues, fingerIndex) ?? latestIndex
+  const rhrIndex = nearestDefinedIndex(rhrValues, sampleIndex)
+  const activeDay = days[sampleIndex] ?? days[latestIndex]
+  const actualHrv = activeDay?.hrvMs ?? null
+  const actualRhr =
+    activeDay?.restingHeartRate ?? (rhrIndex != null ? rhrValues[rhrIndex] : null)
   const vsAvg =
-    scrubHrv != null && hrvAvg != null ? Math.round(scrubHrv - hrvAvg) : null
-  const x =
-    PLOT_LEFT +
-    (Math.max(0, days.length - 1) === 0
-      ? 0
-      : (activeIndex / Math.max(1, days.length - 1)) * PLOT_WIDTH)
+    actualHrv != null && hrvAvg != null ? Math.round(actualHrv - hrvAvg) : null
+  const hairlineX = xAtIndex(fingerIndex, days.length)
+  const sampleX = xAtIndex(sampleIndex, days.length)
   const hrvPath = pathThrough(days, (day) => day.hrvMs, hrvMin, hrvMax)
   const rhrPath = pathThrough(days, (day) => day.restingHeartRate, rhrMin, rhrMax)
-  const lastHrv = hrvKnown[hrvKnown.length - 1] ?? null
   const isScrubbing = scrubRatio != null
 
   return (
-    <section
-      aria-labelledby="hrv-trend-heading"
-      className="space-y-3.5 rounded-2xl border border-[#d8e84c]/15 bg-gradient-to-br from-[#d8e84c]/[0.065] via-white/[0.02] to-transparent p-3.5 sm:p-4"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p id="hrv-trend-heading" className="text-sm font-semibold text-foreground/95">
-            HRV recovery trend
-          </p>
-          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/65">
-            Nightly variability with resting heart rate · last 14 days
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full border border-[#d8e84c]/20 bg-[#d8e84c]/[0.08] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#e7f474]/80">
-          Recovery
-        </span>
-      </div>
-
-      <div className="grid grid-cols-3 gap-1.5 sm:gap-2" aria-live="polite">
-        {[
-          {
-            key: "hrv",
-            label: isScrubbing && activeDay?.date
-              ? format(parseLocalDate(activeDay.date), "MMM d")
-              : "Latest",
-            value: scrubHrv != null ? Math.round(scrubHrv) : lastHrv != null ? Math.round(lastHrv) : null,
-            suffix: "ms",
-          },
-          {
-            key: "avg",
-            label: "14d avg",
-            value: hrvAvg != null ? Math.round(hrvAvg) : null,
-            suffix: "ms",
-          },
-          {
-            key: "delta",
-            label: "vs avg",
-            value: vsAvg,
-            suffix: "ms",
-            signed: true,
-          },
-        ].map((item) => (
-          <div
-            key={item.key}
-            className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 px-2.5 py-2.5"
-          >
-            <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">
-              {item.label}
-            </p>
-            <p className="mt-1 truncate font-heading text-base leading-none tabular-nums text-foreground/90 sm:text-lg">
-              {item.value != null
-                ? `${item.signed && item.value > 0 ? "+" : ""}${item.value}`
-                : "—"}
-              {item.value != null ? (
-                <span className="ml-0.5 text-[9px] font-medium text-muted-foreground/55">
-                  {item.suffix}
-                </span>
-              ) : null}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {isScrubbing && scrubRhr != null ? (
-        <p className="text-[11px] tabular-nums text-muted-foreground/65">
-          Resting HR {Math.round(scrubRhr)} bpm
-          {vsAvg != null ? ` · HRV ${signed(vsAvg)} ms vs 14-day average` : ""}
+    <section aria-labelledby="hrv-trend-heading" className="space-y-3">
+      <div>
+        <p id="hrv-trend-heading" className="type-hud-subsection">
+          HRV
         </p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground/70">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-0.5 w-5 rounded-full bg-[#d8e84c] shadow-[0_0_8px_rgba(216,232,76,0.35)]" />
-            HRV
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-0 w-5 border-t border-dashed border-[#fb7185]/75" />
-            Resting HR
-          </span>
+        <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
+          Nightly variability · last 14 days
+        </p>
+      </div>
+
+      <div className="flex items-end justify-between gap-4" aria-live="polite">
+        <div className="min-w-0">
+          <p className="type-hud-micro text-muted-foreground/55">
+            {isScrubbing && activeDay?.date
+              ? format(parseLocalDate(activeDay.date), "EEE, MMM d")
+              : "Latest"}
+          </p>
+          <p className="mt-1 font-heading text-3xl leading-none tabular-nums tracking-tight text-foreground">
+            {actualHrv != null ? Math.round(actualHrv) : "—"}
+            <span className="ml-1 text-[11px] font-medium text-muted-foreground/50">ms</span>
+          </p>
         </div>
-      )}
+        <div className="text-right type-hud-caption normal-case tracking-normal text-muted-foreground/65">
+          {hrvAvg != null ? <p>14d avg {Math.round(hrvAvg)} ms</p> : null}
+          {vsAvg != null ? <p className="mt-0.5 tabular-nums">{signed(vsAvg)} vs avg</p> : null}
+          {actualRhr != null ? (
+            <p className="mt-0.5 tabular-nums">RHR {Math.round(actualRhr)} bpm</p>
+          ) : null}
+        </div>
+      </div>
 
       {status === "loading" ? (
-        <div className="grid h-56 place-items-center rounded-xl border border-dashed border-white/[0.08] bg-black/10 text-[12px] text-muted-foreground/55 sm:h-60">
-          Loading recovery trend…
-        </div>
+        <p className="type-hud-caption text-muted-foreground/55">Loading recovery trend…</p>
       ) : status === "error" ? (
-        <p className="rounded-xl border border-white/[0.06] bg-black/10 px-3 py-4 text-center text-[12px] text-muted-foreground/65">
+        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/65">
           Couldn&apos;t load HRV history.
         </p>
       ) : !hasTrend ? (
-        <p className="rounded-xl border border-dashed border-white/[0.08] bg-black/10 px-3 py-5 text-center text-[12px] leading-relaxed text-muted-foreground/65">
+        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/65">
           A few nights of Google Health data will fill in this recovery trend.
         </p>
       ) : (
         <div className="chart-touch-safe select-none [-webkit-touch-callout:none]">
-          <div className="relative">
-          <svg
-            viewBox="0 0 1000 200"
-            className="h-56 w-full cursor-crosshair overflow-visible sm:h-60"
-            role="img"
-            aria-label="HRV recovery trend for the last 14 days. Drag horizontally to inspect a day."
-            preserveAspectRatio="none"
-            {...scrubHandlers}
-            onContextMenu={(event) => event.preventDefault()}
-          >
-            <defs>
-              <linearGradient id={`${gradientId}-hrv`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={HRV_COLOR} stopOpacity="0.22" />
-                <stop offset="100%" stopColor={HRV_COLOR} stopOpacity="0" />
-              </linearGradient>
-              <filter id={`${gradientId}-glow`} x="-8%" y="-40%" width="116%" height="180%">
-                <feGaussianBlur stdDeviation="2.4" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            {[0.15, 0.5, 0.85].map((stop) => (
-              <line
-                key={stop}
-                x1={PLOT_LEFT}
-                x2={PLOT_RIGHT}
-                y1={PLOT_TOP + PLOT_HEIGHT * stop}
-                y2={PLOT_TOP + PLOT_HEIGHT * stop}
-                stroke="rgba(255,255,255,0.055)"
-                strokeWidth="1"
-                vectorEffect="non-scaling-stroke"
-              />
-            ))}
-            {hrvAvg != null ? (
-              <line
-                x1={PLOT_LEFT}
-                x2={PLOT_RIGHT}
-                y1={yFor(hrvAvg, hrvMin, hrvMax)}
-                y2={yFor(hrvAvg, hrvMin, hrvMax)}
-                stroke="oklch(0.84 0.14 112 / 32%)"
-                strokeDasharray="3 5"
-                vectorEffect="non-scaling-stroke"
-              />
-            ) : null}
-            {hrvPath ? (
-              <path
-                d={`${hrvPath} L ${PLOT_RIGHT},${PLOT_BOTTOM} L ${PLOT_LEFT},${PLOT_BOTTOM} Z`}
-                fill={`url(#${gradientId}-hrv)`}
-              />
-            ) : null}
-            {rhrPath ? (
-              <path
-                d={rhrPath}
-                fill="none"
-                stroke={RHR_COLOR}
-                strokeOpacity="0.72"
-                strokeWidth="1.75"
-                strokeDasharray="5 4"
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-              />
-            ) : null}
-            {hrvPath ? (
-              <path
-                d={hrvPath}
-                fill="none"
-                stroke={HRV_COLOR}
-                strokeWidth="3"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
-                filter={`url(#${gradientId}-glow)`}
-              />
-            ) : null}
-            {days.map((day, index) => {
-              if (day.hrvMs == null) return null
-              const cx = PLOT_LEFT + (index / Math.max(1, days.length - 1)) * PLOT_WIDTH
-              return (
-                <circle
-                  key={day.date}
-                  cx={cx}
-                  cy={yFor(day.hrvMs, hrvMin, hrvMax)}
-                  r="2.4"
-                  fill={HRV_COLOR}
+          <ChartScrubHit handlers={scrubHandlers} className="cursor-crosshair">
+            <svg
+              viewBox="0 0 1000 200"
+              className="pointer-events-none h-52 w-full overflow-visible sm:h-56"
+              role="img"
+              aria-label="HRV recovery trend for the last 14 days. Drag horizontally to inspect a day."
+              preserveAspectRatio="none"
+            >
+              <defs>
+                <linearGradient id={`${gradientId}-hrv`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={HRV_COLOR} stopOpacity="0.18" />
+                  <stop offset="100%" stopColor={HRV_COLOR} stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {[0.2, 0.5, 0.8].map((stop) => (
+                <line
+                  key={stop}
+                  x1={PLOT_LEFT}
+                  x2={PLOT_RIGHT}
+                  y1={PLOT_TOP + PLOT_HEIGHT * stop}
+                  y2={PLOT_TOP + PLOT_HEIGHT * stop}
+                  stroke="rgba(255,255,255,0.05)"
+                  strokeWidth="1"
                   vectorEffect="non-scaling-stroke"
                 />
-              )
-            })}
-          </svg>
-          {isScrubbing ? (
-            <div className="pointer-events-none absolute inset-0" aria-hidden>
-              <div
-                className="absolute top-[9%] bottom-[11%] w-px bg-white/55"
-                style={{ left: `${(x / 1000) * 100}%` }}
-              />
-              {scrubHrv != null ? (
-                <div
-                  className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#11150a] shadow-[0_0_10px_rgba(216,232,76,0.4)]"
-                  style={{
-                    left: `${(x / 1000) * 100}%`,
-                    top: `${(yFor(scrubHrv, hrvMin, hrvMax) / 200) * 100}%`,
-                    background: HRV_COLOR,
-                  }}
+              ))}
+              {hrvAvg != null ? (
+                <line
+                  x1={PLOT_LEFT}
+                  x2={PLOT_RIGHT}
+                  y1={yFor(hrvAvg, hrvMin, hrvMax)}
+                  y2={yFor(hrvAvg, hrvMin, hrvMax)}
+                  stroke="oklch(0.84 0.14 112 / 28%)"
+                  strokeDasharray="3 5"
+                  vectorEffect="non-scaling-stroke"
                 />
               ) : null}
-              {scrubRhr != null ? (
-                <div
-                  className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#16090d]"
-                  style={{
-                    left: `${(x / 1000) * 100}%`,
-                    top: `${(yFor(scrubRhr, rhrMin, rhrMax) / 200) * 100}%`,
-                    background: RHR_COLOR,
-                  }}
+              {hrvPath ? (
+                <path
+                  d={`${hrvPath} L ${PLOT_RIGHT},${PLOT_BOTTOM} L ${PLOT_LEFT},${PLOT_BOTTOM} Z`}
+                  fill={`url(#${gradientId}-hrv)`}
                 />
               ) : null}
-            </div>
-          ) : null}
-          </div>
-          <div className="mt-1 flex justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/50">
+              {rhrPath ? (
+                <path
+                  d={rhrPath}
+                  fill="none"
+                  stroke={RHR_COLOR}
+                  strokeOpacity="0.65"
+                  strokeWidth="1.6"
+                  strokeDasharray="5 4"
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              ) : null}
+              {hrvPath ? (
+                <path
+                  d={hrvPath}
+                  fill="none"
+                  stroke={HRV_COLOR}
+                  strokeWidth="2.5"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              ) : null}
+              {days.map((day, index) => {
+                if (day.hrvMs == null) return null
+                return (
+                  <circle
+                    key={day.date}
+                    cx={xAtIndex(index, days.length)}
+                    cy={yFor(day.hrvMs, hrvMin, hrvMax)}
+                    r="2.2"
+                    fill={HRV_COLOR}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )
+              })}
+            </svg>
+            {isScrubbing ? (
+              <div className="pointer-events-none absolute inset-0" aria-hidden>
+                <div
+                  className="absolute top-[8%] bottom-[10%] w-px bg-white/50"
+                  style={{ left: `${(hairlineX / 1000) * 100}%` }}
+                />
+                {actualHrv != null ? (
+                  <div
+                    className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#11150a]"
+                    style={{
+                      left: `${(sampleX / 1000) * 100}%`,
+                      top: `${(yFor(actualHrv, hrvMin, hrvMax) / 200) * 100}%`,
+                      background: HRV_COLOR,
+                    }}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </ChartScrubHit>
+          <div className="mt-1.5 flex justify-between type-hud-micro text-muted-foreground/45">
             <span>{days[0] ? format(parseLocalDate(days[0].date), "MMM d") : ""}</span>
-            <span className={cn(isScrubbing && "text-[#e7f474]/80")}>
-              {isScrubbing ? "Release to return" : "Drag to inspect"}
+            <span className="inline-flex items-center gap-3 normal-case tracking-normal">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-0.5 w-3.5 rounded-full bg-[#d8e84c]" />
+                HRV
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-0 w-3.5 border-t border-dashed border-[#fb7185]/70" />
+                RHR
+              </span>
             </span>
-            <span>{days[days.length - 1] ? format(parseLocalDate(days[days.length - 1]!.date), "MMM d") : ""}</span>
+            <span>
+              {days[days.length - 1]
+                ? format(parseLocalDate(days[days.length - 1]!.date), "MMM d")
+                : ""}
+            </span>
           </div>
         </div>
       )}

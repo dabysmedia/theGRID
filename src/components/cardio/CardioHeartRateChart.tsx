@@ -2,15 +2,15 @@
 
 import { useCallback, useId, useMemo, useState } from "react"
 import { format } from "date-fns"
-import { useAxisLockedScrub } from "@/components/charts/useAxisLockedScrub"
+import { ChartScrubHit, useAxisLockedScrub } from "@/components/charts/useAxisLockedScrub"
 import {
   cardioZoneForBpm,
-  interpolateCardioSeries,
+  cardioZoneLegend,
   plottableCardioZoneBands,
-  ratioToTime,
   type CardioHeartRateThreshold,
   type CardioHrSample,
 } from "@/lib/cardio-heart-rate"
+import { nearestSeriesPoint, plotRatioFromView, ratioToTime, type ScrubPoint } from "@/lib/chart-scrub"
 
 const HR_COLOR = "#fb7185"
 const PLOT_LEFT = 8
@@ -61,7 +61,7 @@ export function CardioHeartRateChart({
     onClear: clearScrub,
   })
 
-  const points = useMemo(
+  const points = useMemo<ScrubPoint[]>(
     () =>
       samples
         .map((sample) => ({ t: new Date(sample.time).getTime(), v: sample.bpm }))
@@ -93,18 +93,16 @@ export function CardioHeartRateChart({
     [thresholds, yMin, yMax],
   )
 
-  const active = useMemo(() => {
-    if (points.length === 0) return null
-    if (scrubRatio == null) return peak ?? latest
-    return interpolateCardioSeries(points, ratioToTime(start, end, scrubRatio))
-  }, [latest, peak, points, scrubRatio, start, end])
-
-  const zone = active ? cardioZoneForBpm(active.v, thresholds) : null
-  const vsRest =
-    active && restingHeartRate != null ? active.v - restingHeartRate : null
-  const vsAvg = active && average != null ? active.v - average : null
+  const legend = useMemo(() => cardioZoneLegend(thresholds), [thresholds])
+  const fingerT =
+    scrubRatio == null
+      ? (peak?.t ?? latest?.t ?? start)
+      : ratioToTime(start, end, plotRatioFromView(scrubRatio, PLOT_LEFT, PLOT_RIGHT, 1000))
+  const sample = nearestSeriesPoint(points, fingerT) ?? peak ?? latest
+  const zone = sample ? cardioZoneForBpm(sample.v, thresholds) : null
+  const vsAvg = sample && average != null ? sample.v - average : null
   const pctMax =
-    active && maxHr != null && maxHr > 0 ? Math.round((active.v / maxHr) * 100) : null
+    sample && maxHr != null && maxHr > 0 ? Math.round((sample.v / maxHr) * 100) : null
   const isScrubbing = scrubRatio != null
   const line = points
     .map((point, index) => {
@@ -130,86 +128,63 @@ export function CardioHeartRateChart({
   ].filter(Boolean)
 
   return (
-    <section
-      aria-labelledby="cardio-hr-heading"
-      className="space-y-2.5 rounded-2xl border border-amber-200/[0.12] bg-amber-950/20 p-3"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p id="cardio-hr-heading" className="text-sm font-semibold text-amber-50/95">
-            Session heart rate
-          </p>
-          <p className="mt-0.5 truncate text-[11px] text-muted-foreground/60">
-            {sessionLabel}
-            {profileBits.length > 0 ? ` · ${profileBits.join(" · ")}` : ""}
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full border border-amber-200/15 bg-amber-400/[0.08] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-amber-100/70">
-          {points.length > 0 ? `${points.length} samples` : "Zones"}
-        </span>
+    <section aria-labelledby="cardio-hr-heading" className="space-y-3">
+      <div>
+        <p id="cardio-hr-heading" className="type-hud-subsection text-amber-50/90">
+          Session heart rate
+        </p>
+        <p className="mt-0.5 type-hud-caption normal-case tracking-normal text-muted-foreground/65">
+          {sessionLabel}
+          {profileBits.length > 0 ? ` · ${profileBits.join(" · ")}` : ""}
+        </p>
       </div>
 
-      <div className="rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2.5" aria-live="polite">
-        <div className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/55">
-              {isScrubbing && active ? format(new Date(active.t), "h:mm a") : "Peak / latest"}
+      <div className="flex items-end justify-between gap-3" aria-live="polite">
+        <div className="min-w-0">
+          <p className="type-hud-micro text-muted-foreground/55">
+            {isScrubbing && sample ? format(new Date(sample.t), "h:mm a") : "Peak"}
+          </p>
+          <p className="mt-1 font-heading text-3xl leading-none tabular-nums tracking-tight text-foreground">
+            {sample ? Math.round(sample.v) : "—"}
+            <span className="ml-1 text-[11px] font-medium text-muted-foreground/50">bpm</span>
+          </p>
+        </div>
+        <div className="text-right type-hud-caption normal-case tracking-normal text-muted-foreground/65">
+          <p className="font-semibold tracking-[0.12em]" style={{ color: zone?.color }}>
+            {zone?.label ?? "—"}
+          </p>
+          {pctMax != null ? <p className="mt-0.5 tabular-nums">{pctMax}% max</p> : null}
+          {vsAvg != null ? (
+            <p className="mt-0.5 tabular-nums text-muted-foreground/50">
+              {signed(vsAvg)} vs avg
             </p>
-            <p className="mt-1 font-heading text-3xl leading-none tabular-nums tracking-tight text-rose-100">
-              {active ? Math.round(active.v) : "—"}
-              <span className="ml-1 text-[11px] font-medium text-muted-foreground/55">bpm</span>
-            </p>
-          </div>
-          <div className="text-right">
-            <p
-              className="text-[11px] font-semibold uppercase tracking-[0.12em]"
-              style={{ color: zone?.color ?? "rgba(255,255,255,0.45)" }}
-            >
-              {zone?.label ?? "—"}
-            </p>
-            <p className="mt-1 text-[11px] tabular-nums text-muted-foreground/65">
-              {pctMax != null
-                ? `${pctMax}% max`
-                : vsRest != null
-                  ? `${signed(vsRest)} vs rest`
-                  : `${Math.round(min)}–${Math.round(max)}`}
-            </p>
-            {vsAvg != null ? (
-              <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground/50">
-                {signed(vsAvg)} vs session avg
-              </p>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </div>
 
       {status === "loading" ? (
-        <div className="grid h-44 place-items-center rounded-xl border border-dashed border-white/[0.08] bg-black/10 text-[12px] text-muted-foreground/55">
-          Loading session heart rate…
-        </div>
+        <p className="type-hud-caption text-muted-foreground/55">Loading session heart rate…</p>
       ) : status === "error" ? (
-        <p className="rounded-xl border border-white/[0.06] bg-black/10 px-3 py-4 text-center text-[12px] text-muted-foreground/65">
+        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/65">
           Couldn&apos;t load heart rate for this session.
         </p>
       ) : points.length < 2 ? (
-        <p className="rounded-xl border border-dashed border-amber-200/10 bg-black/10 px-3 py-5 text-center text-[12px] leading-relaxed text-muted-foreground/65">
+        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/65">
           Heart-rate samples for this session will show here after Google Health syncs the workout.
         </p>
       ) : (
         <div className="chart-touch-safe select-none [-webkit-touch-callout:none]">
-          <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-[#07090d]">
+          <ChartScrubHit handlers={scrubHandlers} className="cursor-crosshair">
             <svg
               viewBox="0 0 1000 186"
-              className="h-44 w-full cursor-crosshair overflow-visible"
+              className="pointer-events-none h-44 w-full overflow-visible"
               role="img"
               aria-label="Heart rate during this cardio session. Drag horizontally to inspect time, bpm, and zone."
               preserveAspectRatio="none"
-              {...scrubHandlers}
-              onContextMenu={(event) => event.preventDefault()}
             >
               <defs>
                 <linearGradient id={`${gradientId}-hr`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={HR_COLOR} stopOpacity="0.28" />
+                  <stop offset="0%" stopColor={HR_COLOR} stopOpacity="0.22" />
                   <stop offset="100%" stopColor={HR_COLOR} stopOpacity="0" />
                 </linearGradient>
               </defs>
@@ -221,7 +196,7 @@ export function CardioHeartRateChart({
                   width={PLOT_WIDTH}
                   height={Math.max(1, yFor(band.from, yMin, yMax) - yFor(band.to, yMin, yMax))}
                   fill={band.color}
-                  opacity="0.09"
+                  opacity="0.08"
                 />
               ))}
               {restingHeartRate != null ? (
@@ -241,31 +216,31 @@ export function CardioHeartRateChart({
                   d={line}
                   fill="none"
                   stroke={HR_COLOR}
-                  strokeWidth="2.4"
+                  strokeWidth="2.2"
                   strokeLinejoin="round"
                   strokeLinecap="round"
                   vectorEffect="non-scaling-stroke"
                 />
               ) : null}
             </svg>
-            {active && isScrubbing ? (
+            {isScrubbing && sample ? (
               <div className="pointer-events-none absolute inset-0" aria-hidden>
                 <div
-                  className="absolute top-[8%] bottom-[10%] w-px bg-white/65"
-                  style={{ left: `${(xFor(active.t, start, end) / 1000) * 100}%` }}
+                  className="absolute top-[8%] bottom-[10%] w-px bg-white/50"
+                  style={{ left: `${(xFor(fingerT, start, end) / 1000) * 100}%` }}
                 />
                 <div
-                  className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#14080c]"
+                  className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#14080c]"
                   style={{
-                    left: `${(xFor(active.t, start, end) / 1000) * 100}%`,
-                    top: `${(yFor(active.v, yMin, yMax) / 186) * 100}%`,
+                    left: `${(xFor(sample.t, start, end) / 1000) * 100}%`,
+                    top: `${(yFor(sample.v, yMin, yMax) / 186) * 100}%`,
                     background: zone?.color ?? HR_COLOR,
                   }}
                 />
               </div>
             ) : latest ? (
               <div
-                className="pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                className="pointer-events-none absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
                 style={{
                   left: `${(xFor(latest.t, start, end) / 1000) * 100}%`,
                   top: `${(yFor(latest.v, yMin, yMax) / 186) * 100}%`,
@@ -274,15 +249,15 @@ export function CardioHeartRateChart({
                 aria-hidden
               />
             ) : null}
-          </div>
-          <div className="mt-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/50">
+          </ChartScrubHit>
+          <div className="mt-1.5 flex items-center justify-between type-hud-micro text-muted-foreground/45">
             {ticks.map((tick) => (
               <span key={tick.t}>{tick.label}</span>
             ))}
           </div>
-          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground/60">
-            {bands.map((band) => (
-              <span key={band.key} className="inline-flex items-center gap-1.5">
+          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 type-hud-micro text-muted-foreground/55">
+            {legend.map((band) => (
+              <span key={band.label} className="inline-flex items-center gap-1.5 normal-case tracking-normal">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: band.color }} />
                 {band.label}
               </span>

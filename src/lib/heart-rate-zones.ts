@@ -8,31 +8,47 @@ export type HeartRateZoneInfo = {
   key: string
   label: string
   color: string
+  number: number
 }
 
-export const HEART_RATE_ZONE_STYLE: Record<string, { label: string; color: string }> = {
-  OUT_OF_RANGE: { label: "Rest / easy", color: "#64748b" },
-  FAT_BURN: { label: "Fat burn", color: "#22c55e" },
-  CARDIO: { label: "Cardio", color: "#f59e0b" },
-  PEAK: { label: "Peak", color: "#ef4444" },
+const ZONE_BY_KEY: Record<string, { number: number; color: string }> = {
+  OUT_OF_RANGE: { number: 1, color: "#64748b" },
+  ZONE_1: { number: 1, color: "#64748b" },
+  Z1: { number: 1, color: "#64748b" },
+  FAT_BURN: { number: 2, color: "#84cc16" },
+  ZONE_2: { number: 2, color: "#84cc16" },
+  Z2: { number: 2, color: "#84cc16" },
+  CARDIO: { number: 3, color: "#f59e0b" },
+  ZONE_3: { number: 3, color: "#f59e0b" },
+  Z3: { number: 3, color: "#f59e0b" },
+  PEAK: { number: 4, color: "#f43f5e" },
+  ZONE_4: { number: 4, color: "#f43f5e" },
+  Z4: { number: 4, color: "#f43f5e" },
+  ZONE_5: { number: 5, color: "#e11d48" },
+  Z5: { number: 5, color: "#e11d48" },
 }
 
 export function normalizeZoneKey(zone: string): string {
-  return zone.toUpperCase().replace(/[^A-Z]/g, "_")
+  return zone.toUpperCase().replace(/[^A-Z0-9]/g, "_")
 }
 
 export function zoneStyle(zone: string): HeartRateZoneInfo {
   const key = normalizeZoneKey(zone)
-  const known = HEART_RATE_ZONE_STYLE[key]
-  if (known) return { key, ...known }
-  return {
-    key,
-    label: zone
-      .toLowerCase()
-      .replace(/_/g, " ")
-      .replace(/^\w/, (c) => c.toUpperCase()),
-    color: "#f43f5e",
+  const known = ZONE_BY_KEY[key]
+  if (known) {
+    return { key, label: `Zone ${known.number}`, color: known.color, number: known.number }
   }
+  const numbered = key.match(/^Z(?:ONE)?_?([1-5])$/)
+  if (numbered) {
+    const number = Number(numbered[1])
+    return {
+      key,
+      label: `Zone ${number}`,
+      color: ZONE_BY_KEY[`Z${number}`]?.color ?? "#f43f5e",
+      number,
+    }
+  }
+  return { key, label: "Zone 1", color: "#64748b", number: 1 }
 }
 
 export function fallbackHeartRateThresholds(
@@ -82,4 +98,22 @@ export function plottableZoneBands(
       return { ...zoneStyle(band.zone), from, to }
     })
     .filter((band) => band.to > band.from)
+}
+
+/** All named zones for legends — not clipped to the day's bpm range. */
+export function zoneLegend(
+  thresholds: HeartRateZoneThreshold[] | null | undefined,
+  restingHeartRate?: number | null,
+): HeartRateZoneInfo[] {
+  const bands =
+    thresholds && thresholds.length > 0 ? thresholds : fallbackHeartRateThresholds(restingHeartRate)
+  const seen = new Set<number>()
+  const legend: HeartRateZoneInfo[] = []
+  for (const band of bands) {
+    const info = zoneStyle(band.zone)
+    if (seen.has(info.number)) continue
+    seen.add(info.number)
+    legend.push(info)
+  }
+  return legend
 }

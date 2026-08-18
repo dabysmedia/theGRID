@@ -8,6 +8,18 @@ export function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
 }
 
+/** Map a 0–1 hit-target ratio onto the inner plot (viewBox padding). */
+export function plotRatioFromView(
+  ratio: number,
+  plotLeft: number,
+  plotRight: number,
+  viewWidth: number,
+): number {
+  if (viewWidth <= 0 || plotRight <= plotLeft) return clamp01(ratio)
+  const x = clamp01(ratio) * viewWidth
+  return clamp01((x - plotLeft) / (plotRight - plotLeft))
+}
+
 export function ratioToTime(start: number, end: number, ratio: number): number {
   const span = end - start
   if (!Number.isFinite(span) || span <= 0) return start
@@ -71,6 +83,41 @@ export function interpolateSparseByIndex(
   const rightVal = values[right]!
   const mix = (clamped - left) / (right - left)
   return leftVal + (rightVal - leftVal) * mix
+}
+
+/** Nearest index that actually has a value — no blending between nights. */
+export function nearestDefinedIndex(
+  values: Array<number | null>,
+  index: number,
+): number | null {
+  if (values.length === 0 || !Number.isFinite(index)) return null
+  let best: number | null = null
+  let bestDist = Number.POSITIVE_INFINITY
+  for (let i = 0; i < values.length; i++) {
+    const value = values[i]
+    if (value == null || !Number.isFinite(value)) continue
+    const dist = Math.abs(i - index)
+    if (dist < bestDist) {
+      best = i
+      bestDist = dist
+    }
+  }
+  return best
+}
+
+/** Nearest real sample to a scrub time — displayed bpm stays on recorded points. */
+export function nearestSeriesPoint(points: ScrubPoint[], t: number): ScrubPoint | null {
+  if (points.length === 0) return null
+  let best = points[0]!
+  let bestDist = Math.abs(best.t - t)
+  for (const point of points) {
+    const dist = Math.abs(point.t - t)
+    if (dist < bestDist) {
+      best = point
+      bestDist = dist
+    }
+  }
+  return best
 }
 
 export function hourlyValueRanges(

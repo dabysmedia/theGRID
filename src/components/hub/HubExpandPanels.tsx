@@ -56,7 +56,6 @@ import {
   injectionSiteLabel,
 } from "@/lib/peptides"
 import {
-  READINESS_BAND_ACCENT,
   READINESS_BAND_LABEL,
   readinessBand,
 } from "@/lib/readiness-score"
@@ -79,7 +78,7 @@ import {
 import { HeartRateDayChart } from "@/components/vitals/HeartRateDayChart"
 import { HrvTrendScrubChart } from "@/components/vitals/HrvTrendScrubChart"
 import { zoneStyle, type HeartRateZoneThreshold } from "@/lib/heart-rate-zones"
-import { cn, parseLocalDate } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import type { WeightTrendInsight, WeightTrendPoint } from "@/lib/weight-trend"
 
 export type HubExpandedPanel =
@@ -424,8 +423,6 @@ export function HubWeightExpand() {
 
 /* ─── Vitals ─────────────────────────────────────────────── */
 
-const VITALS_COLOR = "#f43f5e"
-
 type ZoneMinutes = { zone: string; minutes: number }
 type HrSample = { time: string; bpm: number }
 type TrendDay = {
@@ -568,18 +565,12 @@ export function HubVitalsExpand({
   const hrvMs = data?.hrvMs ?? fallbackHrvMs ?? null
   const rhr = data?.restingHeartRate ?? fallbackRhr ?? null
   const band = readinessBand(readiness ?? null)
-  const accent = band ? READINESS_BAND_ACCENT[band] : VITALS_COLOR
   const zones = data?.zones ?? []
   const totalZoneMinutes = zones.reduce((s, z) => s + z.minutes, 0)
   const readinessScore =
     readiness != null && Number.isFinite(readiness)
       ? Math.max(0, Math.min(100, Math.round(readiness)))
       : null
-  const readinessRadius = 35
-  const readinessCircumference = 2 * Math.PI * readinessRadius
-  const readinessOffset =
-    readinessCircumference -
-    readinessCircumference * ((readinessScore ?? 0) / 100)
   const loadSessionCount = useMemo(
     () =>
       completedSessions.filter((session) => {
@@ -608,109 +599,16 @@ export function HubVitalsExpand({
 
   return (
     <div className="hub-detail-sequence space-y-5 px-0.5 sm:space-y-6">
-      <div className="relative min-w-0 overflow-hidden rounded-2xl border border-[#f43f5e]/15 bg-gradient-to-br from-[#f43f5e]/[0.09] via-white/[0.025] to-transparent p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="type-hud-subsection">Vitals</p>
-            <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-              {band ? `${READINESS_BAND_LABEL[band]} · ` : ""}
-              HRV {dash(hrvMs != null ? Math.round(hrvMs) : null, " ms")}
-              {" · "}
-              RHR {dash(rhr, " bpm")}
-              {readiness != null ? ` · readiness ${Math.round(readiness)}` : ""}
-            </p>
-          </div>
-          <div
-            className="relative grid size-[4.75rem] shrink-0 place-items-center rounded-full"
-            style={{
-              boxShadow: `0 0 24px ${accent}20`,
-            }}
-            aria-label={readinessScore != null ? `Readiness ${readinessScore} out of 100` : "Readiness unavailable"}
-          >
-            <svg
-              viewBox="0 0 76 76"
-              className="absolute inset-0 size-full -rotate-90"
-              aria-hidden
-            >
-              <circle
-                cx="38"
-                cy="38"
-                r={readinessRadius}
-                fill="none"
-                stroke="rgba(255,255,255,0.07)"
-                strokeWidth="3"
-              />
-              <circle
-                key={`readiness-${readinessScore ?? "none"}`}
-                cx="38"
-                cy="38"
-                r={readinessRadius}
-                fill="none"
-                stroke={accent}
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeDasharray={readinessCircumference}
-                strokeDashoffset={readinessOffset}
-                className="hub-progress-ring-arc motion-reduce:animate-none"
-                style={{
-                  filter: `drop-shadow(0 0 7px ${accent}66)`,
-                  // @ts-expect-error CSS custom properties drive the shared ring keyframe.
-                  "--ring-circumference": readinessCircumference,
-                  "--ring-offset": readinessOffset,
-                }}
-              />
-            </svg>
-            <div className="absolute inset-[3px] grid place-items-center rounded-full border border-white/[0.06] bg-[#0a0d12]/95 text-center">
-              <div>
-                <p className="font-heading text-2xl leading-none tabular-nums" style={{ color: accent }}>
-                  {readinessScore ?? "—"}
-                </p>
-                <p className="mt-1 text-[7px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/45">
-                  readiness
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 [&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1">
-        {[
-          {
-            label: "HRV",
-            value: hrvMs != null ? String(Math.round(hrvMs)) : "—",
-            unit: "ms",
-            tone: accent,
-          },
-          {
-            label: "RHR",
-            value: rhr != null ? String(Math.round(rhr)) : "—",
-            unit: "bpm",
-            tone: VITALS_COLOR,
-          },
-          {
-            label: "Avg HR",
-            value: data?.hrAvg != null ? String(Math.round(data.hrAvg)) : "—",
-            unit: "bpm",
-            tone: "#94a3b8",
-          },
-        ].map((cell) => (
-          <div
-            key={cell.label}
-            className="min-w-0 rounded-2xl border border-white/[0.07] bg-white/[0.025] px-3.5 py-3.5"
-          >
-            <p className="type-hud-micro text-muted-foreground/55">{cell.label}</p>
-            <p
-              className="mt-1 font-heading text-xl leading-none tabular-nums"
-              style={{ color: cell.tone, textShadow: `0 0 12px ${cell.tone}33` }}
-            >
-              {cell.value}
-              <span className="ml-0.5 text-[10px] font-medium text-muted-foreground/50">
-                {cell.unit}
-              </span>
-            </p>
-          </div>
-        ))}
+      <div className="min-w-0">
+        <p className="type-hud-subsection">Vitals</p>
+        <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
+          {band ? `${READINESS_BAND_LABEL[band]} · ` : ""}
+          HRV {dash(hrvMs != null ? Math.round(hrvMs) : null, " ms")}
+          {" · "}
+          RHR {dash(rhr, " bpm")}
+          {data?.hrAvg != null ? ` · avg ${Math.round(data.hrAvg)} bpm` : ""}
+          {readinessScore != null ? ` · readiness ${readinessScore}` : ""}
+        </p>
       </div>
 
       {trendPanel}
@@ -804,14 +702,16 @@ export function HubVitalsExpand({
         </p>
       ) : (
         <>
-          <div className="space-y-3 rounded-2xl border border-white/[0.07] bg-white/[0.018] p-3.5 sm:p-4">
+          <div className="space-y-3">
             <div>
-              <p className="text-sm font-semibold text-foreground/90">Heart-rate zones</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground/55">How your cardiovascular effort was distributed</p>
+              <p className="type-hud-subsection">Heart-rate zones</p>
+              <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
+                Minutes in each zone today
+              </p>
             </div>
             {zones.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] px-3 py-3 text-center text-[12px] text-muted-foreground/60">
-                No zone data for this day yet
+              <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/65">
+                No zone data for this day yet.
               </p>
             ) : (
               <div className="space-y-2">
@@ -821,16 +721,16 @@ export function HubVitalsExpand({
                   return (
                     <div key={z.zone} className="space-y-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-medium text-foreground/85">
+                        <span className="type-hud-caption normal-case tracking-normal text-foreground/85">
                           {style.label}
                         </span>
                         <span className="type-hud-micro tabular-nums text-muted-foreground/55">
                           {z.minutes} min
                         </span>
                       </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted/30">
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
                         <div
-                          className="h-full rounded-full transition-all duration-700 ease-out"
+                          className="h-full rounded-full"
                           style={{
                             width: `${Math.max(pct, 2)}%`,
                             backgroundColor: style.color,
