@@ -565,7 +565,7 @@ export function HubVitalsExpand({
   const hrvMs = data?.hrvMs ?? fallbackHrvMs ?? null
   const rhr = data?.restingHeartRate ?? fallbackRhr ?? null
   const band = readinessBand(readiness ?? null)
-  const zones = data?.zones ?? []
+  const zones = (data?.zones ?? []).filter((z) => zoneStyle(z.zone).number >= 1)
   const totalZoneMinutes = zones.reduce((s, z) => s + z.minutes, 0)
   const readinessScore =
     readiness != null && Number.isFinite(readiness)
@@ -706,7 +706,7 @@ export function HubVitalsExpand({
             <div>
               <p className="type-hud-subsection">Heart-rate zones</p>
               <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-                Minutes in each zone today
+                Training zones from age and resting HR · rest not counted
               </p>
             </div>
             {zones.length === 0 ? (

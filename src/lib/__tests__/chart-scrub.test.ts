@@ -66,12 +66,13 @@ describe("zoneForBpm", () => {
     expect(zone.number).toBe(3)
   })
 
-  it("maps Google fat-burn to Zone 2", () => {
+  it("maps Google fat-burn to Zone 1", () => {
     const zone = zoneForBpm(120, [
       { zone: "OUT_OF_RANGE", minBpm: 0, maxBpm: 110 },
       { zone: "FAT_BURN", minBpm: 110, maxBpm: 140 },
     ])
-    expect(zone.label).toBe("Zone 2")
+    expect(zone.label).toBe("Zone 1")
+    expect(zone.number).toBe(1)
   })
 })
 
@@ -103,13 +104,13 @@ describe("plotRatioFromView", () => {
 })
 
 describe("zoneLegend", () => {
-  it("lists Zone 1–4 and never Fat burn", () => {
+  it("lists training zones and never Fat burn", () => {
     const legend = zoneLegend([
       { zone: "OUT_OF_RANGE", minBpm: 0, maxBpm: 110 },
       { zone: "FAT_BURN", minBpm: 110, maxBpm: 140 },
       { zone: "CARDIO", minBpm: 140, maxBpm: 170 },
       { zone: "PEAK", minBpm: 170, maxBpm: 220 },
     ])
-    expect(legend.map((zone) => zone.label)).toEqual(["Zone 1", "Zone 2", "Zone 3", "Zone 4"])
+    expect(legend.map((zone) => zone.label)).toEqual(["Zone 1", "Zone 3", "Zone 5"])
   })
 })

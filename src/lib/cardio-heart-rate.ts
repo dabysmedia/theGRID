@@ -1,27 +1,24 @@
-export const CARDIO_ZONE_FALLBACK_AGE = 27
+import {
+  DEFAULT_ZONE_AGE_YEARS,
+  estimatedMaxHeartRate,
+  plottableZoneBands,
+  standardHeartRateThresholds,
+  zoneForBpm,
+  zoneLegend,
+  zoneStyle,
+  type HeartRateZoneThreshold,
+} from "@/lib/heart-rate-zones"
 
-export type CardioHeartRateZoneKey = "OUT_OF_RANGE" | "FAT_BURN" | "CARDIO" | "PEAK"
+export const CARDIO_ZONE_FALLBACK_AGE = DEFAULT_ZONE_AGE_YEARS
+export { estimatedMaxHeartRate }
 
-export type CardioHeartRateThreshold = {
-  zone: CardioHeartRateZoneKey
-  minBpm: number
-  maxBpm: number
-}
+export type CardioHeartRateThreshold = HeartRateZoneThreshold
 
 export type CardioHeartRateZoneInfo = {
-  key: CardioHeartRateZoneKey
+  key: string
   label: string
   color: string
-}
-
-export const CARDIO_HEART_RATE_ZONE_STYLE: Record<
-  CardioHeartRateZoneKey,
-  { label: string; color: string }
-> = {
-  OUT_OF_RANGE: { label: "Zone 1", color: "#64748b" },
-  FAT_BURN: { label: "Zone 2", color: "#84cc16" },
-  CARDIO: { label: "Zone 3", color: "#f59e0b" },
-  PEAK: { label: "Zone 4", color: "#f43f5e" },
+  number: number
 }
 
 const YMD = /^(\d{4})-(\d{2})-(\d{2})$/
@@ -45,11 +42,6 @@ export function ageYearsFromBirthDate(
   return age
 }
 
-/** Classic Fox max-HR estimate: 220 − age. */
-export function estimatedMaxHeartRate(ageYears: number): number {
-  return Math.round(220 - ageYears)
-}
-
 export function resolveCardioAgeYears(
   birthDate: string | null | undefined,
   onDate: string,
@@ -59,13 +51,8 @@ export function resolveCardioAgeYears(
 }
 
 /**
- * Karvonen zones from age (max HR) and resting HR.
+ * Karvonen 5-zone model from age (max HR) and resting HR.
  * Weight is not part of the bpm cutoffs — it is returned for the chart caption.
- *
- *   Zone 1  < 60% HRR
- *   Zone 2  60–70%
- *   Zone 3  70–85%
- *   Zone 4  85%+
  */
 export function profileCardioHeartRateZones(input: {
   ageYears?: number | null
@@ -88,12 +75,12 @@ export function profileCardioHeartRateZones(input: {
     input.restingHeartRate != null && input.restingHeartRate > 30
       ? Math.round(input.restingHeartRate)
       : 60
+  const thresholds = standardHeartRateThresholds({
+    ageYears,
+    restingHeartRate: rest,
+  })
   const maxHr = Math.max(rest + 40, estimatedMaxHeartRate(ageYears))
   const reserve = Math.max(40, maxHr - rest)
-  const at = (fraction: number) => Math.round(rest + reserve * fraction)
-  const fat = at(0.6)
-  const cardio = at(0.7)
-  const peak = at(0.85)
   const weightLb =
     input.weightLb != null && Number.isFinite(input.weightLb) && input.weightLb > 50
       ? Math.round(input.weightLb * 10) / 10
@@ -106,28 +93,19 @@ export function profileCardioHeartRateZones(input: {
     maxHr,
     heartRateReserve: reserve,
     method: "karvonen",
-    thresholds: [
-      { zone: "OUT_OF_RANGE", minBpm: 0, maxBpm: fat },
-      { zone: "FAT_BURN", minBpm: fat, maxBpm: cardio },
-      { zone: "CARDIO", minBpm: cardio, maxBpm: peak },
-      { zone: "PEAK", minBpm: peak, maxBpm: Math.max(peak + 10, maxHr + 15) },
-    ],
+    thresholds,
   }
 }
 
 export function cardioZoneStyle(zone: string): CardioHeartRateZoneInfo {
-  const key = zone.toUpperCase().replace(/[^A-Z]/g, "_") as CardioHeartRateZoneKey
-  const known = CARDIO_HEART_RATE_ZONE_STYLE[key]
-  if (known) return { key, ...known }
-  return { key: "OUT_OF_RANGE", ...CARDIO_HEART_RATE_ZONE_STYLE.OUT_OF_RANGE }
+  return zoneStyle(zone)
 }
 
 export function cardioZoneForBpm(
   bpm: number,
   thresholds: CardioHeartRateThreshold[],
 ): CardioHeartRateZoneInfo {
-  const match = thresholds.find((band) => bpm >= band.minBpm && bpm < band.maxBpm)
-  return cardioZoneStyle(match?.zone ?? (bpm >= (thresholds.at(-1)?.minBpm ?? 200) ? "PEAK" : "OUT_OF_RANGE"))
+  return zoneForBpm(bpm, thresholds)
 }
 
 export function plottableCardioZoneBands(
@@ -135,27 +113,13 @@ export function plottableCardioZoneBands(
   yMin: number,
   yMax: number,
 ): Array<CardioHeartRateZoneInfo & { from: number; to: number }> {
-  return thresholds
-    .map((band) => {
-      const from = Math.max(yMin, band.minBpm)
-      const to = Math.min(yMax, band.maxBpm)
-      return { ...cardioZoneStyle(band.zone), from, to }
-    })
-    .filter((band) => band.to > band.from)
+  return plottableZoneBands(thresholds, null, yMin, yMax)
 }
 
 export function cardioZoneLegend(
   thresholds: CardioHeartRateThreshold[],
 ): CardioHeartRateZoneInfo[] {
-  const seen = new Set<string>()
-  const legend: CardioHeartRateZoneInfo[] = []
-  for (const band of thresholds) {
-    const info = cardioZoneStyle(band.zone)
-    if (seen.has(info.label)) continue
-    seen.add(info.label)
-    legend.push(info)
-  }
-  return legend
+  return zoneLegend(thresholds)
 }
 
 export type CardioHrSample = { time: string; bpm: number }
