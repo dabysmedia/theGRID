@@ -2,8 +2,6 @@ import { HUB_RESET_OVERVIEW_EVENT } from "@/lib/hub-tile-prefs"
 
 /** How close to the screen's left edge a swipe must start. */
 export const EDGE_BACK_ZONE_PX = 28
-/** Extra room after iOS landscape safe-area inset. */
-export const EDGE_BACK_ZONE_PAD_PX = 16
 /** Ignore jitter until the swipe is clearly horizontal. */
 export const EDGE_BACK_AXIS_LOCK_PX = 8
 /** Finger travel that commits a back even on a narrow screen. */
@@ -87,6 +85,7 @@ export function performEdgeBack(
 ): EdgeBackTarget {
   const target = resolveEdgeBackTarget(pathname)
   if (target === "hub") {
+    setHubPanelOpen(false)
     window.dispatchEvent(new CustomEvent(HUB_RESET_OVERVIEW_EVENT))
     return target
   }

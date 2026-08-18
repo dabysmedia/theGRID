@@ -65,19 +65,21 @@ export function EdgeBackGesture({
 
   useEffect(() => {
     const stack = historyRef.current
-    if (stack[stack.length - 1] === pathname) return
-    if (stack.length >= 2 && stack[stack.length - 2] === pathname) {
-      stack.pop()
-    } else {
-      stack.push(pathname)
+    if (stack[stack.length - 1] !== pathname) {
+      if (stack.length >= 2 && stack[stack.length - 2] === pathname) {
+        stack.pop()
+      } else {
+        stack.push(pathname)
+      }
     }
     pathnameRef.current = pathname
     const sheet = sheetRef.current
-    if (sheet && !committingRef.current) {
+    if (sheet) {
       sheet.style.transition = "none"
       sheet.style.transform = ""
       sheet.style.boxShadow = ""
     }
+    committingRef.current = false
   }, [pathname])
 
   useEffect(() => {
@@ -97,6 +99,9 @@ export function EdgeBackGesture({
         raw: 0,
       }
     }
+
+    let commitTimer = 0
+    let fallbackTimer = 0
 
     const applyTravel = (px: number, withTransition: boolean) => {
       const width = window.innerWidth || 1
@@ -155,6 +160,7 @@ export function EdgeBackGesture({
       }
 
       if (event.cancelable) event.preventDefault()
+      event.stopImmediatePropagation()
       gesture.raw = Math.max(0, deltaX)
       applyTravel(gesture.raw, false)
     }
@@ -192,18 +198,23 @@ export function EdgeBackGesture({
       if (target === "hub") {
         performEdgeBack(pathnameRef.current, router, historyRef.current.length)
         applyTravel(0, true)
-        window.setTimeout(() => {
+        commitTimer = window.setTimeout(() => {
           committingRef.current = false
         }, 300)
         return
       }
 
+      const fromPath = pathnameRef.current
       applyTravel(window.innerWidth, true)
-      window.setTimeout(() => {
-        performEdgeBack(pathnameRef.current, router, historyRef.current.length)
-        applyTravel(0, false)
-        committingRef.current = false
+      commitTimer = window.setTimeout(() => {
+        performEdgeBack(fromPath, router, historyRef.current.length)
       }, 240)
+      fallbackTimer = window.setTimeout(() => {
+        if (!committingRef.current) return
+        if (pathnameRef.current !== fromPath) return
+        applyTravel(0, true)
+        committingRef.current = false
+      }, 700)
     }
 
     document.addEventListener("touchstart", onTouchStart, { capture: true, passive: true })
@@ -211,6 +222,8 @@ export function EdgeBackGesture({
     document.addEventListener("touchend", endTouch, { capture: true })
     document.addEventListener("touchcancel", endTouch, { capture: true })
     return () => {
+      window.clearTimeout(commitTimer)
+      window.clearTimeout(fallbackTimer)
       document.removeEventListener("touchstart", onTouchStart, { capture: true })
       document.removeEventListener("touchmove", onTouchMove, { capture: true })
       document.removeEventListener("touchend", endTouch, { capture: true })
@@ -221,7 +234,10 @@ export function EdgeBackGesture({
   return (
     <div
       ref={rootRef}
-      className={cn("relative flex min-h-0 flex-1 flex-col overflow-x-hidden", className)}
+      className={cn(
+        "relative flex min-h-0 flex-1 flex-col overflow-x-hidden overscroll-x-none",
+        className,
+      )}
     >
       <div
         ref={sheetRef}

@@ -1,14 +1,22 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { HUB_RESET_OVERVIEW_EVENT } from "@/lib/hub-tile-prefs"
 import {
   EDGE_BACK_AXIS_LOCK_PX,
   EDGE_BACK_FLICK_MS,
   EDGE_BACK_THRESHOLD_PX,
   isEdgeBackStart,
+  performEdgeBack,
   resolveEdgeBackTarget,
   setHubPanelOpen,
   shouldArmEdgeBack,
   shouldTriggerEdgeBack,
 } from "@/lib/edge-back"
+
+afterEach(() => {
+  setHubPanelOpen(false)
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 describe("isEdgeBackStart", () => {
   it("only starts from the left screen edge", () => {
@@ -90,5 +98,49 @@ describe("resolveEdgeBackTarget", () => {
     setHubPanelOpen(false)
     expect(resolveEdgeBackTarget("/")).toBe(null)
     expect(resolveEdgeBackTarget("/workouts")).toBe("history")
+  })
+})
+
+describe("performEdgeBack", () => {
+  it("collapses the hub panel without touching router history", () => {
+    const dispatchEvent = vi.fn()
+    class TestEvent {
+      type: string
+      constructor(type: string) {
+        this.type = type
+      }
+    }
+    vi.stubGlobal("CustomEvent", TestEvent)
+    vi.stubGlobal("window", { dispatchEvent })
+
+    setHubPanelOpen(true)
+    const router = { back: vi.fn(), push: vi.fn() }
+
+    expect(performEdgeBack("/", router, 3)).toBe("hub")
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: HUB_RESET_OVERVIEW_EVENT }),
+    )
+    expect(router.back).not.toHaveBeenCalled()
+    expect(router.push).not.toHaveBeenCalled()
+    expect(resolveEdgeBackTarget("/")).toBe(null)
+  })
+
+  it("goes back in-app, or home when this is the first page", () => {
+    const router = { back: vi.fn(), push: vi.fn() }
+    expect(performEdgeBack("/workouts", router, 2)).toBe("history")
+    expect(router.back).toHaveBeenCalledOnce()
+    expect(router.push).not.toHaveBeenCalled()
+
+    router.back.mockClear()
+    expect(performEdgeBack("/workouts", router, 1)).toBe("history")
+    expect(router.back).not.toHaveBeenCalled()
+    expect(router.push).toHaveBeenCalledWith("/")
+  })
+
+  it("does nothing on the hub overview", () => {
+    const router = { back: vi.fn(), push: vi.fn() }
+    expect(performEdgeBack("/", router, 4)).toBe(null)
+    expect(router.back).not.toHaveBeenCalled()
+    expect(router.push).not.toHaveBeenCalled()
   })
 })
