@@ -9,20 +9,16 @@ import {
   utcRangeWhereForCalendarDay,
 } from "@/lib/dateStorage"
 import { getStepsDayRange, resolveStepsTimezone } from "@/lib/steps-day"
+import { resolveCardioAgeYears } from "@/lib/cardio-heart-rate"
+import {
+  minutesInZones,
+  remapGoogleZoneMinutes,
+  standardHeartRateThresholds,
+} from "@/lib/heart-rate-zones"
 
 type ZoneMinutes = { zone: string; minutes: number }
-type ZoneThreshold = { zone: string; minBpm: number | null; maxBpm: number | null }
 
 function parseZones(json: string): ZoneMinutes[] {
-  try {
-    const parsed = JSON.parse(json)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function parseThresholds(json: string): ZoneThreshold[] {
   try {
     const parsed = JSON.parse(json)
     return Array.isArray(parsed) ? parsed : []
@@ -45,7 +41,7 @@ export async function GET(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { timeZone: true },
+      select: { timeZone: true, birthDate: true },
     })
     const stepsTz = resolveStepsTimezone(user?.timeZone)
     const hrRange = getStepsDayRange(dateYmd, stepsTz)
@@ -96,6 +92,18 @@ export async function GET(req: NextRequest) {
       })
     }
 
+    const ageYears = resolveCardioAgeYears(user?.birthDate, dateYmd)
+    const thresholds = standardHeartRateThresholds({
+      ageYears,
+      restingHeartRate: today?.restingHeartRate ?? null,
+    })
+    const zonesFromSamples = minutesInZones(
+      samples.map((sample) => ({ time: sample.time, bpm: sample.bpm })),
+      thresholds,
+    )
+    const googleZones = today ? remapGoogleZoneMinutes(parseZones(today.zonesJson)) : []
+    const zones = zonesFromSamples.length > 0 ? zonesFromSamples : googleZones
+
     const body = {
       date: dateYmd,
       restingHeartRate: today?.restingHeartRate ?? null,
@@ -103,8 +111,8 @@ export async function GET(req: NextRequest) {
       hrAvg: today?.hrAvg ?? null,
       hrMin: today?.hrMin ?? null,
       hrMax: today?.hrMax ?? null,
-      zones: today ? parseZones(today.zonesJson) : [],
-      thresholds: today ? parseThresholds(today.thresholdsJson) : [],
+      zones,
+      thresholds,
       samples: samples.map((s) => ({ time: s.time.toISOString(), bpm: s.bpm })),
       trend14: trend,
       lastSyncAt: connection?.lastSyncAt ?? null,

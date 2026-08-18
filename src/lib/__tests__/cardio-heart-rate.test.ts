@@ -31,20 +31,25 @@ describe("profileCardioHeartRateZones", () => {
     expect(profile.heartRateReserve).toBe(137)
     expect(profile.weightLb).toBe(185)
     expect(profile.thresholds.map((band) => [band.zone, band.minBpm, band.maxBpm])).toEqual([
-      ["OUT_OF_RANGE", 0, 138],
-      ["FAT_BURN", 138, 152],
-      ["CARDIO", 152, 172],
-      ["PEAK", 172, 208],
+      ["REST", 0, 111],
+      ["ZONE_1", 111, 138],
+      ["ZONE_2", 138, 152],
+      ["ZONE_3", 152, 166],
+      ["ZONE_4", 166, 179],
+      ["ZONE_5", 179, 208],
     ])
-    expect(cardioZoneForBpm(160, profile.thresholds).key).toBe("CARDIO")
+    expect(cardioZoneForBpm(120, profile.thresholds).label).toBe("Zone 1")
+    expect(cardioZoneForBpm(145, profile.thresholds).label).toBe("Zone 2")
+    expect(cardioZoneForBpm(160, profile.thresholds).key).toBe("ZONE_3")
     expect(cardioZoneForBpm(160, profile.thresholds).label).toBe("Zone 3")
-    expect(cardioZoneForBpm(180, profile.thresholds).key).toBe("PEAK")
-    expect(cardioZoneForBpm(180, profile.thresholds).label).toBe("Zone 4")
+    expect(cardioZoneForBpm(180, profile.thresholds).key).toBe("ZONE_5")
+    expect(cardioZoneForBpm(180, profile.thresholds).label).toBe("Zone 5")
     expect(cardioZoneLegend(profile.thresholds).map((zone) => zone.label)).toEqual([
       "Zone 1",
       "Zone 2",
       "Zone 3",
       "Zone 4",
+      "Zone 5",
     ])
   })
 
