@@ -755,9 +755,17 @@ function narrativeSection(
       totalCalories: number
       totalActiveZoneMinutes: number
     }
-    lines.push(
-      `Cardio: ${cardio.length} session(s), ${ct.totalMinutes} min, ${ct.totalMiles} mi, ${ct.totalCalories} kcal, ${ct.totalActiveZoneMinutes} active-zone min`
-    )
+    // Fitbit reports no distance for several activity types, so an absent
+    // total is omitted rather than printed as "0 mi" (which reads as a
+    // measured zero).
+    const cardioBits = [
+      `${cardio.length} session(s)`,
+      `${ct.totalMinutes} min`,
+      ct.totalMiles > 0 ? `${ct.totalMiles} mi` : null,
+      ct.totalCalories > 0 ? `${ct.totalCalories} kcal` : null,
+      ct.totalActiveZoneMinutes > 0 ? `${ct.totalActiveZoneMinutes} active-zone min` : null,
+    ].filter(Boolean)
+    lines.push(`Cardio: ${cardioBits.join(", ")}`)
     for (const c of cardio) lines.push(formatCardioLine(c))
   } else {
     lines.push("Cardio: (none)")
