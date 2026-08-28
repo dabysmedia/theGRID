@@ -24,9 +24,10 @@ export function buildRangeTextReport(
     `source: ${base}/api/agent/text/${rollup.range.key}`,
     ``,
     `This is a complete snapshot of every metric theGRID tracks for this window:`,
-    `nutrition, steps, runs, cardio, strength workouts, sleep, vitals (resting HR,`,
-    `HRV, HR zones), all-day heart rate, bodyweight, water, habits, journal,`,
-    `recovery & DOMS, alcohol, bowel, peptides, treatments, goals and injuries.`,
+    `the active training split and work rotation, per-lift progression, nutrition,`,
+    `steps, runs, cardio, strength workouts, sleep, vitals (resting HR, HRV, HR`,
+    `zones), all-day heart rate, bodyweight, water, habits, journal, recovery &`,
+    `DOMS, alcohol, bowel, peptides, treatments, goals and injuries.`,
     ``,
   ]
 

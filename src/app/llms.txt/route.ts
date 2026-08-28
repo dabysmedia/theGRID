@@ -63,6 +63,8 @@ The same windows work as query parameters on the full export:
 
 Every snapshot is complete for its window and covers everything the app tracks:
 
+- **Training split** — the active split and its focuses, the progressive-overload model, and the work rotation with today's cycle day and phase
+- **Lift progression** — per movement: top set, estimated 1RM, all-time PR, working sets, volume, top-set load trend, and a session-by-session history. Built from completed sessions only; planned, active, and superseded sessions are excluded so abandoned workouts never count as training
 - **Nutrition** — every meal with calories and protein/carbs/fat, daily totals, saved meals, recipes with ingredients
 - **Steps** — daily counts, goal, per-day series
 - **Runs** — distance, duration, pace, indoor/outdoor, notes
@@ -95,8 +97,9 @@ Every snapshot is complete for its window and covers everything the app tracks:
 - Dates are \`YYYY-MM-DD\` calendar day keys in the profile's timezone, stated in
   each response. Steps, vitals and heart-rate rows use a 5am→5am tracking day.
 - Timestamps are ISO 8601 UTC.
-- Weights are pounds, distances miles (raw meters also present for cardio),
-  energy kilocalories.
+- Weights are pounds, distances miles (runs also carry \`distanceKm\`, the stored
+  value; cardio carries raw \`distanceMeters\`), energy kilocalories.
+- Durations are minutes unless the field name says otherwise.
 - Windows are inclusive of both endpoints.
 - Data is live; responses carry a 60-second cache.
 

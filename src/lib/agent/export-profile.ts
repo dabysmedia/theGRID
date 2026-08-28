@@ -64,6 +64,14 @@ async function loadAgentProfileData(userId: string, hrSampleWindow: HrSampleWind
       vacationResumeDate: true,
       timeZone: true,
       protocolEnabled: true,
+      trainingSplit: true,
+      trainingStyle: true,
+      workCycleEnabled: true,
+      workCycleAnchorDate: true,
+      workCycleLength: true,
+      workCyclePatternJson: true,
+      workoutGoalPerCycle: true,
+      birthDate: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -90,8 +98,6 @@ async function loadAgentProfileData(userId: string, hrSampleWindow: HrSampleWind
     recoveryDailyEntries,
     injuryRecords,
     treatmentLogs,
-    fastingProfile,
-    coachConversations,
     cardioEntries,
     vitalEntries,
     heartRateSamples,
@@ -157,14 +163,6 @@ async function loadAgentProfileData(userId: string, hrSampleWindow: HrSampleWind
       where: { userId },
       orderBy: { date: "desc" },
     }),
-    prisma.fastingProfile.findUnique({ where: { userId } }),
-    prisma.coachConversation.findMany({
-      where: { userId },
-      include: {
-        messages: { orderBy: { createdAt: "asc" } },
-      },
-      orderBy: { updatedAt: "desc" },
-    }),
     prisma.cardioEntry.findMany({
       where: { userId, deletedAt: null },
       orderBy: { date: "desc" },
@@ -217,21 +215,21 @@ async function loadAgentProfileData(userId: string, hrSampleWindow: HrSampleWind
     longGoals,
     goals,
     injuryRecords,
-    fastingProfile,
     cardioEntries,
     vitalEntries,
     heartRateSamples,
     waterEntries,
     recipes,
-    coachConversations: coachConversations.map((c) => ({
-      title: c.title,
-      updatedAt: c.updatedAt,
-      messages: c.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-        createdAt: m.createdAt,
-      })),
-    })),
+    profile: {
+      trainingSplit: user.trainingSplit,
+      trainingStyle: user.trainingStyle,
+      workCycleEnabled: user.workCycleEnabled,
+      workCycleAnchorDate: user.workCycleAnchorDate,
+      workCycleLength: user.workCycleLength,
+      workCyclePatternJson: user.workCyclePatternJson,
+      workoutGoalPerCycle: user.workoutGoalPerCycle,
+      birthDate: user.birthDate,
+    },
   }
 
   const data = {
@@ -254,13 +252,11 @@ async function loadAgentProfileData(userId: string, hrSampleWindow: HrSampleWind
     recoveryDailyEntries,
     injuryRecords,
     treatmentLogs,
-    fastingProfile,
     cardioEntries,
     vitalDailyEntries: vitalEntries,
     heartRateSamples,
     waterEntries,
     recipes,
-    coachConversations,
   }
 
   const counts: Record<string, number> = {}
@@ -287,6 +283,7 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
   const { text: contextSummary } = await buildUserContext({
     userId,
     clientTimeZone: agentTz,
+    includeFasting: false,
   })
 
   const periods = buildAgentPeriodRollups(raw, user.timeZone)
@@ -332,6 +329,7 @@ export async function exportRangeForAgent(
   const { text: contextSummary } = await buildUserContext({
     userId,
     clientTimeZone: agentTz,
+    includeFasting: false,
   })
 
   return {

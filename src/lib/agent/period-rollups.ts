@@ -8,6 +8,7 @@ import {
   storedEntryDayKey,
 } from "@/lib/agent/timezone"
 import { toAgentJson } from "@/lib/agent/serialize"
+import { kmToMiles } from "@/lib/units"
 import {
   buildWeightAnalytics,
   formatMealLine,
@@ -27,6 +28,12 @@ import {
   sessionVolumeLb,
   truncate,
 } from "@/lib/agent/verbose-format"
+import { formatTrainingSplitLines } from "@/lib/agent/training-context"
+import {
+  buildLiftProgression,
+  formatLiftProgressionLines,
+  COMPLETED_SESSION_STATUS,
+} from "@/lib/agent/lift-progression"
 
 export type AgentPeriodKey = "today" | "thisWeek" | "thisMonth"
 
@@ -180,17 +187,18 @@ export interface AgentRawData {
     resolvedAt: Date | null
     notes: string | null
   }>
-  coachConversations: Array<{
-    title: string
-    updatedAt: Date
-    messages: Array<{ role: string; content: string; createdAt: Date }>
-  }>
-  fastingProfile: {
-    fastHours: number
-    eatHours: number
-    mode: string
-    eatWindowStartMinutes: number
-  } | null
+
+  /** Training configuration the user actually trains against. */
+  profile: {
+    trainingSplit: string
+    trainingStyle: string
+    workCycleEnabled: boolean
+    workCycleAnchorDate: string | null
+    workCycleLength: number
+    workCyclePatternJson: string
+    workoutGoalPerCycle: number
+    birthDate: string | null
+  }
   cardioEntries: Array<{
     date: Date
     startTime: Date
@@ -331,6 +339,7 @@ function buildTotals(raw: AgentRawData, bounds: Bounds, todayKey: string) {
   const vitals = filterByDayKey(raw.vitalEntries, bounds)
   const hrSamples = filterByDayKey(raw.heartRateSamples, bounds)
   const water = filterByDayKey(raw.waterEntries, bounds)
+  const completedWorkouts = workouts.filter((w) => w.status === COMPLETED_SESSION_STATUS)
 
   const calsByDay: Record<string, number> = {}
   const proteinByDay: Record<string, number> = {}
@@ -401,27 +410,36 @@ function buildTotals(raw: AgentRawData, bounds: Bounds, todayKey: string) {
     },
     runs: {
       count: runs.length,
-      totalMiles: Math.round(sum(runs.map((r) => r.distance)) * 10) / 10,
-      totalMinutes: Math.round(sum(runs.map((r) => r.duration)) / 60),
-      items: runs.map((r) => ({
-        date: dayKey(r.date),
-        distanceMi: r.distance,
-        durationMin: Math.round(r.duration / 60),
-        paceMinPerMi:
-          r.distance > 0 ? Math.round((r.duration / 60 / r.distance) * 10) / 10 : null,
-        environment: r.environment,
-        notes: r.notes,
-      })),
+      // RunEntry.distance is stored in km and duration in minutes (see units.ts
+      // and the running page); the export reports miles like the rest of the app.
+      totalMiles: Math.round(kmToMiles(sum(runs.map((r) => r.distance))) * 10) / 10,
+      totalMinutes: Math.round(sum(runs.map((r) => r.duration))),
+      items: runs.map((r) => {
+        const miles = kmToMiles(r.distance)
+        return {
+          date: dayKey(r.date),
+          distanceMi: Math.round(miles * 100) / 100,
+          distanceKm: r.distance,
+          durationMin: r.duration,
+          paceMinPerMi: miles > 0 ? Math.round((r.duration / miles) * 10) / 10 : null,
+          environment: r.environment,
+          notes: r.notes,
+        }
+      }),
     },
     workouts: {
       sessionCount: workouts.length,
+      // Only completed sessions are real training — see lift-progression.ts.
+      completedSessionCount: completedWorkouts.length,
       legacyEntryCount: legacyWorkouts.length,
-      totalVolumeLb: sum(workouts.map((w) => sessionVolumeLb(w.exercises))),
+      totalVolumeLb: sum(completedWorkouts.map((w) => sessionVolumeLb(w.exercises))),
+      liftProgression: buildLiftProgression(workouts, raw.workoutSessions),
       sessions: workouts.map((w) => ({
         date: dayKey(w.date),
         name: w.name,
         status: w.status,
-        durationMin: w.duration ? Math.round(w.duration / 60) : null,
+        // Stored in minutes already (workouts page divides elapsed ms by 60000).
+        durationMin: w.duration ?? null,
         bodyWeightLb: w.bodyWeightLb,
         volumeLb: sessionVolumeLb(w.exercises),
         notes: w.notes,
@@ -433,7 +451,7 @@ function buildTotals(raw: AgentRawData, bounds: Bounds, todayKey: string) {
         date: dayKey(w.date),
         type: w.type,
         name: w.name,
-        durationMin: w.duration ? Math.round(w.duration / 60) : null,
+        durationMin: w.duration ?? null,
         notes: w.notes,
       })),
     },
@@ -618,13 +636,6 @@ function buildCatalog(raw: AgentRawData, todayKey: string): Record<string, unkno
     todayKey
   )
 
-  const coachLines: string[] = []
-  for (const c of raw.coachConversations.slice(0, 5)) {
-    const last = c.messages.filter((m) => m.role === "user" || m.role === "assistant").slice(-2)
-    coachLines.push(
-      `  - "${c.title}" (updated ${c.updatedAt.toISOString()}): ${last.map((m) => `${m.role}: ${truncate(m.content, 100)}`).join(" | ")}`
-    )
-  }
 
   return {
     workoutRoutines: raw.workoutTemplates.map((t) => ({
@@ -664,7 +675,6 @@ function buildCatalog(raw: AgentRawData, todayKey: string): Record<string, unkno
       resolvedAt: i.resolvedAt ? dayKey(i.resolvedAt) : null,
       notes: i.notes,
     })),
-    coachRecent: coachLines,
   }
 }
 
@@ -716,19 +726,26 @@ function narrativeSection(
   const sessions = filterByDayKey(raw.workoutSessions, bounds)
   const legacy = filterByDayKey(raw.workoutEntries, bounds)
   if (sessions.length > 0 || legacy.length > 0) {
-    const wo = totals.workouts as { totalVolumeLb: number }
+    const wo = totals.workouts as { totalVolumeLb: number; completedSessionCount: number }
+    const nonCompleted = sessions.length - wo.completedSessionCount
     lines.push(
-      `Workouts: ${sessions.length} session(s), ${legacy.length} legacy log(s)${wo.totalVolumeLb > 0 ? `, ${wo.totalVolumeLb}lb volume` : ""}`
+      `Workouts: ${wo.completedSessionCount} completed session(s)${nonCompleted > 0 ? ` (+${nonCompleted} planned/active/superseded, not counted as training)` : ""}${legacy.length ? `, ${legacy.length} legacy log(s)` : ""}${wo.totalVolumeLb > 0 ? `, ${wo.totalVolumeLb}lb volume` : ""}`
     )
     for (const w of sessions) lines.push(...formatWorkoutSessionBlock(w))
     for (const w of legacy) {
       lines.push(
-        `  - ${dayKey(w.date)} [legacy ${w.type}]: ${w.name}${w.duration ? ` ${Math.round(w.duration / 60)}m` : ""}${w.notes ? ` — ${truncate(w.notes, 100)}` : ""}`
+        `  - ${dayKey(w.date)} [legacy ${w.type}]: ${w.name}${w.duration ? ` ${w.duration}m` : ""}${w.notes ? ` — ${truncate(w.notes, 100)}` : ""}`
       )
     }
   } else {
     lines.push("Workouts: (none)")
   }
+
+  lines.push(
+    ...formatLiftProgressionLines(
+      buildLiftProgression(sessions, raw.workoutSessions)
+    )
+  )
 
   const cardio = filterByDayKey(raw.cardioEntries, bounds)
   if (cardio.length > 0) {
@@ -948,17 +965,10 @@ function buildContextHeader(
           return `  - [${i.kind}] ${label} (${i.severity}, ${i.status})${i.bodyRegion ? `, ${i.bodyRegion}` : ""}, onset ${dayKey(i.onsetDate)}${note}`
         })
       : ["  (none)"]),
-    raw.fastingProfile
-      ? [
-          "",
-          `Fasting: ${raw.fastingProfile.fastHours}:${raw.fastingProfile.eatHours} (${raw.fastingProfile.mode}), eat window from ${Math.floor(raw.fastingProfile.eatWindowStartMinutes / 60)}:${String(raw.fastingProfile.eatWindowStartMinutes % 60).padStart(2, "0")} local`,
-        ]
-      : [],
+    "",
+    ...formatTrainingSplitLines(raw.profile, todayKey),
     "",
     ...catalogNarrative,
-    ...(raw.coachConversations.length
-      ? ["Coach (recent):", ...(catalog.coachRecent as string[]), ""]
-      : []),
   ].flat()
 
 

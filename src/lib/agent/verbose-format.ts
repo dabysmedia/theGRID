@@ -9,6 +9,7 @@ import {
   sideEffectLabel,
 } from "@/lib/peptides"
 import { startOfISOWeek } from "date-fns"
+import { kmToMiles } from "@/lib/units"
 
 export function parseJsonArray<T>(raw: string | unknown): T[] {
   if (Array.isArray(raw)) return raw as T[]
@@ -89,7 +90,8 @@ export function formatWorkoutSessionBlock(session: {
   exercises: string
 }): string[] {
   const dk = storedEntryDayKey(session.date)
-  const mins = session.duration ? Math.round(session.duration / 60) : null
+  // WorkoutSession.duration is stored in minutes, not seconds.
+  const mins = session.duration ?? null
   const vol = sessionVolumeLb(session.exercises)
   const lines: string[] = [
     `  - ${dk}: ${session.name} [${session.status}]${mins != null ? ` ${mins}min` : ""}${vol > 0 ? `, vol ${vol}lb` : ""}${session.bodyWeightLb != null ? `, BW ${session.bodyWeightLb}lb` : ""}`,
@@ -342,9 +344,10 @@ export function formatRunLine(r: {
   notes: string | null
 }): string {
   const dk = storedEntryDayKey(r.date)
-  const paceMin =
-    r.distance > 0 ? Math.round((r.duration / 60 / r.distance) * 10) / 10 : null
-  return `  - ${dk}: ${r.distance} mi in ${Math.round(r.duration / 60)} min (${r.environment})${paceMin != null ? `, pace ${paceMin} min/mi` : ""}${r.notes ? ` — ${truncate(r.notes, 120)}` : ""}`
+  // RunEntry stores distance in km and duration in minutes; the app shows miles.
+  const miles = Math.round(kmToMiles(r.distance) * 100) / 100
+  const paceMin = miles > 0 ? Math.round((r.duration / miles) * 10) / 10 : null
+  return `  - ${dk}: ${miles} mi in ${r.duration} min (${r.environment})${paceMin != null ? `, pace ${paceMin} min/mi` : ""}${r.notes ? ` — ${truncate(r.notes, 120)}` : ""}`
 }
 
 export function formatSleepLine(s: {

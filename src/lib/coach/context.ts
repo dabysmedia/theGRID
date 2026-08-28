@@ -34,6 +34,11 @@ interface BuildContextOptions {
    * clock regardless of server UTC or missing DB timezone.
    */
   clientTimeZone?: string | null
+  /**
+   * Fasting is a legacy tracker the agent export no longer surfaces. The
+   * in-app coach still includes it, so this only opts the agent surface out.
+   */
+  includeFasting?: boolean
 }
 
 interface BuildContextResult {
@@ -569,7 +574,7 @@ export async function buildUserContext(
   }
 
   // ── Fasting ────────────────────────────────────────────────────────────────
-  if (fasting) {
+  if (fasting && opts.includeFasting !== false) {
     const baseLine = `Fasting profile: ${fasting.fastHours}:${fasting.eatHours} (${fasting.mode}).`
     if (fasting.mode === "anchored" && fasting.lastMealAtMs) {
       const lastMealMs = Number(fasting.lastMealAtMs)
