@@ -21,9 +21,22 @@ import {
   type WeightTrendInsight,
   type WeightTrendPoint,
 } from "@/lib/weight-trend"
+import type { ProjectionPoint } from "@/lib/weight-projection"
 
 const WEIGHT_COLOR = CATEGORY_THEME.weight.color
 const RAW_DOT_COLOR = "oklch(0.78 0.04 190)"
+const GOAL_COLOR = "oklch(0.82 0.16 92)"
+
+/** Forward points drawn on the chart; more than this and history is unreadable. */
+const MAX_PROJECTION_POINTS = 26
+
+type ChartRow = {
+  date: string
+  label: string
+  raw: number | null
+  average: number | null
+  projected?: number | null
+}
 
 function signedLb(n: number): string {
   return n > 0 ? `+${n}` : `${n}`
@@ -55,11 +68,27 @@ function TrendTooltip({
   if (!active || !payload?.length) return null
   const average = payload.find((p) => p.dataKey === "average")?.value as number | null | undefined
   const raw = payload.find((p) => p.dataKey === "raw")?.value as number | null | undefined
+  const projected = payload.find((p) => p.dataKey === "projected")?.value as
+    | number
+    | null
+    | undefined
   const isLow =
     raw != null && recordLow != null && Math.abs(raw - recordLow) < 0.05
   return (
     <div className="glass rounded-lg border border-border px-3 py-2 font-sans text-[10px] tabular-nums space-y-0.5 min-w-[7.5rem]">
       <div className="text-muted-foreground/70 mb-1">{label}</div>
+      {average == null && projected != null && (
+        <div className="flex items-center gap-1.5">
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ background: WEIGHT_COLOR, opacity: 0.55 }}
+          />
+          <span className="font-semibold">
+            {projected} {unit}
+            <span className="font-normal text-muted-foreground/70"> · projected</span>
+          </span>
+        </div>
+      )}
       {average != null && (
         <div className="flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full" style={{ background: WEIGHT_COLOR }} />
@@ -99,6 +128,9 @@ export function WeightTrendPanel({
   showTitle = true,
   className,
   animate = false,
+  projection = null,
+  goalTarget = null,
+  showSummary = true,
 }: {
   points: WeightTrendPoint[]
   insight: WeightTrendInsight
@@ -111,6 +143,12 @@ export function WeightTrendPanel({
   className?: string
   /** Hub expand: wipe/fade the chart in. */
   animate?: boolean
+  /** Forward trajectory drawn as a dashed continuation; null hides it. */
+  projection?: ProjectionPoint[] | null
+  /** Goal weight drawn as a horizontal marker. */
+  goalTarget?: number | null
+  /** The three tiles under the chart — off when the caller shows its own. */
+  showSummary?: boolean
 }) {
   const lastDate = points[points.length - 1]?.date ?? ""
   const seriesEnd =
@@ -120,6 +158,29 @@ export function WeightTrendPanel({
     [points, rangeDays, seriesEnd],
   )
 
+  // The projection's first point sits on the last real point, so it is folded
+  // into that row rather than appended — otherwise the dashed line starts in
+  // mid-air one step to the right of the solid one.
+  const chartData = useMemo((): ChartRow[] => {
+    const rows: ChartRow[] = visible.map((p) => ({ ...p, projected: null }))
+    if (!projection || projection.length === 0) return rows
+    const forward = projection.slice(0, MAX_PROJECTION_POINTS)
+    for (const point of forward) {
+      const existing = rows.find((row) => row.date === point.date)
+      if (existing) existing.projected = point.projected
+      else {
+        rows.push({
+          date: point.date,
+          label: point.label,
+          raw: null,
+          average: null,
+          projected: point.projected,
+        })
+      }
+    }
+    return rows
+  }, [visible, projection])
+
   const axisDomain = useMemo((): [number, number] => {
     const vals = visible.map((p) => p.average)
     if (insight.recordLow != null) {
@@ -128,18 +189,24 @@ export function WeightTrendPanel({
     }
     const raws = visible.map((p) => p.raw).filter((v): v is number => v != null)
     vals.push(...raws)
+    if (projection && projection.length > 0) {
+      vals.push(...projection.slice(0, MAX_PROJECTION_POINTS).map((p) => p.projected))
+    }
+    if (goalTarget != null && projection && projection.length > 0) vals.push(goalTarget)
     if (vals.length === 0) return [0, 1]
     const min = Math.min(...vals)
     const max = Math.max(...vals)
     const span = max - min
     const pad = span > 0 ? Math.max(span * 0.12, 0.6) : 1.5
     return [min - pad, max + pad]
-  }, [visible, insight.recordLow])
+  }, [visible, insight.recordLow, projection, goalTarget])
 
   const showLowLine =
     insight.recordLow != null &&
     insight.recordLow >= axisDomain[0] &&
     insight.recordLow <= axisDomain[1]
+  const showGoalLine =
+    goalTarget != null && goalTarget >= axisDomain[0] && goalTarget <= axisDomain[1]
 
   const hasSeries = visible.some((p) => Number.isFinite(p.average))
   if (!hasSeries) return null
@@ -203,7 +270,7 @@ export function WeightTrendPanel({
       >
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
-            data={visible}
+            data={chartData}
             margin={{ top: 10, right: 8, left: 4, bottom: 0 }}
             accessibilityLayer={false}
           >
@@ -251,6 +318,23 @@ export function WeightTrendPanel({
                 ifOverflow="extendDomain"
               />
             )}
+            {showGoalLine && goalTarget != null && (
+              <ReferenceLine
+                y={goalTarget}
+                stroke={GOAL_COLOR}
+                strokeDasharray="2 5"
+                strokeOpacity={0.7}
+                ifOverflow="extendDomain"
+                label={{
+                  value: `goal ${goalTarget}`,
+                  position: "insideBottomLeft",
+                  fill: GOAL_COLOR,
+                  fontSize: 9,
+                  fontFamily:
+                    "var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif",
+                }}
+              />
+            )}
             <Area
               type="monotone"
               dataKey="average"
@@ -260,6 +344,18 @@ export function WeightTrendPanel({
               dot={false}
               connectNulls
               name="average"
+              isAnimationActive={false}
+            />
+            <Line
+              type="linear"
+              dataKey="projected"
+              stroke={WEIGHT_COLOR}
+              strokeWidth={1.8}
+              strokeDasharray="4 4"
+              strokeOpacity={0.55}
+              dot={false}
+              connectNulls
+              name="projected"
               isAnimationActive={false}
             />
             <Line
@@ -276,7 +372,7 @@ export function WeightTrendPanel({
         </ResponsiveContainer>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className={cn("grid grid-cols-2 gap-2 sm:grid-cols-3", !showSummary && "hidden")}>
         <div className="rounded-xl border border-border/50 bg-muted/5 px-3 py-2.5">
           <p className="text-[9px] uppercase tracking-wider text-muted-foreground/75 mb-0.5">
             7-weigh-in avg
