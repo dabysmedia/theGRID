@@ -2,7 +2,14 @@ import "server-only"
 
 import { prisma } from "@/lib/prisma"
 import { buildUserContext } from "@/lib/coach/context"
-import { buildAgentPeriodRollups, type AgentPeriodRollups } from "@/lib/agent/period-rollups"
+import {
+  buildAgentPeriodRollups,
+  buildAgentRangeRollup,
+  type AgentPeriodRollups,
+  type AgentRangeRollup,
+  type AgentRawData,
+} from "@/lib/agent/period-rollups"
+import { shouldIncludeHeartRateSamples, type AgentRange } from "@/lib/agent/ranges"
 import { resolveAgentTimezone } from "@/lib/agent/timezone"
 import { toAgentJson } from "@/lib/agent/serialize"
 
@@ -27,7 +34,26 @@ export interface AgentProfileExport {
   data: Record<string, unknown>
 }
 
-export async function exportProfileForAgent(userId: string): Promise<AgentProfileExport> {
+/** Window of raw heart-rate buckets carried by the full profile export. */
+const DEFAULT_HR_SAMPLE_DAYS = 8
+
+/** Day-key bounds for the raw heart-rate query, or null to skip it entirely. */
+type HrSampleWindow = { fromDay: string; toDay: string } | null
+
+/** Day keys are stored UTC-noon (see dateStorage.ts), so bound on that instant. */
+function dayKeyToStoredDate(dayKey: string): Date {
+  return new Date(`${dayKey}T12:00:00.000Z`)
+}
+
+function lastNDaysWindow(days: number): HrSampleWindow {
+  const now = new Date()
+  const to = now.toISOString().slice(0, 10)
+  const from = new Date(now.getTime() - (days - 1) * 86_400_000).toISOString().slice(0, 10)
+  return { fromDay: from, toDay: to }
+}
+
+/** One DB round-trip for every tracked model, shared by both export shapes. */
+async function loadAgentProfileData(userId: string, hrSampleWindow: HrSampleWindow) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -66,6 +92,11 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
     treatmentLogs,
     fastingProfile,
     coachConversations,
+    cardioEntries,
+    vitalEntries,
+    heartRateSamples,
+    waterEntries,
+    recipes,
   ] = await Promise.all([
     prisma.calorieEntry.findMany({
       where: { userId },
@@ -133,49 +164,71 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
       },
       orderBy: { updatedAt: "desc" },
     }),
+    prisma.cardioEntry.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { date: "desc" },
+    }),
+    prisma.vitalDailyEntry.findMany({ where: { userId }, orderBy: { date: "desc" } }),
+    // ~288 rows/day — bounded so "all time" exports stay a sane size. Daily
+    // min/avg/max for older days still comes through VitalDailyEntry.
+    hrSampleWindow
+      ? prisma.heartRateSample.findMany({
+          where: {
+            userId,
+            date: {
+              gte: dayKeyToStoredDate(hrSampleWindow.fromDay),
+              lte: dayKeyToStoredDate(hrSampleWindow.toDay),
+            },
+          },
+          orderBy: { time: "asc" },
+        })
+      : Promise.resolve([]),
+    prisma.waterEntry.findMany({ where: { userId }, orderBy: { date: "desc" } }),
+    prisma.recipe.findMany({
+      where: { userId },
+      include: { ingredients: { orderBy: { sortOrder: "asc" } } },
+      orderBy: { useCount: "desc" },
+    }),
   ])
 
   const agentTz = resolveAgentTimezone(user.timeZone)
 
-  const { text: contextSummary } = await buildUserContext({
-    userId,
-    clientTimeZone: agentTz,
-  })
-
-  const periods = buildAgentPeriodRollups(
-    {
-      calorieEntries,
-      stepEntries,
-      runEntries,
-      workoutEntries,
-      workoutSessions,
-      workoutTemplates,
-      savedMeals,
-      sleepEntries,
-      peptideEntries,
-      peptideDailyEntries,
-      alcoholEntries,
-      bowelEntries,
-      journalEntries,
-      recoveryDailyEntries,
-      treatmentLogs,
-      habits,
-      longGoals,
-      goals,
-      injuryRecords,
-      fastingProfile,
-      coachConversations: coachConversations.map((c) => ({
-        title: c.title,
-        updatedAt: c.updatedAt,
-        messages: c.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          createdAt: m.createdAt,
-        })),
+  const raw: AgentRawData = {
+    calorieEntries,
+    stepEntries,
+    runEntries,
+    workoutEntries,
+    workoutSessions,
+    workoutTemplates,
+    savedMeals,
+    sleepEntries,
+    peptideEntries,
+    peptideDailyEntries,
+    alcoholEntries,
+    bowelEntries,
+    journalEntries,
+    recoveryDailyEntries,
+    treatmentLogs,
+    habits,
+    longGoals,
+    goals,
+    injuryRecords,
+    fastingProfile,
+    cardioEntries,
+    vitalEntries,
+    heartRateSamples,
+    waterEntries,
+    recipes,
+    coachConversations: coachConversations.map((c) => ({
+      title: c.title,
+      updatedAt: c.updatedAt,
+      messages: c.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt,
       })),
-    },
-    user.timeZone
-  )
+    })),
+  }
 
   const data = {
     calorieEntries,
@@ -198,6 +251,11 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
     injuryRecords,
     treatmentLogs,
     fastingProfile,
+    cardioEntries,
+    vitalDailyEntries: vitalEntries,
+    heartRateSamples,
+    waterEntries,
+    recipes,
     coachConversations,
   }
 
@@ -212,6 +270,22 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
     }
   }
 
+  return { user, agentTz, raw, data, counts }
+}
+
+export async function exportProfileForAgent(userId: string): Promise<AgentProfileExport> {
+  const { user, agentTz, raw, data, counts } = await loadAgentProfileData(
+    userId,
+    lastNDaysWindow(DEFAULT_HR_SAMPLE_DAYS)
+  )
+
+  const { text: contextSummary } = await buildUserContext({
+    userId,
+    clientTimeZone: agentTz,
+  })
+
+  const periods = buildAgentPeriodRollups(raw, user.timeZone)
+
   return {
     exportedAt: new Date().toISOString(),
     profile: toAgentJson(user),
@@ -219,5 +293,48 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
     periods: toAgentJson(periods),
     counts,
     data: toAgentJson(data),
+  }
+}
+
+export interface AgentRangeExport {
+  exportedAt: string
+  profile: AgentProfileExport["profile"]
+  /** Recent-state narrative (same snapshot the in-app AI coach uses). */
+  contextSummary: string
+  rollup: AgentRangeRollup
+  /** All-time record counts, so an agent can tell what exists outside this window. */
+  counts: Record<string, number>
+  /** True when raw heart-rate buckets were omitted because the window is long. */
+  heartRateSamplesOmitted: boolean
+}
+
+/**
+ * Snapshot for one arbitrary crawlable window. Raw heart-rate buckets are only
+ * loaded for short windows; everything else is complete for the range.
+ */
+export async function exportRangeForAgent(
+  userId: string,
+  range: AgentRange
+): Promise<AgentRangeExport> {
+  const includeHrSamples = shouldIncludeHeartRateSamples(range)
+  const { user, agentTz, raw, counts } = await loadAgentProfileData(
+    userId,
+    // Bound by the requested window, not "recent days", so an explicit past
+    // span still returns its own heart-rate buckets.
+    includeHrSamples ? { fromDay: range.from, toDay: range.to } : null
+  )
+
+  const { text: contextSummary } = await buildUserContext({
+    userId,
+    clientTimeZone: agentTz,
+  })
+
+  return {
+    exportedAt: new Date().toISOString(),
+    profile: toAgentJson(user),
+    contextSummary,
+    rollup: buildAgentRangeRollup(raw, user.timeZone, range),
+    counts,
+    heartRateSamplesOmitted: !includeHrSamples,
   }
 }

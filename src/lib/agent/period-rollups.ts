@@ -13,13 +13,17 @@ import {
   formatMealLine,
   formatPeptideDailyLines,
   formatPeptideInjectionLines,
+  formatCardioLine,
+  formatHeartRateDayLines,
   formatRecoveryLine,
   formatRunLine,
+  formatVitalLine,
   formatSleepLine,
   formatStepsLines,
   formatTemplateBlock,
   formatWeightLines,
   formatWorkoutSessionBlock,
+  parseJsonArray,
   sessionVolumeLb,
   truncate,
 } from "@/lib/agent/verbose-format"
@@ -187,6 +191,49 @@ export interface AgentRawData {
     mode: string
     eatWindowStartMinutes: number
   } | null
+  cardioEntries: Array<{
+    date: Date
+    startTime: Date
+    endTime: Date
+    activityType: string
+    displayName: string | null
+    minutes: number
+    calories: number | null
+    distanceMeters: number | null
+    avgHeartRate: number | null
+    activeZoneMinutes: number | null
+    source: string | null
+    notes: string | null
+  }>
+  vitalEntries: Array<{
+    date: Date
+    restingHeartRate: number | null
+    hrvMs: number | null
+    hrAvg: number | null
+    hrMin: number | null
+    hrMax: number | null
+    zonesJson: string
+    thresholdsJson: string
+    source: string | null
+  }>
+  heartRateSamples: Array<{ date: Date; time: Date; bpm: number }>
+  waterEntries: Array<{ date: Date; amountOz: number }>
+  recipes: Array<{
+    name: string
+    mealType: string
+    calories: number
+    protein: number | null
+    carbs: number | null
+    fat: number | null
+    useCount: number
+    ingredients: Array<{
+      name: string
+      calories: number
+      protein: number | null
+      portionAmount: number
+      portionUnit: string
+    }>
+  }>
 }
 
 export interface PeriodSlice {
@@ -280,6 +327,10 @@ function buildTotals(raw: AgentRawData, bounds: Bounds, todayKey: string) {
   const peptides = filterByDayKey(raw.peptideEntries, bounds)
   const peptideDaily = filterByDayKey(raw.peptideDailyEntries, bounds)
   const treatments = filterByDayKey(raw.treatmentLogs, bounds)
+  const cardio = filterByDayKey(raw.cardioEntries, bounds)
+  const vitals = filterByDayKey(raw.vitalEntries, bounds)
+  const hrSamples = filterByDayKey(raw.heartRateSamples, bounds)
+  const water = filterByDayKey(raw.waterEntries, bounds)
 
   const calsByDay: Record<string, number> = {}
   const proteinByDay: Record<string, number> = {}
@@ -443,6 +494,84 @@ function buildTotals(raw: AgentRawData, bounds: Bounds, todayKey: string) {
       treatmentKey: t.treatmentKey,
       completed: t.completed,
     })),
+    cardio: {
+      sessions: cardio.length,
+      totalMinutes: Math.round(sum(cardio.map((c) => c.minutes))),
+      totalCalories: Math.round(sum(cardio.map((c) => c.calories ?? 0))),
+      totalMiles:
+        Math.round((sum(cardio.map((c) => c.distanceMeters ?? 0)) / 1609.344) * 100) / 100,
+      totalActiveZoneMinutes: sum(cardio.map((c) => c.activeZoneMinutes ?? 0)),
+      items: cardio.map((c) => ({
+        date: dayKey(c.date),
+        activityType: c.activityType,
+        displayName: c.displayName,
+        minutes: c.minutes,
+        calories: c.calories,
+        distanceMeters: c.distanceMeters,
+        distanceMi:
+          c.distanceMeters != null ? Math.round((c.distanceMeters / 1609.344) * 100) / 100 : null,
+        avgHeartRate: c.avgHeartRate,
+        activeZoneMinutes: c.activeZoneMinutes,
+        startedAt: c.startTime.toISOString(),
+        endedAt: c.endTime.toISOString(),
+        source: c.source,
+        notes: c.notes,
+      })),
+    },
+    vitals: {
+      daysLogged: vitals.length,
+      avgRestingHeartRate: Math.round(
+        avg(vitals.map((v) => v.restingHeartRate).filter((n): n is number => n != null))
+      ),
+      avgHrvMs: Math.round(avg(vitals.map((v) => v.hrvMs).filter((n): n is number => n != null))),
+      days: vitals.map((v) => ({
+        date: dayKey(v.date),
+        restingHeartRate: v.restingHeartRate,
+        hrvMs: v.hrvMs,
+        hrAvg: v.hrAvg,
+        hrMin: v.hrMin,
+        hrMax: v.hrMax,
+        zones: parseJsonArray<{ zone: string; minutes: number }>(v.zonesJson),
+        thresholds: parseJsonArray<{ zone: string; minBpm: number; maxBpm: number }>(
+          v.thresholdsJson
+        ),
+        source: v.source,
+      })),
+    },
+    heartRate: buildHeartRateTotals(hrSamples),
+    water: {
+      totalOz: Math.round(sum(water.map((w) => w.amountOz)) * 10) / 10,
+      entries: water.length,
+      daily: water.reduce<Record<string, number>>((acc, w) => {
+        const k = dayKey(w.date)
+        acc[k] = Math.round(((acc[k] ?? 0) + w.amountOz) * 10) / 10
+        return acc
+      }, {}),
+    },
+  }
+}
+
+/** Per-day min/avg/max plus hourly means — full samples stay in `entries`. */
+function buildHeartRateTotals(samples: AgentRawData["heartRateSamples"]) {
+  const byDay = new Map<string, number[]>()
+  for (const s of samples) {
+    const k = dayKey(s.date)
+    const bucket = byDay.get(k)
+    if (bucket) bucket.push(s.bpm)
+    else byDay.set(k, [s.bpm])
+  }
+  return {
+    sampleCount: samples.length,
+    daysLogged: byDay.size,
+    days: Array.from(byDay.entries())
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([date, bpms]) => ({
+        date,
+        samples: bpms.length,
+        avgBpm: Math.round(avg(bpms)),
+        minBpm: Math.min(...bpms),
+        maxBpm: Math.max(...bpms),
+      })),
   }
 }
 
@@ -461,6 +590,10 @@ function buildEntries(raw: AgentRawData, bounds: Bounds): Record<string, unknown
     peptideEntries: filterByDayKey(raw.peptideEntries, bounds),
     peptideDailyEntries: filterByDayKey(raw.peptideDailyEntries, bounds),
     treatmentLogs: filterByDayKey(raw.treatmentLogs, bounds),
+    cardioEntries: filterByDayKey(raw.cardioEntries, bounds),
+    vitalDailyEntries: filterByDayKey(raw.vitalEntries, bounds),
+    heartRateSamples: filterByDayKey(raw.heartRateSamples, bounds),
+    waterEntries: filterByDayKey(raw.waterEntries, bounds),
     habitCompletions: filterHabitCompletions(raw.habits, bounds),
     bodyweightEntries: (raw.longGoals.find((g) => g.category === "bodyweight")?.entries ?? []).filter(
       (e) => inRange(dayKey(e.date), bounds.from, bounds.to)
@@ -501,6 +634,7 @@ function buildCatalog(raw: AgentRawData, todayKey: string): Record<string, unkno
       exercises: t.exercises,
     })),
     savedMeals: raw.savedMeals.slice(0, 40),
+    recipes: raw.recipes,
     habits: raw.habits.map((h) => ({
       name: h.name,
       frequency: h.frequency,
@@ -567,7 +701,7 @@ function narrativeSection(
 
   const stepGoal = raw.goals.find((g) => g.active && g.category === "steps")
   lines.push(
-    ...formatStepsLines(filterByDayKey(raw.stepEntries, bounds), stepGoal, title)
+    ...formatStepsLines(filterByDayKey(raw.stepEntries, bounds), stepGoal, "Steps")
   )
 
   const runs = filterByDayKey(raw.runEntries, bounds)
@@ -596,6 +730,22 @@ function narrativeSection(
     lines.push("Workouts: (none)")
   }
 
+  const cardio = filterByDayKey(raw.cardioEntries, bounds)
+  if (cardio.length > 0) {
+    const ct = totals.cardio as {
+      totalMinutes: number
+      totalMiles: number
+      totalCalories: number
+      totalActiveZoneMinutes: number
+    }
+    lines.push(
+      `Cardio: ${cardio.length} session(s), ${ct.totalMinutes} min, ${ct.totalMiles} mi, ${ct.totalCalories} kcal, ${ct.totalActiveZoneMinutes} active-zone min`
+    )
+    for (const c of cardio) lines.push(formatCardioLine(c))
+  } else {
+    lines.push("Cardio: (none)")
+  }
+
   const sleep = filterByDayKey(raw.sleepEntries, bounds)
   if (sleep.length > 0) {
     const sl = totals.sleep as { avgHours: number; avgQuality: number; nights: number; items: Array<{ date: string }> }
@@ -615,14 +765,39 @@ function narrativeSection(
     lines.push("Sleep: (none)")
   }
 
+  const vitals = filterByDayKey(raw.vitalEntries, bounds)
+  if (vitals.length > 0) {
+    const vt = totals.vitals as { avgRestingHeartRate: number; avgHrvMs: number }
+    lines.push(
+      `Vitals: ${vitals.length} day(s), avg resting HR ${vt.avgRestingHeartRate} bpm, avg HRV ${vt.avgHrvMs} ms`
+    )
+    for (const v of vitals) lines.push(formatVitalLine(v))
+  } else {
+    lines.push("Vitals: (none)")
+  }
+
+  const hrSamples = filterByDayKey(raw.heartRateSamples, bounds)
+  if (hrSamples.length > 0) {
+    lines.push(`Heart rate (all-day samples, ${hrSamples.length} buckets):`)
+    lines.push(...formatHeartRateDayLines(hrSamples))
+  }
+
+  const water = totals.water as { totalOz: number; entries: number; daily: Record<string, number> }
+  if (water.entries > 0) {
+    lines.push(`Water: ${water.totalOz} oz across ${water.entries} log(s)`)
+    for (const [d, oz] of Object.entries(water.daily).sort()) {
+      lines.push(`  - ${d}: ${oz} oz`)
+    }
+  }
+
   lines.push(
-    ...formatWeightLines(totals.bodyweight as ReturnType<typeof buildWeightAnalytics>, title)
+    ...formatWeightLines(totals.bodyweight as ReturnType<typeof buildWeightAnalytics>, "Weight")
   )
 
   const habits = totals.habits as Array<{ habitName: string; frequency: string; dates: string[] }>
   const activeHabits = raw.habits.filter((h) => !h.archived)
   if (activeHabits.length > 0) {
-    lines.push(`${title} habits (${activeHabits.length} active):`)
+    lines.push(`Habits (${activeHabits.length} active):`)
     for (const h of habits) {
       const meta = activeHabits.find((x) => x.name === h.habitName)
       lines.push(
@@ -671,15 +846,15 @@ function narrativeSection(
   }
 
   lines.push(
-    ...formatPeptideInjectionLines(filterByDayKey(raw.peptideEntries, bounds), title)
+    ...formatPeptideInjectionLines(filterByDayKey(raw.peptideEntries, bounds), "Peptides")
   )
   lines.push(
-    ...formatPeptideDailyLines(filterByDayKey(raw.peptideDailyEntries, bounds), title)
+    ...formatPeptideDailyLines(filterByDayKey(raw.peptideDailyEntries, bounds), "Peptides")
   )
 
   const treatments = filterByDayKey(raw.treatmentLogs, bounds)
   if (treatments.length > 0) {
-    lines.push(`${title} treatments:`)
+    lines.push(`Treatments:`)
     for (const t of treatments) {
       lines.push(
         `  - ${dayKey(t.date)}: ${t.treatmentKey}${t.completed ? "" : " (skipped)"}${t.notes ? ` — ${truncate(t.notes, 80)}` : ""}`
@@ -691,38 +866,16 @@ function narrativeSection(
   return lines
 }
 
-export function buildAgentPeriodRollups(
+/**
+ * Shared preamble for every narrative: timezone, active goals, active injuries,
+ * fasting config, and the all-time library (routines, meals, recipes, weight).
+ */
+function buildContextHeader(
   raw: AgentRawData,
-  timeZone: string | null | undefined,
-  now: Date = new Date()
-): AgentPeriodRollups {
-  const tz = resolveAgentTimezone(timeZone)
-  const todayKey = agentTodayKey(now, timeZone)
-  const weekFrom = localWeekStartKey(todayKey, tz)
-  const monthFrom = monthStartKey(todayKey)
-
-  const todayBounds = { from: todayKey, to: todayKey }
-  const weekBounds = { from: weekFrom, to: todayKey }
-  const monthBounds = { from: monthFrom, to: todayKey }
-
-  const catalog = buildCatalog(raw, todayKey)
-
-  const today: PeriodSlice = {
-    range: { from: todayKey, to: todayKey, label: "TODAY" },
-    totals: buildTotals(raw, todayBounds, todayKey),
-    entries: buildEntries(raw, todayBounds),
-  }
-  const thisWeek: PeriodSlice = {
-    range: { from: weekFrom, to: todayKey, label: "THIS WEEK" },
-    totals: buildTotals(raw, weekBounds, todayKey),
-    entries: buildEntries(raw, weekBounds),
-  }
-  const thisMonth: PeriodSlice = {
-    range: { from: monthFrom, to: todayKey, label: "THIS MONTH" },
-    totals: buildTotals(raw, monthBounds, todayKey),
-    entries: buildEntries(raw, monthBounds),
-  }
-
+  catalog: Record<string, unknown>,
+  tz: string,
+  todayKey: string
+): string[] {
   const activeGoals = raw.goals.filter((g) => g.active)
   const activeInjuries = raw.injuryRecords.filter((i) =>
     ["active", "improving"].includes(i.status)
@@ -742,6 +895,16 @@ export function buildAgentPeriodRollups(
           ...raw.savedMeals.slice(0, 15).map(
             (m) =>
               `  - ${m.name} [${m.mealType}]: ${m.calories} kcal${m.protein != null ? `, ${m.protein}P` : ""} (used ${m.useCount}×)`
+          ),
+        ]
+      : []),
+    "",
+    ...(raw.recipes.length
+      ? [
+          "Recipes:",
+          ...raw.recipes.map(
+            (r) =>
+              `  - ${r.name} [${r.mealType}]: ${r.calories} kcal${r.protein != null ? `, ${r.protein}P` : ""} (used ${r.useCount}×; ${r.ingredients.length} ingredient(s): ${r.ingredients.map((i) => `${i.name} ${i.portionAmount}${i.portionUnit} ${i.calories}kcal`).join("; ")})`
           ),
         ]
       : []),
@@ -798,6 +961,43 @@ export function buildAgentPeriodRollups(
       : []),
   ].flat()
 
+
+  return header
+}
+export function buildAgentPeriodRollups(
+  raw: AgentRawData,
+  timeZone: string | null | undefined,
+  now: Date = new Date()
+): AgentPeriodRollups {
+  const tz = resolveAgentTimezone(timeZone)
+  const todayKey = agentTodayKey(now, timeZone)
+  const weekFrom = localWeekStartKey(todayKey, tz)
+  const monthFrom = monthStartKey(todayKey)
+
+  const todayBounds = { from: todayKey, to: todayKey }
+  const weekBounds = { from: weekFrom, to: todayKey }
+  const monthBounds = { from: monthFrom, to: todayKey }
+
+  const catalog = buildCatalog(raw, todayKey)
+
+  const today: PeriodSlice = {
+    range: { from: todayKey, to: todayKey, label: "TODAY" },
+    totals: buildTotals(raw, todayBounds, todayKey),
+    entries: buildEntries(raw, todayBounds),
+  }
+  const thisWeek: PeriodSlice = {
+    range: { from: weekFrom, to: todayKey, label: "THIS WEEK" },
+    totals: buildTotals(raw, weekBounds, todayKey),
+    entries: buildEntries(raw, weekBounds),
+  }
+  const thisMonth: PeriodSlice = {
+    range: { from: monthFrom, to: todayKey, label: "THIS MONTH" },
+    totals: buildTotals(raw, monthBounds, todayKey),
+    entries: buildEntries(raw, monthBounds),
+  }
+
+  const header = buildContextHeader(raw, catalog, tz, todayKey)
+
   const narrative = [
     ...header,
     ...narrativeSection("TODAY", today.range, raw, today.totals as ReturnType<typeof buildTotals>),
@@ -822,6 +1022,53 @@ export function buildAgentPeriodRollups(
     today,
     thisWeek,
     thisMonth,
+    narrative,
+  }
+}
+
+export interface AgentRangeRollup {
+  timezone: string
+  todayKey: string
+  range: { key: string; label: string; from: string; to: string; days: number | null }
+  /** Routines, saved meals, recipes, habits, goals, injuries — all-time context. */
+  catalog: Record<string, unknown>
+  totals: Record<string, unknown>
+  entries: Record<string, unknown>
+  /** Plain-text block for LLMs: shared context header + this range's section. */
+  narrative: string
+}
+
+/**
+ * Single-window rollup for an arbitrary crawlable range (see `ranges.ts`).
+ * Same totals/entries/narrative shape the fixed today/week/month slices use.
+ */
+export function buildAgentRangeRollup(
+  raw: AgentRawData,
+  timeZone: string | null | undefined,
+  range: { key: string; label: string; from: string; to: string; days: number | null },
+  now: Date = new Date()
+): AgentRangeRollup {
+  const tz = resolveAgentTimezone(timeZone)
+  const todayKey = agentTodayKey(now, timeZone)
+  const bounds = { from: range.from, to: range.to }
+
+  const catalog = buildCatalog(raw, todayKey)
+  const totals = buildTotals(raw, bounds, todayKey)
+  const entries = buildEntries(raw, bounds)
+  const header = buildContextHeader(raw, catalog, tz, todayKey)
+
+  const narrative = [
+    ...header,
+    ...narrativeSection(range.label, { from: range.from, to: range.to, label: range.label }, raw, totals),
+  ].join("\n")
+
+  return {
+    timezone: tz,
+    todayKey,
+    range,
+    catalog: toAgentJson(catalog),
+    totals: toAgentJson(totals),
+    entries,
     narrative,
   }
 }

@@ -380,3 +380,93 @@ export function formatRecoveryLine(r: {
   const domsStr = doms.length ? `, DOMS: ${doms.join(", ")}` : ""
   return `  - ${dk}: pain ${r.pain}, energy ${r.energy}, mood ${r.mood}, soreness ${r.soreness}, stress ${r.stress}, mobility ${r.mobility}, sleep-feel ${r.sleepFeel}${domsStr}${r.notes ? ` — ${truncate(r.notes, 120)}` : ""}`
 }
+
+export function formatCardioLine(c: {
+  date: Date
+  startTime: Date
+  endTime: Date
+  activityType: string
+  displayName: string | null
+  minutes: number
+  calories: number | null
+  distanceMeters: number | null
+  avgHeartRate: number | null
+  activeZoneMinutes: number | null
+  source: string | null
+  notes: string | null
+}): string {
+  const dk = storedEntryDayKey(c.date)
+  const name = c.displayName?.trim() || c.activityType
+  const miles = c.distanceMeters != null ? Math.round((c.distanceMeters / 1609.344) * 100) / 100 : null
+  const bits = [
+    `${Math.round(c.minutes)} min`,
+    miles != null ? `${miles} mi` : null,
+    c.calories != null ? `${Math.round(c.calories)} kcal` : null,
+    c.avgHeartRate != null ? `avg HR ${c.avgHeartRate}` : null,
+    c.activeZoneMinutes != null ? `${c.activeZoneMinutes} AZM` : null,
+  ].filter(Boolean)
+  const src = c.source ? ` [${c.source}]` : " [manual]"
+  return `  - ${dk}: ${name}${src} — ${bits.join(", ")}${c.notes ? ` — ${truncate(c.notes, 100)}` : ""}`
+}
+
+export function formatVitalLine(v: {
+  date: Date
+  restingHeartRate: number | null
+  hrvMs: number | null
+  hrAvg: number | null
+  hrMin: number | null
+  hrMax: number | null
+  zonesJson: string
+  source: string | null
+}): string {
+  const dk = storedEntryDayKey(v.date)
+  const zones = parseJsonArray<{ zone: string; minutes: number }>(v.zonesJson)
+    .filter((z) => (z.minutes ?? 0) > 0)
+    .map((z) => `${z.zone} ${Math.round(z.minutes)}m`)
+  const bits = [
+    v.restingHeartRate != null ? `RHR ${v.restingHeartRate} bpm` : null,
+    v.hrvMs != null ? `HRV ${Math.round(v.hrvMs)} ms` : null,
+    v.hrAvg != null ? `HR avg ${v.hrAvg}` : null,
+    v.hrMin != null && v.hrMax != null ? `range ${v.hrMin}–${v.hrMax}` : null,
+    zones.length ? `zones: ${zones.join(", ")}` : null,
+  ].filter(Boolean)
+  return `  - ${dk}: ${bits.length ? bits.join(", ") : "(no vitals recorded)"}`
+}
+
+/** Compresses ~288 daily HR buckets into one hourly min/avg/max line per day. */
+export function formatHeartRateDayLines(
+  samples: Array<{ date: Date; time: Date; bpm: number }>
+): string[] {
+  if (samples.length === 0) return []
+  const byDay = new Map<string, Array<{ time: Date; bpm: number }>>()
+  for (const s of samples) {
+    const dk = storedEntryDayKey(s.date)
+    const bucket = byDay.get(dk)
+    if (bucket) bucket.push(s)
+    else byDay.set(dk, [s])
+  }
+  const lines: string[] = []
+  for (const [dk, rows] of Array.from(byDay.entries()).sort()) {
+    const bpms = rows.map((r) => r.bpm)
+    const min = Math.min(...bpms)
+    const max = Math.max(...bpms)
+    const avg = Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length)
+    const byHour = new Map<number, number[]>()
+    for (const r of rows) {
+      const h = r.time.getUTCHours()
+      const b = byHour.get(h)
+      if (b) b.push(r.bpm)
+      else byHour.set(h, [r.bpm])
+    }
+    const hourly = Array.from(byHour.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(
+        ([h, v]) =>
+          `${String(h).padStart(2, "0")}Z:${Math.round(v.reduce((x, y) => x + y, 0) / v.length)}`
+      )
+      .join(" ")
+    lines.push(`  - ${dk}: ${rows.length} samples, avg ${avg}, min ${min}, max ${max}`)
+    lines.push(`      hourly avg bpm — ${hourly}`)
+  }
+  return lines
+}

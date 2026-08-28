@@ -1,36 +1,65 @@
 import { NextRequest, NextResponse } from "next/server"
-import { AgentAccessError, authorizeAgentRequest, resolveCarlosUserId } from "@/lib/agent/access"
-import { exportProfileForAgent } from "@/lib/agent/export-profile"
-import { resolveSessionUserId } from "@/lib/user-session"
+import { AgentAccessError } from "@/lib/agent/access"
+import { agentBaseFromRequest } from "@/lib/agent/base-url"
+import { exportProfileForAgent, exportRangeForAgent } from "@/lib/agent/export-profile"
+import { AGENT_RANGE_PRESETS, resolveAgentRangeFromParams } from "@/lib/agent/ranges"
+import { buildRangeTextReport } from "@/lib/agent/text-report"
+import { agentTodayKey, resolveAgentTimezone } from "@/lib/agent/timezone"
+import { resolveAgentViewerFromRequest } from "@/lib/agent/viewer"
 import { prisma } from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
 
 /**
- * Machine-readable profile export. Browser requests use the active HttpOnly
- * session; unattended agents require AGENT_API_TOKEN and an explicit profile.
+ * Full machine-readable profile export. Serves the authenticated session's
+ * profile when one is present, otherwise the public crawl profile.
+ *
+ * Without params this returns the complete all-time dump (today/week/month
+ * rollups plus every row). With `?range=` / `?from=&to=` it returns the same
+ * single-window snapshot as /api/agent/json/<range>.
  */
 export async function GET(req: NextRequest) {
   try {
-    const sessionUserId = await resolveSessionUserId(req)
-    let profile: { id: string; name: string }
-    if (sessionUserId) {
-      const sessionUser = await prisma.user.findUnique({
-        where: { id: sessionUserId },
-        select: { id: true, name: true },
-      })
-      if (!sessionUser) throw new AgentAccessError("Session profile not found.", 404)
-      profile = sessionUser
-    } else {
-      authorizeAgentRequest(req)
-      profile = await resolveCarlosUserId()
-    }
-    const payload = await exportProfileForAgent(profile.id)
-
+    const viewer = await resolveAgentViewerFromRequest(req)
     const { searchParams } = new URL(req.url)
+    const base = agentBaseFromRequest(req)
     const format = searchParams.get("format")?.toLowerCase()
+    const wantsText = format === "text" || format === "context"
+    const hasRange =
+      searchParams.has("range") || searchParams.has("period") || searchParams.has("from")
 
-    if (format === "text" || format === "context") {
+    if (hasRange) {
+      const profile = await prisma.user.findUnique({
+        where: { id: viewer.id },
+        select: { timeZone: true },
+      })
+      const tz = resolveAgentTimezone(profile?.timeZone)
+      const todayKey = agentTodayKey(new Date(), profile?.timeZone)
+      const range = resolveAgentRangeFromParams(searchParams, todayKey, tz)
+      if (!range) {
+        return NextResponse.json(
+          { error: "Unknown range.", validRanges: AGENT_RANGE_PRESETS },
+          { status: 404 }
+        )
+      }
+      const snapshot = await exportRangeForAgent(viewer.id, range)
+      if (wantsText) {
+        return new NextResponse(buildRangeTextReport(base, viewer.name, snapshot), {
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+          },
+        })
+      }
+      return NextResponse.json(
+        { ...snapshot, _meta: { profileName: viewer.name } },
+        { headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" } }
+      )
+    }
+
+    const payload = await exportProfileForAgent(viewer.id)
+
+    if (wantsText) {
       const lines = [
         `# theGRID — profile export`,
         `exportedAt: ${payload.exportedAt}`,
@@ -43,13 +72,15 @@ export async function GET(req: NextRequest) {
         payload.periods.narrative,
         ``,
         `---`,
-        `Full structured JSON: GET /api/agent/carlos`,
+        `Full structured JSON: GET ${base}/api/agent/carlos`,
+        `Any window (plain text): GET ${base}/api/agent/text/<range>`,
+        `Ranges: ${AGENT_RANGE_PRESETS.map((p) => p.key).join(", ")}`,
         `Record counts: ${JSON.stringify(payload.counts)}`,
       ]
       return new NextResponse(lines.join("\n"), {
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
-          "Cache-Control": "no-store",
+          "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
         },
       })
     }
@@ -58,13 +89,16 @@ export async function GET(req: NextRequest) {
       {
         ...payload,
         _meta: {
-          profileName: profile.name,
-          hint: "Use ?format=text for a plain-text summary only.",
+          profileName: viewer.name,
+          hint: "Use ?format=text for plain text, or ?range=7d (also /api/agent/json/7d) for one window.",
+          ranges: AGENT_RANGE_PRESETS.map((p) => ({
+            ...p,
+            text: `${base}/api/agent/text/${p.key}`,
+            json: `${base}/api/agent/json/${p.key}`,
+          })),
         },
       },
-      {
-        headers: { "Cache-Control": "no-store" },
-      }
+      { headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" } }
     )
   } catch (e) {
     if (e instanceof AgentAccessError) {
