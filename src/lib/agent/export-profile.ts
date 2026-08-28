@@ -97,6 +97,7 @@ async function loadAgentProfileData(userId: string, hrSampleWindow: HrSampleWind
     heartRateSamples,
     waterEntries,
     recipes,
+    heartRateSampleTotal,
   ] = await Promise.all([
     prisma.calorieEntry.findMany({
       where: { userId },
@@ -189,6 +190,9 @@ async function loadAgentProfileData(userId: string, hrSampleWindow: HrSampleWind
       include: { ingredients: { orderBy: { sortOrder: "asc" } } },
       orderBy: { useCount: "desc" },
     }),
+    // Counted separately: the rows above are window-bounded, but `counts` is
+    // advertised as all-time, so a long window must not report zero samples.
+    prisma.heartRateSample.count({ where: { userId } }),
   ])
 
   const agentTz = resolveAgentTimezone(user.timeZone)
@@ -269,6 +273,7 @@ async function loadAgentProfileData(userId: string, hrSampleWindow: HrSampleWind
       counts[key] = 1
     }
   }
+  counts.heartRateSamples = heartRateSampleTotal
 
   return { user, agentTz, raw, data, counts }
 }
