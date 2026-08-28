@@ -968,19 +968,7 @@ export function WeeklyHero({
           show={expanded == null}
           className={fillViewport ? "shrink-0" : undefined}
         >
-          <div className="relative isolate grid grid-cols-2 items-stretch">
-            <div
-              className="pointer-events-none absolute inset-x-3 -inset-y-3 -z-10"
-              aria-hidden
-              style={{
-                background:
-                  "radial-gradient(ellipse 68% 116% at 23% 50%, rgba(34,211,238,0.105) 0%, rgba(8,145,178,0.04) 43%, rgba(8,145,178,0.012) 65%, transparent 86%), radial-gradient(ellipse 68% 116% at 77% 50%, rgba(250,204,21,0.10) 0%, rgba(217,119,6,0.038) 43%, rgba(217,119,6,0.012) 65%, transparent 86%)",
-                maskImage:
-                  "radial-gradient(ellipse 96% 88% at 50% 50%, black 24%, rgba(0,0,0,0.68) 54%, transparent 96%)",
-                WebkitMaskImage:
-                  "radial-gradient(ellipse 96% 88% at 50% 50%, black 24%, rgba(0,0,0,0.68) 54%, transparent 96%)",
-              }}
-            />
+          <div className="grid grid-cols-2 items-stretch gap-2 sm:gap-2.5">
             <WaterTracker />
             <CardioTracker />
           </div>

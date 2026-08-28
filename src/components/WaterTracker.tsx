@@ -218,7 +218,7 @@ export function WaterTracker() {
             ref={triggerRef}
             type="button"
             aria-label={`Open water tracker, ${formatOunces(totalOz)} of ${formatOunces(goalOz)} ounces`}
-            className="group relative flex min-h-[clamp(4.75rem,11svh,5.5rem)] w-full items-center gap-1.5 overflow-hidden rounded-2xl bg-transparent px-2 text-left touch-manipulation transition-[background-color,transform] duration-300 hover:bg-cyan-900/[0.08] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300/40 sm:gap-1.5 sm:px-3"
+            className="group relative flex min-h-[5.5rem] w-full items-center gap-1.5 overflow-hidden rounded-2xl border border-cyan-200/[0.10] bg-cyan-950/[0.09] px-2 text-left touch-manipulation transition-[border-color,background-color,transform] duration-300 hover:border-cyan-200/20 hover:bg-cyan-900/[0.13] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/40 sm:min-h-[5.75rem] sm:gap-1.5 sm:px-3"
           />
         }
       >
@@ -229,19 +229,10 @@ export function WaterTracker() {
             backgroundImage:
               "linear-gradient(to right, rgb(165 243 252 / 6%) 1px, transparent 1px), linear-gradient(to bottom, rgb(165 243 252 / 5%) 1px, transparent 1px)",
             backgroundSize: "18px 18px",
-            maskImage:
-              "linear-gradient(90deg, transparent 0%, black 18%, black 44%, transparent 100%)",
+            maskImage: "linear-gradient(90deg, black, transparent 82%)",
           }}
         />
-        <div
-          className="pointer-events-none absolute inset-y-0 left-0 w-28 bg-[radial-gradient(circle_at_40%_50%,rgba(34,211,238,0.13),transparent_68%)]"
-          style={{
-            maskImage:
-              "linear-gradient(90deg, transparent 0%, black 22%, black 68%, transparent 100%)",
-            WebkitMaskImage:
-              "linear-gradient(90deg, transparent 0%, black 22%, black 68%, transparent 100%)",
-          }}
-        />
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-28 bg-[radial-gradient(circle_at_40%_50%,rgba(34,211,238,0.13),transparent_68%)]" />
 
         <div className="relative flex h-[4rem] w-[2.35rem] shrink-0 items-center justify-center overflow-visible sm:w-[2.8rem]">
           <div className="translate-y-1 scale-[0.5] sm:scale-[0.58]">
