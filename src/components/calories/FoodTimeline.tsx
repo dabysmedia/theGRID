@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- food art comes from user uploads and food databases */
 
 import { useMemo } from "react"
-import { Loader2, Pencil, Plus, Trash2, Utensils } from "lucide-react"
+import { Loader2, Pencil, Plus, Utensils } from "lucide-react"
 import { FoodFallbackIcon } from "@/components/calories/FoodFallbackIcon"
 import type { CalorieEntry } from "@/lib/calories/log-food"
 import type { FrequentFoodSuggestion } from "@/lib/calories/frequent-foods"
@@ -141,12 +141,12 @@ export function MacroRow({
 
 function EntryRow({
   entry,
-  onEdit,
-  onDelete,
+  slot,
+  onEditBlock,
 }: {
   entry: CalorieEntry
-  onEdit: (entry: CalorieEntry) => void
-  onDelete: (entry: CalorieEntry) => void
+  slot: MealSlot
+  onEditBlock: (slot: MealSlot) => void
 }) {
   const portion = formatFoodPortion(entry.portionAmount, entry.portionUnit)
   const macros = [
@@ -157,12 +157,12 @@ function EntryRow({
   const label = entry.description?.trim() || "Logged entry"
 
   return (
-    <li className="group/row flex items-center gap-2.5 rounded-xl px-2 py-2 transition-colors hover:bg-white/[0.025]">
+    <li>
       <button
         type="button"
-        onClick={() => onEdit(entry)}
-        className="flex min-w-0 flex-1 items-center gap-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/25 rounded-lg"
-        aria-label={`Edit ${label}`}
+        onClick={() => onEditBlock(slot)}
+        className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+        aria-label={`Edit ${MEAL_SLOT_LABEL[slot].toLowerCase()} — ${label}`}
       >
         {entry.imageUrl ? (
           <img
@@ -181,35 +181,15 @@ function EntryRow({
             {[macros.join(" "), portion].filter(Boolean).join(" · ") || "No macros logged"}
           </span>
         </span>
+        <span className="shrink-0 text-right">
+          <span className="block text-[13px] font-semibold tabular-nums text-red-100/90">
+            {entry.calories.toLocaleString()}
+          </span>
+          <span className="block text-[8px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/45">
+            cal
+          </span>
+        </span>
       </button>
-
-      <span className="shrink-0 text-right">
-        <span className="block text-[13px] font-semibold tabular-nums text-red-100/90">
-          {entry.calories.toLocaleString()}
-        </span>
-        <span className="block text-[8px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/45">
-          cal
-        </span>
-      </span>
-
-      <span className="flex shrink-0 items-center gap-0.5">
-        <button
-          type="button"
-          onClick={() => onEdit(entry)}
-          className="flex size-7 items-center justify-center rounded-lg text-muted-foreground/35 transition-colors hover:bg-white/[0.05] hover:text-foreground/70"
-          aria-label={`Edit ${label}`}
-        >
-          <Pencil className="size-3" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onDelete(entry)}
-          className="flex size-7 items-center justify-center rounded-lg text-muted-foreground/35 transition-colors hover:bg-red-400/[0.08] hover:text-red-300/75"
-          aria-label={`Delete ${label}`}
-        >
-          <Trash2 className="size-3" />
-        </button>
-      </span>
     </li>
   )
 }
@@ -277,8 +257,7 @@ export function FoodTimeline({
   suggestions,
   quickAddPendingId,
   onAdd,
-  onEditEntry,
-  onDeleteEntry,
+  onEditBlock,
   onQuickAdd,
   onRetry,
   className,
@@ -290,8 +269,8 @@ export function FoodTimeline({
   suggestions: Partial<Record<MealSlot, FrequentFoodSuggestion[]>>
   quickAddPendingId: string | null
   onAdd: (slot: MealSlot) => void
-  onEditEntry: (entry: CalorieEntry) => void
-  onDeleteEntry: (entry: CalorieEntry) => void
+  /** Opens the whole block for editing — reorder, remove, or add to it. */
+  onEditBlock: (slot: MealSlot) => void
   onQuickAdd: (slot: MealSlot, food: FrequentFoodSuggestion) => void
   onRetry: () => void
   className?: string
@@ -393,19 +372,38 @@ export function FoodTimeline({
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => onAdd(slot)}
-                    className={cn(
-                      "flex size-9 shrink-0 items-center justify-center rounded-xl border transition-colors",
-                      "border-white/[0.08] text-muted-foreground/70",
-                      "hover:border-red-300/30 hover:bg-red-400/[0.07] hover:text-red-100",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/25",
-                    )}
-                    aria-label={`Add food to ${MEAL_SLOT_LABEL[slot].toLowerCase()}`}
-                  >
-                    <Plus className="size-4" />
-                  </button>
+                  {/* An empty block invites a first food; once it has one,
+                      the same corner opens the block for editing. */}
+                  {slotEntries.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => onAdd(slot)}
+                      className={cn(
+                        "flex size-11 shrink-0 items-center justify-center rounded-xl border transition-colors",
+                        "border-white/[0.08] text-muted-foreground/70",
+                        "hover:border-white/[0.2] hover:bg-white/[0.05] hover:text-foreground",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                      )}
+                      aria-label={`Add food to ${MEAL_SLOT_LABEL[slot].toLowerCase()}`}
+                    >
+                      <Plus className="size-5" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onEditBlock(slot)}
+                      className={cn(
+                        "flex h-11 shrink-0 items-center gap-1.5 rounded-xl border px-3 transition-colors",
+                        "border-white/[0.09] bg-white/[0.025] type-hud-micro text-foreground/75",
+                        "hover:border-white/[0.2] hover:bg-white/[0.05] hover:text-foreground",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                      )}
+                      aria-label={`Edit ${MEAL_SLOT_LABEL[slot].toLowerCase()}`}
+                    >
+                      <Pencil className="size-3.5" />
+                      Edit
+                    </button>
+                  )}
                 </div>
 
                 {slotEntries.length > 0 ? (
@@ -414,8 +412,8 @@ export function FoodTimeline({
                       <EntryRow
                         key={entry.id}
                         entry={entry}
-                        onEdit={onEditEntry}
-                        onDelete={onDeleteEntry}
+                        slot={slot}
+                        onEditBlock={onEditBlock}
                       />
                     ))}
                   </ul>

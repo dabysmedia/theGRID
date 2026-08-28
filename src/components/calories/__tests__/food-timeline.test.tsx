@@ -52,8 +52,7 @@ function render(props: Partial<Parameters<typeof FoodTimeline>[0]> = {}) {
       suggestions={{}}
       quickAddPendingId={null}
       onAdd={noop}
-      onEditEntry={noop}
-      onDeleteEntry={noop}
+      onEditBlock={noop}
       onQuickAdd={noop}
       onRetry={noop}
       {...props}
@@ -128,6 +127,25 @@ describe("FoodTimeline", () => {
     expect(html).toContain("1 serving")
   })
 
+  it("offers a plus on an empty block and an edit button once it has food", () => {
+    const empty = render()
+    expect(empty).toContain('aria-label="Add food to morning"')
+    expect(empty).not.toContain('aria-label="Edit morning"')
+
+    const filled = render({ entries: [entry({ id: "a" })] })
+    expect(filled).toContain('aria-label="Edit morning"')
+    expect(filled).not.toContain('aria-label="Add food to morning"')
+  })
+
+  it("makes the whole food row open its block, with no tiny per-row controls", () => {
+    const html = render({
+      entries: [entry({ id: "a", description: "Overnight Protein Oats" })],
+    })
+    expect(html).toContain("Edit morning — Overnight Protein Oats")
+    expect(html).not.toContain('aria-label="Delete Overnight Protein Oats"')
+    expect(html).not.toContain('aria-label="Edit Overnight Protein Oats"')
+  })
+
   it("offers the block's regulars while it is still empty", () => {
     const html = render({
       suggestions: { evening: [suggestion({ id: "s1", name: "Salmon Bowl" })] },
@@ -177,8 +195,7 @@ describe("CaloriesFocusPanel", () => {
         suggestions={{}}
         quickAddPendingId={null}
         onAdd={noop}
-        onEditEntry={noop}
-        onDeleteEntry={noop}
+        onEditBlock={noop}
         onQuickAdd={noop}
         onRetry={noop}
         {...over}
@@ -209,5 +226,34 @@ describe("CaloriesFocusPanel", () => {
     expect(html).not.toContain("Daily progress")
     expect(html).not.toContain("cal remaining")
     expect(html).not.toContain(">Add food<")
+  })
+})
+
+describe("CaloriesFocusPanel scrolling", () => {
+  it("scrolls only the food, leaving the heading and totals fixed above it", () => {
+    const entries = [entry({ id: "a" })]
+    const html = renderToStaticMarkup(
+      <CaloriesFocusPanel
+        consumed={345}
+        target={2000}
+        entries={entries}
+        dayTotals={totalsForEntries(entries)}
+        status="ready"
+        currentSlot="morning"
+        suggestions={{}}
+        quickAddPendingId={null}
+        onAdd={noop}
+        onEditBlock={noop}
+        onQuickAdd={noop}
+        onRetry={noop}
+      />,
+    )
+    // The scroll container wraps the timeline, not the header.
+    const headerAt = html.indexOf("Today&#x27;s timeline")
+    const scrollAt = html.indexOf("overflow-y-auto")
+    expect(headerAt).toBeGreaterThan(-1)
+    expect(scrollAt).toBeGreaterThan(headerAt)
+    expect(html).toContain("max-h-[min(58vh,34rem)]")
+    expect(html).toContain("overscroll-contain")
   })
 })

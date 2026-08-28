@@ -1,18 +1,16 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { createPortal } from "react-dom"
 import { CaloriesFocusPanel } from "@/components/calories/CaloriesFocusPanel"
 import { LogFoodDialog } from "@/components/calories/LogFoodDialog"
+import type { EditingMeal } from "@/components/calories/useLogFoodDialog"
 import { totalsForEntries } from "@/components/calories/FoodTimeline"
-import { Button } from "@/components/ui/button"
 import { useActiveDate } from "@/context/DateContext"
 import { apiFetch } from "@/lib/api-fetch"
 import type { CalorieEntry, DraftMealItem } from "@/lib/calories/log-food"
 import type { FrequentFoodSuggestion } from "@/lib/calories/frequent-foods"
 import {
   MEAL_SLOTS,
-  MEAL_SLOT_LABEL,
   currentMealSlot,
   resolveMealSlot,
   type MealSlot,
@@ -46,10 +44,9 @@ export function CaloriesExpandShell({
   const [targetSlot, setTargetSlot] = useState<MealSlot | null>(null)
   const [composerSession, setComposerSession] = useState(0)
   const [editingEntry, setEditingEntry] = useState<CalorieEntry | null>(null)
+  const [editingMeal, setEditingMeal] = useState<EditingMeal | null>(null)
   const [draftMealItems, setDraftMealItems] = useState<DraftMealItem[]>([])
   const [quickAddPendingId, setQuickAddPendingId] = useState<string | null>(null)
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; label: string } | null>(null)
-  const [pendingDeleteBusy, setPendingDeleteBusy] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
 
   // The block being lived in right now — where a bare "Add food" lands, and
@@ -98,15 +95,6 @@ export function CaloriesExpandShell({
 
   useEffect(() => loadSuggestions(), [loadSuggestions, reloadKey])
 
-  useEffect(() => {
-    if (!pendingDelete) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !pendingDeleteBusy) setPendingDelete(null)
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [pendingDelete, pendingDeleteBusy])
-
   const dayTotals = useMemo(() => totalsForEntries(entries), [entries])
 
   function bumpHub() {
@@ -115,15 +103,28 @@ export function CaloriesExpandShell({
 
   function openAddFood(slot: MealSlot) {
     setEditingEntry(null)
+    setEditingMeal(null)
     setTargetSlot(slot)
     setDraftMealItems([])
     setComposerSession((session) => session + 1)
     setLogFoodOpen(true)
   }
 
-  function startEdit(entry: CalorieEntry) {
-    setTargetSlot(null)
-    setEditingEntry(entry)
+  /**
+   * Opens a whole block for editing: every food in it becomes an editable
+   * line, so quantities, removals, and additions are all one screen.
+   */
+  function openEditBlock(slot: MealSlot) {
+    const slotEntries = entries.filter((entry) => resolveMealSlot(entry) === slot)
+    if (slotEntries.length === 0) {
+      openAddFood(slot)
+      return
+    }
+    setEditingEntry(null)
+    setTargetSlot(slot)
+    setDraftMealItems([])
+    setEditingMeal({ mealSlot: slot, entries: slotEntries })
+    setComposerSession((session) => session + 1)
     setLogFoodOpen(true)
   }
 
@@ -163,32 +164,6 @@ export function CaloriesExpandShell({
     }
   }
 
-  function requestDelete(entry: CalorieEntry) {
-    const summary =
-      entry.description?.trim() ||
-      `${entry.calories} cal · ${MEAL_SLOT_LABEL[resolveMealSlot(entry)]}`
-    const detail = summary.length > 90 ? `${summary.slice(0, 90)}…` : summary
-    setPendingDelete({ id: entry.id, label: detail })
-  }
-
-  async function executePendingDelete() {
-    if (!pendingDelete || pendingDeleteBusy) return
-    setPendingDeleteBusy(true)
-    try {
-      const id = pendingDelete.id
-      const res = await apiFetch(`/api/calories?id=${id}`, { method: "DELETE" })
-      if (res.ok) {
-        setEntries((prev) => prev.filter((e) => e.id !== id))
-        setEditingEntry((cur) => (cur?.id === id ? null : cur))
-        if (logFoodOpen) setLogFoodOpen(false)
-        bumpHub()
-      }
-      setPendingDelete(null)
-    } finally {
-      setPendingDeleteBusy(false)
-    }
-  }
-
   if (vacationBlocked) {
     return (
       <div className="space-y-3 px-0.5">
@@ -217,8 +192,7 @@ export function CaloriesExpandShell({
         suggestions={suggestions}
         quickAddPendingId={quickAddPendingId}
         onAdd={openAddFood}
-        onEditEntry={startEdit}
-        onDeleteEntry={requestDelete}
+        onEditBlock={openEditBlock}
         onQuickAdd={(slot, food) => void quickAdd(slot, food)}
         onRetry={() => setReloadKey((key) => key + 1)}
       />
@@ -230,15 +204,22 @@ export function CaloriesExpandShell({
           setLogFoodOpen(open)
           if (!open) {
             setEditingEntry(null)
+            setEditingMeal(null)
+            setDraftMealItems([])
             setTargetSlot(null)
           }
         }}
         initialMealSlot={targetSlot}
-        // Tapping + on a block always lands on food search — the draft starts
-        // empty, so the review screen would just be an extra tap past nothing.
-        startInFoodSearch={editingEntry == null && targetSlot != null}
+        // Adding lands on food search — the draft starts empty, so a review
+        // screen would just be an extra tap past nothing. Editing a block
+        // opens on that block's contents instead.
+        startInFoodSearch={
+          editingEntry == null && editingMeal == null && targetSlot != null
+        }
         editingEntry={editingEntry}
         onEditingEntryChange={setEditingEntry}
+        editingMeal={editingMeal}
+        onEditingMealChange={setEditingMeal}
         draftMealItems={draftMealItems}
         onDraftMealItemsChange={setDraftMealItems}
         onPosted={(created) => {
@@ -250,65 +231,18 @@ export function CaloriesExpandShell({
           setEditingEntry(null)
           bumpHub()
         }}
+        onMealUpdated={(updated, previousIds) => {
+          const replaced = new Set(previousIds)
+          setEntries((current) => [
+            ...updated,
+            ...current.filter((entry) => !replaced.has(entry.id)),
+          ])
+          setEditingMeal(null)
+          setLogFoodOpen(false)
+          bumpHub()
+        }}
       />
 
-      {pendingDelete
-        ? createPortal(
-            <div
-              className="fixed inset-0 z-[300] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[3px]"
-              role="alertdialog"
-              aria-modal="true"
-              aria-labelledby="hub-cal-delete-title"
-              aria-describedby="hub-cal-delete-desc"
-              onClick={() => {
-                if (!pendingDeleteBusy) setPendingDelete(null)
-              }}
-            >
-              <div
-                className="w-full max-w-sm rounded-2xl border border-border/35 bg-popover p-5 shadow-2xl ring-1 ring-foreground/5"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <h2
-                  id="hub-cal-delete-title"
-                  className="font-heading text-base font-semibold text-foreground"
-                >
-                  Delete log entry?
-                </h2>
-                <p
-                  id="hub-cal-delete-desc"
-                  className="mt-2 text-sm leading-relaxed text-muted-foreground"
-                >
-                  This will remove{" "}
-                  <span className="font-medium text-foreground">
-                    &quot;{pendingDelete.label}&quot;
-                  </span>{" "}
-                  from your history. This cannot be undone.
-                </p>
-                <div className="mt-5 flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 flex-1"
-                    disabled={pendingDeleteBusy}
-                    onClick={() => setPendingDelete(null)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    className="h-11 flex-1"
-                    disabled={pendingDeleteBusy}
-                    onClick={() => void executePendingDelete()}
-                  >
-                    {pendingDeleteBusy ? "Deleting…" : "Delete"}
-                  </Button>
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
     </>
   )
 }

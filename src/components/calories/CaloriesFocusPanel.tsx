@@ -4,6 +4,7 @@ import { FoodTimeline, MacroRow, type SlotTotals } from "@/components/calories/F
 import type { CalorieEntry } from "@/lib/calories/log-food"
 import type { FrequentFoodSuggestion } from "@/lib/calories/frequent-foods"
 import type { MealSlot } from "@/lib/calories/meal-slots"
+import { cn } from "@/lib/utils"
 
 /**
  * Everything below the calories ring.
@@ -22,8 +23,7 @@ export function CaloriesFocusPanel({
   suggestions,
   quickAddPendingId,
   onAdd,
-  onEditEntry,
-  onDeleteEntry,
+  onEditBlock,
   onQuickAdd,
   onRetry,
 }: {
@@ -36,8 +36,7 @@ export function CaloriesFocusPanel({
   suggestions: Partial<Record<MealSlot, FrequentFoodSuggestion[]>>
   quickAddPendingId: string | null
   onAdd: (slot: MealSlot) => void
-  onEditEntry: (entry: CalorieEntry) => void
-  onDeleteEntry: (entry: CalorieEntry) => void
+  onEditBlock: (slot: MealSlot) => void
   onQuickAdd: (slot: MealSlot, food: FrequentFoodSuggestion) => void
   onRetry: () => void
 }) {
@@ -66,7 +65,14 @@ export function CaloriesFocusPanel({
           </p>
         ) : null}
 
-        <div className="mt-3">
+        {/* Only the food scrolls — the heading and the day's totals above it
+            stay put, so the numbers never leave the screen. */}
+        <div
+          className={cn(
+            "mt-3 min-h-0 max-h-[min(58vh,34rem)] overflow-y-auto overscroll-contain",
+            "pr-0.5 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]",
+          )}
+        >
           <FoodTimeline
             entries={entries}
             status={status}
@@ -74,8 +80,7 @@ export function CaloriesFocusPanel({
             suggestions={suggestions}
             quickAddPendingId={quickAddPendingId}
             onAdd={onAdd}
-            onEditEntry={onEditEntry}
-            onDeleteEntry={onDeleteEntry}
+            onEditBlock={onEditBlock}
             onQuickAdd={onQuickAdd}
             onRetry={onRetry}
           />
