@@ -1,7 +1,14 @@
+import type { MealSlot } from "@/lib/calories/meal-slots"
+
 export interface CalorieEntry {
   id: string
   date: string
+  /** Legacy meal name, still written by the API for downstream readers. */
   mealType: string
+  /** Timeline block; null on rows logged before the timeline shipped. */
+  mealSlot?: string | null
+  /** Server timestamp — places legacy rows that have no `mealSlot`. */
+  createdAt?: string | null
   description: string | null
   calories: number
   protein: number | null
@@ -59,7 +66,8 @@ export interface DraftMealItem {
   id: string
   /** Existing calorie-log row when this draft is editing a posted meal. */
   entryId?: string
-  mealType: string
+  /** Timeline block this draft posts into. */
+  mealSlot: MealSlot
   description: string | null
   /** Number of servings / units (default 1). */
   quantity: number

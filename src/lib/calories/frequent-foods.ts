@@ -1,12 +1,15 @@
 import { normalizeFoodSearchText, rankByFoodSearch } from "@/lib/calories/food-search-ranking"
+import { isMealSlot, resolveMealSlot, type MealSlot } from "@/lib/calories/meal-slots"
 
-const MEAL_TYPES = new Set(["breakfast", "lunch", "dinner", "snack"])
 const RECENT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000
 const FRESH_WINDOW_MS = 3 * 24 * 60 * 60 * 1000
 
 export interface FrequentFoodEntry {
   id: string
+  /** Legacy meal name; used to place rows logged before the timeline. */
   mealType: string
+  /** Timeline block, when the row has one. */
+  mealSlot?: string | null
   description: string | null
   calories: number
   protein: number | null
@@ -33,14 +36,15 @@ export interface FrequentFoodSuggestion {
   logCount: number
   lastLoggedAt: string
   kind: MealFoodSuggestionKind
-  sameMeal: boolean
+  /** This food has been eaten in the block being suggested for. */
+  sameSlot: boolean
 }
 
 interface GroupedFood {
   latest: FrequentFoodEntry
   name: string
   count: number
-  mealCount: number
+  slotCount: number
   lastLoggedAt: number
 }
 
@@ -60,7 +64,7 @@ function recencyBoost(lastLoggedAt: number, now: number): number {
 function toSuggestion(
   group: GroupedFood,
   kind: MealFoodSuggestionKind,
-  sameMeal: boolean,
+  sameSlot: boolean,
 ): FrequentFoodSuggestion {
   const latest = group.latest
   return {
@@ -76,23 +80,26 @@ function toSuggestion(
     logCount: group.count,
     lastLoggedAt: latest.createdAt.toISOString(),
     kind,
-    sameMeal,
+    sameSlot,
   }
 }
 
 /**
- * Rank foods the user already logs so the search screen can suggest them
- * before they type. Same-meal repeats rank first; a single recent log still
- * appears so yesterday's breakfast is one tap away this morning.
+ * Rank the foods this user actually eats in a given time block, so the timeline
+ * and the search screen can offer them before anything is typed.
+ *
+ * Repeats within the same block rank first — that is what makes the morning
+ * block learn your breakfast. A single recent log still surfaces, so yesterday's
+ * dinner is one tap away tonight.
  */
-export function frequentFoodsForMeal(
+export function frequentFoodsForSlot(
   entries: readonly FrequentFoodEntry[],
-  mealType: string,
+  slot: MealSlot,
   limit = 16,
   now = Date.now(),
+  timeZone?: string | null,
 ): FrequentFoodSuggestion[] {
-  const normalizedMeal = mealType.trim().toLowerCase()
-  if (!MEAL_TYPES.has(normalizedMeal) || limit <= 0) return []
+  if (!isMealSlot(slot) || limit <= 0) return []
 
   const grouped = new Map<string, GroupedFood>()
   for (const entry of entries) {
@@ -100,13 +107,14 @@ export function frequentFoodsForMeal(
     if (!name) continue
     const key = groupingKey(name)
     if (!key) continue
+    const entrySlot = resolveMealSlot(entry, timeZone)
     const current = grouped.get(key)
-    const entryMeal = entry.mealType.trim().toLowerCase()
     if (current) {
       current.count += 1
-      if (entryMeal === normalizedMeal) {
-        current.mealCount += 1
-        if (current.latest.mealType.trim().toLowerCase() !== normalizedMeal) {
+      if (entrySlot === slot) {
+        current.slotCount += 1
+        // Prefer the newest log from this block for portion/photo details.
+        if (resolveMealSlot(current.latest, timeZone) !== slot) {
           current.latest = { ...entry, description: name }
         }
       }
@@ -116,39 +124,39 @@ export function frequentFoodsForMeal(
       latest: { ...entry, description: name },
       name,
       count: 1,
-      mealCount: entryMeal === normalizedMeal ? 1 : 0,
+      slotCount: entrySlot === slot ? 1 : 0,
       lastLoggedAt: entry.createdAt.getTime(),
     })
   }
 
   const scored = [...grouped.values()]
     .map((group) => {
-      const sameMeal = group.mealCount > 0
+      const sameSlot = group.slotCount > 0
       const fresh = now - group.lastLoggedAt <= FRESH_WINDOW_MS
       const recent = now - group.lastLoggedAt <= RECENT_WINDOW_MS
-      const frequent = group.mealCount >= 2 || group.count >= 3 || (group.mealCount >= 1 && fresh)
-      const include = frequent || (sameMeal && recent)
+      const frequent = group.slotCount >= 2 || group.count >= 3 || (group.slotCount >= 1 && fresh)
+      const include = frequent || (sameSlot && recent)
       if (!include) return null
       const kind: MealFoodSuggestionKind =
-        group.mealCount >= 2 || group.count >= 3 ? "frequent" : "recent"
+        group.slotCount >= 2 || group.count >= 3 ? "frequent" : "recent"
       const score =
-        group.mealCount * 24 +
-        (group.count - group.mealCount) * 6 +
+        group.slotCount * 24 +
+        (group.count - group.slotCount) * 6 +
         recencyBoost(group.lastLoggedAt, now) +
-        (sameMeal ? 20 : 0)
-      return { group, kind, sameMeal, score }
+        (sameSlot ? 20 : 0)
+      return { group, kind, sameSlot, score }
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry != null)
     .sort(
       (left, right) =>
-        Number(right.sameMeal) - Number(left.sameMeal) ||
+        Number(right.sameSlot) - Number(left.sameSlot) ||
         right.score - left.score ||
         right.group.lastLoggedAt - left.group.lastLoggedAt ||
         left.group.name.localeCompare(right.group.name),
     )
 
-  const sameMealScored = scored.filter((entry) => entry.sameMeal)
-  const ranked = sameMealScored.length > 0 ? sameMealScored : scored
+  const sameSlotScored = scored.filter((entry) => entry.sameSlot)
+  const ranked = sameSlotScored.length > 0 ? sameSlotScored : scored
 
   const seen = new Set<string>()
   const suggestions: FrequentFoodSuggestion[] = []
@@ -156,10 +164,86 @@ export function frequentFoodsForMeal(
     const key = groupingKey(entry.group.name)
     if (seen.has(key)) continue
     seen.add(key)
-    suggestions.push(toSuggestion(entry.group, entry.kind, entry.sameMeal))
+    suggestions.push(toSuggestion(entry.group, entry.kind, entry.sameSlot))
     if (suggestions.length >= limit) break
   }
   return suggestions
+}
+
+/** One row per distinct food name, with the newest log kept as its face. */
+function groupByFood(
+  entries: readonly FrequentFoodEntry[],
+  slot: MealSlot | null,
+  timeZone?: string | null,
+): GroupedFood[] {
+  const grouped = new Map<string, GroupedFood>()
+  for (const entry of entries) {
+    const name = entry.description?.trim().replace(/\s+/g, " ") ?? ""
+    if (!name) continue
+    const key = groupingKey(name)
+    if (!key) continue
+    const entrySlot = resolveMealSlot(entry, timeZone)
+    const current = grouped.get(key)
+    if (current) {
+      current.count += 1
+      if (slot != null && entrySlot === slot) current.slotCount += 1
+      continue
+    }
+    grouped.set(key, {
+      latest: { ...entry, description: name },
+      name,
+      count: 1,
+      slotCount: slot != null && entrySlot === slot ? 1 : 0,
+      lastLoggedAt: entry.createdAt.getTime(),
+    })
+  }
+  return [...grouped.values()]
+}
+
+/**
+ * Every distinct food this user has ever logged, most-logged first.
+ *
+ * Search runs against this rather than the short picks/recent shelves — a food
+ * eaten twice a month still has to be findable by typing three letters of it.
+ */
+export function loggedFoodLibrary(
+  entries: readonly FrequentFoodEntry[],
+  slot: MealSlot | null,
+  limit = 400,
+  timeZone?: string | null,
+): FrequentFoodSuggestion[] {
+  return groupByFood(entries, slot, timeZone)
+    .sort(
+      (left, right) =>
+        right.count - left.count ||
+        right.lastLoggedAt - left.lastLoggedAt ||
+        left.name.localeCompare(right.name),
+    )
+    .slice(0, Math.max(0, limit))
+    .map((group) =>
+      toSuggestion(group, group.count >= 3 ? "frequent" : "recent", group.slotCount > 0),
+    )
+}
+
+/**
+ * Most recently logged foods, newest first, one row per distinct food and
+ * regardless of block — the "I just ate this yesterday" list.
+ */
+export function recentFoods(
+  entries: readonly FrequentFoodEntry[],
+  slot: MealSlot | null,
+  limit = 12,
+  timeZone?: string | null,
+): FrequentFoodSuggestion[] {
+  return groupByFood(entries, slot, timeZone)
+    .sort(
+      (left, right) =>
+        right.lastLoggedAt - left.lastLoggedAt || left.name.localeCompare(right.name),
+    )
+    .slice(0, Math.max(0, limit))
+    .map((group) =>
+      toSuggestion(group, group.count >= 3 ? "frequent" : "recent", group.slotCount > 0),
+    )
 }
 
 export function matchingFrequentFoods(

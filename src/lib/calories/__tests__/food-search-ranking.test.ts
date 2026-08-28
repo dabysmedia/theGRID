@@ -117,3 +117,31 @@ describe("food search query correction", () => {
     })
   })
 })
+
+describe("partial brand queries", () => {
+  const shake = {
+    food_name: "Fairlife Core Power Shake - Vanilla",
+    brand_name: null,
+    serving_description: null,
+  }
+
+  it("matches a brand from the first few letters typed", () => {
+    for (const query of ["fa", "fai", "fair", "fairl", "fairli", "fairlife"]) {
+      expect(foodSearchRelevance(shake, query), query).not.toBeNull()
+    }
+  })
+
+  it("scores a longer prefix at least as well as a shorter one", () => {
+    const short = foodSearchRelevance(shake, "fair")!
+    const longer = foodSearchRelevance(shake, "fairlife")!
+    expect(longer).toBeGreaterThanOrEqual(short)
+  })
+
+  it("still tolerates a typo in the middle of a brand", () => {
+    expect(foodSearchRelevance(shake, "fairlfe")).not.toBeNull()
+  })
+
+  it("does not match an unrelated food", () => {
+    expect(foodSearchRelevance(shake, "broccoli")).toBeNull()
+  })
+})

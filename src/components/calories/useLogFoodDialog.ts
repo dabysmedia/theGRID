@@ -16,7 +16,6 @@ import { apiFetch } from "@/lib/api-fetch"
 import { isVacationBlockingCalendarDay } from "@/lib/vacation-mode"
 import type { PhotoEstimatePrefill } from "@/components/calories/PhotoCalorieEstimator"
 import {
-  mealTypes,
   savedMealTagList,
   draftMealItemTotals,
   type CalorieEntry,
@@ -26,6 +25,13 @@ import {
   type SavedMeal,
 } from "@/lib/calories/log-food"
 import { isFoodMeasurementUnit } from "@/lib/calories/measurements"
+import {
+  LEGACY_MEAL_TYPE_FOR_SLOT,
+  currentMealSlot,
+  legacyMealTagsForSlot,
+  resolveMealSlot,
+  type MealSlot,
+} from "@/lib/calories/meal-slots"
 import type { SavedFoodCategory } from "@/lib/calories/saved-food-category"
 import type { FrequentFoodSuggestion } from "@/lib/calories/frequent-foods"
 import type {
@@ -33,16 +39,8 @@ import type {
   PortionSelection,
 } from "@/components/calories/UnifiedFoodSearch"
 
-function mealTypeForCurrentTime() {
-  const hour = new Date().getHours()
-  if (hour < 11) return "breakfast"
-  if (hour < 16) return "lunch"
-  if (hour < 21) return "dinner"
-  return "snack"
-}
-
 export interface EditingMeal {
-  mealType: string
+  mealSlot: MealSlot
   entries: CalorieEntry[]
 }
 
@@ -60,7 +58,7 @@ export interface UseLogFoodDialogOptions {
   onPosted?: (created: CalorieEntry[]) => void
   onUpdated?: (entry: CalorieEntry) => void
   onMealUpdated?: (entries: CalorieEntry[], previousIds: string[]) => void
-  initialMealType?: string | null
+  initialMealSlot?: MealSlot | null
 }
 
 export function useLogFoodDialog({
@@ -75,7 +73,7 @@ export function useLogFoodDialog({
   onPosted,
   onUpdated,
   onMealUpdated,
-  initialMealType,
+  initialMealSlot,
 }: UseLogFoodDialogOptions) {
   const { activeDate } = useActiveDate()
   const { user } = useUser()
@@ -88,7 +86,7 @@ export function useLogFoodDialog({
   const editingEntry = controlledEditingEntry ?? null
   const editingMeal = controlledEditingMeal ?? null
 
-  const [mealType, setMealType] = useState<string | null>(initialMealType ?? null)
+  const [mealSlot, setMealSlot] = useState<MealSlot | null>(initialMealSlot ?? null)
   const [description, setDescription] = useState("")
   const [calories, setCalories] = useState("")
   const [protein, setProtein] = useState("")
@@ -200,12 +198,12 @@ export function useLogFoodDialog({
       return
     }
     if (!editingEntry && !editingMeal) {
-      setMealType(initialMealType ?? mealTypeForCurrentTime())
+      setMealSlot(initialMealSlot ?? currentMealSlot())
       setLogFoodMode("saved")
       setLogFoodPhotoOpen(false)
       setShowEstimateMacros(false)
     }
-  }, [open, editingEntry, editingMeal, initialMealType])
+  }, [open, editingEntry, editingMeal, initialMealSlot])
 
   useEffect(() => {
     if (!open) return
@@ -223,7 +221,7 @@ export function useLogFoodDialog({
 
   useEffect(() => {
     if (!editingEntry || !open) return
-    setMealType(editingEntry.mealType)
+    setMealSlot(resolveMealSlot(editingEntry))
     setDescription(editingEntry.description ?? "")
     setCalories(String(editingEntry.calories))
     setProtein(editingEntry.protein != null ? String(editingEntry.protein) : "")
@@ -239,12 +237,12 @@ export function useLogFoodDialog({
 
   useEffect(() => {
     if (!editingMeal || !open) return
-    setMealType(editingMeal.mealType)
+    setMealSlot(editingMeal.mealSlot)
     setDraftMealItems(
       editingMeal.entries.map((entry) => ({
         id: `entry-${entry.id}`,
         entryId: entry.id,
-        mealType: editingMeal.mealType,
+        mealSlot: editingMeal.mealSlot,
         description: entry.description,
         quantity: 1,
         unitCalories: entry.calories,
@@ -264,24 +262,24 @@ export function useLogFoodDialog({
   const displayedSavedMeals = useMemo(() => {
     const sorted = [...savedMeals].sort((a, b) => b.useCount - a.useCount || a.name.localeCompare(b.name))
     const query = savedMealSearch.trim().toLowerCase()
-    const mt = mealType?.toLowerCase()
+    const slotTags = mealSlot ? legacyMealTagsForSlot(mealSlot) : null
     return sorted.filter((meal) => {
-      if (mt && !savedMealTagList(meal).includes(mt)) return false
+      if (slotTags && !savedMealTagList(meal).some((tag) => slotTags.includes(tag))) return false
       if (savedMealCategory !== "all" && meal.foodCategory !== savedMealCategory) return false
       if (query && !meal.name.toLowerCase().includes(query)) return false
       return true
     })
-  }, [savedMeals, mealType, savedMealCategory, savedMealSearch])
+  }, [savedMeals, mealSlot, savedMealCategory, savedMealSearch])
 
   const savedMealCategoryCounts = useMemo(() => {
     const counts = new Map<SavedFoodCategory, number>()
-    const mt = mealType?.toLowerCase()
+    const slotTags = mealSlot ? legacyMealTagsForSlot(mealSlot) : null
     for (const meal of savedMeals) {
-      if (mt && !savedMealTagList(meal).includes(mt)) continue
+      if (slotTags && !savedMealTagList(meal).some((tag) => slotTags.includes(tag))) continue
       counts.set(meal.foodCategory, (counts.get(meal.foodCategory) ?? 0) + 1)
     }
     return counts
-  }, [savedMeals, mealType])
+  }, [savedMeals, mealSlot])
 
   const estimateCalDisplay =
     calories.trim() === ""
@@ -322,7 +320,7 @@ export function useLogFoodDialog({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       entryId: fields.entryId,
       quantity: fields.quantity ?? 1,
-      mealType: fields.mealType,
+      mealSlot: fields.mealSlot,
       description: fields.description,
       unitCalories: fields.unitCalories,
       unitProtein: fields.unitProtein,
@@ -342,7 +340,7 @@ export function useLogFoodDialog({
       : draftMealItems.find(
           (candidate) =>
             !candidate.savedMealId &&
-            candidate.mealType === item.mealType &&
+            candidate.mealSlot === item.mealSlot &&
             candidate.description === item.description &&
             candidate.unitCalories === item.unitCalories,
         )
@@ -358,7 +356,7 @@ export function useLogFoodDialog({
         item.savedMealId
           ? candidate.savedMealId === item.savedMealId
           : !candidate.savedMealId &&
-            candidate.mealType === item.mealType &&
+            candidate.mealSlot === item.mealSlot &&
             candidate.description === item.description &&
             candidate.unitCalories === item.unitCalories,
       )
@@ -383,10 +381,10 @@ export function useLogFoodDialog({
     if (cal == null || cal <= 0) return
 
     const label = food.brand_name ? `${food.food_name} (${food.brand_name})` : food.food_name
-    const effectiveMealType = mealType || mealTypes[0]
+    const effectiveSlot = mealSlot ?? currentMealSlot()
     pushDraftItem(
       createDraftItem({
-        mealType: effectiveMealType,
+        mealSlot: effectiveSlot,
         description: label,
         unitCalories: Math.round(cal),
         unitProtein: food.protein != null ? Math.round(food.protein * portion.multiplier * 10) / 10 : null,
@@ -443,10 +441,10 @@ export function useLogFoodDialog({
     const c = carbs.trim() === "" ? null : parseFloat(carbs)
     const f = fat.trim() === "" ? null : parseFloat(fat)
 
-    const effectiveMealType = mealType || mealTypes[0]
+    const effectiveSlot = mealSlot ?? currentMealSlot()
     pushDraftItem(
       createDraftItem({
-        mealType: effectiveMealType,
+        mealSlot: effectiveSlot,
         description: description.trim() || null,
         unitCalories: Math.round(cal),
         unitProtein: Number.isFinite(p) ? p : null,
@@ -483,7 +481,7 @@ export function useLogFoodDialog({
     onEditingMealChange?.(null)
     setDraftMealItems([])
     resetCurrentItemFields()
-    setMealType(null)
+    setMealSlot(null)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -492,14 +490,14 @@ export function useLogFoodDialog({
 
     if (editingEntry) {
       if (vacationBlocksEditingEntry) return
-      const effectiveMealType = mealType || editingEntry.mealType
+      const effectiveSlot = mealSlot ?? resolveMealSlot(editingEntry)
       const res = await apiFetch("/api/calories", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: editingEntry.id,
           date: editingEntry.date.split("T")[0],
-          mealType: effectiveMealType,
+          mealSlot: effectiveSlot,
           description: description || null,
           calories,
           protein: protein || null,
@@ -531,11 +529,10 @@ export function useLogFoodDialog({
     },
   ) {
     if (vacationBlocksLog) return
-    const mealTags = savedMealTagList(meal)
-    const effectiveMealType = mealType || (mealTags.length > 0 ? mealTags[0] : mealTypes[0])
+    const effectiveSlot = mealSlot ?? currentMealSlot()
     pushDraftItem(
       createDraftItem({
-        mealType: effectiveMealType,
+        mealSlot: effectiveSlot,
         description: meal.name,
         unitCalories: Math.round(meal.calories * portion.multiplier),
         unitProtein: meal.protein != null ? Math.round(meal.protein * portion.multiplier * 10) / 10 : null,
@@ -559,10 +556,10 @@ export function useLogFoodDialog({
     portion: PortionSelection,
   ) {
     if (vacationBlocksLog) return
-    const effectiveMealType = mealType || mealTypes[0]
+    const effectiveSlot = mealSlot ?? currentMealSlot()
     pushDraftItem(
       createDraftItem({
-        mealType: effectiveMealType,
+        mealSlot: effectiveSlot,
         description: food.name,
         unitCalories: Math.round(food.calories * portion.multiplier),
         unitProtein:
@@ -586,12 +583,10 @@ export function useLogFoodDialog({
 
   function handleUseRecipe(recipe: Recipe) {
     if (vacationBlocksLog) return
-    const recipeTags = savedMealTagList(recipe)
-    const effectiveMealType =
-      mealType || (recipeTags.length > 0 ? recipeTags[0] : mealTypes[0])
+    const effectiveSlot = mealSlot ?? currentMealSlot()
     const nextItems = recipe.ingredients.map((ingredient) =>
       createDraftItem({
-        mealType: effectiveMealType,
+        mealSlot: effectiveSlot,
         description: ingredient.name,
         unitCalories: ingredient.calories,
         unitProtein: ingredient.protein,
@@ -689,7 +684,7 @@ export function useLogFoodDialog({
         return {
           ...(item.entryId ? { id: item.entryId } : {}),
           date,
-          mealType: mealType || item.mealType,
+          mealSlot: mealSlot ?? item.mealSlot,
           description: item.description,
           calories: totals.calories,
           protein: totals.protein,
@@ -777,11 +772,15 @@ export function useLogFoodDialog({
     setRecipeError(null)
   }
 
-  async function handleSaveRecipe() {
-    if (recipeSaving || draftMealItems.length === 0) return
+  async function handleSaveRecipe(): Promise<boolean> {
+    if (recipeSaving) return false
+    if (draftMealItems.length === 0) {
+      setRecipeError("Add at least one ingredient.")
+      return false
+    }
     if (!recipeName.trim()) {
       setRecipeError("Give this recipe a name.")
-      return
+      return false
     }
     setRecipeSaving(true)
     setRecipeError(null)
@@ -804,7 +803,7 @@ export function useLogFoodDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: recipeName.trim(),
-          mealTags: [mealType || draftMealItems[0]?.mealType || mealTypes[0]],
+          mealTags: [LEGACY_MEAL_TYPE_FOR_SLOT[mealSlot ?? draftMealItems[0]?.mealSlot ?? currentMealSlot()]],
           imageUrl: recipeImageUrl,
           ingredients,
         }),
@@ -816,13 +815,14 @@ export function useLogFoodDialog({
             ? data.error
             : "Could not save recipe.",
         )
-        return
+        return false
       }
       setRecipes((current) => [
         data as Recipe,
         ...current.filter((recipe) => recipe.id !== data.id),
       ])
       resetRecipeCreator()
+      return true
     } finally {
       setRecipeSaving(false)
     }
@@ -878,14 +878,14 @@ export function useLogFoodDialog({
     setNewMealProtein("")
     setNewMealCarbs("")
     setNewMealFat("")
-    setNewMealTags(mealType ? [mealType] : [])
-    setNewMealCategory(mealType === "snack" ? "snack" : "meal")
+    setNewMealTags(mealSlot ? [LEGACY_MEAL_TYPE_FOR_SLOT[mealSlot]] : [])
+    setNewMealCategory("meal")
   }
 
   async function handleSaveCurrentAsFrequent() {
     if (!description.trim() || !calories.trim()) return
 
-    const tags = mealType ? [mealType] : [mealTypes[0]]
+    const tags = [LEGACY_MEAL_TYPE_FOR_SLOT[mealSlot ?? currentMealSlot()]]
     await apiFetch("/api/saved-meals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -922,7 +922,7 @@ export function useLogFoodDialog({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name,
-        mealTags: [mealType || mealTypes[0]],
+        mealTags: [LEGACY_MEAL_TYPE_FOR_SLOT[mealSlot ?? currentMealSlot()]],
         calories: roundedCalories,
         protein: food.protein,
         carbs: food.carbs,
@@ -964,8 +964,8 @@ export function useLogFoodDialog({
   return {
     editingEntry,
     editingMeal,
-    mealType,
-    setMealType,
+    mealSlot,
+    setMealSlot,
     description,
     setDescription,
     calories,

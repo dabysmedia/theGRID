@@ -3,28 +3,30 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
-  Barcode,
   Bookmark,
   BookOpen,
   Check,
   ChevronLeft,
-  Clock,
+  ChevronRight,
   Loader2,
   Plus,
   Search,
   Store,
   Utensils,
-  X,
 } from "lucide-react"
 import { apiFetch } from "@/lib/api-fetch"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { BarcodeScanner } from "@/components/calories/BarcodeScanner"
 import { FoodFallbackIcon } from "@/components/calories/FoodFallbackIcon"
 import type { Recipe, SavedMeal } from "@/lib/calories/log-food"
-import { matchingFrequentFoods, type FrequentFoodSuggestion } from "@/lib/calories/frequent-foods"
-import { rankByFoodSearch } from "@/lib/calories/food-search-ranking"
+import { type FrequentFoodSuggestion } from "@/lib/calories/frequent-foods"
+import { MEAL_SLOT_LABEL, asMealSlot } from "@/lib/calories/meal-slots"
+import {
+  foodSearchRelevance,
+  normalizeFoodSearchText,
+  rankByFoodSearch,
+} from "@/lib/calories/food-search-ranking"
 import {
   availableFoodUnits,
   foodPortionMultiplier,
@@ -44,12 +46,33 @@ type SelectedFood =
   | { kind: "saved"; food: SavedMeal }
   | { kind: "frequent"; food: FrequentFoodSuggestion }
 
-type LibraryFilter = "all" | "saved" | "recipes"
+/** Which shelf of foods the composer is showing. */
+export type FoodBrowseMode = "search" | "library"
+
+/** A match from the user's own foods, ranked across history and saved foods. */
+type LocalHit =
+  | { kind: "frequent"; food: FrequentFoodSuggestion; score: number }
+  | { kind: "saved"; food: SavedMeal; score: number }
+
+const MACRO_COLOR = {
+  protein: "#38bdf8",
+  fat: "#fbbf24",
+  carbs: "#4ade80",
+} as const
+
+function round1(value: number | null | undefined): number | null {
+  return value == null ? null : Math.round(value * 10) / 10
+}
 
 export function UnifiedFoodSearch({
   savedMeals,
   recipes,
-  mealType,
+  mealSlot,
+  query,
+  mode,
+  barcodeScan,
+  renderRestaurants,
+  onCreateRecipe,
   onAddCatalog,
   onAddSaved,
   onAddFrequent,
@@ -58,45 +81,68 @@ export function UnifiedFoodSearch({
 }: {
   savedMeals: SavedMeal[]
   recipes: Recipe[]
-  mealType: string | null
+  /** Timeline block the picked food will be logged into. */
+  mealSlot: string | null
+  /** Search text, owned by the composer so the field can live in the footer. */
+  query: string
+  mode: FoodBrowseMode
+  /**
+   * A resolved barcode scan. Carries an id so scanning the same code twice
+   * still re-runs the lookup.
+   */
+  barcodeScan: { code: string; id: number } | null
+  /** Restaurant menu browser, shown as a Library shelf. */
+  renderRestaurants?: () => React.ReactNode
+  /** Opens the recipe builder from the Library's Recipes shelf. */
+  onCreateRecipe?: () => void
   onAddCatalog: (food: CatalogFoodResult, portion: PortionSelection) => void
   onAddSaved: (food: SavedMeal, portion: PortionSelection) => void
   onAddFrequent: (food: FrequentFoodSuggestion, portion: PortionSelection) => void
   onAddRecipe: (recipe: Recipe) => void
   onSaveCatalog?: (food: CatalogFoodResult) => Promise<boolean>
 }) {
-  const [query, setQuery] = useState("")
-  const [filter, setFilter] = useState<LibraryFilter>("all")
   const [catalog, setCatalog] = useState<CatalogFoodResult[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<SelectedFood | null>(null)
   const [amount, setAmount] = useState("1")
   const [unit, setUnit] = useState<FoodMeasurementUnit>("serving")
-  const [scannerOpen, setScannerOpen] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set())
-  const [frequentFoods, setFrequentFoods] = useState<FrequentFoodSuggestion[]>([])
+  const [restaurantsOpen, setRestaurantsOpen] = useState(false)
+  const [picks, setPicks] = useState<FrequentFoodSuggestion[]>([])
+  const [recent, setRecent] = useState<FrequentFoodSuggestion[]>([])
+  const [library, setLibrary] = useState<FrequentFoodSuggestion[]>([])
   const requestRef = useRef(0)
   const frequentRequestRef = useRef(0)
 
+  const activeSlot = asMealSlot(mealSlot)
+  const slotLabel = activeSlot ? MEAL_SLOT_LABEL[activeSlot] : "This block"
+
   useEffect(() => {
-    const normalizedMeal = mealType?.trim().toLowerCase() ?? ""
+    const slot = asMealSlot(mealSlot)
     const requestId = ++frequentRequestRef.current
-    if (!normalizedMeal) {
-      setFrequentFoods([])
+    if (!slot) {
+      setPicks([])
+      setRecent([])
+      setLibrary([])
       return
     }
-    void apiFetch(`/api/calories/frequent?mealType=${encodeURIComponent(normalizedMeal)}`)
+    void apiFetch(`/api/calories/frequent?slot=${encodeURIComponent(slot)}`)
       .then(async (response) => {
         const data = await response.json()
         if (requestId !== frequentRequestRef.current) return
-        setFrequentFoods(response.ok && Array.isArray(data) ? data : [])
+        setPicks(response.ok && Array.isArray(data?.picks) ? data.picks : [])
+        setRecent(response.ok && Array.isArray(data?.recent) ? data.recent : [])
+        setLibrary(response.ok && Array.isArray(data?.library) ? data.library : [])
       })
       .catch(() => {
-        if (requestId === frequentRequestRef.current) setFrequentFoods([])
+        if (requestId !== frequentRequestRef.current) return
+        setPicks([])
+        setRecent([])
+        setLibrary([])
       })
-  }, [mealType])
+  }, [mealSlot])
 
   const searchCatalog = useCallback(async (value: string, barcode = false) => {
     const trimmed = value.trim()
@@ -129,7 +175,7 @@ export function UnifiedFoodSearch({
 
   useEffect(() => {
     const trimmed = query.trim()
-    if (trimmed.length < 2 || filter !== "all") {
+    if (trimmed.length < 2 || mode !== "search") {
       requestRef.current += 1
       setCatalog([])
       setLoading(false)
@@ -139,19 +185,25 @@ export function UnifiedFoodSearch({
     if (/^\d{4,18}$/.test(trimmed)) return
     const timeout = window.setTimeout(() => void searchCatalog(trimmed), 260)
     return () => window.clearTimeout(timeout)
-  }, [filter, query, searchCatalog])
+  }, [mode, query, searchCatalog])
+
+  useEffect(() => {
+    if (!barcodeScan) return
+    void searchCatalog(barcodeScan.code, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- id makes a repeat scan a new event
+  }, [barcodeScan?.id, searchCatalog])
 
   const localQuery = query.trim()
   const matchingSaved = useMemo(() => {
     if (!localQuery) {
-      return [...savedMeals]
-        .sort((left, right) => right.useCount - left.useCount || left.name.localeCompare(right.name))
-        .slice(0, 8)
+      return [...savedMeals].sort(
+        (left, right) => right.useCount - left.useCount || left.name.localeCompare(right.name),
+      )
     }
     return rankByFoodSearch(savedMeals, localQuery, (food) => ({ name: food.name }), 20)
   }, [localQuery, savedMeals])
   const matchingRecipes = useMemo(() => {
-    if (!localQuery) return recipes.slice(0, 8)
+    if (!localQuery) return recipes
     return rankByFoodSearch(
       recipes,
       localQuery,
@@ -162,11 +214,44 @@ export function UnifiedFoodSearch({
       20,
     )
   }, [localQuery, recipes])
-  const matchingFrequent = useMemo(() => {
-    if (filter !== "all") return []
-    if (!localQuery) return frequentFoods
-    return matchingFrequentFoods(frequentFoods, localQuery, 8)
-  }, [filter, frequentFoods, localQuery])
+  /**
+   * While searching, everything the user already eats collapses into one
+   * ranked list — their own history and saved foods together, scored against
+   * the same relevance function and shown above the food database.
+   */
+  const yourFoods = useMemo((): LocalHit[] => {
+    if (!localQuery) return []
+    const score = (name: string) =>
+      foodSearchRelevance(
+        { food_name: name, brand_name: null, serving_description: null },
+        localQuery,
+      )
+
+    const hits: LocalHit[] = []
+    for (const food of savedMeals) {
+      const relevance = score(food.name)
+      // Saved foods are deliberate picks, so they edge out a bare log.
+      if (relevance != null) hits.push({ kind: "saved", food, score: relevance + 25 })
+    }
+    for (const food of library) {
+      const relevance = score(food.name)
+      if (relevance != null) {
+        // A food logged many times is more likely the one being reached for.
+        hits.push({ kind: "frequent", food, score: relevance + Math.min(food.logCount, 10) * 4 })
+      }
+    }
+
+    const seen = new Set<string>()
+    return hits
+      .sort((left, right) => right.score - left.score)
+      .filter((hit) => {
+        const key = normalizeFoodSearchText(hit.food.name)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .slice(0, 12)
+  }, [localQuery, library, savedMeals])
 
   const selectedBasis = useMemo(() => {
     if (!selected) return null
@@ -215,19 +300,21 @@ export function UnifiedFoodSearch({
     ? availableFoodUnits(selectedBasis.unit, selectedBasis.weightG)
     : []
 
-  function chooseFood(next: SelectedFood) {
-    const basisUnit = next.kind === "catalog"
-      ? "serving"
-      : next.kind === "frequent"
-        ? isFoodMeasurementUnit(next.food.portionUnit)
-          ? next.food.portionUnit
-          : "serving"
-        : next.food.servingUnit || "serving"
-    const basisAmount = next.kind === "catalog"
-      ? 1
-      : next.kind === "frequent"
-        ? next.food.portionAmount || 1
-        : next.food.servingAmount || 1
+  function openPortion(next: SelectedFood) {
+    const basisUnit =
+      next.kind === "catalog"
+        ? "serving"
+        : next.kind === "frequent"
+          ? isFoodMeasurementUnit(next.food.portionUnit)
+            ? next.food.portionUnit
+            : "serving"
+          : next.food.servingUnit || "serving"
+    const basisAmount =
+      next.kind === "catalog"
+        ? 1
+        : next.kind === "frequent"
+          ? next.food.portionAmount || 1
+          : next.food.servingAmount || 1
     setSelected(next)
     setUnit(basisUnit)
     setAmount(String(basisAmount))
@@ -240,25 +327,27 @@ export function UnifiedFoodSearch({
     else if (selected.kind === "saved") onAddSaved(selected.food, portion)
     else onAddFrequent(selected.food, portion)
     setSelected(null)
-    setQuery("")
   }
 
-  function addSavedNow(food: SavedMeal) {
-    onAddSaved(food, {
-      amount: food.servingAmount || 1,
-      unit: food.servingUnit || "serving",
+  /** The + button logs the food at its usual portion, with no extra screen. */
+  function addNow(next: SelectedFood) {
+    if (next.kind === "catalog") {
+      onAddCatalog(next.food, { amount: 1, unit: "serving", multiplier: 1 })
+      return
+    }
+    if (next.kind === "saved") {
+      onAddSaved(next.food, {
+        amount: next.food.servingAmount || 1,
+        unit: next.food.servingUnit || "serving",
+        multiplier: 1,
+      })
+      return
+    }
+    onAddFrequent(next.food, {
+      amount: next.food.portionAmount || 1,
+      unit: isFoodMeasurementUnit(next.food.portionUnit) ? next.food.portionUnit : "serving",
       multiplier: 1,
     })
-    setQuery("")
-  }
-
-  function addFrequentNow(food: FrequentFoodSuggestion) {
-    onAddFrequent(food, {
-      amount: food.portionAmount || 1,
-      unit: isFoodMeasurementUnit(food.portionUnit) ? food.portionUnit : "serving",
-      multiplier: 1,
-    })
-    setQuery("")
   }
 
   function scaled(value: number | null) {
@@ -278,49 +367,40 @@ export function UnifiedFoodSearch({
     }
   }
 
-  function handleBarcode(value: string) {
-    setScannerOpen(false)
-    setFilter("all")
-    setQuery(value)
-    void searchCatalog(value, true)
-  }
+  /* ── portion detail ───────────────────────────────────── */
 
   if (selected && selectedBasis) {
-    const name =
-      selected.kind === "catalog" ? selected.food.food_name : selected.food.name
-    const image =
-      selected.kind === "catalog" ? selected.food.image_url : selected.food.imageUrl
+    const name = selected.kind === "catalog" ? selected.food.food_name : selected.food.name
+    const image = selected.kind === "catalog" ? selected.food.image_url : selected.food.imageUrl
     const subtitle =
       selected.kind === "catalog"
         ? selected.food.brand_name || selected.food.serving_description
         : selected.kind === "frequent"
-          ? `${selected.food.logCount} ${mealType ?? "meal"} logs`
+          ? `${selected.food.logCount} ${slotLabel.toLowerCase()} logs`
           : "Saved food"
     return (
-      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col py-1 motion-safe:animate-fade-up">
+      <div className="mx-auto flex w-full max-w-2xl flex-col motion-safe:animate-fade-up">
         <button
           type="button"
           onClick={() => setSelected(null)}
-          className="mb-4 flex h-10 w-fit items-center gap-1.5 rounded-xl px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
+          className="mb-3 flex h-9 w-fit items-center gap-1 rounded-lg px-1.5 type-hud-micro text-muted-foreground/70 transition-colors hover:bg-white/[0.04] hover:text-foreground"
         >
-          <ChevronLeft className="size-4" />
-          Back to results
+          <ChevronLeft className="size-3.5" />
+          Back
         </button>
-        <div className="flex items-center gap-4">
-          <FoodArtwork src={image} label={name} large />
+
+        <div className="flex items-center gap-3">
+          <FoodArtwork src={image} label={name} size="lg" />
           <div className="min-w-0 flex-1">
-            <p className="text-xl font-semibold leading-tight tracking-tight">{name}</p>
+            <p className="text-base font-semibold leading-snug tracking-tight">{name}</p>
             {subtitle ? (
-              <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground/65">{subtitle}</p>
             ) : null}
           </div>
         </div>
 
-        <div className="mt-6">
-          <p className="type-hud-label-soft">
-            Choose a measurement
-          </p>
-          <div className="mt-2 flex rounded-xl border border-glass-border bg-glass-highlight/20 p-1">
+        {unitOptions.length > 1 ? (
+          <div className="mt-4 flex rounded-xl border border-white/[0.08] bg-white/[0.02] p-1">
             {unitOptions.map((option) => (
               <button
                 key={option}
@@ -330,18 +410,15 @@ export function UnifiedFoodSearch({
                   if (option === "g") setAmount(String(selectedBasis.weightG ?? 100))
                   else if (option === "oz") {
                     setAmount(
-                      String(
-                        Math.round(((selectedBasis.weightG ?? 28.35) / 28.3495) * 10) /
-                          10,
-                      ),
+                      String(Math.round(((selectedBasis.weightG ?? 28.35) / 28.3495) * 10) / 10),
                     )
                   } else setAmount(String(selectedBasis.amount))
                 }}
                 className={cn(
-                  "flex-1 rounded-lg py-2.5 text-[12px] font-semibold tracking-wide transition-colors",
+                  "flex-1 rounded-lg py-2 text-[11px] font-semibold tracking-wide transition-colors",
                   unit === option
-                    ? "bg-background/90 text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "bg-background/85 text-foreground shadow-sm"
+                    : "text-muted-foreground/70 hover:text-foreground",
                 )}
               >
                 {option === "g"
@@ -354,136 +431,175 @@ export function UnifiedFoodSearch({
               </button>
             ))}
           </div>
-          <div className="mt-3 rounded-2xl border border-border/25 bg-gradient-to-b from-glass-highlight/[0.14] via-transparent to-[#ef4444]/[0.06] px-4 py-4 text-center">
-            <p className="type-hud-label-soft">Portion</p>
-            <Input
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              type="number"
-              min="0.01"
-              step={unit === "g" ? "1" : "0.1"}
-              inputMode="decimal"
-              className="h-14 border-0 bg-transparent px-0 text-center font-heading text-5xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
-              aria-label="Portion amount"
-              autoFocus
-            />
-            <p className="type-hud-unit mt-1">
-              {measurementUnitLabel(unit, numericAmount)}
-            </p>
-          </div>
+        ) : null}
+
+        <div className="mt-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-center">
+          <Input
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            type="number"
+            min="0.01"
+            step={unit === "g" ? "1" : "0.1"}
+            inputMode="decimal"
+            className="h-12 border-0 bg-transparent px-0 text-center font-heading text-4xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
+            aria-label="Portion amount"
+            autoFocus
+          />
+          <p className="type-hud-unit mt-0.5">{measurementUnitLabel(unit, numericAmount)}</p>
         </div>
 
-        <div className="mt-5 grid grid-cols-4 divide-x divide-border/25 border-y border-border/25 py-4">
-          <NutritionNumber label="Calories" value={scaled(selectedBasis.calories)} />
+        <div className="mt-3 grid grid-cols-4 divide-x divide-white/[0.07] rounded-xl border border-white/[0.07] py-3">
+          <NutritionNumber label="Cal" value={scaled(selectedBasis.calories)} />
           <NutritionNumber label="Protein" value={scaled(selectedBasis.protein)} suffix="g" />
-          <NutritionNumber label="Carbs" value={scaled(selectedBasis.carbs)} suffix="g" />
           <NutritionNumber label="Fat" value={scaled(selectedBasis.fat)} suffix="g" />
+          <NutritionNumber label="Carbs" value={scaled(selectedBasis.carbs)} suffix="g" />
         </div>
 
         <Button
           type="button"
           variant="glass"
-          className="mt-6 h-14 w-full text-sm font-semibold"
+          className="mt-4 h-12 w-full text-sm font-semibold"
           disabled={multiplier == null}
           onClick={confirmPortion}
         >
           <Plus className="size-4" />
-          Add to meal
+          Add to {slotLabel.toLowerCase()}
         </Button>
       </div>
     )
   }
 
-  const showSaved = filter === "all" || filter === "saved"
-  const showRecipes = filter === "all" || filter === "recipes"
+  /* ── browse / results ─────────────────────────────────── */
+
   const restaurantCatalog = catalog.filter((food) => food.source === "restaurant")
   const generalCatalog = catalog.filter((food) => food.source !== "restaurant")
-  const usualFoods = !localQuery && filter === "all" ? frequentFoods.slice(0, 6) : []
-  const suggestedFoods = localQuery ? matchingFrequent : matchingFrequent.slice(usualFoods.length)
-  const noResults =
+  const favorites = !localQuery ? matchingSaved.slice(0, 8) : []
+  const showLibrary = mode === "library"
+  const showSearchShelves = mode === "search"
+
+  const nothingToShow =
     !loading &&
+    yourFoods.length === 0 &&
+    picks.length === 0 &&
+    recent.length === 0 &&
+    matchingSaved.length === 0 &&
+    matchingRecipes.length === 0 &&
     catalog.length === 0 &&
-    (!showSaved || matchingSaved.length === 0) &&
-    (!showRecipes || matchingRecipes.length === 0) &&
-    suggestedFoods.length === 0 &&
-    usualFoods.length === 0
+    !(showLibrary && renderRestaurants)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="z-20 pb-3">
-        <div className="flex gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 z-10 size-4 -translate-y-1/2 text-red-200/45" />
-            <Input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Try chicken, oatmeal, banana…"
-              className="food-search-input h-12 rounded-2xl pl-11 pr-10 text-sm"
-            />
-            {query ? (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                className="absolute right-2 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground hover:bg-white/[0.05]"
-                aria-label="Clear search"
-              >
-                <X className="size-4" />
-              </button>
+      <div className="space-y-5 pb-2">
+        {showLibrary ? (
+          <>
+            {matchingSaved.length > 0 ? (
+              <ResultSection icon={Bookmark} title="Saved foods" caption={`${matchingSaved.length}`}>
+                {matchingSaved.map((food) => (
+                  <FoodRow
+                    key={food.id}
+                    name={food.name}
+                    calories={food.calories}
+                    protein={food.protein}
+                    fat={food.fat}
+                    carbs={food.carbs}
+                    portion={`${food.servingAmount} ${food.servingUnit}`}
+                    image={food.imageUrl}
+                    onOpen={() => openPortion({ kind: "saved", food })}
+                    onAdd={() => addNow({ kind: "saved", food })}
+                  />
+                ))}
+              </ResultSection>
             ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={() => setScannerOpen(true)}
-            className="food-search-scan-button flex size-12 shrink-0 items-center justify-center rounded-2xl border text-red-200/80 transition-colors hover:text-red-100"
-            aria-label="Scan barcode"
-          >
-            <Barcode className="size-5" />
-          </button>
-        </div>
-        <div className="food-search-filters mt-2 flex rounded-xl border p-1">
-          {([
-            ["all", "All foods"],
-            ["saved", "My foods"],
-            ["recipes", "Recipes"],
-          ] as const).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setFilter(id)}
-              className={cn(
-                "flex-1 rounded-lg py-2 text-[11px] font-semibold transition-colors",
-                filter === id
-                  ? "food-search-filter-active text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
 
-      <div className="space-y-6 pb-5">
-        {usualFoods.length > 0 ? (
-          <section>
-            <div className="flex items-center gap-2 border-b border-white/[0.07] pb-2">
-              <Clock className="size-3.5 text-primary/75" />
-              <h3 className="type-hud-subsection text-foreground/75">Usual portions</h3>
-              <span className="ml-auto text-[9px] text-muted-foreground/45">Tap to add</span>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pt-3 [scrollbar-width:none]">
-              {usualFoods.map((food) => (
+            {matchingRecipes.length > 0 || onCreateRecipe ? (
+              <section>
+                <div className="flex items-center gap-2 border-b border-white/[0.07] pb-2">
+                  <BookOpen className="size-3.5 text-muted-foreground/60" />
+                  <h3 className="type-hud-subsection text-foreground/75">Recipes</h3>
+                  {onCreateRecipe ? (
+                    <button
+                      type="button"
+                      onClick={onCreateRecipe}
+                      className="ml-auto inline-flex h-7 items-center gap-1 rounded-full border border-white/[0.1] bg-white/[0.025] px-2.5 type-hud-micro text-foreground/75 transition-colors hover:border-white/[0.2] hover:bg-white/[0.05] hover:text-foreground"
+                    >
+                      <Plus className="size-3" />
+                      New
+                    </button>
+                  ) : (
+                    <span className="ml-auto text-[9px] text-muted-foreground/45">
+                      Adds every ingredient
+                    </span>
+                  )}
+                </div>
+                {matchingRecipes.length === 0 ? (
+                  <p className="px-1 py-4 text-[11px] leading-relaxed text-muted-foreground/55">
+                    Build a recipe once — the ingredients, the photo, the totals — then log the
+                    whole thing in a tap.
+                  </p>
+                ) : null}
+                {matchingRecipes.map((recipe) => (
+                  <FoodRow
+                    key={recipe.id}
+                    name={recipe.name}
+                    calories={recipe.calories}
+                    protein={recipe.protein}
+                    fat={recipe.fat}
+                    carbs={recipe.carbs}
+                    portion={`${recipe.ingredients.length} ingredient${recipe.ingredients.length === 1 ? "" : "s"}`}
+                    image={recipe.imageUrl}
+                    recipe
+                    onOpen={() => onAddRecipe(recipe)}
+                    onAdd={() => onAddRecipe(recipe)}
+                  />
+                ))}
+              </section>
+            ) : null}
+
+            {renderRestaurants ? (
+              <section>
                 <button
-                  key={`usual-${food.id}`}
                   type="button"
-                  onClick={() => addFrequentNow(food)}
-                  className="max-w-[11rem] shrink-0 rounded-2xl border border-white/[0.08] bg-glass-highlight/[0.08] px-3 py-2.5 text-left transition-colors hover:bg-glass-highlight/[0.14]"
+                  onClick={() => setRestaurantsOpen((open) => !open)}
+                  aria-expanded={restaurantsOpen}
+                  className="flex w-full items-center gap-2 border-b border-white/[0.07] pb-2 text-left"
                 >
-                  <span className="block truncate text-[12px] font-semibold">{food.name}</span>
-                  <span className="mt-1 block text-[10px] tabular-nums text-muted-foreground/70">
+                  <Store className="size-3.5 text-muted-foreground/60" />
+                  <h3 className="type-hud-subsection text-foreground/75">Restaurant menus</h3>
+                  <ChevronRight
+                    className={cn(
+                      "ml-auto size-3.5 text-muted-foreground/50 transition-transform",
+                      restaurantsOpen && "rotate-90",
+                    )}
+                  />
+                </button>
+                {restaurantsOpen ? <div className="pt-3">{renderRestaurants()}</div> : null}
+              </section>
+            ) : null}
+          </>
+        ) : null}
+
+        {showSearchShelves && !localQuery && favorites.length > 0 ? (
+          <section>
+            <SectionHeading icon={Bookmark} title="Favorites" caption="Tap to add" />
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pt-2.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {favorites.map((food) => (
+                <button
+                  key={`fav-${food.id}`}
+                  type="button"
+                  onClick={() => addNow({ kind: "saved", food })}
+                  className="group/fav flex w-[5.5rem] shrink-0 flex-col items-center gap-1.5 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-2 py-2.5 transition-colors hover:border-white/[0.18] hover:bg-white/[0.05]"
+                >
+                  <span className="relative">
+                    <FoodArtwork src={food.imageUrl} label={food.name} size="sm" />
+                    <span className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full border border-white/10 bg-[#12161d] text-muted-foreground/70 transition-colors group-hover/fav:text-foreground">
+                      <Plus className="size-3" />
+                    </span>
+                  </span>
+                  <span className="line-clamp-2 text-center text-[10px] font-medium leading-tight text-foreground/80">
+                    {food.name}
+                  </span>
+                  <span className="text-[9px] tabular-nums text-muted-foreground/50">
                     {Math.round(food.calories)} cal
-                    {food.logCount > 1 ? ` · ${food.logCount}x` : ""}
                   </span>
                 </button>
               ))}
@@ -491,77 +607,108 @@ export function UnifiedFoodSearch({
           </section>
         ) : null}
 
-        {filter === "all" && suggestedFoods.length > 0 ? (
+        {/* Searching: one ranked list of foods the user already eats. */}
+        {showSearchShelves && localQuery && yourFoods.length > 0 ? (
           <ResultSection
             icon={Utensils}
-            title={
-              localQuery
-                ? "From your log"
-                : `Suggested for ${mealType ? mealType[0].toUpperCase() + mealType.slice(1) : "this meal"}`
-            }
-            caption={localQuery ? "Matches from history" : "Learned from your history"}
+            title="Your foods"
+            caption={`${yourFoods.length} from your history`}
           >
-            {suggestedFoods.map((food) => (
-              <FoodResultRow
-                key={food.id}
+            {yourFoods.map((hit) =>
+              hit.kind === "saved" ? (
+                <FoodRow
+                  key={`yours-saved-${hit.food.id}`}
+                  name={hit.food.name}
+                  calories={hit.food.calories}
+                  protein={hit.food.protein}
+                  fat={hit.food.fat}
+                  carbs={hit.food.carbs}
+                  portion={`${hit.food.servingAmount} ${hit.food.servingUnit}`}
+                  image={hit.food.imageUrl}
+                  onOpen={() => openPortion({ kind: "saved", food: hit.food })}
+                  onAdd={() => addNow({ kind: "saved", food: hit.food })}
+                />
+              ) : (
+                <FoodRow
+                  key={`yours-log-${hit.food.id}`}
+                  name={hit.food.name}
+                  calories={hit.food.calories}
+                  protein={hit.food.protein}
+                  fat={hit.food.fat}
+                  carbs={hit.food.carbs}
+                  portion={portionLabel(hit.food)}
+                  image={hit.food.imageUrl}
+                  onOpen={() => openPortion({ kind: "frequent", food: hit.food })}
+                  onAdd={() => addNow({ kind: "frequent", food: hit.food })}
+                />
+              ),
+            )}
+          </ResultSection>
+        ) : null}
+
+        {/* Idle: the block's regulars, then what was logged most recently. */}
+        {showSearchShelves && !localQuery && picks.length > 0 ? (
+          <ResultSection
+            icon={Utensils}
+            title={`${slotLabel} picks`}
+            caption="Learned from your history"
+          >
+            {picks.map((food) => (
+              <FoodRow
+                key={`pick-${food.id}`}
                 name={food.name}
-                subtitle={suggestionSubtitle(food, mealType)}
                 calories={food.calories}
                 protein={food.protein}
+                fat={food.fat}
+                carbs={food.carbs}
+                portion={portionLabel(food)}
                 image={food.imageUrl}
-                onClick={() => addFrequentNow(food)}
+                onOpen={() => openPortion({ kind: "frequent", food })}
+                onAdd={() => addNow({ kind: "frequent", food })}
               />
             ))}
           </ResultSection>
         ) : null}
 
-        {showRecipes && matchingRecipes.length > 0 ? (
-          <ResultSection
-            icon={BookOpen}
-            title={localQuery ? "Matching recipes" : "Your recipes"}
-            caption="Adds every ingredient"
-          >
-            {matchingRecipes.map((recipe) => (
-              <RecipeResult key={recipe.id} recipe={recipe} onAdd={() => onAddRecipe(recipe)} />
-            ))}
+        {showSearchShelves && !localQuery && recent.length > 0 ? (
+          <ResultSection icon={Utensils} title="Recent" caption="Most recently logged">
+            {recent
+              .filter((food) => !picks.some((pick) => pick.id === food.id))
+              .map((food) => (
+                <FoodRow
+                  key={`recent-${food.id}`}
+                  name={food.name}
+                  calories={food.calories}
+                  protein={food.protein}
+                  fat={food.fat}
+                  carbs={food.carbs}
+                  portion={portionLabel(food)}
+                  image={food.imageUrl}
+                  onOpen={() => openPortion({ kind: "frequent", food })}
+                  onAdd={() => addNow({ kind: "frequent", food })}
+                />
+              ))}
           </ResultSection>
         ) : null}
 
-        {showSaved && matchingSaved.length > 0 ? (
-          <ResultSection
-            icon={Bookmark}
-            title="Saved foods"
-            caption="Your private library"
-          >
-            {matchingSaved.map((food) => (
-              <FoodResultRow
-                key={food.id}
-                name={food.name}
-                subtitle={localQuery ? "Saved food" : "Adds your usual serving"}
-                calories={food.calories}
-                protein={food.protein}
-                image={food.imageUrl}
-                onClick={() => addSavedNow(food)}
-              />
-            ))}
-          </ResultSection>
-        ) : null}
-
-        {filter === "all" && restaurantCatalog.length > 0 ? (
+        {showSearchShelves && restaurantCatalog.length > 0 ? (
           <ResultSection
             icon={Store}
             title="Restaurant menus"
             caption={`${restaurantCatalog.length} matches`}
           >
             {restaurantCatalog.map((food) => (
-              <FoodResultRow
+              <FoodRow
                 key={food.food_id}
                 name={food.food_name}
-                subtitle={[food.brand_name, food.serving_description].filter(Boolean).join(" · ")}
                 calories={food.calories}
                 protein={food.protein}
+                fat={food.fat}
+                carbs={food.carbs}
+                portion={[food.brand_name, food.serving_description].filter(Boolean).join(" · ")}
                 image={food.image_url}
-                onClick={() => chooseFood({ kind: "catalog", food })}
+                onOpen={() => openPortion({ kind: "catalog", food })}
+                onAdd={() => addNow({ kind: "catalog", food })}
                 accessory={
                   onSaveCatalog ? (
                     <SaveCatalogButton
@@ -577,7 +724,7 @@ export function UnifiedFoodSearch({
           </ResultSection>
         ) : null}
 
-        {filter === "all" && (generalCatalog.length > 0 || loading || error) ? (
+        {showSearchShelves && (generalCatalog.length > 0 || loading || error) ? (
           <ResultSection
             icon={Search}
             title="Food database"
@@ -585,8 +732,11 @@ export function UnifiedFoodSearch({
           >
             {loading && catalog.length === 0
               ? [0, 1, 2].map((item) => (
-                  <div key={item} className="flex animate-pulse items-center gap-3 border-b border-white/[0.06] py-3">
-                    <div className="size-14 rounded-2xl bg-white/[0.05]" />
+                  <div
+                    key={item}
+                    className="flex animate-pulse items-center gap-3 border-b border-white/[0.05] py-2.5"
+                  >
+                    <div className="size-11 rounded-xl bg-white/[0.05]" />
                     <div className="flex-1 space-y-2">
                       <div className="h-3 w-2/3 rounded bg-white/[0.07]" />
                       <div className="h-2 w-1/3 rounded bg-white/[0.04]" />
@@ -594,16 +744,19 @@ export function UnifiedFoodSearch({
                   </div>
                 ))
               : null}
-            {error ? <p className="py-4 text-xs text-destructive">{error}</p> : null}
+            {error ? <p className="py-3 text-[11px] text-destructive">{error}</p> : null}
             {generalCatalog.map((food) => (
-              <FoodResultRow
+              <FoodRow
                 key={food.food_id}
                 name={food.food_name}
-                subtitle={[food.brand_name, food.serving_description].filter(Boolean).join(" · ")}
                 calories={food.calories}
                 protein={food.protein}
+                fat={food.fat}
+                carbs={food.carbs}
+                portion={[food.brand_name, food.serving_description].filter(Boolean).join(" · ")}
                 image={food.image_url}
-                onClick={() => chooseFood({ kind: "catalog", food })}
+                onOpen={() => openPortion({ kind: "catalog", food })}
+                onAdd={() => addNow({ kind: "catalog", food })}
                 accessory={
                   onSaveCatalog ? (
                     <SaveCatalogButton
@@ -619,37 +772,145 @@ export function UnifiedFoodSearch({
           </ResultSection>
         ) : null}
 
-        {noResults ? (
+        {nothingToShow ? (
           <div className="flex flex-col items-center justify-center px-5 py-12 text-center">
-            <span className="flex size-14 items-center justify-center rounded-2xl bg-white/[0.035] text-muted-foreground/40">
-              <Utensils className="size-6" />
+            <span className="flex size-12 items-center justify-center rounded-2xl bg-white/[0.035] text-muted-foreground/40">
+              <Utensils className="size-5" />
             </span>
-            <p className="mt-4 text-sm font-semibold">
-              {localQuery ? "No foods found" : "Your food library is empty"}
-            </p>
-            <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
+            <p className="mt-3 text-sm font-semibold">
               {localQuery
-                ? "Try a shorter name, a brand, or scan the barcode. Spelling does not need to be perfect."
-                : "Search the food database to start building your meal."}
+                ? "No foods found"
+                : showLibrary
+                  ? "Nothing saved yet"
+                  : "Nothing logged yet"}
+            </p>
+            <p className="mt-1 max-w-xs text-[11px] leading-relaxed text-muted-foreground/65">
+              {localQuery
+                ? "Try a shorter name or a brand, or scan the barcode. Spelling does not need to be perfect."
+                : showLibrary
+                  ? "Save a food from search and it will show up here."
+                  : "Search below to add your first food — what you log starts showing up here."}
             </p>
           </div>
         ) : null}
       </div>
-      {scannerOpen ? (
-        <BarcodeScanner onClose={() => setScannerOpen(false)} onDetected={handleBarcode} />
-      ) : null}
     </div>
   )
 }
 
-function suggestionSubtitle(food: FrequentFoodSuggestion, mealType: string | null) {
-  if (food.kind === "recent") {
-    return food.sameMeal ? "Logged recently for this meal" : "Logged recently"
-  }
-  if (food.sameMeal) {
-    return `${food.logCount} ${mealType ?? "meal"} logs · tap to add`
-  }
-  return `${food.logCount} logs overall · tap to add`
+function portionLabel(food: FrequentFoodSuggestion): string {
+  const amount = food.portionAmount || 1
+  const rounded = Math.round(amount * 100) / 100
+  return `${rounded} ${food.portionUnit}`
+}
+
+function SectionHeading({
+  icon: Icon,
+  title,
+  caption,
+}: {
+  icon: typeof Search
+  title: string
+  caption: string
+}) {
+  return (
+    <div className="flex items-center gap-2 border-b border-white/[0.07] pb-2">
+      <Icon className="size-3.5 text-muted-foreground/60" />
+      <h3 className="type-hud-subsection text-foreground/75">{title}</h3>
+      <span className="ml-auto text-[9px] text-muted-foreground/45">{caption}</span>
+    </div>
+  )
+}
+
+function ResultSection({
+  icon,
+  title,
+  caption,
+  children,
+}: {
+  icon: typeof Search
+  title: string
+  caption: string
+  children: React.ReactNode
+}) {
+  return (
+    <section>
+      <SectionHeading icon={icon} title={title} caption={caption} />
+      <div>{children}</div>
+    </section>
+  )
+}
+
+/**
+ * One food. Tapping the body opens the portion editor; the + logs it at its
+ * usual portion — the same split MacroFactor uses, so a repeat log is one tap
+ * and an unusual one is two.
+ */
+function FoodRow({
+  name,
+  calories,
+  protein,
+  fat,
+  carbs,
+  portion,
+  image,
+  recipe = false,
+  onOpen,
+  onAdd,
+  accessory,
+}: {
+  name: string
+  calories: number | null
+  protein: number | null
+  fat: number | null
+  carbs: number | null
+  portion: string | null
+  image: string | null
+  recipe?: boolean
+  onOpen: () => void
+  onAdd: () => void
+  accessory?: React.ReactNode
+}) {
+  return (
+    <div className="group flex items-center gap-2.5 border-b border-white/[0.05] transition-colors hover:bg-white/[0.02]">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 items-center gap-2.5 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 rounded-lg"
+      >
+        <FoodArtwork src={image} label={name} recipe={recipe} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-medium leading-snug text-foreground/92">
+            {name}
+          </span>
+          <span className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[10px] tabular-nums">
+            {calories != null ? (
+              <span className="font-semibold text-red-200/85">{Math.round(calories)}</span>
+            ) : null}
+            {protein != null ? (
+              <span style={{ color: MACRO_COLOR.protein }}>{round1(protein)}P</span>
+            ) : null}
+            {fat != null ? <span style={{ color: MACRO_COLOR.fat }}>{round1(fat)}F</span> : null}
+            {carbs != null ? (
+              <span style={{ color: MACRO_COLOR.carbs }}>{round1(carbs)}C</span>
+            ) : null}
+            {portion ? (
+              <span className="truncate text-muted-foreground/50">· {portion}</span>
+            ) : null}
+          </span>
+        </span>
+      </button>
+      {accessory}
+      <button
+        type="button"
+        onClick={onAdd}
+        className="flex size-9 shrink-0 items-center justify-center rounded-full border border-white/[0.09] text-muted-foreground/70 transition-[transform,color,border-color,background-color] hover:border-white/[0.22] hover:bg-white/[0.06] hover:text-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+        aria-label={`Add ${name}`}
+      >
+        <Plus className="size-4" />
+      </button>
+    </div>
+  )
 }
 
 function SaveCatalogButton({
@@ -671,113 +932,16 @@ function SaveCatalogButton({
         void onSave(food)
       }}
       disabled={saving || saved}
-      className="flex size-9 items-center justify-center rounded-xl text-muted-foreground/45 hover:bg-primary/10 hover:text-primary"
+      className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/40 hover:bg-white/[0.05] hover:text-foreground/70"
       aria-label={`Save ${food.food_name}`}
     >
       {saving ? (
-        <Loader2 className="size-4 animate-spin" />
+        <Loader2 className="size-3.5 animate-spin" />
       ) : saved ? (
-        <Check className="size-4 text-primary" />
+        <Check className="size-3.5 text-foreground/70" />
       ) : (
-        <Bookmark className="size-4" />
+        <Bookmark className="size-3.5" />
       )}
-    </button>
-  )
-}
-
-function ResultSection({
-  icon: Icon,
-  title,
-  caption,
-  children,
-}: {
-  icon: typeof Search
-  title: string
-  caption: string
-  children: React.ReactNode
-}) {
-  return (
-    <section>
-      <div className="flex items-center gap-2 border-b border-white/[0.07] pb-2">
-        <Icon className="size-3.5 text-primary/75" />
-        <h3 className="type-hud-subsection text-foreground/75">
-          {title}
-        </h3>
-        <span className="ml-auto text-[9px] text-muted-foreground/45">{caption}</span>
-      </div>
-      <div>{children}</div>
-    </section>
-  )
-}
-
-function FoodResultRow({
-  name,
-  subtitle,
-  calories,
-  protein,
-  image,
-  onClick,
-  accessory,
-}: {
-  name: string
-  subtitle: string | null
-  calories: number | null
-  protein: number | null
-  image: string | null
-  onClick: () => void
-  accessory?: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex min-h-[4.75rem] w-full items-center gap-3 border-b border-border/20 py-2.5 text-left transition-colors hover:bg-glass-highlight/[0.06]"
-    >
-      <FoodArtwork src={image} label={name} />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold">{name}</span>
-        {subtitle ? (
-          <span className="mt-1 block truncate text-[10px] text-muted-foreground/55">
-            {subtitle}
-          </span>
-        ) : null}
-        <span className="mt-1.5 flex items-center gap-2 text-[10px] tabular-nums">
-          {calories != null ? (
-            <span className="font-semibold text-foreground/80">{Math.round(calories)} cal</span>
-          ) : null}
-          {protein != null ? (
-            <span className="text-blue-300/70">P {Math.round(protein)}g</span>
-          ) : null}
-        </span>
-      </span>
-      {accessory}
-      <span className="food-search-add-chip flex size-9 shrink-0 items-center justify-center rounded-full border transition-transform group-active:scale-90">
-        <Plus className="size-4" />
-      </span>
-    </button>
-  )
-}
-
-function RecipeResult({ recipe, onAdd }: { recipe: Recipe; onAdd: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onAdd}
-      className="group flex min-h-[4.75rem] w-full items-center gap-3 border-b border-border/20 py-2.5 text-left transition-colors hover:bg-glass-highlight/[0.06]"
-    >
-      <FoodArtwork src={recipe.imageUrl} label={recipe.name} recipe />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold">{recipe.name}</span>
-        <span className="mt-1 block text-[10px] text-muted-foreground/55">
-          {recipe.ingredients.length} ingredient{recipe.ingredients.length === 1 ? "" : "s"}
-        </span>
-        <span className="mt-1.5 text-[10px] font-semibold tabular-nums text-foreground/75">
-          {recipe.calories.toLocaleString()} cal
-        </span>
-      </span>
-      <span className="food-search-add-chip flex size-9 shrink-0 items-center justify-center rounded-full border transition-transform group-active:scale-90">
-        <Plus className="size-4" />
-      </span>
     </button>
   )
 }
@@ -785,26 +949,32 @@ function RecipeResult({ recipe, onAdd }: { recipe: Recipe; onAdd: () => void }) 
 function FoodArtwork({
   src,
   label,
-  large = false,
+  size = "md",
   recipe = false,
 }: {
   src: string | null
   label: string
-  large?: boolean
+  size?: "sm" | "md" | "lg"
   recipe?: boolean
 }) {
+  const box =
+    size === "lg"
+      ? "size-20 rounded-2xl text-3xl"
+      : size === "sm"
+        ? "size-9 rounded-xl text-base"
+        : "size-11 rounded-xl text-lg"
   return src ? (
     <img
       src={src}
       alt=""
       className={cn(
-        "shrink-0 rounded-2xl bg-white/[0.035]",
+        "shrink-0 rounded-xl bg-white/[0.035]",
         recipe ? "object-cover" : "object-contain",
-        large ? "size-24" : "size-12",
+        box,
       )}
     />
   ) : (
-    <FoodFallbackIcon label={label} large={large} recipe={recipe} />
+    <FoodFallbackIcon label={label} large={size === "lg"} recipe={recipe} className={box} />
   )
 }
 
@@ -822,9 +992,7 @@ function NutritionNumber({
       <p className="type-hud-stat-sm">
         {value == null ? "—" : `${Math.round(value * 10) / 10}${suffix}`}
       </p>
-      <p className="type-hud-micro mt-1">
-        {label}
-      </p>
+      <p className="type-hud-micro mt-0.5">{label}</p>
     </div>
   )
 }

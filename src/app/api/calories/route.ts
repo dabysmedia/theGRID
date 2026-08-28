@@ -5,6 +5,40 @@ import { resolveUserId, UserError } from "@/lib/current-user"
 import { assertNotVacationBlocked } from "@/lib/vacation-block-server"
 import { normalizeFoodImageUrl } from "@/lib/calories/food-image"
 import { isFoodMeasurementUnit } from "@/lib/calories/measurements"
+import {
+  LEGACY_MEAL_TYPE_FOR_SLOT,
+  asMealSlot,
+  resolveMealSlot,
+  type MealSlot,
+} from "@/lib/calories/meal-slots"
+
+/**
+ * The timeline posts a `mealSlot`; older clients (and the saved-meal/recipe
+ * paths) post a `mealType`. Accept either and always store both, so one write
+ * satisfies the timeline and every legacy reader of `mealType`.
+ */
+function resolveSlotAndMealType(body: Record<string, unknown>): {
+  mealSlot: MealSlot
+  mealType: string
+} {
+  const slot = asMealSlot(body.mealSlot) ?? asMealSlot(body.mealType)
+  const rawMealType = typeof body.mealType === "string" ? body.mealType.trim() : ""
+
+  if (slot) {
+    // A legacy meal name is only kept when it already belongs to this block —
+    // otherwise the two columns would disagree.
+    const keepLegacy =
+      rawMealType !== "" &&
+      asMealSlot(rawMealType) == null &&
+      resolveMealSlot({ mealType: rawMealType }) === slot
+    return { mealSlot: slot, mealType: keepLegacy ? rawMealType : LEGACY_MEAL_TYPE_FOR_SLOT[slot] }
+  }
+
+  if (rawMealType === "") {
+    throw new UserError("A meal slot or meal type is required.", 400)
+  }
+  return { mealSlot: resolveMealSlot({ mealType: rawMealType }), mealType: rawMealType }
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,8 +70,8 @@ function safeOptionalFloat(v: unknown): number | null {
 
 async function calorieEntryData(body: Record<string, unknown>, userId: string) {
   const dateStr = typeof body.date === "string" ? body.date.trim() : ""
-  const mealType = typeof body.mealType === "string" ? body.mealType.trim() : ""
-  if (!dateStr || !mealType) throw new UserError("Date and meal type are required.", 400)
+  if (!dateStr) throw new UserError("A date is required.", 400)
+  const { mealSlot, mealType } = resolveSlotAndMealType(body)
 
   let date: Date
   try {
@@ -56,6 +90,7 @@ async function calorieEntryData(body: Record<string, unknown>, userId: string) {
   return {
     date,
     mealType,
+    mealSlot,
     description:
       typeof body.description === "string" && body.description.trim() !== ""
         ? body.description.trim()
@@ -181,10 +216,10 @@ export async function PUT(req: NextRequest) {
     }
 
     const dateStr = typeof body.date === "string" ? body.date.trim() : ""
-    const mealType = typeof body.mealType === "string" ? body.mealType.trim() : ""
-    if (!dateStr || !mealType) {
-      return NextResponse.json({ error: "Date and meal type are required." }, { status: 400 })
+    if (!dateStr) {
+      return NextResponse.json({ error: "A date is required." }, { status: 400 })
     }
+    const { mealSlot, mealType } = resolveSlotAndMealType(body)
 
     let date: Date
     try {
@@ -208,6 +243,7 @@ export async function PUT(req: NextRequest) {
       data: {
         date,
         mealType,
+        mealSlot,
         description:
           typeof body.description === "string" && body.description.trim() !== ""
             ? body.description.trim()

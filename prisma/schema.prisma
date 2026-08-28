@@ -131,7 +131,12 @@ model CardioEntry {
 model CalorieEntry {
   id            String   @id @default(cuid())
   date          DateTime
+  /// Legacy meal name (breakfast/lunch/dinner/snack), derived from mealSlot on
+  /// new logs. Kept so agent exports, coach context, and reminders still read it.
   mealType      String
+  /// Timeline block the food was eaten in: morning, afternoon, or evening.
+  /// Null on rows written before the timeline — see resolveMealSlot().
+  mealSlot      String?
   description   String?
   calories      Int
   protein       Float?
