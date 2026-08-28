@@ -1,94 +1,102 @@
-import { NextRequest, NextResponse } from "next/server"
+import { createHash, randomUUID } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
-import { randomUUID } from "node:crypto"
+import { NextRequest, NextResponse } from "next/server"
+import { prisma } from "@/lib/prisma"
+import { resolveUserId, UserError } from "@/lib/current-user"
+import { detectJournalImage, safeJournalStoragePath } from "@/lib/journal-photo"
+import { journalPhotoIdFromUrl } from "@/lib/journal"
 import { getJournalUploadDir } from "@/lib/uploads-path"
 
-const MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
-const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"])
+const MAX_SIZE_BYTES = 10 * 1024 * 1024
 
-function getUploadDir(): string {
-  // UPLOADS_PATH / DATA_DIR / DATABASE_PATH avoid cwd-relative paths in production
-  // (standalone cwd is .next/standalone). Local dev falls back to public/uploads/journal.
-  return getJournalUploadDir()
-}
-
-function ensureUploadDir() {
-  const uploadDir = getUploadDir()
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true })
-  }
-}
-
-function extFromMime(mime: string): string {
-  const map: Record<string, string> = {
-    "image/jpeg": "jpg",
-    "image/png": "png",
-    "image/webp": "webp",
-    "image/gif": "gif",
-  }
-  return map[mime] ?? "jpg"
+function userStoragePrefix(userId: string): string {
+  return createHash("sha256").update(userId).digest("hex").slice(0, 24)
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await resolveUserId(req)
     const formData = await req.formData()
     const file = formData.get("file")
 
     if (!file || typeof file === "string") {
-      return NextResponse.json({ error: "No file provided." }, { status: 400 })
+      return NextResponse.json({ error: "Choose a photo to upload." }, { status: 400 })
+    }
+    if (file.size <= 0 || file.size > MAX_SIZE_BYTES) {
+      return NextResponse.json({ error: "Photos must be smaller than 10 MB." }, { status: 400 })
     }
 
-    if (!ALLOWED_TYPES.has(file.type)) {
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    const detected = detectJournalImage(bytes)
+    if (!detected) {
       return NextResponse.json(
-        { error: "Only JPEG, PNG, WebP, and GIF images are allowed." },
-        { status: 400 }
+        { error: "Use a valid JPEG, PNG, WebP, or GIF photo." },
+        { status: 400 },
       )
     }
 
-    const arrayBuffer = await file.arrayBuffer()
-    if (arrayBuffer.byteLength > MAX_SIZE_BYTES) {
-      return NextResponse.json(
-        { error: "File too large. Maximum size is 10 MB." },
-        { status: 400 }
-      )
+    const storageKey = `${userStoragePrefix(userId)}/${randomUUID()}.${detected.ext}`
+    const uploadRoot = getJournalUploadDir()
+    const filePath = safeJournalStoragePath(uploadRoot, storageKey)
+    if (!filePath) {
+      return NextResponse.json({ error: "Could not prepare a safe upload path." }, { status: 500 })
     }
 
-    ensureUploadDir()
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.promises.writeFile(filePath, bytes, { flag: "wx" })
 
-    const ext = extFromMime(file.type)
-    const filename = `${randomUUID()}.${ext}`
-    const filePath = path.join(getUploadDir(), filename)
-
-    fs.writeFileSync(filePath, Buffer.from(arrayBuffer))
-
-    return NextResponse.json({ url: `/uploads/journal/${filename}` }, { status: 201 })
-  } catch (e) {
-    console.error("[journal/upload POST]", e)
-    return NextResponse.json({ error: "Upload failed." }, { status: 500 })
+    try {
+      const photo = await prisma.journalPhoto.create({
+        data: {
+          storageKey,
+          mimeType: detected.mime,
+          byteSize: bytes.byteLength,
+          userId,
+        },
+        select: { id: true },
+      })
+      return NextResponse.json(
+        { id: photo.id, url: `/uploads/journal/${photo.id}` },
+        { status: 201 },
+      )
+    } catch (error) {
+      await fs.promises.unlink(filePath).catch(() => {})
+      throw error
+    }
+  } catch (error) {
+    if (error instanceof UserError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+    console.error("[journal/upload POST]", error)
+    return NextResponse.json({ error: "Photo upload failed. Please try again." }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const url = searchParams.get("url")
-
-  if (!url || !url.startsWith("/uploads/journal/")) {
-    return NextResponse.json({ error: "Invalid URL." }, { status: 400 })
-  }
-
-  const filename = path.basename(url)
-  // Prevent path traversal
-  if (filename.includes("..") || filename.includes("/")) {
-    return NextResponse.json({ error: "Invalid filename." }, { status: 400 })
-  }
-
-  const filePath = path.join(getUploadDir(), filename)
   try {
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    const userId = await resolveUserId(req)
+    const url = new URL(req.url).searchParams.get("url") ?? ""
+    const id = journalPhotoIdFromUrl(url)
+    if (!id) return NextResponse.json({ error: "Invalid photo reference." }, { status: 400 })
+
+    const photo = await prisma.journalPhoto.findFirst({
+      where: { id, userId, journalEntryId: null },
+      select: { id: true, storageKey: true },
+    })
+    if (!photo) {
+      return NextResponse.json({ error: "Photo not found or already attached." }, { status: 404 })
+    }
+
+    await prisma.journalPhoto.delete({ where: { id: photo.id } })
+    const filePath = safeJournalStoragePath(getJournalUploadDir(), photo.storageKey)
+    if (filePath) await fs.promises.unlink(filePath).catch(() => {})
     return NextResponse.json({ success: true })
-  } catch (e) {
-    console.error("[journal/upload DELETE]", e)
-    return NextResponse.json({ error: "Failed to delete file." }, { status: 500 })
+  } catch (error) {
+    if (error instanceof UserError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+    console.error("[journal/upload DELETE]", error)
+    return NextResponse.json({ error: "Could not remove the photo." }, { status: 500 })
   }
 }

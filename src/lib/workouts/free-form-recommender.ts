@@ -12,6 +12,17 @@ import {
 } from "./progressive-overload"
 
 export type BodySplit = "upper" | "lower"
+export type WorkoutFocus =
+  | BodySplit
+  | "push"
+  | "pull"
+  | "legs"
+  | "full_body"
+  | "chest"
+  | "back"
+  | "shoulders"
+  | "arms"
+  | "shoulders_arms"
 
 export interface RecommendedExercise {
   name: string
@@ -27,6 +38,8 @@ export interface FreeFormRecommendInput {
   library: ApiExercise[]
   sessions: WorkoutSessionLike[]
   split: BodySplit
+  /** The selected day within the user's configured training split. */
+  focus?: WorkoutFocus
   weekStart: string
   weekEnd: string
   /** Already in the session — skip these names. */
@@ -72,6 +85,14 @@ const LOWER_MUSCLES = new Set([
   "lower back",
   "erectors",
 ])
+
+const PUSH_MUSCLES = new Set(["chest", "shoulders", "deltoids", "triceps"])
+const PULL_MUSCLES = new Set(["lats", "upper back", "rhomboids", "back", "biceps", "forearms", "forearm", "trapezius", "traps"])
+const CHEST_MUSCLES = new Set(["chest"])
+const BACK_MUSCLES = new Set(["lats", "upper back", "rhomboids", "back", "trapezius", "traps"])
+const SHOULDER_MUSCLES = new Set(["shoulders", "deltoids", "trapezius", "traps"])
+const ARM_MUSCLES = new Set(["biceps", "triceps", "forearms", "forearm", "arms"])
+const SHOULDERS_AND_ARMS_MUSCLES = new Set([...SHOULDER_MUSCLES, ...ARM_MUSCLES])
 
 /** Pattern buckets used to keep a balanced free-form session. */
 type PatternBucket =
@@ -148,6 +169,26 @@ export function muscleMatchesSplit(name: string, split: BodySplit): boolean {
   const key = name.trim().toLowerCase()
   if (split === "upper") return UPPER_MUSCLES.has(key)
   return LOWER_MUSCLES.has(key)
+}
+
+function musclesForFocus(focus: WorkoutFocus): Set<string> {
+  switch (focus) {
+    case "push": return PUSH_MUSCLES
+    case "pull": return PULL_MUSCLES
+    case "legs": return LOWER_MUSCLES
+    case "chest": return CHEST_MUSCLES
+    case "back": return BACK_MUSCLES
+    case "shoulders": return SHOULDER_MUSCLES
+    case "arms": return ARM_MUSCLES
+    case "shoulders_arms": return SHOULDERS_AND_ARMS_MUSCLES
+    case "full_body": return new Set([...UPPER_MUSCLES, ...LOWER_MUSCLES])
+    case "upper": return UPPER_MUSCLES
+    case "lower": return LOWER_MUSCLES
+  }
+}
+
+export function muscleMatchesFocus(name: string, focus: WorkoutFocus): boolean {
+  return musclesForFocus(focus).has(name.trim().toLowerCase())
 }
 
 /** True for multi-joint presses, pulls, squats, hinges — not flies/raises/curls. */
@@ -354,12 +395,12 @@ export function suggestedCompoundExercises(
 
 function muscleDeficitMap(
   stats: MuscleWeekStats[],
-  split: BodySplit,
+  focus: WorkoutFocus,
   weeklySetTarget: number,
 ): Map<string, number> {
   const byKey = new Map(stats.map((s) => [s.muscle.trim().toLowerCase(), s.sets]))
   const deficits = new Map<string, number>()
-  const pool = split === "upper" ? UPPER_MUSCLES : LOWER_MUSCLES
+  const pool = musclesForFocus(focus)
   for (const muscle of pool) {
     const sets = byKey.get(muscle) ?? 0
     deficits.set(muscle, Math.max(0, weeklySetTarget - sets))
@@ -415,6 +456,25 @@ function bucketPriority(bucket: PatternBucket): number {
   return 1
 }
 
+/** Small, deterministic tie-breakers for dependable starter recommendations. */
+function familiarStapleBonus(name: string, focus: WorkoutFocus): number {
+  const n = name.toLowerCase()
+  if (focus === "chest") {
+    if (/bench press|incline press|chest press/.test(n)) return 3
+    // Alternating floor press is useful, but should not displace a standard
+    // press for a new user. Recent personal history can overcome this penalty.
+    if (/alternating floor press/.test(n)) return -6
+  }
+  if (focus === "back" && /lat pulldown/.test(n)) return 2.5
+  if (focus === "shoulders" || focus === "shoulders_arms") {
+    if (/y[- ]raise/.test(n)) return 1.5
+  }
+  if (focus === "legs" || focus === "lower") {
+    if (/leg extension/.test(n)) return 1.5
+  }
+  return 0
+}
+
 /**
  * Build a free-form Upper/Lower session: favor undertrained muscles this week
  * and movements the user already trains often. Heavy compounds fill first.
@@ -433,16 +493,35 @@ export function recommendFreeFormWorkout(
     input.weekStart,
     input.weekEnd,
   )
-  const deficits = muscleDeficitMap(muscleStats, input.split, weeklySetTarget)
-  const bucketOrder =
-    input.split === "upper" ? UPPER_BUCKET_ORDER : LOWER_BUCKET_ORDER
+  const focus = input.focus ?? input.split
+  const deficits = muscleDeficitMap(muscleStats, focus, weeklySetTarget)
+  const bucketOrder: PatternBucket[] =
+    focus === "lower" || focus === "legs"
+      ? LOWER_BUCKET_ORDER
+      : focus === "chest"
+        ? ["horizontal_push", "chest_isolation"]
+        : focus === "back"
+          ? ["vertical_pull", "horizontal_pull"]
+            : focus === "shoulders"
+              ? ["vertical_push", "shoulder_isolation"]
+            : focus === "arms"
+              ? ["elbow_extension", "elbow_flexion"]
+              : focus === "shoulders_arms"
+                ? ["vertical_push", "shoulder_isolation", "elbow_extension", "elbow_flexion"]
+              : focus === "full_body"
+                ? ["squat", "hinge", "horizontal_push", "vertical_pull", "horizontal_pull", "vertical_push", "core"]
+                : focus === "push"
+                  ? ["horizontal_push", "vertical_push", "elbow_extension", "chest_isolation", "shoulder_isolation"]
+                  : focus === "pull"
+                    ? ["vertical_pull", "horizontal_pull", "elbow_flexion"]
+                    : UPPER_BUCKET_ORDER
 
   const candidates: Candidate[] = []
   for (const ex of input.library) {
     const key = normalizeExerciseKey(ex.name)
     if (exclude.has(key)) continue
     const primary = ex.primaryMuscles[0]
-    if (!primary || !muscleMatchesSplit(primary.name, input.split)) continue
+    if (!primary || !muscleMatchesFocus(primary.name, focus)) continue
     // Skip pure cardio for strength free-form
     if (primary.name.trim().toLowerCase() === "cardio") continue
 
@@ -460,16 +539,19 @@ export function recommendFreeFormWorkout(
           ),
         )
       : 999
-    const recencyBonus = daysSince <= 14 ? 1.5 : daysSince <= 30 ? 0.5 : 0
+    // Personal history is the strongest signal after volume need: a movement
+    // completed in the last week should beat an equally suitable new option.
+    const recencyBonus = daysSince <= 7 ? 6 : daysSince <= 14 ? 3 : daysSince <= 30 ? 1 : 0
     const favoriteBonus = Math.log1p(sessionCount) * 2.4
     const deficitBonus = deficit * 3.2
     // Mild novelty so we don't only pick the same 5 forever
     const novelty = sessionCount === 0 ? 0.8 : 0
     // Heavy compounds always outrank flies / raises / curls for the same muscle
     const compoundBonus = compound ? 5.5 : 0
+    const stapleBonus = familiarStapleBonus(ex.name, focus)
 
     const score =
-      deficitBonus + favoriteBonus + recencyBonus + novelty + compoundBonus
+      deficitBonus + favoriteBonus + recencyBonus + novelty + compoundBonus + stapleBonus
     const reasonParts: string[] = []
     if (compound) reasonParts.push("compound lift")
     if (deficit >= weeklySetTarget * 0.7) {
@@ -529,6 +611,15 @@ export function recommendFreeFormWorkout(
     picked.push(c)
     usedBuckets.add(c.bucket)
     usedPrimaries.add(c.primaryKey)
+  }
+
+  // Narrow bro-split days can legitimately contain several variations for one
+  // muscle. If the diversity pass left the session short, retain additional
+  // non-identical movements instead of returning an unusably tiny workout.
+  for (const c of candidates) {
+    if (picked.length >= count) break
+    if (picked.some((p) => p.name === c.name)) continue
+    picked.push(c)
   }
 
   // Session order: compounds first, then accessories — never open with a fly/raise

@@ -1,7 +1,7 @@
 import { format, startOfWeek } from "date-fns"
 
-/** Steel HUD accent — matches hub protocol rail (not purple). */
-export const PEPTIDE_COLOR = "#94a3b8"
+/** Protocol signal accent — distinct from training lime and the hub's sleep indigo. */
+export const PEPTIDE_COLOR = "#a78bfa"
 
 /** Retatrutide (Reta) approximate plasma half-life used for circulating estimates. */
 export const RETA_HALF_LIFE_DAYS = 6

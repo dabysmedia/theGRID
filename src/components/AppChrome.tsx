@@ -16,6 +16,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const agentPublic = isAgentPublicPath(pathname)
   const isHub = pathname === "/"
+  const isHubSurface = isHub || pathname === "/journal"
 
   return (
     <EdgeBackGesture
@@ -24,13 +25,13 @@ export function AppChrome({ children }: { children: ReactNode }) {
         "flex min-h-0 flex-1 flex-col",
         // Pin hub/fullscreen shells to the live visual viewport so the card
         // always fills — CSS 100dvh alone can stay short until a scroll reflow.
-        (isHub || fullscreen) && "app-shell-height overflow-hidden",
+        (isHubSurface || fullscreen) && "app-shell-height overflow-hidden",
       )}
     >
       <main
         className={cn(
           "mx-auto flex w-full max-w-full min-h-0 flex-1 flex-col",
-          isHub
+          isHubSurface
             ? [
                 "h-full max-h-full overflow-hidden",
                 // Keep the live-height shell, but let the panel sit inside the
@@ -58,16 +59,16 @@ export function AppChrome({ children }: { children: ReactNode }) {
           key={pathname}
           className={cn(
             "flex min-h-0 flex-1 flex-col",
-            isHub ? "hub-route-enter" : "route-enter",
+            isHubSurface ? "hub-route-enter" : "route-enter",
           )}
         >
           <PullToRefresh disabled={fullscreen || agentPublic}>
             {children}
-            {!fullscreen && !agentPublic && !isHub && <PageFooter />}
+            {!fullscreen && !agentPublic && !isHubSurface && <PageFooter />}
           </PullToRefresh>
         </div>
       </main>
-      {!fullscreen && !agentPublic && !isHub && <BottomNav />}
+      {!fullscreen && !agentPublic && !isHubSurface && <BottomNav />}
     </EdgeBackGesture>
   )
 }

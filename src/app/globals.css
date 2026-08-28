@@ -109,12 +109,12 @@
   /* Matches PageFooter dock spacer: dock h-16 + mb-2 + breathing room + safe area */
   --bottom-dock-clearance: calc(6.5rem + env(safe-area-inset-bottom, 0px));
   /* Hub instrument sizes — scale down on short phones, cap on tall ones */
-  --hub-ring-size: clamp(5.25rem, 16svh, 7rem);
+  --hub-ring-size: clamp(4.75rem, 13svh, 6rem);
   /* Steps chart: keep a readable floor on short phones; prefer ~instrument size */
-  --hub-bar-area: clamp(3.5rem, 11svh, 4.75rem);
-  --hub-protocol-min-h: clamp(4rem, 10.5svh, 5.5rem);
-  --hub-protocol-glyph: clamp(4rem, 10.5svh, 5.5rem);
-  --hub-section-gap: clamp(0.25rem, 1.1svh, 1rem);
+  --hub-bar-area: clamp(3rem, 9svh, 4.25rem);
+  --hub-protocol-min-h: clamp(3.5rem, 9svh, 4.5rem);
+  --hub-protocol-glyph: clamp(3.5rem, 9svh, 4.5rem);
+  --hub-section-gap: clamp(0.15rem, 0.65svh, 0.6rem);
   --hub-fasting-ring: clamp(7.5rem, 22svh, 12.5rem);
 }
 
@@ -1483,6 +1483,19 @@ html {
   to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
+@keyframes journal-photo-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+    clip-path: inset(0 0 18% 0 round 1.15rem);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    clip-path: inset(0 0 0 0 round 1.15rem);
+  }
+}
+
 @keyframes hub-hour-bar-enter {
   from { opacity: 0.4; transform: scaleY(0); }
   to { opacity: 1; transform: scaleY(1); }
@@ -1685,6 +1698,24 @@ html {
   .hub-detail-sequence > *:nth-child(4) { animation-delay: 300ms; }
   .hub-detail-sequence > *:nth-child(n + 5) { animation-delay: 360ms; }
 
+  .journal-feed-enter > article,
+  .journal-compose-enter > * {
+    animation: hub-step-detail-enter 0.72s cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
+  }
+
+  .journal-feed-enter > article:nth-child(1),
+  .journal-compose-enter > *:nth-child(1) { animation-delay: 70ms; }
+  .journal-feed-enter > article:nth-child(2),
+  .journal-compose-enter > *:nth-child(2) { animation-delay: 130ms; }
+  .journal-feed-enter > article:nth-child(3),
+  .journal-compose-enter > *:nth-child(3) { animation-delay: 190ms; }
+  .journal-feed-enter > article:nth-child(n + 4),
+  .journal-compose-enter > *:nth-child(n + 4) { animation-delay: 240ms; }
+
+  .journal-photo-reveal {
+    animation: journal-photo-reveal 0.88s cubic-bezier(0.22, 0.7, 0.18, 1) 120ms backwards;
+  }
+
   .workout-week-bar {
     transform-origin: center bottom;
     animation: workout-week-bar-in 1.05s cubic-bezier(0.22, 0.7, 0.18, 1) both;
@@ -1835,7 +1866,10 @@ html {
     .hub-weight-chart-reveal,
     .hub-weight-trend-enter,
     .hub-weight-atl-pulse,
-    .hub-detail-sequence > * {
+    .hub-detail-sequence > *,
+    .journal-feed-enter > article,
+    .journal-compose-enter > *,
+    .journal-photo-reveal {
       opacity: 1;
       clip-path: none;
       transform: none;
@@ -2784,4 +2818,3 @@ html {
     top: 50%;
   }
 }
-

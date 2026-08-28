@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useState, useRef, useCallback, useMemo } from "react"
 import Link from "next/link"
-import { ArrowDown, ArrowUp, ChevronRight, Minus, TrendingDown, TrendingUp } from "lucide-react"
+import { ArrowDown, ArrowUp, ChevronRight, Minus, NotebookPen, TrendingDown, TrendingUp } from "lucide-react"
 import { apiFetch } from "@/lib/api-fetch"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -121,6 +121,44 @@ interface DailyWeighInProps {
   onActivate?: () => void
   /** Hub shared-element state: widen and fade the sparkline into the correlation graph bay. */
   graphFocused?: boolean
+  /** Hub overview: pair the compact weight entry with the progress-journal entry point. */
+  showProgressCheckIn?: boolean
+}
+
+function ProgressCheckInLink() {
+  return (
+    <Link
+      href="/journal"
+      aria-label="Open progress journal and add a check-in"
+      className="group relative flex min-h-[clamp(4.25rem,10svh,5rem)] min-w-0 touch-manipulation items-start overflow-hidden border-l border-white/[0.07] px-3 py-2 text-left transition-[background-color,border-color] duration-500 hover:border-teal-300/25 hover:bg-teal-300/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-300/30 active:bg-teal-300/[0.055]"
+    >
+      <div
+        className="pointer-events-none absolute -right-2 -top-2 size-20 rounded-full bg-teal-300/[0.035] blur-xl transition-[background-color,transform] duration-700 group-hover:-translate-x-1 group-hover:translate-y-1 group-hover:bg-teal-300/[0.07]"
+        aria-hidden
+      />
+      <NotebookPen
+        className="pointer-events-none absolute right-2.5 top-2.5 size-7 text-teal-100/20 transition-[color,transform] duration-500 group-hover:-translate-y-0.5 group-hover:text-teal-100/40"
+        strokeWidth={1.35}
+        aria-hidden
+      />
+      <span
+        className="pointer-events-none absolute right-2.5 top-2.5 size-1.5 rounded-full bg-teal-300/85 shadow-[0_0_8px_oklch(0.78_0.11_185/0.7)]"
+        aria-hidden
+      />
+
+      <span className="relative min-w-0 flex-1">
+        <span className="type-hud-micro block text-teal-100/65">Progress</span>
+        <span className="mt-0.5 block truncate text-[13px] font-medium tracking-[-0.01em] text-foreground/90">
+          Check in
+        </span>
+        <span className="type-hud-caption mt-0.5 block truncate">Photo · note · metrics</span>
+      </span>
+      <ChevronRight
+        className="relative ml-1 mt-0.5 size-3.5 shrink-0 text-muted-foreground/45 transition-[color,transform] duration-300 group-hover:translate-x-0.5 group-hover:text-teal-100/80"
+        aria-hidden
+      />
+    </Link>
+  )
 }
 
 const AnimatedWeightInput = forwardRef<
@@ -168,6 +206,7 @@ export function DailyWeighIn({
   weightTrend = null,
   onActivate,
   graphFocused = false,
+  showProgressCheckIn = false,
 }: DailyWeighInProps) {
   const { activeDate } = useActiveDate()
   const { user } = useUser()
@@ -309,7 +348,15 @@ export function DailyWeighIn({
     )
     if (embedded) {
       return (
-        <div className="animate-in fade-in slide-in-from-bottom-1 duration-300">{vacationBody}</div>
+        <div
+          className={cn(
+            "animate-in fade-in slide-in-from-bottom-1 duration-300",
+            showProgressCheckIn && !graphFocused && "grid grid-cols-2 gap-2 sm:gap-3",
+          )}
+        >
+          <div className="min-w-0">{vacationBody}</div>
+          {showProgressCheckIn && !graphFocused ? <ProgressCheckInLink /> : null}
+        </div>
       )
     }
     return (
@@ -486,74 +533,83 @@ export function DailyWeighIn({
         </div>
       )}
 
-      <div className="space-y-2">
-        <div
-          className={cn(
-            "flex flex-wrap items-end gap-x-3 gap-y-1",
-            "pb-1.5",
-            embedded ? "border-b border-white/[0.06]" : "border-b border-white/10",
-          )}
-        >
-          <AnimatedWeightInput
-            ref={inputRef}
-            placeholder={latestWeight != null ? `${latestWeight}` : "—"}
-            value={value}
-            animate={!weightEditing && !submitting}
-            onChange={(e) => {
-              setWeightEditing(true)
-              setValue(e.target.value)
-            }}
-            readOnly={logged}
+      <div
+        className={cn(
+          showProgressCheckIn && embedded && !graphFocused
+            ? "grid grid-cols-2 gap-2 sm:gap-3"
+            : "block",
+        )}
+      >
+        <div className="min-w-0 space-y-2 py-0.5">
+          <div
             className={cn(
-              "h-auto min-h-0 w-[min(100%,12rem)] flex-1 border-0 rounded-none bg-transparent px-0 py-0 font-extralight tracking-tight tabular-nums shadow-none backdrop-blur-none",
-              embedded ? "text-3xl sm:text-4xl" : "text-4xl sm:text-5xl",
-              "placeholder:text-muted-foreground/35 focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:bg-transparent",
-              "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-              greyedHint && "text-muted-foreground/90 placeholder:text-muted-foreground/40",
-              logged && "cursor-default text-foreground/90",
-            )}
-            required={!logged}
-          />
-          <span
-            className={cn(
-              "pb-1.5 tracking-wide",
-              embedded ? "type-hud-unit" : "text-sm font-medium text-muted-foreground/55",
+              "flex min-w-0 items-end gap-x-2 gap-y-1 pb-1.5",
+              embedded ? "border-b border-white/[0.06]" : "border-b border-white/10",
             )}
           >
-            {unit}
-          </span>
-        </div>
-      </div>
+            <AnimatedWeightInput
+              ref={inputRef}
+              placeholder={latestWeight != null ? `${latestWeight}` : "—"}
+              value={value}
+              animate={!weightEditing && !submitting}
+              onChange={(e) => {
+                setWeightEditing(true)
+                setValue(e.target.value)
+              }}
+              readOnly={logged}
+              className={cn(
+                "h-auto min-h-0 min-w-0 w-[min(100%,12rem)] flex-1 border-0 rounded-none bg-transparent px-0 py-0 font-extralight tracking-tight tabular-nums shadow-none backdrop-blur-none",
+                embedded ? "text-3xl sm:text-4xl" : "text-4xl sm:text-5xl",
+                "placeholder:text-muted-foreground/35 focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:bg-transparent",
+                "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                greyedHint && "text-muted-foreground/90 placeholder:text-muted-foreground/40",
+                logged && "cursor-default text-foreground/90",
+              )}
+              required={!logged}
+            />
+            <span
+              className={cn(
+                "shrink-0 pb-1.5 tracking-wide",
+                embedded ? "type-hud-unit" : "text-sm font-medium text-muted-foreground/55",
+              )}
+            >
+              {unit}
+            </span>
+          </div>
 
-      <div className={cn("flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-4", embedded ? "gap-1" : "gap-2")}>
-        {logged && delta != null && delta !== 0 ? (
-          <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            {delta > 0 ? (
-              <ArrowUp className="h-3 w-3 shrink-0 text-red-400/90" />
+          <div className={cn("flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-4", embedded ? "gap-1" : "gap-2")}>
+            {logged && delta != null && delta !== 0 ? (
+              <p className="flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground">
+                {delta > 0 ? (
+                  <ArrowUp className="h-3 w-3 shrink-0 text-red-400/90" />
+                ) : (
+                  <ArrowDown className="h-3 w-3 shrink-0 text-[#22c55e]" />
+                )}
+                <span className="tabular-nums">{Math.abs(delta)}</span> {unit} vs last
+              </p>
             ) : (
-              <ArrowDown className="h-3 w-3 shrink-0 text-[#22c55e]" />
+              <span className="hidden sm:block" />
             )}
-            <span className="tabular-nums">{Math.abs(delta)}</span> {unit} vs last
-          </p>
-        ) : (
-          <span className="hidden sm:block" />
-        )}
-        {logged ? null : (
-          <Button
-            type="submit"
-            variant={embedded ? "ghost" : "glass"}
-            disabled={!value.trim() || submitting}
-            size="sm"
-            className={cn(
-              "w-full sm:ml-auto sm:w-auto sm:shrink-0",
-              embedded
-                ? "h-8 border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/85 hover:border-teal-400/25 hover:bg-teal-400/[0.06] hover:text-teal-100/90"
-                : "bg-muted/20 hover:bg-muted/30",
+            {logged ? null : (
+              <Button
+                type="submit"
+                variant={embedded ? "ghost" : "glass"}
+                disabled={!value.trim() || submitting}
+                size="sm"
+                className={cn(
+                  "w-full",
+                  embedded
+                    ? "h-7 min-h-7 border border-white/10 bg-white/[0.03] px-2 type-hud-micro text-muted-foreground/85 hover:border-teal-400/25 hover:bg-teal-400/[0.06] hover:text-teal-100/90"
+                    : "bg-muted/20 hover:bg-muted/30",
+                )}
+              >
+                {embedded ? "Log weight" : "Log"}
+              </Button>
             )}
-          >
-            {embedded ? "Log weight" : "Log"}
-          </Button>
-        )}
+          </div>
+        </div>
+
+        {showProgressCheckIn && embedded && !graphFocused ? <ProgressCheckInLink /> : null}
       </div>
     </div>
   )

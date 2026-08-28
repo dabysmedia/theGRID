@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react"
 import type { TrainingStyle } from "@/lib/workouts/training-style"
+import type { TrainingSplit } from "@/lib/workouts/training-split"
 
 const STORAGE_KEY = "theGRID_activeUser"
 
@@ -27,6 +28,8 @@ export interface UserProfile {
   workCyclePatternJson?: string
   workoutGoalPerCycle?: number
   trainingStyle?: TrainingStyle
+  trainingSplit?: TrainingSplit
+  protocolEnabled?: boolean
 }
 
 interface UserContextValue {
@@ -40,15 +43,6 @@ interface UserContextValue {
 }
 
 const UserContext = createContext<UserContextValue | null>(null)
-
-function readStoredUser(): UserProfile | null {
-  if (typeof window === "undefined") return null
-  try {
-    const v = localStorage.getItem(STORAGE_KEY)
-    if (v) return JSON.parse(v) as UserProfile
-  } catch {}
-  return null
-}
 
 function storeUser(user: UserProfile | null) {
   try {
@@ -64,73 +58,45 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
-  const [hydrated, setHydrated] = useState(false)
-
-  useEffect(() => {
-    const stored = readStoredUser()
-    if (stored) setUser(stored)
-    setHydrated(true)
-  }, [])
 
   const refreshUsers = useCallback(async () => {
     try {
-      const res = await fetch("/api/users")
-      if (res.ok) {
-        const list = (await res.json()) as UserProfile[]
-        setUsers(list)
-        return list
+      const [profilesResponse, sessionResponse] = await Promise.all([
+        fetch("/api/users", { cache: "no-store" }),
+        fetch("/api/users/session", { cache: "no-store", credentials: "same-origin" }),
+      ])
+      if (!profilesResponse.ok) return undefined
+
+      const list = (await profilesResponse.json()) as UserProfile[]
+      setUsers(list)
+      if (sessionResponse.ok) {
+        const session = (await sessionResponse.json()) as { user?: UserProfile }
+        if (session.user) {
+          const publicIdentity = list.find((candidate) => candidate.id === session.user?.id)
+          const restored = { ...publicIdentity, ...session.user }
+          setUser(restored)
+          storeUser(restored)
+        }
+      } else if (sessionResponse.status === 401) {
+        setUser(null)
+        storeUser(null)
       }
+      return list
     } catch {}
     return undefined
   }, [])
 
   useEffect(() => {
-    if (!hydrated) return
     let cancelled = false
 
     async function init() {
-      const list = await refreshUsers()
-      if (cancelled) return
-      if (list === undefined) {
-        setLoading(false)
-        return
-      }
-
-      if (list.length === 1 && !user) {
-        const solo = list[0]
-        setUser(solo)
-        storeUser(solo)
-      } else if (user && !list.find((u) => u.id === user.id)) {
-        setUser(null)
-        storeUser(null)
-      }
-      setLoading(false)
+      await refreshUsers()
+      if (!cancelled) setLoading(false)
     }
 
-    init()
+    void init()
     return () => { cancelled = true }
-  }, [hydrated]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!user || users.length === 0) return
-    const f = users.find((u) => u.id === user.id)
-    if (!f) return
-    const nameSame = f.name === user.name
-    const colorSame = f.avatarColor === user.avatarColor
-    const urlSame = (f.avatarUrl ?? null) === (user.avatarUrl ?? null)
-    const vacationSame = (f.vacationResumeDate ?? null) === (user.vacationResumeDate ?? null)
-    const workCycleSame =
-      Boolean(f.workCycleEnabled) === Boolean(user.workCycleEnabled) &&
-      (f.workCycleAnchorDate ?? null) === (user.workCycleAnchorDate ?? null) &&
-      (f.workCycleLength ?? 8) === (user.workCycleLength ?? 8) &&
-      (f.workCyclePatternJson ?? "") === (user.workCyclePatternJson ?? "") &&
-      (f.workoutGoalPerCycle ?? 3) === (user.workoutGoalPerCycle ?? 3)
-    const trainingStyleSame =
-      (f.trainingStyle ?? "science_based") === (user.trainingStyle ?? "science_based")
-    if (nameSame && colorSame && urlSame && vacationSame && workCycleSame && trainingStyleSame) return
-    setUser(f)
-    storeUser(f)
-  }, [users, user])
+  }, [refreshUsers])
 
   const switchUser = useCallback((u: UserProfile) => {
     setUser(u)
@@ -138,9 +104,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
+    void fetch("/api/users/session", { method: "DELETE", credentials: "same-origin" }).catch(() => {})
     setUser(null)
     storeUser(null)
   }, [])
+
+  useEffect(() => {
+    const onExpired = () => logout()
+    window.addEventListener("grid:session-expired", onExpired)
+    return () => window.removeEventListener("grid:session-expired", onExpired)
+  }, [logout])
 
   const value = useMemo<UserContextValue>(
     () => ({ user, users, loading, switchUser, logout, refreshUsers }),

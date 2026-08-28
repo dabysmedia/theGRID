@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { hashPin } from "@/lib/pin-hash"
+import { createUserSession, revokeRequestSession, setUserSessionCookie } from "@/lib/user-session"
 
 const AVATAR_COLORS = [
   "#3b82f6", "#ef4444", "#22c55e", "#a855f7", "#f59e0b",
@@ -21,39 +22,22 @@ const workCycleSelect = {
   workCyclePatternJson: true,
   workoutGoalPerCycle: true,
   trainingStyle: true,
+  trainingSplit: true,
+  protocolEnabled: true,
 } as const
 
 export async function GET() {
   try {
     const users = await prisma.user.findMany({
-      select: { ...userListBaseSelect, vacationResumeDate: true, ...workCycleSelect },
+      // This endpoint powers the locked profile picker, so expose identity only.
+      // Private settings are restored from the authenticated session endpoint.
+      select: userListBaseSelect,
       orderBy: { createdAt: "asc" },
     })
     return NextResponse.json(users)
   } catch (e) {
-    // DB may be behind schema (e.g. vacation column not migrated yet)
-    console.error("[users GET] with vacationResumeDate failed, retrying without it", e)
-    try {
-      const users = await prisma.user.findMany({
-        select: { ...userListBaseSelect },
-        orderBy: { createdAt: "asc" },
-      })
-      return NextResponse.json(
-        users.map((u) => ({
-          ...u,
-          vacationResumeDate: null as string | null,
-          workCycleEnabled: false,
-          workCycleAnchorDate: null as string | null,
-          workCycleLength: 8,
-          workCyclePatternJson: '["day","day","night","night","off","off","off","off"]',
-          workoutGoalPerCycle: 3,
-          trainingStyle: "science_based",
-        }))
-      )
-    } catch (e2) {
-      console.error("[users GET]", e2)
-      return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 })
-    }
+    console.error("[users GET]", e)
+    return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 })
   }
 }
 
@@ -64,9 +48,12 @@ export async function POST(req: NextRequest) {
     if (!name) {
       return NextResponse.json({ error: "Name is required." }, { status: 400 })
     }
+    if (name.length > 40) {
+      return NextResponse.json({ error: "Name must be 40 characters or fewer." }, { status: 400 })
+    }
     const pin = typeof body.pin === "string" ? body.pin : ""
-    if (pin && (pin.length < 4 || pin.length > 8)) {
-      return NextResponse.json({ error: "PIN must be 4–8 characters." }, { status: 400 })
+    if (!/^\d{4,8}$/.test(pin)) {
+      return NextResponse.json({ error: "PIN must be 4–8 digits." }, { status: 400 })
     }
 
     const count = await prisma.user.count()
@@ -75,7 +62,7 @@ export async function POST(req: NextRequest) {
     const user = await prisma.user.create({
       data: {
         name,
-        pinHash: pin ? hashPin(pin) : "",
+        pinHash: hashPin(pin),
         avatarColor,
       },
       select: {
@@ -87,7 +74,11 @@ export async function POST(req: NextRequest) {
         ...workCycleSelect,
       },
     })
-    return NextResponse.json(user, { status: 201 })
+    await revokeRequestSession(req)
+    const session = await createUserSession(user.id)
+    const response = NextResponse.json(user, { status: 201 })
+    setUserSessionCookie(response, session)
+    return response
   } catch (e) {
     console.error("[users POST]", e)
     return NextResponse.json({ error: "Failed to create user" }, { status: 500 })

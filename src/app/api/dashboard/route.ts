@@ -206,6 +206,7 @@ export async function GET(req: NextRequest) {
         workCycleLength: true,
         workCyclePatternJson: true,
         workoutGoalPerCycle: true,
+        protocolEnabled: true,
       },
     })
     const trackingTz = resolveStepsTimezone(profile?.timeZone ?? DEFAULT_STEPS_TIMEZONE)
@@ -261,7 +262,9 @@ export async function GET(req: NextRequest) {
       prisma.runEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.workoutEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.sleepEntry.findMany({ where: { date: dateInRange, userId } }),
-      prisma.peptideEntry.findMany({ where: { date: dateInRange, userId } }),
+      profile?.protocolEnabled === false
+        ? Promise.resolve([])
+        : prisma.peptideEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.alcoholEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.bowelEntry.findMany({ where: { date: dateInRange, userId } }),
       prisma.recoveryDailyEntry.findMany({ where: { date: dateInRange, userId } }),

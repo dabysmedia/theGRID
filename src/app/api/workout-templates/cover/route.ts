@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import fs from "node:fs"
 import path from "node:path"
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { getRoutineCoversUploadDir } from "@/lib/uploads-path"
 import { resolveUserId, UserError } from "@/lib/current-user"
+import { prisma } from "@/lib/prisma"
 
 const MAX_SIZE_BYTES = 8 * 1024 * 1024
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
@@ -26,7 +27,7 @@ function extFromMime(mime: string): string {
 
 export async function POST(req: NextRequest) {
   try {
-    await resolveUserId(req)
+    const userId = await resolveUserId(req)
     const formData = await req.formData()
     const file = formData.get("file")
 
@@ -51,7 +52,8 @@ export async function POST(req: NextRequest) {
 
     ensureUploadDir()
     const ext = extFromMime(file.type)
-    const filename = `${randomUUID()}.${ext}`
+    const ownerPrefix = createHash("sha256").update(userId).digest("hex").slice(0, 16)
+    const filename = `${ownerPrefix}-${randomUUID()}.${ext}`
     const filePath = path.join(getRoutineCoversUploadDir(), filename)
     fs.writeFileSync(filePath, Buffer.from(arrayBuffer))
 
@@ -67,7 +69,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    await resolveUserId(req)
+    const userId = await resolveUserId(req)
     const url = new URL(req.url).searchParams.get("url")
     if (!url || !url.startsWith(ROUTINE_COVER_PREFIX)) {
       return NextResponse.json({ error: "Invalid URL." }, { status: 400 })
@@ -75,6 +77,16 @@ export async function DELETE(req: NextRequest) {
     const filename = path.basename(url)
     if (filename.includes("..") || filename.includes("/")) {
       return NextResponse.json({ error: "Invalid filename." }, { status: 400 })
+    }
+    const ownerPrefix = createHash("sha256").update(userId).digest("hex").slice(0, 16)
+    if (!filename.startsWith(`${ownerPrefix}-`)) {
+      const ownedLegacy = await prisma.workoutTemplate.findFirst({
+        where: { userId, coverImageUrl: url },
+        select: { id: true },
+      })
+      if (!ownedLegacy) {
+        return NextResponse.json({ error: "Cover not found for this profile." }, { status: 404 })
+      }
     }
     const filePath = path.join(getRoutineCoversUploadDir(), filename)
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath)

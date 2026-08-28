@@ -23,6 +23,24 @@ export async function POST(req: NextRequest) {
         { status: 400, headers: NO_STORE },
       )
     }
+    const sessionId = typeof body.sessionId === "string" && body.sessionId.trim()
+      ? body.sessionId.trim()
+      : null
+    const sourceSessionIds = Array.isArray(body.sourceSessionIds)
+      ? [...new Set(body.sourceSessionIds.filter((id: unknown): id is string => typeof id === "string" && id.trim() !== ""))]
+      : []
+    const referencedIds = [...new Set([...(sessionId ? [sessionId] : []), ...sourceSessionIds])]
+    if (referencedIds.length > 0) {
+      const ownedCount = await prisma.workoutSession.count({
+        where: { id: { in: referencedIds }, userId },
+      })
+      if (ownedCount !== referencedIds.length) {
+        return NextResponse.json(
+          { error: "One or more workout sessions do not belong to this profile." },
+          { status: 404, headers: NO_STORE },
+        )
+      }
+    }
     const status = ["shown", "applied", "dismissed"].includes(body.status)
       ? (body.status as string)
       : "shown"
@@ -34,15 +52,13 @@ export async function POST(req: NextRequest) {
     const row = await prisma.progressionRecommendation.create({
       data: {
         userId,
-        sessionId: typeof body.sessionId === "string" ? body.sessionId : null,
+        sessionId,
         targetExerciseKey,
         sourceExerciseKey:
           typeof body.sourceExerciseKey === "string" && body.sourceExerciseKey
             ? body.sourceExerciseKey
             : null,
-        sourceSessionIds: JSON.stringify(
-          Array.isArray(body.sourceSessionIds) ? body.sourceSessionIds : [],
-        ),
+        sourceSessionIds: JSON.stringify(sourceSessionIds),
         recommendationType:
           typeof body.recommendationType === "string" ? body.recommendationType : "initial",
         suggestedLoadLb: num(body.suggestedLoadLb),

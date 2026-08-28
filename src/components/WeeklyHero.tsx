@@ -36,6 +36,7 @@ import { CardioTracker } from "@/components/CardioTracker"
 import { useActiveDate } from "@/context/DateContext"
 import { ProfileHeaderTrigger } from "@/context/ProfileDialogContext"
 import type { NextInjectionInfo } from "@/lib/hub-tile-prefs"
+import { PEPTIDE_COLOR } from "@/lib/peptides"
 import { cn, glassPanelClass, parseLocalDate } from "@/lib/utils"
 import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
 
@@ -154,7 +155,7 @@ function ProgressRing({
     <>
       <div
         className={cn(
-          "relative size-[var(--hub-ring-size)] motion-safe:animate-ring-pop motion-reduce:animate-none lg:h-[124px] lg:w-[124px]",
+          "relative size-[var(--hub-ring-size)] motion-safe:animate-ring-pop motion-reduce:animate-none",
           staggerClass,
           "transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
           selected && "scale-[1.06]",
@@ -315,6 +316,8 @@ interface WeeklyHeroProps {
    * distribute instrument sections (no default page scroll).
    */
   fillViewport?: boolean
+  /** Per-profile feature flag. Disabled hides all peptide / protocol surfaces. */
+  protocolEnabled?: boolean
   /** Peptides / workouts summary for the protocol/training instrument rail + expand panels. */
   peptideSummary?: {
     lastDoseMg: number | null
@@ -462,6 +465,7 @@ export function WeeklyHero({
   expanded: expandedProp,
   onExpandedChange,
   fillViewport = false,
+  protocolEnabled = true,
   peptideSummary,
   workoutSummary,
 }: WeeklyHeroProps) {
@@ -480,6 +484,7 @@ export function WeeklyHero({
   }
 
   const toggleExpand = (panel: HubExpandedPanel) => {
+    if (panel === "peptides" && !protocolEnabled) return
     const closing = expanded === panel
     if (panel === "peptides" || panel === "workouts") {
       const source = closing
@@ -562,7 +567,7 @@ export function WeeklyHero({
     expanded === "calories" || expanded === "steps" || expanded === "sleep"
       ? expanded
       : null
-  const protocolFocused = expanded === "peptides" || expanded === "workouts"
+  const protocolFocused = (protocolEnabled && expanded === "peptides") || expanded === "workouts"
   const weightFocused = expanded === "weight"
   const showRings = expanded == null || expandedRing != null || protocolFocused
   const showStepsBars =
@@ -601,7 +606,7 @@ export function WeeklyHero({
         // body below so card edges stay visible.
         // flex-1 (not h-full %) so the card always consumes the shell height —
         // percentage heights can stay short until a scroll reflow on mobile.
-        "flex min-h-0 flex-col !overflow-clip !rounded-[1.35rem] border border-white/[0.09] p-4 transition-opacity duration-700 max-sm:!rounded-b-[2.65rem] max-lg:px-3 max-lg:pt-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] lg:p-5",
+        "flex min-h-0 flex-col !overflow-clip !rounded-[1.35rem] border border-white/[0.09] p-4 transition-opacity duration-700 max-sm:!rounded-b-[2.65rem] max-lg:px-3 max-lg:pt-3 max-lg:pb-[max(1rem,env(safe-area-inset-bottom,0px))] lg:p-5",
         fillViewport && "min-h-0 flex-1",
         loading ? "opacity-50" : "opacity-100",
       )}
@@ -723,10 +728,12 @@ export function WeeklyHero({
           "relative z-10 motion-safe:animate-fade-up motion-reduce:animate-none",
           fillViewport && expanded != null &&
             "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0",
+          fillViewport && expanded == null && "min-h-0 flex-1 overflow-hidden",
+          fillViewport && expanded != null && "-mx-3 px-3 lg:-mx-5 lg:px-5",
           protocolFocused || weightFocused || expanded === "vitals"
             ? "space-y-0"
             : fillViewport && expanded == null
-            ? "max-lg:flex max-lg:min-h-0 max-lg:flex-1 max-lg:flex-col max-lg:justify-between max-lg:gap-[var(--hub-section-gap)] space-y-4 max-lg:space-y-0"
+            ? "flex min-h-0 flex-1 flex-col justify-between gap-[var(--hub-section-gap)] pb-1 space-y-0"
             : "space-y-4",
         )}
       >
@@ -893,7 +900,7 @@ export function WeeklyHero({
                 >
                   {expanded === "peptides" ? (
                     <PeptideVialGraphic
-                      color="#94a3b8"
+                      color={PEPTIDE_COLOR}
                       doseMg={peptideSummary?.lastDoseMg ?? null}
                       size="md"
                       className="shrink-0"
@@ -961,14 +968,26 @@ export function WeeklyHero({
           show={expanded == null}
           className={fillViewport ? "shrink-0" : undefined}
         >
-          <div className="grid grid-cols-2 items-stretch gap-2 sm:gap-2.5">
+          <div className="relative isolate grid grid-cols-2 items-stretch">
+            <div
+              className="pointer-events-none absolute inset-x-3 -inset-y-3 -z-10"
+              aria-hidden
+              style={{
+                background:
+                  "radial-gradient(ellipse 68% 116% at 23% 50%, rgba(34,211,238,0.105) 0%, rgba(8,145,178,0.04) 43%, rgba(8,145,178,0.012) 65%, transparent 86%), radial-gradient(ellipse 68% 116% at 77% 50%, rgba(250,204,21,0.10) 0%, rgba(217,119,6,0.038) 43%, rgba(217,119,6,0.012) 65%, transparent 86%)",
+                maskImage:
+                  "radial-gradient(ellipse 96% 88% at 50% 50%, black 24%, rgba(0,0,0,0.68) 54%, transparent 96%)",
+                WebkitMaskImage:
+                  "radial-gradient(ellipse 96% 88% at 50% 50%, black 24%, rgba(0,0,0,0.68) 54%, transparent 96%)",
+              }}
+            />
             <WaterTracker />
             <CardioTracker />
           </div>
         </FadeSection>
 
         <HubPresence
-          open={expanded === "peptides"}
+          open={protocolEnabled && expanded === "peptides"}
           durationMs={1000}
         >
           <div className="pt-3">
@@ -1073,22 +1092,24 @@ export function WeeklyHero({
           />
         </HubPresence>
 
-        {/* Protocol / training — classic 2-col rail (no nested HubCollapse around text) */}
+        {/* Optional Protocol + always-on training rail. */}
         <FadeSection show={showProtocolRail} className={fillViewport ? "shrink-0" : undefined}>
           <div
             className="relative z-10 px-0.5 py-0.5 sm:px-1 sm:py-1"
             role="group"
-            aria-label="Protocol and training"
+            aria-label={protocolEnabled ? "Protocol and training" : "Training"}
           >
-            <div className="relative grid grid-cols-2 items-stretch">
+            <div className={cn("relative grid items-stretch", protocolEnabled ? "grid-cols-2" : "grid-cols-1")}>
+              {protocolEnabled && (
+                <>
                 <button
                   type="button"
                   onClick={() => toggleExpand("peptides")}
                   aria-label="Expand peptides"
                   aria-expanded={false}
-                  className="group relative flex min-h-[var(--hub-protocol-min-h)] min-w-0 items-center py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem] sm:py-3.5"
+                  className="group relative flex min-h-[var(--hub-protocol-min-h)] min-w-0 items-center py-2 text-left transition-colors hover:bg-violet-400/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-300/25 sm:py-3"
                 >
-                  <span className="pointer-events-none absolute left-2/3 top-1/2 z-10 size-[var(--hub-protocol-glyph)] -translate-x-1/2 -translate-y-1/2 sm:size-24">
+                  <span className="pointer-events-none absolute left-2/3 top-1/2 z-10 size-[var(--hub-protocol-glyph)] -translate-x-1/2 -translate-y-1/2">
                     <ProtocolGlyphMorph
                       origin={
                         expanded == null && protocolMotionOrigin?.panel === "peptides"
@@ -1099,7 +1120,7 @@ export function WeeklyHero({
                       captureRef={peptideRailGlyphRef}
                     >
                       <PeptideVialGraphic
-                        color="#94a3b8"
+                        color={PEPTIDE_COLOR}
                         doseMg={peptideSummary?.lastDoseMg ?? null}
                         size="md"
                         className="mx-0 shrink-0 opacity-90"
@@ -1107,10 +1128,10 @@ export function WeeklyHero({
                     </ProtocolGlyphMorph>
                   </span>
                   <div className="min-w-0 w-[calc(66.666%-3.25rem)] pr-1 text-right sm:w-[calc(66.666%-3.5rem)]">
-                    <p className="type-hud-micro text-muted-foreground/70">Protocol</p>
+                    <p className="type-hud-micro text-violet-200/70">Protocol</p>
                     <p
                       className={cn(
-                        "truncate text-[13px] font-semibold tracking-wide text-foreground/90",
+                        "truncate text-[13px] font-semibold tracking-wide text-violet-100/90",
                         peptideNext?.overdue && "text-negative",
                         peptideNext?.dueToday && "text-primary",
                       )}
@@ -1129,15 +1150,22 @@ export function WeeklyHero({
                   className="pointer-events-none absolute inset-y-3 left-1/2 z-[1] w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-white/12 to-transparent"
                   aria-hidden
                 />
+                </>
+              )}
 
                 <button
                   type="button"
                   onClick={() => toggleExpand("workouts")}
                   aria-label={primaryPlan ? `Expand workouts, ${primaryPlan.name} planned` : "Expand workouts"}
                   aria-expanded={false}
-                  className="group relative flex min-h-[var(--hub-protocol-min-h)] min-w-0 items-center py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:min-h-[6rem] sm:py-3.5"
+                  className="group relative flex min-h-[var(--hub-protocol-min-h)] min-w-0 items-center py-2 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25 sm:py-3"
                 >
-                  <span className="pointer-events-none absolute left-1/3 top-1/2 z-10 size-[var(--hub-protocol-glyph)] -translate-x-1/2 -translate-y-1/2 sm:size-24">
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute top-1/2 z-10 size-[var(--hub-protocol-glyph)] -translate-x-1/2 -translate-y-1/2",
+                      protocolEnabled ? "left-1/3" : "left-2/3",
+                    )}
+                  >
                     <ProtocolGlyphMorph
                       origin={
                         expanded == null && protocolMotionOrigin?.panel === "workouts"
@@ -1156,7 +1184,14 @@ export function WeeklyHero({
                       />
                     </ProtocolGlyphMorph>
                   </span>
-                  <div className="min-w-0 w-full pl-[calc(33.333%+3.25rem)] sm:pl-[calc(33.333%+3.5rem)]">
+                  <div
+                    className={cn(
+                      "min-w-0 w-full",
+                      protocolEnabled
+                        ? "pl-[calc(33.333%+3.25rem)] sm:pl-[calc(33.333%+3.5rem)]"
+                        : "w-[calc(66.666%-3.25rem)] pr-1 text-right sm:w-[calc(66.666%-3.5rem)]",
+                    )}
+                  >
                     <p
                       className={cn(
                         "type-hud-micro",
@@ -1215,6 +1250,7 @@ export function WeeklyHero({
               embedded
               weightTrend={data.weightTrend}
               graphFocused={expanded === "weight"}
+              showProgressCheckIn={expanded !== "weight"}
               onActivate={expanded === "weight" ? undefined : () => toggleExpand("weight")}
             />
             <HubPresence open={expanded === "weight"} durationMs={HUB_MOTION_MS}>

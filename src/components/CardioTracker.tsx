@@ -300,7 +300,7 @@ export function CardioTracker() {
             ref={triggerRef}
             type="button"
             aria-label={`Open cardio tracker, ${formatMinutes(totalMinutes)} of ${formatMinutes(goalMinutes)} minutes`}
-            className="group relative flex min-h-[5.5rem] w-full items-center gap-1.5 overflow-hidden rounded-2xl border border-amber-200/[0.10] bg-amber-950/[0.09] px-2 text-left touch-manipulation transition-[border-color,background-color,transform] duration-300 hover:border-amber-200/20 hover:bg-amber-900/[0.13] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/40 sm:min-h-[5.75rem] sm:gap-1.5 sm:px-3"
+            className="group relative flex min-h-[clamp(4.75rem,11svh,5.5rem)] w-full items-center gap-1.5 overflow-hidden rounded-2xl bg-transparent px-2 text-left touch-manipulation transition-[background-color,transform] duration-300 hover:bg-amber-900/[0.08] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-300/40 sm:gap-1.5 sm:px-3"
           />
         }
       >
@@ -311,10 +311,19 @@ export function CardioTracker() {
             backgroundImage:
               "linear-gradient(to right, rgb(254 240 138 / 6%) 1px, transparent 1px), linear-gradient(to bottom, rgb(254 240 138 / 5%) 1px, transparent 1px)",
             backgroundSize: "18px 18px",
-            maskImage: "linear-gradient(90deg, black, transparent 82%)",
+            maskImage:
+              "linear-gradient(90deg, transparent 0%, black 56%, black 82%, transparent 100%)",
           }}
         />
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-28 bg-[radial-gradient(circle_at_40%_50%,rgba(250,204,21,0.13),transparent_68%)]" />
+        <div
+          className="pointer-events-none absolute inset-y-0 right-0 w-32 bg-[radial-gradient(circle_at_58%_50%,rgba(250,204,21,0.13),transparent_70%)]"
+          style={{
+            maskImage:
+              "linear-gradient(90deg, transparent 0%, black 32%, black 76%, transparent 100%)",
+            WebkitMaskImage:
+              "linear-gradient(90deg, transparent 0%, black 32%, black 76%, transparent 100%)",
+          }}
+        />
 
         <div className="relative flex h-[4rem] w-[2.35rem] shrink-0 items-center justify-center overflow-visible sm:w-[2.8rem]">
           <div className="scale-[0.45] sm:scale-[0.54]">

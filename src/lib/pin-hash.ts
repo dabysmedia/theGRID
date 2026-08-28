@@ -1,6 +1,6 @@
 import "server-only"
 
-import { scryptSync, randomBytes } from "node:crypto"
+import { scryptSync, randomBytes, timingSafeEqual } from "node:crypto"
 
 const KEY_LEN = 32
 
@@ -15,6 +15,7 @@ export function verifyPin(pin: string, stored: string): boolean {
   const parts = stored.split("$")
   if (parts.length !== 3) return false
   const [, salt, hash] = parts
-  const derived = scryptSync(pin, salt, KEY_LEN).toString("hex")
-  return derived === hash
+  const derived = scryptSync(pin, salt, KEY_LEN)
+  const expected = Buffer.from(hash, "hex")
+  return expected.length === derived.length && timingSafeEqual(derived, expected)
 }

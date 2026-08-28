@@ -12,6 +12,7 @@ export type TokenBundle = {
   refreshToken: string
   expiresAt: Date
   scope?: string | null
+  googleSubject?: string | null
 }
 
 const TOKEN_SKEW_MS = 60_000
@@ -62,13 +63,15 @@ export async function exchangeAuthorizationCode(input: {
   }
 
   let googleAccount: string | null = null
+  let googleSubject: string | null = null
   try {
     const ui = await fetch(GOOGLE_USERINFO_URL, {
       headers: { Authorization: `Bearer ${data.access_token}` },
     })
     if (ui.ok) {
-      const profile = (await ui.json()) as { email?: string }
+      const profile = (await ui.json()) as { id?: string; email?: string }
       googleAccount = profile.email ?? null
+      googleSubject = profile.id ?? null
     }
   } catch {
     /* optional */
@@ -80,6 +83,7 @@ export async function exchangeAuthorizationCode(input: {
     expiresAt: new Date(Date.now() + (data.expires_in ?? 3600) * 1000),
     scope: data.scope ?? null,
     googleAccount,
+    googleSubject,
   }
 }
 

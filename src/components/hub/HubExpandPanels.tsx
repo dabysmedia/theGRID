@@ -876,21 +876,21 @@ export function HubPeptidesExpand({
   }
 
   const statsGrid = (
-    <div className="grid grid-cols-3 gap-2">
-      <div className="flex min-h-[5.5rem] min-w-0 flex-col justify-between rounded-xl border border-white/[0.065] bg-white/[0.025] p-3">
-        <p className="type-hud-micro text-muted-foreground/55">Today</p>
-        <p className="text-base font-semibold tabular-nums text-foreground/90">
+    <div className="-mx-3 grid grid-cols-3 divide-x divide-violet-300/[0.07] border-y border-violet-300/[0.07] bg-violet-400/[0.015] sm:-mx-4 lg:-mx-5">
+      <div className="flex min-h-[5.25rem] min-w-0 flex-col justify-between px-3 py-3.5 sm:px-4">
+        <p className="type-hud-micro text-violet-200/55">Today</p>
+        <p className="text-lg font-semibold tabular-nums text-foreground/95">
           {todayMg > 0 ? `${todayMg} mg` : "—"}
         </p>
       </div>
-      <div className="flex min-h-[5.5rem] min-w-0 flex-col justify-between rounded-xl border border-white/[0.065] bg-white/[0.025] p-3">
-        <p className="type-hud-micro text-muted-foreground/55">Protocol</p>
-        <p className="text-base font-semibold tabular-nums text-foreground/90">
+      <div className="flex min-h-[5.25rem] min-w-0 flex-col justify-between px-3 py-3.5 sm:px-4">
+        <p className="type-hud-micro text-violet-200/55">Protocol</p>
+        <p className="text-lg font-semibold tabular-nums text-violet-100/95">
           {weekLabel ?? "—"}
         </p>
       </div>
-      <div className="flex min-h-[5.5rem] min-w-0 flex-col justify-between rounded-xl border border-white/[0.065] bg-white/[0.025] p-3">
-        <p className="type-hud-micro text-muted-foreground/55">Last shot</p>
+      <div className="flex min-h-[5.25rem] min-w-0 flex-col justify-between px-3 py-3.5 sm:px-4">
+        <p className="type-hud-micro text-violet-200/55">Last shot</p>
         <p className="text-[13px] font-semibold leading-snug tabular-nums text-foreground/85">
           {lastLabel ?? "—"}
         </p>
@@ -899,7 +899,19 @@ export function HubPeptidesExpand({
   )
 
   return (
-    <div className="hub-detail-sequence space-y-4 px-0.5">
+    <div className="hub-detail-sequence relative isolate space-y-0 overflow-visible">
+      <div
+        className="pointer-events-none absolute -inset-x-20 top-[-0.75rem] -z-10 h-[24rem]"
+        style={{
+          background:
+            "radial-gradient(ellipse 105% 72% at 50% 34%, rgba(167,139,250,0.08) 0%, rgba(124,58,237,0.022) 42%, rgba(124,58,237,0.006) 68%, transparent 90%)",
+          maskImage:
+            "linear-gradient(to bottom, transparent 0%, black 22%, black 68%, transparent 100%)",
+          WebkitMaskImage:
+            "linear-gradient(to bottom, transparent 0%, black 22%, black 68%, transparent 100%)",
+        }}
+        aria-hidden
+      />
       {!hideHero ? (
         <>
           <div className="min-w-0">
@@ -932,11 +944,11 @@ export function HubPeptidesExpand({
         statsGrid
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 gap-2.5 py-4">
         <button
           type="button"
           onClick={() => setInjectionOpen(true)}
-          className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-slate-400/35 hover:bg-slate-400/[0.07] hover:text-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/30 sm:flex-none sm:px-4"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-violet-300/20 bg-gradient-to-b from-violet-400/12 to-violet-500/[0.05] px-3 type-hud-micro !text-violet-100 shadow-[0_10px_30px_rgba(124,58,237,0.06)] transition-colors hover:border-violet-200/30 hover:from-violet-400/16 hover:to-violet-500/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/30"
         >
           <Syringe className="h-3.5 w-3.5" aria-hidden />
           Log injection
@@ -944,15 +956,20 @@ export function HubPeptidesExpand({
         <button
           type="button"
           onClick={() => setDailyOpen(true)}
-          className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-slate-400/35 hover:bg-slate-400/[0.07] hover:text-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/30 sm:flex-none sm:px-4"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.025] px-3 type-hud-micro text-muted-foreground/90 transition-colors hover:border-violet-300/25 hover:bg-violet-400/[0.06] hover:text-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/30"
         >
           <Plus className="h-3.5 w-3.5" aria-hidden />
           Log appetite
         </button>
       </div>
 
-      <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-        <p className="type-hud-caption">Injection frequency</p>
+      <div className="space-y-3 border-t border-violet-300/10 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="type-hud-caption text-violet-100/65">Injection frequency</p>
+          <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/45">
+            Every {intervalDays} days
+          </p>
+        </div>
         <div className="flex flex-wrap gap-2">
           {INJECTION_INTERVAL_PRESETS.map((days) => (
             <GlassChip
@@ -988,7 +1005,7 @@ export function HubPeptidesExpand({
                   commitCustomInterval()
                 }
               }}
-              className="h-9 w-20 rounded-lg border border-white/10 bg-white/[0.04] px-2 text-sm tabular-nums outline-none focus:border-slate-400/40 focus:ring-1 focus:ring-slate-400/20"
+              className="h-9 w-20 rounded-lg border border-violet-300/15 bg-violet-400/[0.045] px-2 text-sm tabular-nums outline-none focus:border-violet-300/40 focus:ring-1 focus:ring-violet-300/20"
               aria-label="Custom interval days"
             />
             <span className="type-hud-caption normal-case tracking-normal text-muted-foreground/60">
@@ -998,8 +1015,18 @@ export function HubPeptidesExpand({
         )}
       </div>
 
-      <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-        <p className="type-hud-caption">Schedule</p>
+      <div className="space-y-3 border-t border-violet-300/10 py-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="type-hud-caption text-violet-100/65">Schedule</p>
+          <p
+            className={cn(
+              "text-[11px] font-semibold tabular-nums",
+              nextInjection?.overdue ? "text-negative" : "text-violet-200/75",
+            )}
+          >
+            {untilLabel}
+          </p>
+        </div>
         {lastInjectedAt && nextInjection ? (
           <div className="space-y-2">
             <div className="relative h-3 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-inset ring-white/[0.035]">
@@ -1010,7 +1037,7 @@ export function HubPeptidesExpand({
                     ? "bg-negative/80"
                     : nextInjection.dueToday
                       ? "bg-primary/80"
-                      : "bg-slate-400/70",
+                    : "bg-violet-400/80 shadow-[0_0_14px_rgba(167,139,250,0.24)]",
                 )}
                 style={{ width: `${Math.round(cycleProgress * 100)}%` }}
               />
@@ -1070,7 +1097,7 @@ export function HubPeptidesExpand({
         entries={recentEntries}
         lastDoseMg={lastDoseMg}
         lastInjectedAt={lastInjectedAt}
-        className="rounded-2xl border border-white/[0.07] bg-black/10 p-4"
+        className="border-t border-violet-300/10 py-4"
         compact
       />
 
@@ -1078,11 +1105,11 @@ export function HubPeptidesExpand({
         hungerLogs={hungerLogs}
         doseEntries={recentEntries}
         lastDoseMg={lastDoseMg}
-        className="rounded-2xl border border-white/[0.07] bg-black/10 p-4"
+        className="border-t border-violet-300/10 py-4"
         compact
       />
 
-      <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+      <div className="space-y-3 border-t border-violet-300/10 py-4">
         <div className="flex items-baseline justify-between gap-2">
           <p className="type-hud-caption">Recent injections</p>
         </div>
@@ -1106,7 +1133,7 @@ export function HubPeptidesExpand({
                       {format(new Date(latestEntry.injectedAt), "EEE · MMM d · h:mm a")}
                     </p>
                   </div>
-                  <span className="shrink-0 type-hud-micro text-slate-300/70">Latest</span>
+                  <span className="shrink-0 type-hud-micro text-violet-200/75">Latest</span>
                 </div>
               </li>
             ) : null}
@@ -1131,7 +1158,7 @@ export function HubPeptidesExpand({
                   <ChevronDown
                     className={cn(
                       "h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform duration-200",
-                      pastWeeksOpen && "rotate-180 text-slate-300/70",
+                      pastWeeksOpen && "rotate-180 text-violet-200/70",
                     )}
                     aria-hidden
                   />
@@ -1141,7 +1168,7 @@ export function HubPeptidesExpand({
                     {pastWeekGroups.map((group) => (
                       <div key={group.weekKey} className="space-y-0">
                         <div className="flex items-baseline justify-between gap-2 px-0.5 pt-1.5">
-                          <p className="type-hud-micro tabular-nums text-slate-300/70">
+                          <p className="type-hud-micro tabular-nums text-violet-200/70">
                             Week {group.weekNumber}
                           </p>
                           <p className="type-hud-micro normal-case tracking-normal text-muted-foreground/45">
@@ -1182,7 +1209,7 @@ export function HubPeptidesExpand({
                                   <ChevronDown
                                     className={cn(
                                       "h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                                      open && "rotate-180 text-slate-300/70",
+                                      open && "rotate-180 text-violet-200/70",
                                     )}
                                     aria-hidden
                                   />
@@ -1436,9 +1463,9 @@ export function HubWorkoutsExpand({
   const workoutStats = (
     <div className="flex min-w-0 flex-col gap-2.5">
       {!primaryPlan ? (
-        <div className="order-2 flex min-h-[5.75rem] min-w-0 flex-col justify-between gap-2 rounded-2xl border border-[#c4d632]/15 bg-gradient-to-br from-[#c4d632]/[0.09] via-white/[0.025] to-transparent p-3">
+        <div className="order-2 -mx-3 grid min-h-[5.75rem] min-w-0 gap-3 border-t border-[#c4d632]/10 bg-gradient-to-r from-[#c4d632]/[0.045] via-[#c4d632]/[0.012] to-transparent px-3 py-4 sm:-mx-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-4 lg:-mx-5 lg:px-5">
           <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-foreground/95">Start training</p>
+            <p className="font-heading text-lg font-semibold tracking-tight text-foreground/95">Start training</p>
             <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground/60">
               {trainingStyle === "classic"
                 ? "Start a focused session with clear working-set guidance."
@@ -1449,7 +1476,7 @@ export function HubWorkoutsExpand({
             type="button"
             disabled={startingId != null}
             onClick={goStartFreeForm}
-            className="inline-flex h-9 w-full touch-manipulation items-center justify-center gap-2 rounded-lg border border-[#dce95c]/30 bg-[#c4d632]/15 px-3 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#e8f07a] transition-colors hover:border-[#dce95c]/50 hover:bg-[#c4d632]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 disabled:opacity-50"
+            className="inline-flex h-10 w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-[#dce95c]/25 bg-[#c4d632]/10 px-5 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#eff78c] shadow-[0_8px_26px_rgba(196,214,50,0.045)] transition-colors hover:border-[#dce95c]/40 hover:bg-[#c4d632]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/25 disabled:opacity-50 sm:w-auto"
           >
             <Play className="size-3.5" aria-hidden />
             {startingId === "free" ? "Starting…" : "Start"}
@@ -1459,7 +1486,7 @@ export function HubWorkoutsExpand({
       {primaryPlan ? (
         <section
           aria-labelledby="scheduled-workout-heading"
-          className="order-1 relative min-h-[11.5rem] overflow-hidden rounded-2xl border border-[#dce95c]/25 bg-gradient-to-br from-[#c4d632]/[0.15] via-[#c4d632]/[0.055] to-white/[0.02] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_45px_rgba(0,0,0,0.16)] sm:p-5"
+          className="order-1 relative min-h-[11.5rem] overflow-hidden rounded-2xl border border-[#dce95c]/18 bg-gradient-to-br from-[#c4d632]/[0.085] via-[#c4d632]/[0.022] to-white/[0.012] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.035),0_18px_48px_rgba(0,0,0,0.13)] sm:p-5"
         >
           {primaryPlanTemplate?.coverImageUrl?.trim() ? (
             <>
@@ -1531,7 +1558,7 @@ export function HubWorkoutsExpand({
                 type="button"
                 disabled={startingId != null}
                 onClick={() => void goStartPlannedSession(primaryPlan.id)}
-                className="inline-flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-[#e8f07a]/35 bg-[#c4d632]/20 px-5 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#f1f7a3] shadow-[0_0_20px_rgba(196,214,50,0.08)] transition-colors hover:border-[#e8f07a]/55 hover:bg-[#c4d632]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dce95c]/40 disabled:opacity-50 sm:w-auto sm:min-w-48"
+                className="inline-flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-[#e8f07a]/25 bg-[#c4d632]/12 px-5 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#f1f7a3] shadow-[0_0_24px_rgba(196,214,50,0.045)] transition-colors hover:border-[#e8f07a]/40 hover:bg-[#c4d632]/17 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dce95c]/30 disabled:opacity-50 sm:w-auto sm:min-w-48"
               >
                 <Play className="size-3.5" aria-hidden />
                 {startingId === `planned:${primaryPlan.id}` ? "Starting…" : "Start scheduled workout"}
@@ -1545,9 +1572,9 @@ export function HubWorkoutsExpand({
           </div>
         </section>
       ) : (
-        <div className="order-1 flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.018] px-3.5 py-3">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] bg-white/[0.025]">
-            <Dumbbell className="size-4 text-muted-foreground/45" aria-hidden />
+        <div className="order-1 flex items-center gap-3 border-y border-white/[0.06] px-1 py-3.5">
+          <div className="flex size-9 shrink-0 items-center justify-center text-[#c4d632]/65">
+            <Dumbbell className="size-5" aria-hidden />
           </div>
           <div className="min-w-0">
             <p className="truncate text-[13px] font-semibold text-foreground/90">{lastCue}</p>
@@ -1563,7 +1590,19 @@ export function HubWorkoutsExpand({
   )
 
   return (
-    <div className="flex flex-col gap-4 px-0.5">
+    <div className="relative isolate flex flex-col gap-0 overflow-visible">
+      <div
+        className="pointer-events-none absolute -inset-x-20 top-[-0.75rem] -z-10 h-[25rem]"
+        style={{
+          background:
+            "radial-gradient(ellipse 108% 74% at 50% 35%, rgba(196,214,50,0.065) 0%, rgba(196,214,50,0.016) 44%, rgba(196,214,50,0.005) 70%, transparent 92%)",
+          maskImage:
+            "linear-gradient(to bottom, transparent 0%, black 22%, black 70%, transparent 100%)",
+          WebkitMaskImage:
+            "linear-gradient(to bottom, transparent 0%, black 22%, black 70%, transparent 100%)",
+        }}
+        aria-hidden
+      />
       {!hideHero ? (
         <div className="workout-focus-section order-1 space-y-3">
           <div className="min-w-0">
@@ -1582,11 +1621,11 @@ export function HubWorkoutsExpand({
           </div>
         </div>
       ) : (
-        <div className="workout-focus-section order-1">{workoutStats}</div>
+        <div className="workout-focus-section order-1 pb-4">{workoutStats}</div>
       )}
 
       <div
-        className="workout-focus-section order-2 space-y-3 rounded-2xl border border-white/[0.065] bg-white/[0.02] p-4"
+        className="workout-focus-section order-2 space-y-3 border-y border-[#c4d632]/10 py-4"
         style={{ animationDelay: "150ms" }}
       >
         <div className="flex items-end justify-between gap-3">
@@ -1640,11 +1679,11 @@ export function HubWorkoutsExpand({
 
       <ProgressionSummaryHero
         variant="hud"
-        className="workout-focus-section order-3 rounded-2xl border border-white/[0.065] bg-white/[0.02] p-4"
+        className="workout-focus-section order-3 border-b border-[#c4d632]/10 py-4"
       />
 
       <div
-        className="workout-focus-section order-4 space-y-2.5"
+        className="workout-focus-section order-4 space-y-2.5 pt-4"
         style={{ animationDelay: "280ms" }}
       >
         <div className="flex items-baseline justify-between gap-2">
@@ -1707,7 +1746,7 @@ export function HubWorkoutsExpand({
         ) : null}
 
         {visibleTemplates.length > 0 ? (
-          <div className="grid grid-cols-1 items-stretch gap-2.5 sm:grid-cols-2 sm:gap-3">
+          <div className="grid grid-cols-1 items-stretch border-y border-white/[0.065] sm:grid-cols-2 sm:divide-x sm:divide-white/[0.065]">
             {visibleTemplates.map((tmpl) => {
               const exs = parseHubRoutineExercises(tmpl.exercises)
               const tags = parseHubRoutineTags(tmpl.tags)
@@ -1725,11 +1764,11 @@ export function HubWorkoutsExpand({
                   key={tmpl.id}
                   data-routine-tile={tmpl.id}
                   className={cn(
-                    "group flex min-h-[8.25rem] overflow-hidden rounded-2xl border bg-white/[0.022] transition-colors hover:border-[#c4d632]/20 hover:bg-white/[0.035]",
-                    isPlanned ? "border-[#dce95c]/30 ring-1 ring-[#c4d632]/10" : "border-white/[0.07]",
+                    "group flex min-h-[8.25rem] overflow-hidden border-b border-white/[0.065] bg-transparent transition-colors last:border-b-0 hover:bg-[#c4d632]/[0.025] sm:border-b-0",
+                    isPlanned && "bg-[#c4d632]/[0.035] shadow-[inset_3px_0_0_rgba(220,233,92,0.55)]",
                   )}
                 >
-                  <div className="relative w-[7.25rem] shrink-0 border-r border-white/[0.07] bg-white/[0.03] sm:w-[7.75rem]">
+                  <div className="relative m-3 mr-0 w-[5.75rem] shrink-0 overflow-hidden rounded-xl bg-white/[0.035] sm:w-[6.25rem]">
                     <button
                       type="button"
                       onClick={() => setPreviewId(tmpl.id)}
@@ -1752,7 +1791,7 @@ export function HubWorkoutsExpand({
                         </div>
                       )}
                     </button>
-                    <div className="absolute left-1.5 top-1.5 z-20 sm:left-2 sm:top-2">
+                    <div className="absolute left-1.5 top-1.5 z-20">
                       <Link
                         href={`/workouts?editRoutine=${encodeURIComponent(tmpl.id)}`}
                         className="inline-flex rounded-lg border border-white/15 bg-background/55 p-1.5 text-muted-foreground/80 shadow-sm backdrop-blur-md transition-colors hover:border-[#c4d632]/35 hover:bg-background/75 hover:text-[#e8f07a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c4d632]/30 touch-manipulation"

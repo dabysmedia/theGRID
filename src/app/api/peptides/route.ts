@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { parseYyyyMmDdToStoredDate, utcRangeWhereForCalendarDay } from "@/lib/dateStorage"
-import { resolveUserId, UserError } from "@/lib/current-user"
+import { requireProtocolEnabled, resolveUserId, UserError } from "@/lib/current-user"
 import { INJECTION_SITE_IDS, normalizeSideEffects } from "@/lib/peptides"
 
 export async function GET(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
+    await requireProtocolEnabled(userId)
     const { searchParams } = new URL(req.url)
     const dateParam = searchParams.get("date")
 
@@ -29,6 +30,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
+    await requireProtocolEnabled(userId)
     const body = await req.json()
 
     const doseMg = Number(body.doseMg)
@@ -71,6 +73,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const userId = await resolveUserId(req)
+    await requireProtocolEnabled(userId)
     const { searchParams } = new URL(req.url)
     const id = searchParams.get("id")
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })

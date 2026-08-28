@@ -37,7 +37,7 @@ export function useProfileDialog(): ProfileDialogContextValue {
 }
 
 export function ProfileDialogProvider({ children }: { children: ReactNode }) {
-  const { user, users, loading } = useUser()
+  const { user, loading } = useUser()
   const pathname = usePathname()
   const agentPublic = isAgentPublicPath(pathname)
   const [open, setOpen] = useState(false)
@@ -48,21 +48,18 @@ export function ProfileDialogProvider({ children }: { children: ReactNode }) {
     if (user) setOpen(false)
   }, [user])
 
-  useEffect(() => {
-    if (agentPublic) {
-      setOpen(false)
-      return
-    }
-    if (loading || user) return
-    if (users.length === 0 || users.length > 1) setOpen(true)
-  }, [loading, user, users, agentPublic])
-
   const value = useMemo(() => ({ openProfile }), [openProfile])
 
   return (
     <ProfileDialogContext value={value}>
       {children}
-      <Dialog open={!agentPublic && open} onOpenChange={setOpen}>
+      <Dialog
+        open={!agentPublic && (open || (!loading && !user))}
+        onOpenChange={(next) => {
+          if (!next && !user) return
+          setOpen(next)
+        }}
+      >
         <DialogContent className="glass-frost max-h-[min(32rem,85dvh)] max-w-md w-[calc(100vw-2rem)] flex flex-col overflow-hidden sm:w-full">
           <DialogHeader>
             <DialogTitle className="text-lg tracking-tight">

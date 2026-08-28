@@ -1,5 +1,6 @@
 import "server-only"
 
+import { timingSafeEqual } from "node:crypto"
 import { prisma } from "@/lib/prisma"
 
 export class AgentAccessError extends Error {
@@ -11,18 +12,27 @@ export class AgentAccessError extends Error {
   }
 }
 
-const PROFILE_FALLBACKS = ["los", "carlos"] as const
-
-/** Resolves the agent export profile (AGENT_PROFILE_NAME, then los, then carlos). */
+/** Resolves the explicitly configured profile for unattended agent exports. */
 export async function resolveCarlosUserId(): Promise<{
   id: string
   name: string
 }> {
+  const envId = process.env.AGENT_PROFILE_ID?.trim()
   const envName = process.env.AGENT_PROFILE_NAME?.trim().toLowerCase()
-  const targets = [
-    ...(envName ? [envName] : []),
-    ...PROFILE_FALLBACKS,
-  ].filter((name, i, arr) => arr.indexOf(name) === i)
+  if (!envId && !envName) {
+    throw new AgentAccessError(
+      "Agent export is not configured. Set AGENT_PROFILE_ID or AGENT_PROFILE_NAME.",
+      503,
+    )
+  }
+
+  if (envId) {
+    const user = await prisma.user.findUnique({
+      where: { id: envId },
+      select: { id: true, name: true },
+    })
+    if (user) return user
+  }
 
   const users = await prisma.user.findMany({
     where: { name: { not: "" } },
@@ -30,17 +40,30 @@ export async function resolveCarlosUserId(): Promise<{
     orderBy: { createdAt: "asc" },
   })
 
-  for (const target of targets) {
-    const match = users.find((u) => u.name.trim().toLowerCase() === target)
-    if (match) return match
-  }
-
-  if (users.length === 1) {
-    return users[0]!
+  if (envName) {
+    const matches = users.filter((user) => user.name.trim().toLowerCase() === envName)
+    if (matches.length === 1) return matches[0]!
+    if (matches.length > 1) {
+      throw new AgentAccessError("AGENT_PROFILE_NAME is ambiguous; use AGENT_PROFILE_ID.", 503)
+    }
   }
 
   throw new AgentAccessError(
-    `No agent profile found (tried: ${targets.join(", ")}). Set AGENT_PROFILE_NAME or create a profile.`,
+    "The configured agent profile was not found.",
     404
   )
+}
+
+export function authorizeAgentRequest(req: Request): void {
+  const expected = process.env.AGENT_API_TOKEN?.trim()
+  if (!expected || expected.length < 32) {
+    throw new AgentAccessError("Agent API access is not configured.", 503)
+  }
+  const auth = req.headers.get("authorization") ?? ""
+  const supplied = auth.startsWith("Bearer ") ? auth.slice(7) : ""
+  const left = Buffer.from(supplied)
+  const right = Buffer.from(expected)
+  if (left.length !== right.length || !timingSafeEqual(left, right)) {
+    throw new AgentAccessError("Unauthorized.", 401)
+  }
 }

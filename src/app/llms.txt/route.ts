@@ -8,19 +8,19 @@ function buildLlmsTxt(origin: string): string {
 
 > Tactical health & fitness tracker (calories, workouts, sleep, recovery, journal, peptides, and more).
 
-This site exposes read-only health data (profile **los** or **carlos**, or the only profile on the server) for external AI agents. No sign-in, profile picker, or PIN.
+Health data is never public. Browser access follows the active authenticated profile. Unattended agent access requires a Bearer token and an explicitly configured profile.
 
 ## Data export
 
-- **Agent page (HTML + summary, no auth):** ${base}/agents
+- **Agent page (HTML + summary, browser session required):** ${base}/agents
 - **JSON (all tables):** ${base}/api/agent/carlos
 - **Plain-text (today / week / month + 7-day snapshot):** ${base}/api/agent/carlos?format=text
 
-All agent routes are public.
+Machine requests must send \`Authorization: Bearer <AGENT_API_TOKEN>\`. The server must also set \`AGENT_PROFILE_ID\` (preferred) or a unique \`AGENT_PROFILE_NAME\`.
 
 ## In-app API (browser session)
 
-The web app uses \`x-user-id\` on API routes after the user selects a profile. Agents should prefer \`/api/agent/carlos\` instead.
+The web app uses a persistent HttpOnly profile session. A client-provided profile id can narrow a request but cannot override the authenticated session.
 
 ## Data included in /api/agent/carlos
 

@@ -11,7 +11,8 @@ const MIME: Record<string, string> = {
   gif: "image/gif",
 }
 
-const ALLOWED_SEGMENTS = new Set(["journal", "avatars", "routine-covers", "coach"])
+// Private media is served by authenticated routes under /api/uploads.
+const ALLOWED_SEGMENTS = new Set(["avatars", "routine-covers"])
 
 /**
  * Resolves a catch-all upload path (array of segments) to an absolute file
@@ -23,7 +24,7 @@ const ALLOWED_SEGMENTS = new Set(["journal", "avatars", "routine-covers", "coach
  *   [segment, userId, filename]   e.g. ["coach", "clxxx", "uuid.jpg"]
  */
 function resolveUploadPath(segments: string[]): string | null {
-  if (segments.length < 2 || segments.length > 3) return null
+  if (segments.length !== 2) return null
 
   const segment = segments[0]
   if (!ALLOWED_SEGMENTS.has(segment)) return null
@@ -34,13 +35,6 @@ function resolveUploadPath(segments: string[]): string | null {
 
   const ext = path.extname(filename).slice(1).toLowerCase()
   if (!MIME[ext]) return null
-
-  if (segments.length === 3) {
-    const userId = segments[1]
-    if (!userId || userId !== path.basename(userId)) return null
-    if (userId.includes("..") || userId.includes("/") || userId.includes("\\")) return null
-    return resolveUploadFilePath(segment, userId, filename)
-  }
 
   return resolveUploadFilePath(segment, filename)
 }
@@ -72,6 +66,7 @@ export async function GET(req: NextRequest) {
   const contentType = MIME[ext]
   if (!contentType) return new NextResponse(null, { status: 404 })
 
+  if (!fs.existsSync(filePath)) return new NextResponse(null, { status: 404 })
   const body = fs.readFileSync(filePath)
   return new NextResponse(body, {
     status: 200,

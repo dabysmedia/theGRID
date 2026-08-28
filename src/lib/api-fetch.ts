@@ -12,9 +12,13 @@ function getActiveUserId(): string | null {
   return null
 }
 
-export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const userId = getActiveUserId()
   const headers = new Headers(init?.headers)
   if (userId) headers.set("x-user-id", userId)
-  return fetch(input, { ...init, headers })
+  const response = await fetch(input, { ...init, headers, credentials: "same-origin" })
+  if (response.status === 401 && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("grid:session-expired"))
+  }
+  return response
 }

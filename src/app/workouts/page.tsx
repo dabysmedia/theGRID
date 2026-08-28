@@ -70,7 +70,7 @@ import {
   recommendFreeFormWorkout,
   suggestedCompoundExercises,
   topFrequentExercises,
-  type BodySplit,
+  type WorkoutFocus,
 } from "@/lib/workouts/free-form-recommender"
 import {
   normalizeTrainingStyle,
@@ -80,6 +80,12 @@ import {
 } from "@/lib/workouts/training-style"
 import { deferExercise } from "@/lib/workouts/active-queue"
 import { normalizeWorkoutSessionExercises } from "@/lib/workouts/session-exercises"
+import {
+  normalizeTrainingSplit,
+  TRAINING_SPLIT_DEFINITIONS,
+  trainingSplitFocuses,
+  type TrainingSplit,
+} from "@/lib/workouts/training-split"
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Types
@@ -1603,6 +1609,7 @@ function ActiveWorkout({
   weekStart,
   weekEnd,
   trainingStyle,
+  trainingSplit,
 }: {
   session: WorkoutSession
   onUpdate: (
@@ -1623,6 +1630,7 @@ function ActiveWorkout({
   weekStart: string
   weekEnd: string
   trainingStyle: TrainingStyle
+  trainingSplit: TrainingSplit
 }) {
   const { activeDate } = useActiveDate()
   const { setFullscreen } = useFullscreenOverlay()
@@ -1635,7 +1643,7 @@ function ActiveWorkout({
     null | "discard" | "finish"
   >(null)
   const [endMenuOpen, setEndMenuOpen] = useState(false)
-  const [freeFormSplit, setFreeFormSplit] = useState<BodySplit | null>(null)
+  const [freeFormSplit, setFreeFormSplit] = useState<WorkoutFocus | null>(null)
   const [freeFormBusy, setFreeFormBusy] = useState(false)
   const [freeFormError, setFreeFormError] = useState<string | null>(null)
   const [restConfig, setRestConfig] =
@@ -1860,11 +1868,11 @@ function ActiveWorkout({
     onUpdate(updated)
   }
 
-  async function generateFreeFormWorkout(split: BodySplit) {
+  async function generateFreeFormWorkout(focus: WorkoutFocus) {
     if (freeFormBusy) return
     setFreeFormBusy(true)
     setFreeFormError(null)
-    setFreeFormSplit(split)
+    setFreeFormSplit(focus)
     try {
       let library = exerciseListCache
       if (!library || library.length === 0) {
@@ -1880,7 +1888,8 @@ function ActiveWorkout({
       const recs = recommendFreeFormWorkout({
         library,
         sessions: previousSessions,
-        split,
+        split: focus === "lower" || focus === "legs" ? "lower" : "upper",
+        focus,
         weekStart,
         weekEnd,
         count: 5,
@@ -1900,7 +1909,8 @@ function ActiveWorkout({
           TRAINING_STYLE_DEFINITIONS[trainingStyle].workingSetTarget ?? 3,
         ).map((s) => ({ ...s, id: uid() })),
       }))
-      onUpdate(next, split === "upper" ? "Upper workout" : "Lower workout")
+      const focusDefinition = trainingSplitFocuses(trainingSplit).find((option) => option.id === focus)
+      onUpdate(next, `${focusDefinition?.label ?? "Free-form"} workout`)
     } catch {
       setFreeFormError("Something went wrong building this workout. Try again.")
     } finally {
@@ -2577,31 +2587,17 @@ function ActiveWorkout({
                     Free-form workout
                   </p>
                   <p className="mx-auto mt-1.5 max-w-[20rem] text-sm leading-relaxed text-muted-foreground/70">
-                    Pick upper or lower — we&apos;ll fill a session from your favorites and
-                    the muscle groups that still need volume this training cycle.
+                    {TRAINING_SPLIT_DEFINITIONS[trainingSplit].label} is active. Choose today&apos;s focus and we&apos;ll prioritize your familiar movements and the groups that still need volume.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2.5">
-                  {(
-                    [
-                      {
-                        id: "upper" as const,
-                        label: "Upper",
-                        hint: "Push · pull · arms",
-                      },
-                      {
-                        id: "lower" as const,
-                        label: "Lower",
-                        hint: "Squat · hinge · glutes",
-                      },
-                    ] as const
-                  ).map((opt) => (
+                  {trainingSplitFocuses(trainingSplit).map((opt) => (
                     <button
                       key={opt.id}
                       type="button"
                       disabled={freeFormBusy}
-                      onClick={() => void generateFreeFormWorkout(opt.id)}
+                      onClick={() => void generateFreeFormWorkout(opt.id as WorkoutFocus)}
                       className={cn(
                         "rounded-2xl border px-3 py-5 text-left transition-all touch-manipulation active:scale-[0.98]",
                         freeFormSplit === opt.id && freeFormBusy
@@ -3426,6 +3422,7 @@ function WorkoutsPageInner() {
   const { user } = useUser()
   const today = activeDate
   const trainingStyle = normalizeTrainingStyle(user?.trainingStyle)
+  const trainingSplit = normalizeTrainingSplit(user?.trainingSplit)
 
   useEffect(() => {
     Promise.all([
@@ -3845,6 +3842,7 @@ function WorkoutsPageInner() {
           weekStart={weekStart}
           weekEnd={weekEnd}
           trainingStyle={trainingStyle}
+          trainingSplit={trainingSplit}
         />
       ) : startError ? (
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-4">

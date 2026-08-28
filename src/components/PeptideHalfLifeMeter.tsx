@@ -174,8 +174,12 @@ export function PeptideHalfLifeMeter({
 
       <div className="relative h-3 overflow-hidden rounded-full bg-white/[0.06] ring-1 ring-inset ring-white/[0.035]">
         <div
-          className="absolute inset-y-0 left-0 rounded-full bg-slate-400/75 transition-[width] duration-500"
-          style={{ width: `${Math.round(model.fillPct)}%` }}
+          className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500"
+          style={{
+            width: `${Math.round(model.fillPct)}%`,
+            background: `linear-gradient(90deg, ${PEPTIDE_COLOR}99, ${PEPTIDE_COLOR})`,
+            boxShadow: `0 0 16px ${PEPTIDE_COLOR}35`,
+          }}
         />
       </div>
 

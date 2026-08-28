@@ -15,6 +15,7 @@ export interface AgentProfileExport {
     avatarUrl: string | null
     vacationResumeDate: string | null
     timeZone: string | null
+    protocolEnabled: boolean
     createdAt: string
     updatedAt: string
   }
@@ -36,6 +37,7 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
       avatarUrl: true,
       vacationResumeDate: true,
       timeZone: true,
+      protocolEnabled: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -81,14 +83,18 @@ export async function exportProfileForAgent(userId: string): Promise<AgentProfil
       orderBy: { date: "desc" },
     }),
     prisma.sleepEntry.findMany({ where: { userId }, orderBy: { date: "desc" } }),
-    prisma.peptideEntry.findMany({
-      where: { userId },
-      orderBy: { injectedAt: "desc" },
-    }),
-    prisma.peptideDailyEntry.findMany({
-      where: { userId },
-      orderBy: { date: "desc" },
-    }),
+    user.protocolEnabled
+      ? prisma.peptideEntry.findMany({
+          where: { userId },
+          orderBy: { injectedAt: "desc" },
+        })
+      : Promise.resolve([]),
+    user.protocolEnabled
+      ? prisma.peptideDailyEntry.findMany({
+          where: { userId },
+          orderBy: { date: "desc" },
+        })
+      : Promise.resolve([]),
     prisma.goal.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
     prisma.longGoal.findMany({
       where: { userId },

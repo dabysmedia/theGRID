@@ -175,6 +175,7 @@ interface PeptideHubEntry {
 export function HubDashboard() {
   const { activeDate } = useActiveDate()
   const { user } = useUser()
+  const protocolEnabled = user?.protocolEnabled ?? true
   const [data, setData] = useState<DashboardData>(defaultData)
   const [peptideEntries, setPeptideEntries] = useState<PeptideHubEntry[]>([])
   const [peptideHungerLogs, setPeptideHungerLogs] = useState<
@@ -221,7 +222,7 @@ export function HubDashboard() {
 
   useEffect(() => {
     setHubExpanded(null)
-  }, [activeDate])
+  }, [activeDate, protocolEnabled])
 
   useEffect(() => {
     function onResetOverview() {
@@ -245,17 +246,19 @@ export function HubDashboard() {
         const from = formatDate(subDays(parseLocalDate(activeDate), 21))
         const [dashRes, peptideRes, hungerRes] = await Promise.all([
           apiFetch(`/api/dashboard?d=${activeDate}&_ts=${Date.now()}`, { cache: "no-store" }),
-          apiFetch("/api/peptides"),
-          apiFetch(`/api/peptides/daily?from=${from}&to=${activeDate}`),
+          protocolEnabled ? apiFetch("/api/peptides") : Promise.resolve(null),
+          protocolEnabled
+            ? apiFetch(`/api/peptides/daily?from=${from}&to=${activeDate}`)
+            : Promise.resolve(null),
         ])
         if (dashRes.ok && !cancelled) {
           setData(await dashRes.json())
         }
-        if (peptideRes.ok && !cancelled) {
+        if (peptideRes?.ok && !cancelled) {
           const rows = await peptideRes.json()
           setPeptideEntries(Array.isArray(rows) ? rows : [])
         }
-        if (hungerRes.ok && !cancelled) {
+        if (hungerRes?.ok && !cancelled) {
           const rows = await hungerRes.json()
           setPeptideHungerLogs(
             Array.isArray(rows)
@@ -271,6 +274,10 @@ export function HubDashboard() {
                   .filter((r) => r.date && r.hungerLevel >= 1)
               : [],
           )
+        }
+        if (!protocolEnabled && !cancelled) {
+          setPeptideEntries([])
+          setPeptideHungerLogs([])
         }
       } catch {
         // DB not yet connected
@@ -292,7 +299,7 @@ export function HubDashboard() {
       cancelled = true
       window.removeEventListener("grid:log-saved", onLogSaved)
     }
-  }, [activeDate])
+  }, [activeDate, protocolEnabled])
 
   const lastPeptide = peptideEntries[0] ?? null
   const nextInjection = useMemo(
@@ -318,7 +325,11 @@ export function HubDashboard() {
       className="flex min-h-0 flex-1 flex-col overflow-hidden [scrollbar-gutter:stable]"
     >
       <Suspense fallback={null}>
-        <HubExpandFromQuery onExpand={setHubExpanded} />
+        <HubExpandFromQuery
+          onExpand={(panel) => {
+            if (panel !== "peptides" || protocolEnabled) setHubExpanded(panel)
+          }}
+        />
       </Suspense>
       <div className="flex min-h-0 flex-1 flex-col">
         <WeeklyHero
@@ -328,6 +339,7 @@ export function HubDashboard() {
           expanded={hubExpanded}
           onExpandedChange={setHubExpanded}
           fillViewport
+          protocolEnabled={protocolEnabled}
           peptideSummary={{
             lastDoseMg: lastPeptide?.doseMg ?? null,
             lastInjectedAt: lastPeptide?.injectedAt ?? null,

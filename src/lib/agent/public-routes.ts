@@ -1,5 +1,5 @@
-/** App routes that skip profile picker / PIN (public agent read surface). */
-export const AGENT_PUBLIC_PATH_PREFIXES = ["/agents"] as const
+/** No health-data route bypasses the profile picker or authenticated session. */
+export const AGENT_PUBLIC_PATH_PREFIXES: readonly string[] = []
 
 export function isAgentPublicPath(pathname: string | null | undefined): boolean {
   if (!pathname) return false

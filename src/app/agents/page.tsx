@@ -1,13 +1,15 @@
-import { headers } from "next/headers"
+import { cookies, headers } from "next/headers"
+import { redirect } from "next/navigation"
 import Link from "next/link"
-import { AgentAccessError, resolveCarlosUserId } from "@/lib/agent/access"
 import { exportProfileForAgent } from "@/lib/agent/export-profile"
+import { prisma } from "@/lib/prisma"
+import { resolveSessionTokenUserId, USER_SESSION_COOKIE } from "@/lib/user-session"
 
 export const dynamic = "force-dynamic"
 
 export const metadata = {
   title: "Agent data — THEGRID",
-  description: "Public health data export for AI agents (no sign-in)",
+  description: "Authenticated health data export for the active THEGRID profile",
 }
 
 function PeriodBlock({ title, narrative }: { title: string; narrative: string }) {
@@ -24,23 +26,18 @@ function PeriodBlock({ title, narrative }: { title: string; narrative: string })
 }
 
 export default async function AgentsPage() {
+  const cookieStore = await cookies()
+  const userId = await resolveSessionTokenUserId(cookieStore.get(USER_SESSION_COOKIE)?.value)
+  if (!userId) redirect("/")
   const h = await headers()
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000"
   const proto = h.get("x-forwarded-proto") ?? "http"
   const base = `${proto}://${host}`
 
-  let exportError: string | null = null
-  let payload: Awaited<ReturnType<typeof exportProfileForAgent>> | null = null
-  let profileName = "profile"
-
-  try {
-    const profile = await resolveCarlosUserId()
-    profileName = profile.name
-    payload = await exportProfileForAgent(profile.id)
-  } catch (e) {
-    exportError =
-      e instanceof AgentAccessError ? e.message : "Failed to load profile data."
-  }
+  const profile = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } })
+  if (!profile) redirect("/")
+  const profileName = profile.name
+  const payload = await exportProfileForAgent(userId)
 
   const jsonUrl = `${base}/api/agent/carlos`
   const textUrl = `${base}/api/agent/carlos?format=text`
@@ -67,8 +64,8 @@ export default async function AgentsPage() {
           <span className="text-gradient-glass title-underline-accent">Agent data</span>
         </h1>
         <p className="text-[11px] leading-snug text-muted-foreground/75 sm:text-xs">
-          Public read-only export for <strong className="text-foreground">{profileName}</strong>.
-          No profile picker or PIN. Includes <strong className="text-foreground">today</strong>,{" "}
+          Session-protected read-only export for <strong className="text-foreground">{profileName}</strong>.
+          Includes <strong className="text-foreground">today</strong>,{" "}
           <strong className="text-foreground">this week</strong>, and{" "}
           <strong className="text-foreground">this month</strong> plus full history in JSON.
         </p>
@@ -95,9 +92,7 @@ export default async function AgentsPage() {
         </ul>
       </div>
 
-      {exportError ? (
-        <div className="glass-panel p-6 text-sm text-red-400">{exportError}</div>
-      ) : payload && periods ? (
+      {payload && periods ? (
         <>
           <div className="glass-panel p-4 text-xs text-muted-foreground">
             <p>

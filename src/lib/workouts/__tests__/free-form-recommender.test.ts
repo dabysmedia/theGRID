@@ -161,6 +161,23 @@ describe("recommendFreeFormWorkout", () => {
     }
   })
 
+  it("keeps a bro-split chest session to chest movements and orders presses first", () => {
+    const recs = recommendFreeFormWorkout({
+      library: LIBRARY,
+      sessions: [],
+      split: "upper",
+      focus: "chest",
+      weekStart,
+      weekEnd,
+      count: 3,
+    })
+    expect(recs.length).toBeGreaterThanOrEqual(2)
+    expect(recs.every((r) => r.primaryMuscles[0]?.name === "Chest")).toBe(true)
+    expect(recs[0]?.name).toMatch(/bench|press/i)
+    const flyIndex = recs.findIndex((r) => /fly/i.test(r.name))
+    if (flyIndex >= 0) expect(flyIndex).toBeGreaterThan(0)
+  })
+
   it("prefers undertrained muscles and favorites", () => {
     // Heavy chest volume this week; no back work. User loves rows historically.
     const recs = recommendFreeFormWorkout({

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import Link from "next/link"
 import {
   format,
   parse,
@@ -26,17 +27,28 @@ import {
   Minus,
   CircleMinus,
   Sparkles,
+  Activity,
+  Camera,
+  Droplets,
+  Gauge,
+  Users,
+  UserRound,
+  ChevronLeft,
 } from "lucide-react"
-import { CATEGORY_THEME } from "@/lib/category-theme"
 import { cn, formatDate, glassPanelClass } from "@/lib/utils"
 import { kmToMiles, DEFAULT_WEIGHT_UNIT } from "@/lib/units"
 import { apiFetch } from "@/lib/api-fetch"
 import { useUser } from "@/context/UserContext"
 import { useActiveDate } from "@/context/DateContext"
-import { PageHeader } from "@/components/PageHeader"
-import { PageHeroStrip } from "@/components/PageHeroStrip"
 import { UserProfileAvatar } from "@/components/ProfileSwitcher"
+import { DatePicker } from "@/components/DatePicker"
+import { ProfileHeaderTrigger } from "@/context/ProfileDialogContext"
 import { Button } from "@/components/ui/button"
+import {
+  JOURNAL_CONTENT_MAX,
+  JOURNAL_MAX_IMAGES,
+  type AttachedStats,
+} from "@/lib/journal"
 import {
   Dialog,
   DialogContent,
@@ -46,14 +58,6 @@ import {
 } from "@/components/ui/dialog"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-interface AttachedStats {
-  run?: { distance: number; duration: number; environment: string }
-  calories?: { total: number; protein: number }
-  steps?: { count: number }
-  weight?: { value: number; unit: string }
-  sleep?: { durationMins: number; quality: number }
-}
 
 interface EntryUser {
   id: string
@@ -89,13 +93,7 @@ interface RawJournalEntry {
 }
 
 // Available stats fetched from existing APIs
-interface AvailableStats {
-  run?: { distance: number; duration: number; environment: string }
-  calories?: { total: number; protein: number }
-  steps?: { count: number }
-  weight?: { value: number; unit: string }
-  sleep?: { durationMins: number; quality: number }
-}
+type AvailableStats = AttachedStats
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -133,7 +131,7 @@ function MoodIcon({
   return <Minus className={className} />
 }
 
-const MAX_IMAGES = 5
+const MAX_IMAGES = JOURNAL_MAX_IMAGES
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -215,19 +213,51 @@ function StatChips({ stats }: { stats: AttachedStats }) {
       label: formatDurationMins(stats.sleep.durationMins),
     })
   }
+  if (stats.water) {
+    chips.push({
+      key: "water",
+      icon: <Droplets className="size-3" />,
+      label: `${stats.water.amountOz} oz water`,
+    })
+  }
+  if (stats.workouts) {
+    chips.push({
+      key: "workouts",
+      icon: <Dumbbell className="size-3" />,
+      label: `${stats.workouts.count} ${stats.workouts.count === 1 ? "workout" : "workouts"}`,
+    })
+  }
+  if (stats.recovery) {
+    chips.push({
+      key: "recovery",
+      icon: <Activity className="size-3" />,
+      label: `${stats.recovery.score}/10 recovery`,
+    })
+  }
+  if (stats.readiness) {
+    chips.push({
+      key: "readiness",
+      icon: <Gauge className="size-3" />,
+      label: `${stats.readiness.score} readiness`,
+    })
+  }
 
   if (chips.length === 0) return null
 
   return (
-    <div className="flex flex-wrap gap-1.5 mt-2">
-      {chips.map((c) => (
-        <span
+    <div className="mt-3 grid grid-cols-2 border-y border-white/[0.055] sm:grid-cols-3">
+      {chips.map((c, index) => (
+        <div
           key={c.key}
-          className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/8 px-2 py-0.5 text-[10px] font-medium text-primary tracking-wide"
+          className={cn(
+            "flex min-w-0 items-center gap-2 py-2.5 text-muted-foreground/65",
+            index % 2 === 0 ? "pr-2" : "border-l border-white/[0.05] pl-3 sm:border-l",
+            index % 3 === 0 && "sm:border-l-0 sm:pl-0",
+          )}
         >
-          {c.icon}
-          {c.label}
-        </span>
+          <span className="shrink-0 text-primary/75">{c.icon}</span>
+          <span className="truncate text-[10px] font-medium tabular-nums tracking-wide">{c.label}</span>
+        </div>
       ))}
     </div>
   )
@@ -258,17 +288,17 @@ function EntryCard({
 
   return (
     <>
-      <article className={cn(glassPanelClass, "overflow-hidden transition-all")}>
-        <div className="flex items-center justify-between gap-2 px-3.5 py-3">
+      <article className="relative border-b border-white/[0.065] py-5 last:border-b-0 sm:py-6">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             {author && (
               <UserProfileAvatar user={author} size="sm" noPhotoStyle="color" />
             )}
             <div className="min-w-0">
               {author && (
-                <p className="truncate font-heading text-xs font-semibold text-foreground/90">{author.name}</p>
+                <p className="truncate text-[12px] font-semibold tracking-wide text-foreground/90">{author.name}</p>
               )}
-              <p className="type-hud-caption normal-case text-muted-foreground">
+              <p className="mt-0.5 type-hud-caption normal-case tracking-normal text-muted-foreground/50">
                 {dateLabel} &middot; {timeLabel}
               </p>
             </div>
@@ -276,13 +306,11 @@ function EntryCard({
           <div className="flex items-center gap-1">
             {mood && (
               <span
-                className={cn(
-                  "rounded-full border border-border/40 bg-muted/40 px-2 py-1 leading-none",
-                  MOOD_COLORS[mood.value]
-                )}
+                className={cn("mr-1 inline-flex items-center gap-1.5 type-hud-micro", MOOD_COLORS[mood.value])}
                 title={mood.label}
               >
-                <MoodIcon icon={mood.icon} className="size-4" />
+                <MoodIcon icon={mood.icon} className="size-3.5" />
+                <span className="hidden sm:inline">{mood.label}</span>
               </span>
             )}
             {isOwner && (
@@ -292,6 +320,7 @@ function EntryCard({
                   size="icon-xs"
                   onClick={() => onEdit(entry)}
                   aria-label="Edit entry"
+                  className="text-muted-foreground/45 hover:text-foreground"
                 >
                   <Pencil />
                 </Button>
@@ -310,31 +339,42 @@ function EntryCard({
         </div>
 
         {entry.images.length > 0 && (
-          <div className="grid gap-0.5 bg-black/25">
+          <div
+            className={cn(
+              "journal-photo-reveal mt-3 grid overflow-hidden rounded-[1.15rem] bg-black/20",
+              entry.images.length > 1 && "gap-px",
+              entry.images.length === 1 ? "grid-cols-1" : "grid-cols-2",
+            )}
+          >
             {entry.images.map((url, i) => (
               <button
                 key={i}
                 onClick={() => setLightboxImg(url)}
-                className="group relative aspect-square w-full overflow-hidden bg-muted/30"
+                className={cn(
+                  "group relative w-full overflow-hidden bg-white/[0.025]",
+                  entry.images.length === 1 ? "aspect-[16/11]" : "aspect-square",
+                  entry.images.length === 3 && i === 0 && "row-span-2 aspect-auto min-h-full",
+                )}
                 aria-label={`View image ${i + 1}`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={url}
-                  alt=""
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                  alt={`${author?.name ?? "Profile"} progress photo ${i + 1}`}
+                  className="h-full w-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.22,0.7,0.18,1)] group-hover:scale-[1.025]"
                 />
+                <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-white/[0.025]" aria-hidden />
               </button>
             ))}
           </div>
         )}
 
-        <div className="px-3.5 pb-3 pt-3">
+        <div className={entry.images.length > 0 ? "pt-3.5" : "pt-3"}>
           {entry.content && (
             <div>
               <p
                 className={cn(
-                  "whitespace-pre-wrap text-sm leading-relaxed text-foreground/90",
+                  "whitespace-pre-wrap text-[13px] leading-[1.65] text-foreground/82 sm:text-sm",
                   !expanded && isLong && "line-clamp-3"
                 )}
               >
@@ -343,7 +383,7 @@ function EntryCard({
               {isLong && (
                 <button
                   onClick={() => setExpanded((v) => !v)}
-                  className="mt-1 flex items-center gap-1 text-[11px] font-medium text-primary transition-colors hover:text-primary/80"
+                  className="mt-1.5 flex items-center gap-1 type-hud-micro text-primary/75 transition-colors hover:text-primary"
                 >
                   {expanded ? (
                     <>
@@ -366,14 +406,14 @@ function EntryCard({
       {/* Lightbox */}
       {lightboxImg && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/88 backdrop-blur-md"
           onClick={() => setLightboxImg(null)}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={lightboxImg}
             alt=""
-            className="max-h-[90dvh] max-w-[95vw] rounded-xl object-contain shadow-2xl"
+            className="max-h-[90dvh] max-w-[95vw] rounded-[1.15rem] object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
           <button
@@ -416,12 +456,14 @@ function StatsPicker({
     fetched.current = true
     setLoading(true)
     try {
-      const [runRes, calRes, stepsRes, weightRes, sleepRes] = await Promise.allSettled([
+      const [runRes, calRes, stepsRes, weightRes, sleepRes, waterRes, dashboardRes] = await Promise.allSettled([
         apiFetch(`/api/running?date=${date}`).then((r) => r.json()),
         apiFetch(`/api/calories?date=${date}`).then((r) => r.json()),
         apiFetch(`/api/steps?date=${date}`).then((r) => r.json()),
         apiFetch(`/api/weigh-in?d=${date}`).then((r) => r.json()),
         apiFetch(`/api/sleep?date=${date}`).then((r) => r.json()),
+        apiFetch(`/api/water?date=${date}`).then((r) => r.json()),
+        apiFetch(`/api/dashboard?d=${date}`).then((r) => r.json()),
       ])
 
       const s: AvailableStats = {}
@@ -458,6 +500,32 @@ function StatsPicker({
         const wake = new Date(sl.wakeTime)
         const durationMins = Math.round((wake.getTime() - bedtime.getTime()) / 60000)
         s.sleep = { durationMins, quality: sl.quality }
+      }
+
+      if (waterRes.status === "fulfilled" && Number.isFinite(waterRes.value?.totalOz)) {
+        s.water = {
+          amountOz: waterRes.value.totalOz,
+          ...(Number.isFinite(waterRes.value.goalOz) ? { goalOz: waterRes.value.goalOz } : {}),
+        }
+      }
+
+      if (dashboardRes.status === "fulfilled") {
+        const dashboard = dashboardRes.value
+        if (Number.isFinite(dashboard?.workouts?.todayValue)) {
+          s.workouts = { count: dashboard.workouts.todayValue }
+        }
+        if (Number.isFinite(dashboard?.recovery?.todayValue) && dashboard.recovery.todayValue > 0) {
+          s.recovery = { score: dashboard.recovery.todayValue }
+        }
+        if (Number.isFinite(dashboard?.readiness?.todayValue)) {
+          s.readiness = {
+            score: dashboard.readiness.todayValue,
+            ...(Number.isFinite(dashboard.readiness.hrvMs) ? { hrvMs: dashboard.readiness.hrvMs } : {}),
+            ...(Number.isFinite(dashboard.readiness.restingHeartRate)
+              ? { restingHeartRate: dashboard.readiness.restingHeartRate }
+              : {}),
+          }
+        }
       }
 
       setAvailable(s)
@@ -521,25 +589,49 @@ function StatsPicker({
           ? `${formatDurationMins(v.sleep.durationMins)} · quality ${v.sleep.quality}/5`
           : "",
     },
+    {
+      key: "water",
+      icon: <Droplets className="size-3.5" />,
+      label: "Water",
+      summary: (v) => (v.water ? `${v.water.amountOz} oz${v.water.goalOz ? ` / ${v.water.goalOz} oz` : ""}` : ""),
+    },
+    {
+      key: "workouts",
+      icon: <Dumbbell className="size-3.5" />,
+      label: "Training",
+      summary: (v) => (v.workouts ? `${v.workouts.count} session${v.workouts.count === 1 ? "" : "s"}` : ""),
+    },
+    {
+      key: "recovery",
+      icon: <Activity className="size-3.5" />,
+      label: "Recovery",
+      summary: (v) => (v.recovery ? `${v.recovery.score}/10` : ""),
+    },
+    {
+      key: "readiness",
+      icon: <Gauge className="size-3.5" />,
+      label: "Readiness",
+      summary: (v) => (v.readiness ? `${v.readiness.score}/100` : ""),
+    },
   ]
 
   const hasAny = Object.keys(available).length > 0
 
   return (
-    <div className="rounded-xl border border-border/40 bg-muted/30">
+    <div className="border-y border-white/[0.06]">
       <button
         type="button"
         onClick={() => {
           setOpen((v) => !v)
           if (!open) fetchStats()
         }}
-        className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium text-foreground"
+        className="flex min-h-11 w-full items-center justify-between py-2.5 text-left text-foreground transition-colors hover:text-primary"
       >
         <span className="flex items-center gap-2">
-          <Dumbbell className="size-4 text-primary" />
-          Attach day stats
+          <Activity className="size-3.5 text-primary/75" />
+          <span className="type-hud-label-soft text-foreground/75">Attach day signals</span>
           {Object.keys(selected).length > 0 && (
-            <span className="inline-flex items-center justify-center rounded-full bg-primary/15 text-primary text-[10px] font-semibold w-4 h-4">
+            <span className="text-[10px] font-semibold tabular-nums text-primary">
               {Object.keys(selected).length}
             </span>
           )}
@@ -548,7 +640,7 @@ function StatsPicker({
       </button>
 
       {open && (
-        <div className="border-t border-border/30 px-3 py-3">
+        <div className="border-t border-white/[0.05] py-2">
           {loading ? (
             <p className="text-xs text-muted-foreground text-center py-2 animate-pulse">
               Loading stats…
@@ -558,7 +650,7 @@ function StatsPicker({
               No stats logged for {date} yet.
             </p>
           ) : (
-            <div className="flex flex-col gap-1.5">
+            <div className="divide-y divide-white/[0.045]">
               {statDefs.map((def) => {
                 if (!available[def.key]) return null
                 const isOn = !!selected[def.key]
@@ -568,10 +660,10 @@ function StatsPicker({
                     type="button"
                     onClick={() => toggle(def.key)}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition-colors",
+                      "flex min-h-11 w-full items-center gap-2.5 py-2 text-left text-xs transition-colors",
                       isOn
-                        ? "bg-primary/12 border border-primary/30 text-primary"
-                        : "border border-border/30 bg-background/40 text-muted-foreground hover:text-foreground hover:border-border/60"
+                        ? "text-primary"
+                        : "text-muted-foreground hover:text-foreground"
                     )}
                   >
                     <span className={isOn ? "text-primary" : "text-muted-foreground"}>
@@ -581,16 +673,7 @@ function StatsPicker({
                     <span className={cn("flex-1", isOn ? "text-primary/80" : "text-muted-foreground")}>
                       {def.summary(available)}
                     </span>
-                    <span
-                      className={cn(
-                        "ml-auto shrink-0 rounded-full border text-[9px] font-semibold px-1.5 py-0.5 leading-none tracking-wider",
-                        isOn
-                          ? "border-primary/40 bg-primary/15 text-primary"
-                          : "border-border/40 text-muted-foreground"
-                      )}
-                    >
-                      {isOn ? "ON" : "OFF"}
-                    </span>
+                    <span className={cn("ml-auto size-1.5 shrink-0 rounded-full", isOn ? "bg-primary shadow-[0_0_7px_var(--primary)]" : "bg-white/10")} aria-hidden />
                   </button>
                 )
               })}
@@ -621,6 +704,8 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const uploadedDuringSession = useRef(new Set<string>())
 
   // Populate form when editing
   useEffect(() => {
@@ -636,6 +721,7 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
         setImages([])
         setAttachedStats({})
       }
+      uploadedDuringSession.current.clear()
       setError(null)
     }
   }, [open, editEntry])
@@ -661,6 +747,7 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
         }
         const { url } = await res.json()
         uploaded.push(url)
+        uploadedDuringSession.current.add(url)
       }
       setImages((prev) => [...prev, ...uploaded])
     } catch (err) {
@@ -673,8 +760,17 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
 
   const removeImage = async (url: string) => {
     setImages((prev) => prev.filter((u) => u !== url))
-    // Best-effort delete from disk
-    apiFetch(`/api/journal/upload?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {})
+    if (uploadedDuringSession.current.delete(url)) {
+      apiFetch(`/api/journal/upload?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {})
+    }
+  }
+
+  const handleClose = () => {
+    for (const url of uploadedDuringSession.current) {
+      apiFetch(`/api/journal/upload?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {})
+    }
+    uploadedDuringSession.current.clear()
+    onClose()
   }
 
   const handleSave = async () => {
@@ -701,6 +797,7 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
         const j = await res.json()
         throw new Error(j.error ?? "Failed to save")
       }
+      uploadedDuringSession.current.clear()
       onSaved()
       onClose()
     } catch (err) {
@@ -710,167 +807,151 @@ function ComposeDialog({ open, onClose, date, editEntry, onSaved }: ComposeDialo
     }
   }
 
+  if (!open) return null
+
   return (
-    <Dialog open={open} onOpenChange={(o: boolean) => !o && onClose()}>
-      <DialogContent
-        showCloseButton={false}
-        className="inset-x-0 bottom-0 top-auto translate-x-0 translate-y-0 rounded-b-none rounded-t-2xl max-w-none w-full max-h-[92dvh] flex flex-col p-0 gap-0"
-      >
-        {/* Handle bar */}
-        <div className="flex shrink-0 items-center justify-center pt-3 pb-1">
-          <div className="h-1 w-10 rounded-full bg-border/60" />
+    <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+      <div className="mb-[var(--hub-section-gap)] flex h-7 shrink-0 items-center justify-between">
+        <button
+          type="button"
+          onClick={handleClose}
+          className="group flex h-7 min-w-0 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25"
+        >
+          <ChevronLeft className="size-3.5 shrink-0 text-muted-foreground/55 transition-colors group-hover:text-foreground/80" aria-hidden />
+          <span className="status-dot shrink-0 opacity-70" aria-hidden />
+          <span className="type-hud-title truncate text-foreground/85">Timeline</span>
+        </button>
+        <span className="type-hud-eyebrow truncate pl-3">
+          {format(parse(date, "yyyy-MM-dd", new Date()), "EEE, MMM d").toUpperCase()}
+        </span>
+      </div>
+
+      <div className="journal-compose-enter min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 scrollbar-none">
+        <div className="border-b border-white/[0.06] pb-4">
+          <p className="type-hud-subsection">{editEntry ? "Revise signal" : "New progress signal"}</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground/60">
+            Pair a clear visual with the smallest useful amount of context.
+          </p>
         </div>
 
-        {/* Header */}
-        <DialogHeader className="shrink-0 px-4 pb-2 pt-1">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-base font-semibold">
-              {editEntry ? "Edit entry" : "New entry"}
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                {format(parse(date, "yyyy-MM-dd", new Date()), "EEEE, MMM d")}
-              </span>
-            </DialogTitle>
-            <Button variant="ghost" size="icon-sm" onClick={onClose}>
-              <X />
-              <span className="sr-only">Close</span>
-            </Button>
-          </div>
-        </DialogHeader>
-
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-2 flex flex-col gap-4">
-          {/* Mood selector */}
-          <div>
-            <p className="type-hud-label-soft mb-2">Mood</p>
-            <div className="flex gap-1.5">
-              {MOODS.map((m) => (
+        <section className="border-b border-white/[0.06] py-4">
+          <p className="type-hud-label-soft mb-2.5">How it felt</p>
+          <div className="grid grid-cols-5">
+            {MOODS.map((m) => {
+              const active = mood === m.value
+              return (
                 <button
                   key={m.value}
                   type="button"
-                  onClick={() => setMood(mood === m.value ? null : m.value)}
+                  onClick={() => setMood(active ? null : m.value)}
                   className={cn(
-                    "flex flex-1 flex-col items-center gap-0.5 rounded-xl border py-2.5 text-xl transition-all",
-                    mood === m.value
-                      ? "border-primary/40 bg-primary/10 shadow-inner"
-                      : "border-border/30 bg-muted/20 hover:border-border/60 hover:bg-muted/40"
+                    "relative flex min-h-14 flex-col items-center justify-center gap-1 border-r border-white/[0.045] text-muted-foreground transition-colors last:border-r-0 hover:text-foreground",
+                    active && "text-primary",
                   )}
                   title={m.label}
                 >
-                  <MoodIcon
-                    icon={m.icon}
-                    className={cn(
-                      "size-5",
-                      mood === m.value ? MOOD_COLORS[m.value] : "text-muted-foreground"
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      "text-[9px] font-medium tracking-wide",
-                      mood === m.value ? "text-primary" : "text-muted-foreground"
-                    )}
-                  >
-                    {m.label}
-                  </span>
+                  <MoodIcon icon={m.icon} className={cn("size-4.5", active ? MOOD_COLORS[m.value] : "text-current")} />
+                  <span className="type-hud-micro normal-case tracking-wide text-current">{m.label}</span>
+                  <span className={cn("absolute inset-x-3 bottom-0 h-px", active ? "bg-primary shadow-[0_0_8px_var(--primary)]" : "bg-transparent")} aria-hidden />
                 </button>
-              ))}
-            </div>
+              )
+            })}
           </div>
+        </section>
 
-          {/* Text area */}
-          <div>
-            <p className="type-hud-label-soft mb-2">Entry</p>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your thoughts, reflections, wins, setbacks…"
-              rows={6}
-              className="w-full resize-none rounded-xl border border-border/40 bg-glass-highlight/20 px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-all leading-relaxed focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
-            />
+        <section className="border-b border-white/[0.06] py-4">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="type-hud-label-soft">Field note</p>
+            <span className="type-hud-caption tabular-nums">{content.length}/{JOURNAL_CONTENT_MAX}</span>
           </div>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="What changed? Record the win, the lesson, or the next move…"
+            rows={5}
+            maxLength={JOURNAL_CONTENT_MAX}
+            className="w-full resize-none border-0 bg-transparent py-1 text-[15px] leading-relaxed text-foreground/88 placeholder:text-muted-foreground/35 outline-none"
+          />
+        </section>
 
-          {/* Images */}
-          <div>
-            <p className="type-hud-label-soft mb-2">
-              Photos {images.length > 0 && `(${images.length}/${MAX_IMAGES})`}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {images.map((url, i) => (
-                <div
-                  key={i}
-                  className="relative h-20 w-20 overflow-hidden rounded-xl border border-border/30"
+        <section className="border-b border-white/[0.06] py-4">
+          <div className="mb-2.5 flex items-center justify-between gap-3">
+            <p className="type-hud-label-soft">Progress photos</p>
+            <span className="type-hud-caption tabular-nums">{images.length}/{MAX_IMAGES}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {images.map((url, i) => (
+              <div key={i} className="journal-photo-reveal relative h-24 w-24 overflow-hidden rounded-[1rem]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeImage(url)}
+                  className="absolute right-1 top-1 flex size-6 items-center justify-center rounded-full border border-white/15 bg-black/65 text-white backdrop-blur-md transition-colors hover:bg-black/85"
+                  aria-label="Remove image"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(url)}
-                    className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white transition-opacity hover:bg-black/80"
-                    aria-label="Remove image"
-                  >
-                    <X className="size-3" />
-                  </button>
-                </div>
-              ))}
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
 
-              {images.length < MAX_IMAGES && (
+            {images.length < MAX_IMAGES && (
+              <div className="grid h-24 grid-cols-2 overflow-hidden rounded-[1rem] border border-white/[0.08] bg-white/[0.02]">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex w-20 flex-col items-center justify-center gap-1.5 text-muted-foreground/65 transition-colors hover:bg-primary/[0.05] hover:text-primary disabled:opacity-50"
+                  aria-label="Take progress photo"
+                >
+                  <Camera className="size-4.5" />
+                  <span className="type-hud-micro">Camera</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className={cn(
-                    "flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border/50 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary",
-                    uploading && "opacity-50"
-                  )}
-                  aria-label="Add photo"
+                  className="flex w-20 flex-col items-center justify-center gap-1.5 border-l border-white/[0.06] text-muted-foreground/65 transition-colors hover:bg-primary/[0.05] hover:text-primary disabled:opacity-50"
+                  aria-label="Upload progress photos"
                 >
-                  {uploading ? (
-                    <Timer className="size-5 animate-spin" />
-                  ) : (
-                    <>
-                      <ImagePlus className="size-5" />
-                      <span className="text-[10px] font-medium">Add</span>
-                    </>
-                  )}
+                  {uploading ? <Timer className="size-4.5 animate-spin" /> : <ImagePlus className="size-4.5" />}
+                  <span className="type-hud-micro">Library</span>
                 </button>
-              )}
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              multiple
-              className="hidden"
-              onChange={handleImagePick}
-            />
+              </div>
+            )}
           </div>
+          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className="hidden" onChange={handleImagePick} />
+          <input ref={cameraInputRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={handleImagePick} />
+        </section>
 
-          {/* Stats picker */}
+        <section className="py-4">
           <StatsPicker date={date} selected={attachedStats} onChange={setAttachedStats} />
-        </div>
+        </section>
+      </div>
 
-        {/* Footer */}
-        <DialogFooter className="shrink-0 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,1rem))]">
-          {error && (
-            <p className="mb-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error}
-            </p>
-          )}
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={onClose} disabled={saving}>
-              Cancel
-            </Button>
-            <Button
-              variant="glass"
-              className="flex-1"
-              onClick={handleSave}
-              disabled={saving || uploading}
-            >
-              {saving ? "Saving…" : editEntry ? "Update" : "Save entry"}
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <div className="relative z-20 shrink-0 border-t border-white/[0.07] pt-3">
+        {error ? <p className="mb-2 text-[11px] text-destructive" role="alert">{error}</p> : null}
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={saving}
+            className="h-10 px-3 type-hud-micro text-muted-foreground/65 transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || uploading}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-primary/25 bg-primary/[0.075] type-hud-chip text-primary transition-colors hover:border-primary/40 hover:bg-primary/[0.12] disabled:opacity-50"
+          >
+            <Plus className="size-3.5" aria-hidden />
+            {saving ? "Publishing…" : editEntry ? "Update signal" : "Publish signal"}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -880,29 +961,51 @@ export default function JournalPage() {
   const { user } = useUser()
   const { activeDate } = useActiveDate()
   const [entries, setEntries] = useState<JournalEntry[]>([])
+  const [scope, setScope] = useState<"everyone" | "mine">("everyone")
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [feedError, setFeedError] = useState("")
   const [composeOpen, setComposeOpen] = useState(false)
   const [composeDate, setComposeDate] = useState<string>(activeDate)
   const [editEntry, setEditEntry] = useState<JournalEntry | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
-  const fetchEntries = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await apiFetch("/api/journal")
-      const data: RawJournalEntry[] = await res.json()
-      const parsed = Array.isArray(data) ? data.map(parseEntry) : []
-      parsed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      setEntries(parsed)
-    } catch {
+  const fetchEntries = useCallback(async (cursor?: string) => {
+    if (!user?.id) {
       setEntries([])
+      setNextCursor(null)
+      setLoading(false)
+      return
+    }
+    if (cursor) setLoadingMore(true)
+    else setLoading(true)
+    setFeedError("")
+    try {
+      const params = new URLSearchParams()
+      if (scope === "mine") params.set("scope", "mine")
+      if (cursor) params.set("cursor", cursor)
+      const res = await apiFetch(`/api/journal${params.size ? `?${params}` : ""}`, { cache: "no-store" })
+      const data = (await res.json()) as {
+        items?: RawJournalEntry[]
+        nextCursor?: string | null
+        error?: string
+      }
+      if (!res.ok) throw new Error(data.error || "Could not load the timeline.")
+      const parsed = Array.isArray(data.items) ? data.items.map(parseEntry) : []
+      setEntries((previous) => (cursor ? [...previous, ...parsed] : parsed))
+      setNextCursor(data.nextCursor ?? null)
+    } catch (caught) {
+      if (!cursor) setEntries([])
+      setFeedError(caught instanceof Error ? caught.message : "Could not load the timeline.")
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
-  }, [user?.id])
+  }, [scope, user?.id])
 
   useEffect(() => {
-    fetchEntries()
+    void fetchEntries()
   }, [fetchEntries])
 
   const openCompose = (date: string, entry?: JournalEntry) => {
@@ -917,136 +1020,159 @@ export default function JournalPage() {
 
   const handleDeleteConfirm = async (id: string) => {
     try {
-      await apiFetch(`/api/journal?id=${id}`, { method: "DELETE" })
+      const response = await apiFetch(`/api/journal?id=${id}`, { method: "DELETE" })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : "Could not delete the post.")
       setEntries((prev) => prev.filter((e) => e.id !== id))
-    } catch {
-      // silently fail
+    } catch (caught) {
+      setFeedError(caught instanceof Error ? caught.message : "Could not delete the post.")
     } finally {
       setDeleteConfirm(null)
     }
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader title="Journal" />
+    <>
+      <div
+        className={cn(
+          glassPanelClass,
+          "flex min-h-0 flex-1 flex-col !overflow-clip !rounded-[1.35rem] border border-white/[0.09] p-4 max-sm:!rounded-b-[2.65rem] max-lg:px-3 max-lg:pt-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] lg:p-5",
+        )}
+      >
+        <div className="pointer-events-none absolute inset-0 rounded-[inherit]" aria-hidden style={{ background: "linear-gradient(180deg, oklch(0.20 0.01 250 / 10%) 0rem, oklch(0.14 0.008 250 / 14%) 20rem, oklch(0.08 0.005 250 / 22%) 38rem, oklch(0.08 0.005 250 / 22%) 100%)" }} />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.10]" aria-hidden style={{ backgroundImage: "linear-gradient(to right, oklch(0.30 0.01 250 / 18%) 1px, transparent 1px), linear-gradient(to bottom, oklch(0.30 0.01 250 / 12%) 1px, transparent 1px)", backgroundSize: "22px 22px", maskImage: "linear-gradient(180deg, black 0%, transparent 62%)" }} />
+        <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/14 to-transparent" aria-hidden />
+        <div className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-70" aria-hidden style={{ background: "radial-gradient(ellipse 75% 34% at 50% -5%, oklch(0.72 0.02 250 / 10%), transparent 68%), radial-gradient(ellipse 45% 30% at 100% 100%, oklch(0.45 0.04 220 / 7%), transparent 72%)", boxShadow: "inset 0 1px 0 oklch(1 0 0 / 7%), inset 0 -1px 0 oklch(0 0 0 / 45%)" }} />
 
-      <PageHeroStrip
-        color={CATEGORY_THEME.journal.color}
-        icon={NotebookPen}
-        eyebrow="Feed"
-        value={loading ? "—" : String(entries.length)}
-        unit={loading || entries.length === 0 ? undefined : "posts"}
-        hint={entries.length === 0 ? "write your first note" : "all time"}
-        metrics={[
-          {
-            label: "This week",
-            value: String(
-              entries.filter((e) => {
-                const age =
-                  (Date.now() - new Date(e.createdAt).getTime()) / 86_400_000
-                return age <= 7
-              }).length,
-            ),
-          },
-          {
-            label: "With photos",
-            value: String(entries.filter((e) => e.images.length > 0).length),
-          },
-          {
-            label: "Mood logged",
-            value: String(entries.filter((e) => e.mood != null).length),
-          },
-        ]}
-      />
+        <div className="relative z-20 mb-[var(--hub-section-gap)] shrink-0 border-b border-white/[0.07] pb-2 sm:pb-2.5">
+          <div className="flex min-w-0 items-center gap-2 px-0.5 sm:gap-3 sm:px-1">
+            <h1 className="font-kelly-slab min-w-0 shrink-0 text-lg font-semibold leading-none tracking-[-0.03em] sm:text-xl">
+              <span className="text-gradient-glass title-underline-accent block truncate">THEGRID</span>
+            </h1>
+            <div className="flex min-w-0 flex-1 justify-end overflow-hidden"><DatePicker compact /></div>
+            {!composeOpen ? (
+              <button
+                type="button"
+                onClick={() => openCompose(activeDate)}
+                aria-label="Share a progress update"
+                title="New progress signal"
+                className="group relative flex size-9 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/[0.055] text-primary transition-all hover:border-primary/35 hover:bg-primary/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 active:scale-95"
+              >
+                <Plus className="size-4" strokeWidth={1.9} aria-hidden />
+                <span className="pointer-events-none absolute right-0.5 top-0.5 size-1.5 rounded-full bg-primary/80 shadow-[0_0_7px_var(--primary)]" aria-hidden />
+              </button>
+            ) : null}
+            <ProfileHeaderTrigger className="!mt-0 min-h-9 min-w-9" />
+          </div>
+        </div>
 
-      {/* Entries feed */}
-      {loading ? (
-        <div className="flex flex-col gap-4">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className={cn(glassPanelClass, "overflow-hidden")}>
-              <div className="aspect-[4/3] animate-pulse bg-muted/40" />
-              <div className="space-y-2 p-3.5">
-                <div className="h-3 w-1/3 animate-pulse rounded bg-muted/40" />
-                <div className="h-3 w-full animate-pulse rounded bg-muted/40" />
+        {composeOpen ? (
+          <ComposeDialog
+            open
+            onClose={() => {
+              setComposeOpen(false)
+              setEditEntry(null)
+            }}
+            date={composeDate}
+            editEntry={editEntry}
+            onSaved={() => void fetchEntries()}
+          />
+        ) : (
+          <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+            <div className="mb-[var(--hub-section-gap)] flex h-7 shrink-0 items-center justify-between gap-3">
+              <Link href="/" className="group flex h-7 min-w-0 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25">
+                <ChevronLeft className="size-3.5 shrink-0 text-muted-foreground/55 transition-colors group-hover:text-foreground/80" aria-hidden />
+                <span className="status-dot shrink-0 opacity-70" aria-hidden />
+                <span className="type-hud-title truncate text-foreground/85">Overview</span>
+              </Link>
+              <div className="flex shrink-0 items-center" role="tablist" aria-label="Timeline filter">
+                {([
+                  { value: "everyone", label: "Everyone", Icon: Users },
+                  { value: "mine", label: "Mine", Icon: UserRound },
+                ] as const).map(({ value, label, Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={scope === value}
+                    onClick={() => setScope(value)}
+                    className={cn(
+                      "relative flex h-7 items-center gap-1.5 px-2 type-hud-micro transition-colors sm:px-2.5",
+                      scope === value ? "text-primary" : "text-muted-foreground/50 hover:text-foreground/80",
+                    )}
+                  >
+                    <Icon className="size-3" aria-hidden />
+                    <span className="hidden sm:inline">{label}</span>
+                    <span className={cn("absolute inset-x-2 bottom-0 h-px", scope === value ? "bg-primary/80 shadow-[0_0_6px_var(--primary)]" : "bg-transparent")} aria-hidden />
+                  </button>
+                ))}
               </div>
             </div>
-          ))}
-        </div>
-      ) : entries.length === 0 ? (
-        <div className={cn(glassPanelClass, "flex flex-col items-center justify-center gap-4 py-16 text-center")}>
-          <div
-            className="flex h-14 w-14 items-center justify-center rounded-2xl border"
-            style={{
-              borderColor: `${CATEGORY_THEME.journal.color}33`,
-              backgroundColor: `${CATEGORY_THEME.journal.color}14`,
-            }}
-          >
-            <NotebookPen className="size-6" style={{ color: CATEGORY_THEME.journal.color }} />
-          </div>
-          <div>
-            <p className="font-heading font-medium text-foreground">No journal posts yet</p>
-            <p className="type-hud-caption mt-1 normal-case text-muted-foreground">
-              Tap + to write your first entry.
-            </p>
-          </div>
-          <Button
-            variant="glass"
-            size="sm"
-            onClick={() => openCompose(activeDate)}
-          >
-            <Plus className="size-4" />
-            Write entry
-          </Button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-5 pb-4">
-          {entries.map((entry) => (
-            <EntryCard
-              key={entry.id}
-              entry={entry}
-              onEdit={handleEdit}
-              onDelete={(id) => setDeleteConfirm(id)}
-              currentUserId={user?.id ?? null}
-            />
-          ))}
-        </div>
-      )}
 
-      {/* FAB */}
-      <button
-        onClick={() => openCompose(activeDate)}
-        className={cn(
-          "fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,1rem))]",
-          "flex h-14 w-14 items-center justify-center rounded-2xl shadow-xl shadow-black/30",
-          "border border-primary/30 bg-gradient-to-b from-primary/20 via-primary/10 to-transparent backdrop-blur-md",
-          "text-primary transition-all hover:border-primary/50 hover:from-primary/30 active:scale-95",
-          "z-40 press-scale touch-manipulation",
+            <div className="flex shrink-0 items-end justify-between gap-4 border-b border-white/[0.07] pb-3 pt-1">
+              <div className="min-w-0">
+                <p className="type-hud-subsection">Progress timeline</p>
+                <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/55">
+                  {loading ? "Scanning signals…" : `${entries.length} loaded · ${entries.filter((entry) => entry.images.length > 0).length} visual · ${new Set(entries.map((entry) => entry.userId).filter(Boolean)).size} people`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => openCompose(activeDate)}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 type-hud-micro text-muted-foreground/80 transition-colors hover:border-primary/25 hover:bg-primary/[0.055] hover:text-primary"
+              >
+                <Plus className="size-3" aria-hidden />
+                Signal
+              </button>
+            </div>
+
+            {feedError ? <p className="shrink-0 border-b border-destructive/20 py-2.5 text-[11px] text-destructive" role="alert">{feedError}</p> : null}
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 scrollbar-none">
+              {loading ? (
+                <div className="divide-y divide-white/[0.055]">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="space-y-3 py-5">
+                      <div className="flex items-center gap-2.5"><div className="size-8 animate-pulse rounded-full bg-white/[0.055]" /><div className="h-2.5 w-24 animate-pulse rounded-full bg-white/[0.055]" /></div>
+                      <div className="aspect-[16/8] animate-pulse rounded-[1.15rem] bg-white/[0.035]" />
+                      <div className="h-2.5 w-3/4 animate-pulse rounded-full bg-white/[0.045]" />
+                    </div>
+                  ))}
+                </div>
+              ) : entries.length === 0 ? (
+                <div className="flex min-h-full flex-col items-center justify-center px-6 py-12 text-center motion-safe:animate-fade-up motion-reduce:animate-none">
+                  <div className="relative mb-5 flex size-20 items-center justify-center">
+                    <div className="absolute inset-0 rounded-full border border-primary/15 bg-primary/[0.035] shadow-[0_0_38px_oklch(0.78_0.17_110/0.08)]" />
+                    <NotebookPen className="relative size-7 text-primary/75" strokeWidth={1.4} aria-hidden />
+                  </div>
+                  <p className="type-hud-title">{scope === "mine" ? "No personal signals" : "Timeline clear"}</p>
+                  <p className="mt-2 max-w-xs text-[12px] leading-relaxed text-muted-foreground/55">Add a photo, a field note, or a compact snapshot from the day.</p>
+                  <button type="button" onClick={() => openCompose(activeDate)} className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl border border-primary/20 bg-primary/[0.055] px-4 type-hud-micro text-primary transition-colors hover:border-primary/35 hover:bg-primary/[0.1]"><Plus className="size-3.5" aria-hidden />Create first signal</button>
+                </div>
+              ) : (
+                <div className="journal-feed-enter">
+                  {entries.map((entry) => (
+                    <EntryCard key={entry.id} entry={entry} onEdit={handleEdit} onDelete={(id) => setDeleteConfirm(id)} currentUserId={user?.id ?? null} />
+                  ))}
+                  {nextCursor ? (
+                    <button type="button" disabled={loadingMore} onClick={() => void fetchEntries(nextCursor)} className="my-3 inline-flex h-10 w-full items-center justify-center type-hud-micro text-muted-foreground/60 transition-colors hover:text-primary disabled:opacity-50">
+                      {loadingMore ? "Scanning…" : "Load earlier signals"}
+                    </button>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          </div>
         )}
-        aria-label="New journal entry"
-      >
-        <Plus className="size-6" strokeWidth={2.5} />
-      </button>
+      </div>
 
-      {/* Compose / Edit dialog */}
-      <ComposeDialog
-        open={composeOpen}
-        onClose={() => {
-          setComposeOpen(false)
-          setEditEntry(null)
-        }}
-        date={composeDate}
-        editEntry={editEntry}
-        onSaved={fetchEntries}
-      />
-
-      {/* Delete confirmation */}
       <Dialog open={!!deleteConfirm} onOpenChange={(o: boolean) => !o && setDeleteConfirm(null)}>
         <DialogContent className="glass-frost mx-auto inset-0 m-auto h-fit max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete entry?</DialogTitle>
+            <DialogTitle>Delete progress post?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This entry and its attached images will be permanently removed.
+            This post and its attached photos will be permanently removed.
           </p>
           <DialogFooter className="flex-row">
             <Button
@@ -1066,6 +1192,6 @@ export default function JournalPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }

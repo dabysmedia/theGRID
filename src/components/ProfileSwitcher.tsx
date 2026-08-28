@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { useUser, type UserProfile } from "@/context/UserContext"
-import { Plus, Lock, Check, UserCircle } from "lucide-react"
+import { Plus, Lock, Check, LogOut, UserCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export function UserProfileAvatar({
@@ -46,7 +46,7 @@ export function UserProfileAvatar({
 }
 
 export function ProfileSwitcher() {
-  const { user, users, switchUser, refreshUsers } = useUser()
+  const { user, users, switchUser, logout, refreshUsers } = useUser()
   const [pinPrompt, setPinPrompt] = useState<UserProfile | null>(null)
   const [pin, setPin] = useState("")
   const [pinError, setPinError] = useState("")
@@ -75,7 +75,9 @@ export function ProfileSwitcher() {
       })
       const data = await res.json()
       if (res.ok && data.success) {
-        switchUser(data.user)
+        const refreshed = await refreshUsers()
+        // refreshUsers restores the full private profile from the new session.
+        if (!refreshed) switchUser(data.user)
         setPinPrompt(null)
         setPin("")
       } else {
@@ -84,17 +86,18 @@ export function ProfileSwitcher() {
     } catch {
       setPinError("Network error")
     }
-  }, [pinPrompt, pin, switchUser])
+  }, [pinPrompt, pin, refreshUsers, switchUser])
 
   const handleCreate = useCallback(async () => {
     setCreateError("")
     const name = newName.trim()
     if (!name) { setCreateError("Name is required"); return }
+    if (!/^\d{4,8}$/.test(newPin)) { setCreateError("PIN must be 4–8 digits"); return }
     try {
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, pin: newPin || undefined }),
+        body: JSON.stringify({ name, pin: newPin }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -141,6 +144,17 @@ export function ProfileSwitcher() {
           )
         })}
       </div>
+
+      {user ? (
+        <button
+          type="button"
+          onClick={logout}
+          className="glass-subtle w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/75 transition-colors hover:bg-glass-highlight/25 hover:text-foreground"
+        >
+          <LogOut className="size-3.5" aria-hidden />
+          Lock {user.name}&apos;s profile
+        </button>
+      ) : null}
 
       {pinPrompt && (
         <div className="glass rounded-xl p-4 space-y-3 animate-fade-up">
@@ -197,7 +211,7 @@ export function ProfileSwitcher() {
             maxLength={8}
             value={newPin}
             onChange={(e) => setNewPin(e.target.value)}
-            placeholder="PIN (optional, 4-8 digits)"
+            placeholder="PIN (4-8 digits)"
             className="w-full glass-subtle rounded-lg px-3 py-2 text-sm bg-transparent outline-none focus:ring-1 focus:ring-primary/40"
           />
           {createError && <p className="text-xs text-red-400">{createError}</p>}
