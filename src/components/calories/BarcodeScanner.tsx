@@ -12,6 +12,73 @@ interface BarcodeScannerProps {
   onDetected: (barcode: string) => void
 }
 
+const CAMERA_WARM_WINDOW_MS = 2 * 60 * 1000
+let warmCameraStream: MediaStream | null = null
+let warmCameraRequest: Promise<MediaStream> | null = null
+let warmCameraTimer: ReturnType<typeof setTimeout> | null = null
+let cameraPageCleanupBound = false
+
+function disposeWarmCamera() {
+  if (warmCameraTimer) clearTimeout(warmCameraTimer)
+  warmCameraTimer = null
+  warmCameraStream?.getTracks().forEach((track) => track.stop())
+  warmCameraStream = null
+}
+
+async function acquireCamera(): Promise<MediaStream> {
+  if (warmCameraTimer) clearTimeout(warmCameraTimer)
+  warmCameraTimer = null
+
+  const reusable = warmCameraStream?.getVideoTracks().some((track) => track.readyState === "live")
+  if (warmCameraStream && reusable) {
+    warmCameraStream.getTracks().forEach((track) => {
+      track.enabled = true
+    })
+    return warmCameraStream
+  }
+
+  if (!warmCameraRequest) {
+    disposeWarmCamera()
+    warmCameraRequest = navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    }).then((stream) => {
+      warmCameraStream = stream
+      return stream
+    }).finally(() => {
+      warmCameraRequest = null
+    })
+  }
+
+  const stream = await warmCameraRequest
+  stream.getTracks().forEach((track) => {
+    track.enabled = true
+  })
+
+  if (!cameraPageCleanupBound) {
+    window.addEventListener("pagehide", disposeWarmCamera)
+    cameraPageCleanupBound = true
+  }
+  return stream
+}
+
+function parkCamera(stream: MediaStream) {
+  if (stream !== warmCameraStream) {
+    stream.getTracks().forEach((track) => track.stop())
+    return
+  }
+
+  stream.getTracks().forEach((track) => {
+    track.enabled = false
+  })
+  if (warmCameraTimer) clearTimeout(warmCameraTimer)
+  warmCameraTimer = setTimeout(disposeWarmCamera, CAMERA_WARM_WINDOW_MS)
+}
+
 function cameraMessage(error: unknown): string {
   const name = error instanceof DOMException ? error.name : ""
   if (name === "NotAllowedError") return "Camera access was blocked. Allow camera access or enter the barcode below."
@@ -23,6 +90,7 @@ function cameraMessage(error: unknown): string {
 export function BarcodeScanner({ onClose, onDetected }: BarcodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const controlsRef = useRef<IScannerControls | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const handledRef = useRef(false)
   const [status, setStatus] = useState<"starting" | "scanning" | "found" | "error">("starting")
   const [error, setError] = useState<string | null>(null)
@@ -44,6 +112,7 @@ export function BarcodeScanner({ onClose, onDetected }: BarcodeScannerProps) {
 
   useEffect(() => {
     let cancelled = false
+    const videoElement = videoRef.current
 
     async function startCamera() {
       if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
@@ -51,19 +120,19 @@ export function BarcodeScanner({ onClose, onDetected }: BarcodeScannerProps) {
       }
 
       const { BrowserMultiFormatReader } = await import("@zxing/browser")
-      if (cancelled || !videoRef.current) return
+      if (cancelled || !videoElement) return
+
+      const stream = await acquireCamera()
+      if (cancelled) {
+        parkCamera(stream)
+        return
+      }
+      streamRef.current = stream
+      videoElement.srcObject = stream
 
       const reader = new BrowserMultiFormatReader()
-      const controls = await reader.decodeFromConstraints(
-        {
-          audio: false,
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-        },
-        videoRef.current,
+      const controls = await reader.decodeFromVideoElement(
+        videoElement,
         (result, _scanError, scannerControls) => {
           if (result) finish(result.getText(), scannerControls)
         },
@@ -74,7 +143,11 @@ export function BarcodeScanner({ onClose, onDetected }: BarcodeScannerProps) {
         return
       }
       controlsRef.current = controls
-      setTorchAvailable(Boolean(controls.switchTorch))
+      const videoTrack = stream.getVideoTracks()[0]
+      const capabilities = videoTrack?.getCapabilities?.() as MediaTrackCapabilities & {
+        torch?: boolean
+      }
+      setTorchAvailable(Boolean(capabilities?.torch))
       setStatus("scanning")
     }
 
@@ -88,13 +161,23 @@ export function BarcodeScanner({ onClose, onDetected }: BarcodeScannerProps) {
       cancelled = true
       controlsRef.current?.stop()
       controlsRef.current = null
+      if (videoElement) {
+        videoElement.pause()
+        videoElement.srcObject = null
+      }
+      if (streamRef.current) parkCamera(streamRef.current)
+      streamRef.current = null
     }
   }, [finish])
 
   async function toggleTorch() {
     const next = !torchOn
     try {
-      await controlsRef.current?.switchTorch?.(next)
+      const track = streamRef.current?.getVideoTracks()[0]
+      if (!track) throw new Error("Camera track unavailable")
+      await track.applyConstraints({
+        advanced: [{ torch: next } as MediaTrackConstraintSet],
+      })
       setTorchOn(next)
     } catch {
       setTorchAvailable(false)
