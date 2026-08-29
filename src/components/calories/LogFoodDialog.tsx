@@ -1,7 +1,7 @@
 "use client"
 /* eslint-disable @next/next/no-img-element -- food images can come from dynamic food sources */
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   Barcode,
   BookOpen,
@@ -14,8 +14,6 @@ import {
   Plus,
   Save,
   Search,
-  Trash2,
-  Utensils,
   X,
 } from "lucide-react"
 import {
@@ -32,29 +30,29 @@ import { useActiveDate } from "@/context/DateContext"
 import { cn, formatDisplayDate, parseLocalDate } from "@/lib/utils"
 import { UnifiedFoodSearch } from "@/components/calories/UnifiedFoodSearch"
 import { BarcodeScanner } from "@/components/calories/BarcodeScanner"
+import { FoodFallbackIcon } from "@/components/calories/FoodFallbackIcon"
+import { MACRO_COLOR, MacroPill } from "@/components/calories/FoodTimeline"
 import { RestaurantMenuBrowser } from "@/components/calories/RestaurantMenuBrowser"
 import {
   PhotoCalorieEstimator,
   type PhotoEstimatePrefill,
 } from "@/components/calories/PhotoCalorieEstimator"
-import { FoodFallbackIcon } from "@/components/calories/FoodFallbackIcon"
 import {
   useLogFoodDialog,
   type UseLogFoodDialogOptions,
 } from "@/components/calories/useLogFoodDialog"
 import { draftMealItemTotals } from "@/lib/calories/log-food"
+import { formatFoodPortion } from "@/lib/calories/measurements"
 import {
   MEAL_SLOT_ACCENT,
   MEAL_SLOT_LABEL,
   MEAL_SLOT_RANGE_LABEL,
-  asMealSlot,
   resolveMealSlot,
 } from "@/lib/calories/meal-slots"
-import { formatFoodPortion } from "@/lib/calories/measurements"
 
 export type LogFoodDialogProps = UseLogFoodDialogOptions
 type DialogState = ReturnType<typeof useLogFoodDialog>
-type ComposerScreen = "search" | "library" | "manual" | "meal" | "recipe"
+type ComposerScreen = "search" | "library" | "manual" | "recipe"
 
 /**
  * Three places to get a food, and that is all. Scanning is a button in the
@@ -71,20 +69,22 @@ const COMPOSER_TABS = [
 const BROWSE_SCREENS = new Set<ComposerScreen>(["search", "library"])
 
 /** Screens that are building something rather than browsing. */
-const BUILDER_SCREENS = new Set<ComposerScreen>(["meal", "recipe"])
+const BUILDER_SCREENS = new Set<ComposerScreen>(["recipe"])
 
-const CALORIES_COLOR = "#ef4444"
+/** Breathing room between the search bar and the top of the keyboard. */
+const KEYBOARD_GAP_PX = 8
 
 export function LogFoodDialog(props: LogFoodDialogProps) {
   const { open } = props
   const { activeDate } = useActiveDate()
   const state = useLogFoodDialog(props)
-  const [screen, setScreen] = useState<ComposerScreen>(() =>
-    props.editingMeal || (props.initialMealSlot && !props.startInFoodSearch)
-      ? "meal"
-      : "search",
-  )
+  const [screen, setScreen] = useState<ComposerScreen>("search")
   const [query, setQuery] = useState("")
+  // Callback refs, not object refs: the dialog's content mounts a commit after
+  // `open` flips, so an effect keyed on `open` alone would measure nothing.
+  const [bodyEl, setBodyEl] = useState<HTMLDivElement | null>(null)
+  const [dockEl, setDockEl] = useState<HTMLDivElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [barcodeScan, setBarcodeScan] = useState<{ code: string; id: number } | null>(null)
   const [scannerOpen, setScannerOpen] = useState(false)
   const [photoOpen, setPhotoOpen] = useState(false)
@@ -96,9 +96,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
 
   function handleOpenChange(next: boolean) {
     if (!next) {
-      setScreen(
-        props.initialMealSlot && !props.startInFoodSearch ? "meal" : "search",
-      )
+      setScreen("search")
       setQuery("")
       setBarcodeScan(null)
       setPhotoOpen(false)
@@ -107,7 +105,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
     props.onOpenChange(next)
   }
 
-  function showScreen(next: Exclude<ComposerScreen, "meal">) {
+  function showScreen(next: ComposerScreen) {
     setScreen(next)
     state.setLogFoodMode(next === "manual" ? "estimate" : "saved")
     if (next !== "manual") setPhotoOpen(false)
@@ -117,11 +115,81 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
     showScreen(id)
   }
 
+  const browsing = BROWSE_SCREENS.has(visibleScreen)
+
+  /**
+   * The bar rests at the bottom of the results area and lifts only far enough
+   * to clear the on-screen keyboard — it stays put on desktop, where there is
+   * no keyboard, so opening search never rearranges the screen.
+   */
+  useEffect(() => {
+    const body = bodyEl
+    const dock = dockEl
+    if (!body || !dock) return
+
+    const sync = () => {
+      const height = dock.offsetHeight
+      const travel = Math.max(0, body.clientHeight - height)
+      body.style.setProperty("--dock-height", `${height}px`)
+      body.style.setProperty("--dock-travel", `${travel}px`)
+
+      // visualViewport shrinks by the keyboard; anything below its bottom edge
+      // is covered.
+      const viewport = window.visualViewport
+      const viewportBottom = viewport
+        ? viewport.offsetTop + viewport.height
+        : window.innerHeight
+      const restingBottom = body.getBoundingClientRect().top + travel + height
+      const lift = Math.max(0, restingBottom - viewportBottom + KEYBOARD_GAP_PX)
+      body.style.setProperty("--keyboard-lift", `${lift}px`)
+    }
+
+    sync()
+    const observer = new ResizeObserver(sync)
+    observer.observe(body)
+    observer.observe(dock)
+    const viewport = window.visualViewport
+    viewport?.addEventListener("resize", sync)
+    viewport?.addEventListener("scroll", sync)
+    return () => {
+      observer.disconnect()
+      viewport?.removeEventListener("resize", sync)
+      viewport?.removeEventListener("scroll", sync)
+    }
+  }, [bodyEl, dockEl])
+
   const description = editingEntry && state.editingEntry
     ? `${formatDisplayDate(parseLocalDate(state.editingEntry.date.split("T")[0]))} · ${MEAL_SLOT_LABEL[resolveMealSlot(state.editingEntry)]}`
     : state.editingMeal?.entries[0]
       ? `${formatDisplayDate(parseLocalDate(state.editingMeal.entries[0].date.split("T")[0]))} · ${MEAL_SLOT_LABEL[state.editingMeal.mealSlot]}`
     : formatDisplayDate(parseLocalDate(activeDate))
+
+  const foodSearch = BROWSE_SCREENS.has(visibleScreen) ? (
+    <UnifiedFoodSearch
+      savedMeals={state.savedMeals}
+      recipes={state.recipes}
+      mealSlot={state.mealSlot}
+      query={query}
+      mode={visibleScreen === "library" ? "library" : "search"}
+      barcodeScan={barcodeScan}
+      renderRestaurants={() => (
+        <RestaurantMenuBrowser onAdd={state.handleFoodSelect} />
+      )}
+      onCreateRecipe={() => {
+        state.setDraftMealItems([])
+        state.setShowRecipeCreator(true)
+        setScreen("recipe")
+      }}
+      onAddCatalog={state.handleFoodSelect}
+      onAddSaved={state.handleUseSavedMeal}
+      onAddFrequent={state.handleUseFrequentFood}
+      onAddRecipe={(recipe) => {
+        // Ingredients drop into the tray below, where the meal is assembled.
+        state.handleUseRecipe(recipe)
+      }}
+      onSaveCatalog={state.handleSaveSearchFood}
+    />
+  ) : null
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -133,18 +201,14 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
           "[&_[data-slot=dialog-close]]:right-3 [&_[data-slot=dialog-close]]:top-3",
         )}
       >
-        <header className="shrink-0 border-b border-white/[0.07] px-4 pb-0 pt-4 pr-12">
-          <DialogHeader className="space-y-0 text-left">
+        <header className="shrink-0 border-b border-white/[0.07] px-4 pb-0 pt-4">
+          <DialogHeader className="space-y-0 pr-8 text-left">
             <DialogTitle className="flex flex-wrap items-center gap-2 font-heading text-base tracking-tight">
               {editingEntry
                 ? "Edit food"
                 : editingMeal
                   ? `Edit ${state.editingMeal ? MEAL_SLOT_LABEL[state.editingMeal.mealSlot].toLowerCase() : "meal"}`
-                  : visibleScreen === "meal"
-                    ? state.draftMealItems.length === 0
-                      ? "Build meal"
-                      : "Review meal"
-                    : "Add food"}
+                  : "Add food"}
               {activeSlot ? (
                 <span
                   className="ml-0.5 inline-flex h-6 items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.025] px-2 font-sans text-[10px] font-semibold tracking-wide text-foreground/75"
@@ -169,7 +233,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
 
           {!editingEntry && !BUILDER_SCREENS.has(visibleScreen) ? (
             <nav
-              className="-mx-1 mt-3 flex gap-0.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="-mx-1 mt-3 grid grid-cols-3 gap-0.5 px-1"
               aria-label="Food logging method"
             >
               {COMPOSER_TABS.map(({ id, label, icon: Icon }) => {
@@ -181,7 +245,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
                     onClick={() => handleTab(id)}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "relative flex h-11 shrink-0 items-center gap-1.5 px-3 type-hud-micro transition-colors",
+                      "relative flex h-11 min-w-0 items-center justify-center gap-1.5 px-2 type-hud-micro transition-colors",
                       "after:absolute after:inset-x-1 after:-bottom-px after:h-0.5 after:rounded-full after:transition-colors",
                       active
                         ? "text-foreground after:bg-foreground/75"
@@ -203,83 +267,74 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
           </div>
         ) : null}
 
-        <main className="food-log-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
-          {BROWSE_SCREENS.has(visibleScreen) ? (
-            <UnifiedFoodSearch
-              savedMeals={state.savedMeals}
-              recipes={state.recipes}
-              mealSlot={state.mealSlot}
-              query={query}
-              mode={visibleScreen === "library" ? "library" : "search"}
-              barcodeScan={barcodeScan}
-              renderRestaurants={() => (
-                <RestaurantMenuBrowser onAdd={state.handleFoodSelect} />
-              )}
-              onCreateRecipe={() => {
-                state.setDraftMealItems([])
-                state.setShowRecipeCreator(true)
-                setScreen("recipe")
-              }}
-              onAddCatalog={state.handleFoodSelect}
-              onAddSaved={state.handleUseSavedMeal}
-              onAddFrequent={state.handleUseFrequentFood}
-              onAddRecipe={(recipe) => {
-                state.handleUseRecipe(recipe)
-                setScreen("meal")
-              }}
-              onSaveCatalog={state.handleSaveSearchFood}
-            />
-          ) : null}
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div ref={setBodyEl} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          <main
+            className="food-log-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
+            style={
+              browsing
+                ? { paddingBottom: "calc(var(--dock-height, 4rem) + 0.5rem)" }
+                : undefined
+            }
+          >
+            {browsing ? foodSearch : null}
 
-          {visibleScreen === "manual" ? (
-            <ManualEntryPanel
-              state={state}
-              photoOpen={photoOpen}
-              onTogglePhoto={() => setPhotoOpen((open) => !open)}
-              onPhotoPrefill={(prefill) => {
-                state.handlePhotoPrefill(prefill)
-                setPhotoOpen(false)
-              }}
-              onAdded={() => {
-                if (!editingEntry && state.estimateCalDisplay != null) setScreen("meal")
-              }}
-            />
-          ) : null}
+            {visibleScreen === "manual" ? (
+              <ManualEntryPanel
+                state={state}
+                photoOpen={photoOpen}
+                onTogglePhoto={() => setPhotoOpen((open) => !open)}
+                onPhotoPrefill={(prefill) => {
+                  state.handlePhotoPrefill(prefill)
+                  setPhotoOpen(false)
+                }}
+                onAdded={() => {
+                  if (!editingEntry && state.estimateCalDisplay != null) setScreen("search")
+                }}
+              />
+            ) : null}
 
-          {visibleScreen === "meal" ? (
-            <MealReview state={state} onBack={() => setScreen("search")} />
-          ) : null}
+            {visibleScreen === "recipe" ? (
+              <RecipeCreator
+                state={state}
+                onBack={() => {
+                  state.setDraftMealItems([])
+                  state.resetRecipeCreator()
+                  setScreen("library")
+                }}
+                onAddIngredients={() => setScreen("search")}
+                onSaved={() => {
+                  // The ingredients belonged to the recipe, not to today's log.
+                  state.setDraftMealItems([])
+                  setScreen("library")
+                }}
+              />
+            ) : null}
+          </main>
 
-          {visibleScreen === "recipe" ? (
-            <RecipeCreator
-              state={state}
-              onBack={() => {
-                state.setDraftMealItems([])
-                state.resetRecipeCreator()
-                setScreen("library")
-              }}
-              onAddIngredients={() => setScreen("search")}
-              onSaved={() => {
-                // The ingredients belonged to the recipe, not to today's log.
-                state.setDraftMealItems([])
-                setScreen("library")
-              }}
-            />
+          {browsing ? (
+            <div ref={setDockEl} className="food-search-dock">
+              <FoodSearchBar
+                inputRef={searchInputRef}
+                query={query}
+                mode={visibleScreen === "library" ? "library" : "search"}
+                onQueryChange={setQuery}
+                onScan={() => setScannerOpen(true)}
+              />
+            </div>
           ) : null}
-        </main>
+          </div>
 
-        <DialogFooter
-          state={state}
-          editingEntry={editingEntry}
-          editingMeal={editingMeal}
-          screen={visibleScreen}
-          slotLabel={activeSlot ? MEAL_SLOT_LABEL[activeSlot] : "meal"}
-          query={query}
-          onQueryChange={setQuery}
-          onScan={() => setScannerOpen(true)}
-          buildingRecipe={state.showRecipeCreator}
-          onReview={() => setScreen(state.showRecipeCreator ? "recipe" : "meal")}
-        />
+          <DialogFooter
+            state={state}
+            editingEntry={editingEntry}
+            editingMeal={editingMeal}
+            screen={visibleScreen}
+            slotLabel={activeSlot ? MEAL_SLOT_LABEL[activeSlot] : "meal"}
+            buildingRecipe={state.showRecipeCreator}
+            onBackToRecipe={() => setScreen("recipe")}
+          />
+        </div>
 
         {scannerOpen ? (
           <BarcodeScanner
@@ -297,29 +352,89 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
   )
 }
 
+/**
+ * The one search field in the composer. It lives in a dock that slides between
+ * the bottom of the body and the top, so this renders the same element in both
+ * places rather than swapping in a second copy.
+ */
+function FoodSearchBar({
+  inputRef,
+  query,
+  mode,
+  onQueryChange,
+  onScan,
+}: {
+  inputRef: React.RefObject<HTMLInputElement | null>
+  query: string
+  mode: "search" | "library"
+  onQueryChange: (value: string) => void
+  onScan: () => void
+}) {
+  const placeholder = mode === "library" ? "Search your library" : "Search for a food"
+
+  return (
+    <div className="flex items-center gap-2 bg-gradient-to-t from-background/92 to-transparent px-4 pb-3 pt-5">
+      <div className="relative min-w-0 flex-1">
+        <Search
+          className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground/50"
+          aria-hidden
+        />
+        <Input
+          ref={inputRef}
+          type="search"
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") event.currentTarget.blur()
+          }}
+          placeholder={placeholder}
+          className="food-search-input h-11 rounded-full pl-10 pr-9 text-sm"
+          aria-label={placeholder}
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => {
+              onQueryChange("")
+              inputRef.current?.focus()
+            }}
+            className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+            aria-label="Clear search"
+          >
+            <X className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
+
+      <button
+        type="button"
+        onClick={onScan}
+        className="flex size-11 shrink-0 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.025] text-foreground/75 transition-colors hover:border-white/[0.2] hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+        aria-label="Scan a barcode"
+      >
+        <Barcode className="size-5" />
+      </button>
+    </div>
+  )
+}
+
 function DialogFooter({
   state,
   editingEntry,
   editingMeal,
   screen,
   slotLabel,
-  query,
-  onQueryChange,
-  onScan,
   buildingRecipe,
-  onReview,
+  onBackToRecipe,
 }: {
   state: DialogState
   editingEntry: boolean
   editingMeal: boolean
   screen: ComposerScreen
   slotLabel: string
-  query: string
-  onQueryChange: (value: string) => void
-  onScan: () => void
   /** Items being gathered belong to a recipe, not to today's log. */
   buildingRecipe: boolean
-  onReview: () => void
+  onBackToRecipe: () => void
 }) {
   if (editingEntry) {
     return (
@@ -342,11 +457,11 @@ function DialogFooter({
     )
   }
 
-  const browsing = BROWSE_SCREENS.has(screen)
   const draftCount = state.draftMealItems.length
-  // The recipe builder carries its own Save button.
+  // The recipe builder carries its own Save button; everywhere else the footer
+  // exists only to hold the meal tray.
   if (screen === "recipe") return null
-  if (draftCount === 0 && !editingMeal && !browsing) return null
+  if (draftCount === 0) return null
 
   return (
     <div className="shrink-0 border-t border-border/30 bg-background/70 px-4 py-3 pb-[max(0.75rem,calc(0.5rem+env(safe-area-inset-bottom)))] backdrop-blur-md">
@@ -356,300 +471,191 @@ function DialogFooter({
         </p>
       ) : null}
 
-      {/* What is already in the draft, above the search row — the only place
-          the running total needs to live while browsing. */}
-      {browsing && draftCount > 0 ? (
-        <button
-          type="button"
-          onClick={onReview}
-          className="mb-2 flex h-11 w-full items-center gap-2.5 rounded-xl border border-white/[0.09] bg-white/[0.025] px-3 text-left transition-colors hover:border-white/[0.16] hover:bg-white/[0.045]"
-        >
-          <span className="flex size-7 items-center justify-center rounded-lg bg-white/[0.05] text-foreground/70">
-            <Utensils className="size-3.5" />
-          </span>
-          <span className="min-w-0 flex-1 text-[12px] font-medium text-foreground/85">
-            {draftCount} {buildingRecipe ? "ingredient" : "item"}
-            {draftCount === 1 ? "" : "s"} {buildingRecipe ? "added" : "ready"}
-            <span className="ml-1.5 tabular-nums text-muted-foreground/60">
-              {state.draftTotals.calories.toLocaleString()} cal
-            </span>
-          </span>
-          <span className="type-hud-micro text-muted-foreground/70">
-            {buildingRecipe ? "Back to recipe" : "Review"}
-          </span>
-          <ChevronRight className="size-3.5 text-muted-foreground/50" />
-        </button>
-      ) : null}
+      {/* The meal as it is being built, in full, right where it is assembled —
+          no separate review screen to bounce through to see what is in it. */}
+      <MealTray
+        state={state}
+        slotLabel={slotLabel}
+        buildingRecipe={buildingRecipe}
+        editingMeal={editingMeal}
+        onBackToRecipe={onBackToRecipe}
+      />
 
-      {/* Search and scan sit at the bottom, in thumb reach, and stay put
-          while results scroll behind them. */}
-      {browsing ? (
-        <div className="flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search
-              className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground/50"
-              aria-hidden
-            />
-            <Input
-              type="search"
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-              placeholder={screen === "library" ? "Search your library" : "Search for a food"}
-              className="food-search-input h-11 rounded-full pl-10 pr-9 text-sm"
-              aria-label="Search for a food"
-            />
-            {query ? (
-              <button
-                type="button"
-                onClick={() => onQueryChange("")}
-                className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-white/[0.05]"
-                aria-label="Clear search"
-              >
-                <X className="size-3.5" />
-              </button>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={onScan}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.025] text-foreground/75 transition-colors hover:border-white/[0.2] hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-            aria-label="Scan a barcode"
-          >
-            <Barcode className="size-5" />
-          </button>
-        </div>
-      ) : screen === "meal" ? (
-        <Button
-          type="button"
-          variant="glass"
-          className="h-12 w-full press-scale text-sm font-semibold"
-          disabled={
-            state.postingMeal ||
-            (editingMeal ? state.vacationBlocksEditingEntry : state.vacationBlocksLog)
-          }
-          onClick={() => void state.handlePostMealToDay()}
-        >
-          {state.postingMeal
-            ? editingMeal
-              ? "Saving meal…"
-              : "Adding meal…"
-            : editingMeal
-              ? state.draftMealItems.length === 0
-                ? "Delete meal"
-                : `Save meal · ${state.draftTotals.calories.toLocaleString()} cal`
-              : `Add ${state.draftMealItems.length} item${state.draftMealItems.length === 1 ? "" : "s"} · ${state.draftTotals.calories.toLocaleString()} cal`}
-        </Button>
-      ) : (
-        <button
-          type="button"
-          onClick={onReview}
-          className="flex h-14 w-full items-center gap-3 rounded-xl border border-white/[0.09] bg-white/[0.025] px-3 text-left press-scale transition-colors hover:border-white/[0.16] hover:bg-white/[0.045]"
-        >
-          <span className="flex size-9 items-center justify-center rounded-lg bg-white/[0.05] text-foreground/70">
-            <Utensils className="size-4" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold text-foreground/90">
-              Review {slotLabel.toLowerCase()}
-            </span>
-            <span className="type-hud-caption mt-0.5 block normal-case">
-              {draftCount} item{draftCount === 1 ? "" : "s"} ·{" "}
-              {state.draftTotals.calories.toLocaleString()} cal
-            </span>
-          </span>
-          <ChevronRight className="size-4 text-muted-foreground/50" />
-        </button>
-      )}
     </div>
   )
 }
 
-function MealReview({ state, onBack }: { state: DialogState; onBack: () => void }) {
-  const slot = asMealSlot(state.mealSlot)
-  const accent = {
-    dot: slot ? MEAL_SLOT_ACCENT[slot] : CALORIES_COLOR,
-    text: slot ? MEAL_SLOT_ACCENT[slot] : "#fca5a5",
-  }
-  const slotLabel = slot ? MEAL_SLOT_LABEL[slot] : "Meal"
+/**
+ * The draft meal, expanded in place at the bottom of the composer: every item
+ * with its quantity and a way off the list, the running total, and the button
+ * that commits it.
+ */
+function MealTray({
+  state,
+  slotLabel,
+  buildingRecipe,
+  editingMeal,
+  onBackToRecipe,
+}: {
+  state: DialogState
+  slotLabel: string
+  buildingRecipe: boolean
+  editingMeal: boolean
+  onBackToRecipe: () => void
+}) {
+  const items = state.draftMealItems
+  const blocked = editingMeal ? state.vacationBlocksEditingEntry : state.vacationBlocksLog
 
   return (
-    <div className="space-y-4">
-      {state.draftMealItems.length > 0 ? (
+    <div className="mb-2 overflow-hidden rounded-2xl border border-white/[0.09] bg-white/[0.022]">
+      <div className="flex items-center gap-2 border-b border-white/[0.06] px-3.5 py-2.5">
+        <p className="flex min-w-0 flex-1 items-baseline gap-1.5">
+          <span className="truncate text-[12px] font-semibold uppercase tracking-[0.1em] text-foreground/75">
+            {buildingRecipe ? "Recipe" : slotLabel}
+          </span>
+          <span className="shrink-0 text-[11px] font-medium text-muted-foreground/55">
+            {items.length} {buildingRecipe ? "ingredient" : "item"}
+            {items.length === 1 ? "" : "s"}
+          </span>
+        </p>
+        <span className="shrink-0 text-[13px] font-bold tabular-nums text-red-200/85">
+          {state.draftTotals.calories.toLocaleString()}
+          <span className="ml-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/50">
+            cal
+          </span>
+        </span>
         <button
           type="button"
-          onClick={onBack}
-          className="flex h-9 items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+          onClick={() => state.setDraftMealItems([])}
+          className="ml-0.5 flex h-9 shrink-0 items-center rounded-lg px-2.5 type-hud-micro text-muted-foreground/55 transition-colors hover:bg-white/[0.05] hover:text-foreground/80"
         >
-          <ChevronLeft className="size-4" />
-          Add more food
+          Clear
         </button>
-      ) : null}
+      </div>
 
-      <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02]">
-        <div className="flex items-center gap-3 px-4 py-4">
-          <span
-            className="h-9 w-1 shrink-0 rounded-full"
-            style={{ background: accent.dot, boxShadow: `0 0 12px ${accent.dot}55` }}
-          />
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: accent.text }}>
-              {slotLabel}
-              {slot ? (
-                <span className="ml-2 font-medium normal-case tracking-normal text-muted-foreground/55">
-                  {MEAL_SLOT_RANGE_LABEL[slot]}
-                </span>
-              ) : null}
-            </p>
-            <p className="type-hud-caption mt-0.5 normal-case">
-              {state.draftMealItems.length === 0
-                ? "Empty meal"
-                : `${state.draftMealItems.length} item${state.draftMealItems.length === 1 ? "" : "s"} ${
-                    state.editingMeal ? "in this meal" : "ready to log"
-                  }`}
-            </p>
-          </div>
-          <p className="font-heading text-3xl font-semibold tabular-nums text-red-100/90">
-            {state.draftTotals.calories.toLocaleString()}
-            <span className="type-hud-unit ml-1">cal</span>
-          </p>
-        </div>
-        <dl className="grid grid-cols-3 divide-x divide-border/25 border-t border-border/20 py-3">
-          <NutritionTotal label="Protein" value={state.draftTotals.protein} />
-          <NutritionTotal label="Carbs" value={state.draftTotals.carbs} />
-          <NutritionTotal label="Fat" value={state.draftTotals.fat} />
-        </dl>
-      </section>
+      {/* Capped so a long meal never swallows the results above it. */}
+      <ul className="max-h-[min(32vh,13.5rem)] divide-y divide-white/[0.05] overflow-y-auto overscroll-contain">
+        {items.map((item) => {
+          const totals = draftMealItemTotals(item)
+          const label = item.description || "Food"
+          const portion = formatFoodPortion(
+            item.portionAmount != null
+              ? Math.round(item.portionAmount * item.quantity * 100) / 100
+              : item.quantity,
+            item.portionUnit ?? "serving",
+          )
+          return (
+            <li key={item.id} className="px-3 py-2.5">
+              <div className="flex items-center gap-2.5">
+                {item.imageUrl ? (
+                  <img
+                    src={item.imageUrl}
+                    alt=""
+                    className="size-10 shrink-0 rounded-lg object-contain"
+                  />
+                ) : (
+                  <FoodFallbackIcon label={label} className="size-10 shrink-0 rounded-lg text-lg" />
+                )}
 
-      <section>
-        <div className="flex items-center justify-between pb-2">
-          <p className="type-hud-subsection">Meal contents</p>
-          {state.draftMealItems.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => state.setDraftMealItems([])}
-              className="flex h-8 items-center gap-1.5 rounded-lg px-2 type-hud-micro text-muted-foreground/55 hover:bg-destructive/10 hover:text-destructive"
-            >
-              <Trash2 className="size-3.5" />
-              Clear
-            </button>
-          ) : null}
-        </div>
-
-        {state.draftMealItems.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/[0.09] px-5 py-10 text-center">
-            <span className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-white/[0.04] text-muted-foreground/60">
-              <Utensils className="size-5" />
-            </span>
-            <p className="mt-3 text-sm font-medium">Your {slotLabel.toLowerCase()} block is empty</p>
-            <p className="mt-1 text-xs text-muted-foreground/55">
-              Add foods, a restaurant item, or a quick entry.
-            </p>
-            <Button type="button" variant="glass" className="mt-5 h-11" onClick={onBack}>
-              <Plus className="size-4" />
-              Add food
-            </Button>
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {state.draftMealItems.map((item) => {
-              const totals = draftMealItemTotals(item)
-              const portion = formatFoodPortion(
-                item.portionAmount != null
-                  ? item.portionAmount * item.quantity
-                  : item.quantity,
-                item.portionUnit ?? "serving",
-              )
-              return (
-                <li
-                  key={item.id}
-                  className={cn(
-                    "rounded-2xl border border-border/25 bg-glass-highlight/[0.035] px-3 py-3 transition-colors",
-                    state.lastAddedDraftId === item.id && "border-white/[0.2] bg-white/[0.05]",
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    {item.imageUrl ? (
-                      <img
-                        src={item.imageUrl}
-                        alt=""
-                        className="size-12 shrink-0 rounded-xl object-contain"
-                      />
-                    ) : (
-                      <FoodFallbackIcon
-                        label={item.description || "Food"}
-                        className="rounded-xl"
-                      />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="line-clamp-2 text-[13px] font-medium leading-snug">
-                        {item.description || "Quick add"}
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                        {portion ? (
-                          <span className="rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground/65">
-                            {portion}
-                          </span>
-                        ) : null}
-                        <span className="text-[10px] tabular-nums text-muted-foreground/55">
-                          {[
-                            totals.protein != null ? `P ${totals.protein}g` : null,
-                            totals.carbs != null ? `C ${totals.carbs}g` : null,
-                            totals.fat != null ? `F ${totals.fat}g` : null,
-                          ].filter(Boolean).join(" · ") || "Macros unavailable"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="w-14 shrink-0 text-right">
-                      <p className="text-sm font-semibold tabular-nums text-red-100/90">
-                        {totals.calories.toLocaleString()}
-                      </p>
-                      <p className="type-hud-micro">cal</p>
-                    </div>
-                  </div>
-                  <div className="mt-2.5 flex items-center justify-between border-t border-border/20 pt-2.5">
-                    <span className="type-hud-micro">Quantity</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        disabled={item.quantity <= 0.5}
-                        onClick={() => state.adjustDraftItemQuantity(item.id, -0.5)}
-                        className="flex size-8 items-center justify-center rounded-lg border border-border/25 text-muted-foreground disabled:opacity-30"
-                        aria-label={`Decrease ${item.description || "food"} quantity`}
-                      >
-                        <Minus className="size-3" />
-                      </button>
-                      <span className="w-12 text-center text-xs font-semibold tabular-nums">
-                        {item.quantity}×
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium leading-snug text-foreground/90">
+                    {label}
+                  </p>
+                  <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[11px] tabular-nums">
+                    {totals.protein != null ? (
+                      <MacroPill value={totals.protein} letter="P" color={MACRO_COLOR.protein} />
+                    ) : null}
+                    {totals.fat != null ? (
+                      <MacroPill value={totals.fat} letter="F" color={MACRO_COLOR.fat} />
+                    ) : null}
+                    {totals.carbs != null ? (
+                      <MacroPill value={totals.carbs} letter="C" color={MACRO_COLOR.carbs} />
+                    ) : null}
+                    {portion ? (
+                      <span className="truncate text-[10px] text-muted-foreground/50">
+                        · {portion}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => state.adjustDraftItemQuantity(item.id, 0.5)}
-                        className="flex size-8 items-center justify-center rounded-lg border border-border/25 text-muted-foreground"
-                        aria-label={`Increase ${item.description || "food"} quantity`}
-                      >
-                        <Plus className="size-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          state.setDraftMealItems((current) =>
-                            current.filter((candidate) => candidate.id !== item.id),
-                          )
-                        }
-                        className="ml-1 flex size-8 items-center justify-center rounded-lg text-muted-foreground/45 hover:bg-destructive/10 hover:text-destructive"
-                        aria-label={`Remove ${item.description || "food"}`}
-                      >
-                        <X className="size-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </section>
+                    ) : null}
+                  </p>
+                </div>
 
+                <div className="shrink-0 text-right">
+                  <p className="text-[13px] font-semibold tabular-nums text-red-100/90">
+                    {totals.calories.toLocaleString()}
+                  </p>
+                  <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/45">
+                    cal
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-1.5 flex items-center gap-1 pl-[3.125rem]">
+                <button
+                  type="button"
+                  disabled={item.quantity <= 0.5}
+                  onClick={() => state.adjustDraftItemQuantity(item.id, -0.5)}
+                  className="flex size-9 items-center justify-center rounded-lg border border-white/[0.09] text-muted-foreground/75 transition-colors hover:border-white/[0.2] hover:bg-white/[0.05] hover:text-foreground disabled:opacity-25"
+                  aria-label={`Decrease ${label} quantity`}
+                >
+                  <Minus className="size-3.5" />
+                </button>
+                <span className="w-10 text-center text-[12px] font-semibold tabular-nums text-foreground/85">
+                  {item.quantity}×
+                </span>
+                <button
+                  type="button"
+                  onClick={() => state.adjustDraftItemQuantity(item.id, 0.5)}
+                  className="flex size-9 items-center justify-center rounded-lg border border-white/[0.09] text-muted-foreground/75 transition-colors hover:border-white/[0.2] hover:bg-white/[0.05] hover:text-foreground"
+                  aria-label={`Increase ${label} quantity`}
+                >
+                  <Plus className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    state.setDraftMealItems((current) =>
+                      current.filter((candidate) => candidate.id !== item.id),
+                    )
+                  }
+                  className="ml-auto flex size-9 items-center justify-center rounded-lg text-muted-foreground/45 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  aria-label={`Remove ${label}`}
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+
+      <div className="border-t border-white/[0.06] p-2">
+        {buildingRecipe ? (
+          <Button
+            type="button"
+            variant="glass"
+            className="h-12 w-full text-[13px] font-semibold"
+            onClick={onBackToRecipe}
+          >
+            Back to recipe
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="glass"
+            className="h-12 w-full press-scale text-[13px] font-semibold"
+            disabled={state.postingMeal || blocked}
+            onClick={() => void state.handlePostMealToDay()}
+          >
+            {state.postingMeal
+              ? editingMeal
+                ? "Saving…"
+                : "Logging…"
+              : editingMeal
+                ? `Save ${slotLabel.toLowerCase()} · ${state.draftTotals.calories.toLocaleString()} cal`
+                : `Log ${items.length} item${items.length === 1 ? "" : "s"} · ${state.draftTotals.calories.toLocaleString()} cal`}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
@@ -963,11 +969,3 @@ function MacroInput({
   )
 }
 
-function NutritionTotal({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="px-2 text-center">
-      <p className="type-hud-stat-sm">{Math.round(value * 10) / 10}g</p>
-      <p className="type-hud-micro mt-1">{label}</p>
-    </div>
-  )
-}

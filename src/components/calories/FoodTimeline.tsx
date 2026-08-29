@@ -18,7 +18,7 @@ import {
 import { cn } from "@/lib/utils"
 
 const CALORIE_COLOR = "#ef4444"
-const MACRO_COLOR = {
+export const MACRO_COLOR = {
   protein: "#38bdf8",
   fat: "#fbbf24",
   carbs: "#4ade80",
@@ -85,7 +85,7 @@ function round1(value: number): number {
 
 /* ─── macro readout ──────────────────────────────────────── */
 
-function MacroPill({
+export function MacroPill({
   value,
   letter,
   color,
@@ -95,9 +95,12 @@ function MacroPill({
   color: string
 }) {
   return (
-    <span className="inline-flex items-baseline gap-1 tabular-nums">
-      <span className="font-semibold text-foreground/75">{round1(value)}</span>
-      <span className="text-[9px] font-bold" style={{ color }}>
+    <span
+      className="inline-flex items-baseline gap-1 tabular-nums"
+      aria-label={`${round1(value)}${letter}`}
+    >
+      <span className="font-semibold text-foreground/75" aria-hidden>{round1(value)}</span>
+      <span className="text-[9px] font-bold" style={{ color }} aria-hidden>
         {letter}
       </span>
     </span>
@@ -149,11 +152,7 @@ function EntryRow({
   onEditBlock: (slot: MealSlot) => void
 }) {
   const portion = formatFoodPortion(entry.portionAmount, entry.portionUnit)
-  const macros = [
-    entry.protein != null ? `${round1(entry.protein)}P` : null,
-    entry.fat != null ? `${round1(entry.fat)}F` : null,
-    entry.carbs != null ? `${round1(entry.carbs)}C` : null,
-  ].filter(Boolean)
+  const hasMacros = entry.protein != null || entry.fat != null || entry.carbs != null
   const label = entry.description?.trim() || "Logged entry"
 
   return (
@@ -177,8 +176,24 @@ function EntryRow({
           <span className="line-clamp-2 block text-[13px] font-medium leading-snug text-foreground/92">
             {label}
           </span>
-          <span className="mt-0.5 block truncate text-[10px] tabular-nums text-muted-foreground/55">
-            {[macros.join(" "), portion].filter(Boolean).join(" · ") || "No macros logged"}
+          <span className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px] tabular-nums">
+            {entry.protein != null ? (
+              <MacroPill value={entry.protein} letter="P" color={MACRO_COLOR.protein} />
+            ) : null}
+            {entry.fat != null ? (
+              <MacroPill value={entry.fat} letter="F" color={MACRO_COLOR.fat} />
+            ) : null}
+            {entry.carbs != null ? (
+              <MacroPill value={entry.carbs} letter="C" color={MACRO_COLOR.carbs} />
+            ) : null}
+            {portion ? (
+              <span className="min-w-0 truncate text-[10px] text-muted-foreground/48">
+                {hasMacros ? "· " : ""}{portion}
+              </span>
+            ) : null}
+            {!hasMacros && !portion ? (
+              <span className="text-[10px] text-muted-foreground/55">No macros logged</span>
+            ) : null}
           </span>
         </span>
         <span className="shrink-0 text-right">

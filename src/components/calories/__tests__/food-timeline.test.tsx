@@ -123,7 +123,12 @@ describe("FoodTimeline", () => {
       entries: [entry({ id: "a", description: "Overnight Protein Oats" })],
     })
     expect(html).toContain("Overnight Protein Oats")
-    expect(html).toContain("18P")
+    expect(html).toContain('aria-label="18P"')
+    expect(html).toContain('aria-label="11F"')
+    expect(html).toContain('aria-label="30C"')
+    expect(html).toContain('style="color:#38bdf8"')
+    expect(html).toContain('style="color:#fbbf24"')
+    expect(html).toContain('style="color:#4ade80"')
     expect(html).toContain("1 serving")
   })
 

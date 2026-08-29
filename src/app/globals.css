@@ -2774,6 +2774,21 @@ html {
   background: rgb(239 68 68 / 8%);
 }
 
+/**
+ * The composer's search bar rests at the bottom of the results area and lifts
+ * only far enough to clear the on-screen keyboard, so focusing it never
+ * rearranges the screen. `--keyboard-lift` is measured from visualViewport.
+ */
+.food-search-dock {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: 30;
+  transform: translateY(calc(var(--dock-travel, 0px) - var(--keyboard-lift, 0px)));
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
 .food-log-surface .food-search-filters {
   border-color: var(--glass-border);
   background: color-mix(in oklab, var(--glass) 68%, transparent);
@@ -2816,5 +2831,9 @@ html {
   .barcode-scan-line {
     animation: none;
     top: 50%;
+  }
+
+  .food-search-dock {
+    transition: none;
   }
 }
