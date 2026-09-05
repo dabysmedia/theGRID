@@ -44,7 +44,7 @@ import {
   type UseLogFoodDialogOptions,
 } from "@/components/calories/useLogFoodDialog"
 import { draftMealItemTotals } from "@/lib/calories/log-food"
-import { formatFoodPortion } from "@/lib/calories/measurements"
+import { formatFoodPortion, isFoodMeasurementUnit, portionStep } from "@/lib/calories/measurements"
 import {
   MEAL_SLOT_ACCENT,
   MEAL_SLOT_LABEL,
@@ -542,6 +542,14 @@ function MealTray({
               : item.quantity,
             item.portionUnit ?? "serving",
           )
+          const basisAmount = item.portionAmount && item.portionAmount > 0 ? item.portionAmount : 1
+          const actualAmount = Math.round(basisAmount * item.quantity * 10000) / 10000
+          const actualUnit = isFoodMeasurementUnit(item.portionUnit) ? item.portionUnit : "serving"
+          const step = portionStep(actualUnit)
+          const updateAmount = (amount: number) => {
+            if (!Number.isFinite(amount) || amount <= 0) return
+            state.setDraftMealItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, quantity: amount / basisAmount } : candidate))
+          }
           return (
             <li key={item.id} className="px-3 py-2.5">
               <div className="flex items-center gap-2.5">
@@ -590,19 +598,18 @@ function MealTray({
               <div className="mt-1.5 flex items-center gap-1 pl-[3.125rem]">
                 <button
                   type="button"
-                  disabled={item.quantity <= 0.5}
-                  onClick={() => state.adjustDraftItemQuantity(item.id, -0.5)}
+                  disabled={actualAmount <= step}
+                  onClick={() => updateAmount(Math.max(step, actualAmount - step))}
                   className="flex size-9 items-center justify-center rounded-lg border border-white/[0.09] text-muted-foreground/75 transition-colors hover:border-white/[0.2] hover:bg-white/[0.05] hover:text-foreground disabled:opacity-25"
                   aria-label={`Decrease ${label} quantity`}
                 >
                   <Minus className="size-3.5" />
                 </button>
-                <span className="w-10 text-center text-[12px] font-semibold tabular-nums text-foreground/85">
-                  {item.quantity}×
-                </span>
+                <Input key={`${item.id}-${actualAmount}`} defaultValue={actualAmount} type="number" min="0.01" step="any" inputMode="decimal" aria-label={`${label} amount in ${actualUnit}`} onFocus={(event) => event.currentTarget.select()} onBlur={(event) => { const value = Number(event.target.value); if (value > 0) updateAmount(value); else event.target.value = String(actualAmount) }} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur() }} className="h-11 w-20 rounded-lg text-center tabular-nums" />
+                <span className="text-xs text-muted-foreground">{actualUnit}</span>
                 <button
                   type="button"
-                  onClick={() => state.adjustDraftItemQuantity(item.id, 0.5)}
+                  onClick={() => updateAmount(actualAmount + step)}
                   className="flex size-9 items-center justify-center rounded-lg border border-white/[0.09] text-muted-foreground/75 transition-colors hover:border-white/[0.2] hover:bg-white/[0.05] hover:text-foreground"
                   aria-label={`Increase ${label} quantity`}
                 >

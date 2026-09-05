@@ -91,10 +91,21 @@ export function availableFoodUnits(
   servingWeightG?: number | null,
 ): FoodMeasurementUnit[] {
   const units: FoodMeasurementUnit[] = [basisUnit]
+  if (basisUnit === "g") units.push("oz")
+  if (basisUnit === "oz") units.push("g")
   if (servingWeightG != null && servingWeightG > 0) {
     for (const unit of ["serving", "g", "oz"] as const) {
       if (!units.includes(unit)) units.push(unit)
     }
   }
   return units
+}
+
+/** Convert a quantity without changing the amount of food or its nutrition. */
+export function convertFoodAmount(amount: number, from: FoodMeasurementUnit, to: FoodMeasurementUnit, servingWeightG?: number | null): number | null {
+  return foodPortionMultiplier({ amount, unit: from, basisAmount: 1, basisUnit: to, servingWeightG })
+}
+
+export function portionStep(unit: FoodMeasurementUnit): number {
+  return unit === "g" ? 10 : unit === "oz" ? 0.25 : 0.5
 }

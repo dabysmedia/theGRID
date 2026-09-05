@@ -17,6 +17,7 @@ import {
   Store,
   Utensils,
 } from "lucide-react"
+import { PortionMacros } from "./PortionMacros"
 import { apiFetch } from "@/lib/api-fetch"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
@@ -32,6 +33,8 @@ import {
 } from "@/lib/calories/food-search-ranking"
 import {
   availableFoodUnits,
+  convertFoodAmount,
+  portionStep,
   foodPortionMultiplier,
   isFoodMeasurementUnit,
   measurementUnitLabel,
@@ -112,6 +115,7 @@ export function UnifiedFoodSearch({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<SelectedFood | null>(null)
+  const [customWeight, setCustomWeight] = useState("")
   const [amount, setAmount] = useState("1")
   const [unit, setUnit] = useState<FoodMeasurementUnit>("serving")
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -306,7 +310,7 @@ export function UnifiedFoodSearch({
       return {
         amount: 1,
         unit: "serving" as const,
-        weightG: selected.food.serving_size_g,
+        weightG: selected.food.serving_size_g || (Number(customWeight) > 0 ? Number(customWeight) : null),
         calories: selected.food.calories,
         protein: selected.food.protein,
         carbs: selected.food.carbs,
@@ -324,13 +328,13 @@ export function UnifiedFoodSearch({
             ? selected.food.portionUnit
             : "serving"
           : selected.food.servingUnit || ("serving" as const),
-      weightG: selected.kind === "frequent" ? null : selected.food.servingWeightG,
+      weightG: (selected.kind === "frequent" ? null : selected.food.servingWeightG) || (Number(customWeight) > 0 ? Number(customWeight) : null),
       calories: selected.food.calories,
       protein: selected.food.protein,
       carbs: selected.food.carbs,
       fat: selected.food.fat,
     }
-  }, [selected])
+  }, [selected, customWeight])
 
   const numericAmount = Number(amount)
   const multiplier =
@@ -348,6 +352,7 @@ export function UnifiedFoodSearch({
     : []
 
   function openPortion(next: SelectedFood) {
+    setCustomWeight("")
     const basisUnit =
       next.kind === "catalog"
         ? "serving"
@@ -364,8 +369,10 @@ export function UnifiedFoodSearch({
           : next.food.servingAmount || 1
     ;(document.activeElement as HTMLElement)?.blur()
     setSelected(next)
-    setUnit(basisUnit)
-    setAmount(String(basisAmount))
+    const weight = next.kind === "catalog" ? next.food.serving_size_g : next.kind === "saved" ? next.food.servingWeightG : null
+    const grams = convertFoodAmount(basisAmount, basisUnit, "g", weight)
+    setUnit(grams != null ? "g" : basisUnit)
+    setAmount(String(grams ?? basisAmount))
   }
 
   function confirmPortion() {
@@ -450,6 +457,11 @@ export function UnifiedFoodSearch({
           </div>
         </div>
 
+        {selectedBasis.unit !== "g" && selectedBasis.unit !== "oz" && (customWeight || !selectedBasis.weightG) ? <details className="mt-3 text-xs text-muted-foreground">
+          <summary className="cursor-pointer py-2">Set grams per {measurementUnitLabel(selectedBasis.unit, 1)}</summary>
+          <label className="mt-2 flex items-center gap-3"><span className="flex-1">Weight of one {measurementUnitLabel(selectedBasis.unit, 1)} (g)</span><Input type="number" min="0.01" step="any" inputMode="decimal" value={customWeight} onChange={(event) => setCustomWeight(event.target.value)} aria-label="Grams per serving or piece" className="h-11 w-24" /></label>
+          <p className="mt-2">Use the package label or your food scale.</p>
+        </details> : null}
         {unitOptions.length > 1 ? (
           <div className="mt-4 flex rounded-xl border border-white/[0.08] bg-white/[0.02] p-1">
             {unitOptions.map((option) => (
@@ -457,13 +469,9 @@ export function UnifiedFoodSearch({
                 key={option}
                 type="button"
                 onClick={() => {
+                  const converted = convertFoodAmount(numericAmount, unit, option, selectedBasis.weightG)
                   setUnit(option)
-                  if (option === "g") setAmount(String(selectedBasis.weightG ?? 100))
-                  else if (option === "oz") {
-                    setAmount(
-                      String(Math.round(((selectedBasis.weightG ?? 28.35) / 28.3495) * 10) / 10),
-                    )
-                  } else setAmount(String(selectedBasis.amount))
+                  setAmount(converted == null ? "" : String(Math.round(converted * 10000) / 10000))
                 }}
                 className={cn(
                   "flex-1 rounded-lg py-2 text-[11px] font-semibold tracking-wide transition-colors",
@@ -485,7 +493,7 @@ export function UnifiedFoodSearch({
         ) : null}
 
         <div className="mt-4 flex items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-3 py-3">
-          <button type="button" aria-label="Decrease portion" disabled={!Number.isFinite(numericAmount) || numericAmount <= 0.5} onClick={() => setAmount(String(Math.max(0.5, Math.round((numericAmount - 0.5) * 100) / 100)))} className="food-portion-step"><Minus className="size-5" /></button>
+          <button type="button" aria-label="Decrease portion" disabled={!Number.isFinite(numericAmount) || numericAmount <= portionStep(unit)} onClick={() => setAmount(String(Math.max(portionStep(unit), Math.round((numericAmount - portionStep(unit)) * 10000) / 10000)))} className="food-portion-step"><Minus className="size-5" /></button>
           <div className="min-w-0 flex-1 text-center">
           <Input
             value={amount}
@@ -502,15 +510,14 @@ export function UnifiedFoodSearch({
           />
           <p className="type-hud-unit mt-0.5">{measurementUnitLabel(unit, numericAmount)}</p>
           </div>
-          <button type="button" aria-label="Increase portion" onClick={() => setAmount(String(Math.round(((Number.isFinite(numericAmount) ? numericAmount : 0) + 0.5) * 100) / 100))} className="food-portion-step"><Plus className="size-5" /></button>
+          <button type="button" aria-label="Increase portion" onClick={() => setAmount(String(Math.round(((Number.isFinite(numericAmount) ? numericAmount : 0) + portionStep(unit)) * 10000) / 10000))} className="food-portion-step"><Plus className="size-5" /></button>
         </div>
 
-        <div className="mt-3 grid grid-cols-4 divide-x divide-white/[0.07] rounded-xl border border-white/[0.07] py-3">
-          <NutritionNumber label="Cal" value={scaled(selectedBasis.calories)} />
-          <NutritionNumber label="Protein" value={scaled(selectedBasis.protein)} suffix="g" />
-          <NutritionNumber label="Fat" value={scaled(selectedBasis.fat)} suffix="g" />
-          <NutritionNumber label="Carbs" value={scaled(selectedBasis.carbs)} suffix="g" />
-        </div>
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          Nutrition updates for the amount above.
+          {selectedBasis.weightG ? ` 1 ${measurementUnitLabel(selectedBasis.unit === "piece" ? "piece" : "serving", 1)} = ${selectedBasis.weightG} g.` : ""}
+        </p>
+        <PortionMacros calories={scaled(selectedBasis.calories)} protein={scaled(selectedBasis.protein)} carbs={scaled(selectedBasis.carbs)} fat={scaled(selectedBasis.fat)} />
 
         <div className="food-portion-action">
         <Button
@@ -1047,24 +1054,5 @@ function FoodArtwork({
     />
   ) : (
     <FoodFallbackIcon label={label} large={size === "lg"} recipe={recipe} className={box} />
-  )
-}
-
-function NutritionNumber({
-  label,
-  value,
-  suffix = "",
-}: {
-  label: string
-  value: number | null
-  suffix?: string
-}) {
-  return (
-    <div className="px-1 text-center">
-      <p className="type-hud-stat-sm">
-        {value == null ? "—" : `${Math.round(value * 10) / 10}${suffix}`}
-      </p>
-      <p className="type-hud-micro mt-0.5">{label}</p>
-    </div>
   )
 }
