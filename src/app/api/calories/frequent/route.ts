@@ -1,3 +1,4 @@
+import { hiddenFoodNames, updateHiddenFoods, visibleFoodHistory } from "@/lib/calories/hidden-foods"
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId, UserError } from "@/lib/current-user"
@@ -50,9 +51,10 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
         take: 1000,
       }),
-      prisma.user.findUnique({ where: { id: userId }, select: { timeZone: true } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { timeZone: true, hiddenFoodNamesJson: true } }),
     ])
 
+    const visibleEntries = visibleFoodHistory(entries, profile?.hiddenFoodNamesJson)
     const timeZone = profile?.timeZone ?? null
     const now = Date.now()
     const headers = { "Cache-Control": "no-store, must-revalidate" }
@@ -60,9 +62,10 @@ export async function GET(req: NextRequest) {
     if (single) {
       return NextResponse.json(
         {
-          picks: frequentFoodsForSlot(entries, single, 16, now, timeZone),
-          recent: recentFoods(entries, single, 12, timeZone),
-          library: loggedFoodLibrary(entries, single, 400, timeZone),
+          hiddenNames: [...hiddenFoodNames(profile?.hiddenFoodNamesJson)],
+          picks: frequentFoodsForSlot(visibleEntries, single, 16, now, timeZone),
+          recent: recentFoods(visibleEntries, single, 12, timeZone),
+          library: loggedFoodLibrary(visibleEntries, single, 400, timeZone),
         },
         { headers },
       )
@@ -72,7 +75,7 @@ export async function GET(req: NextRequest) {
       Object.fromEntries(
         [...new Set(batch)].map((slot) => [
           slot,
-          frequentFoodsForSlot(entries, slot, 16, now, timeZone),
+          frequentFoodsForSlot(visibleEntries, slot, 16, now, timeZone),
         ]),
       ),
       { headers },
@@ -82,5 +85,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }
     return NextResponse.json({ error: "Failed to load frequent foods." }, { status: 500 })
+  }
+}
+
+/** Hide a history suggestion across all slots without touching nutrition logs. */
+export async function PATCH(req: NextRequest) {
+  try {
+    const userId = await resolveUserId(req)
+    const body = await req.json()
+    if (typeof body.name !== "string" || !body.name.trim() || body.name.length > 500 || typeof body.hidden !== "boolean") {
+      return NextResponse.json({ error: "A food name and hidden flag are required." }, { status: 400 })
+    }
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { hiddenFoodNamesJson: true } })
+      await tx.user.update({ where: { id: userId }, data: { hiddenFoodNamesJson: updateHiddenFoods(user.hiddenFoodNamesJson, body.name, body.hidden) } })
+    })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    if (error instanceof UserError) return NextResponse.json({ error: error.message }, { status: error.status })
+    return NextResponse.json({ error: "Could not update suggestions." }, { status: 500 })
   }
 }

@@ -10,6 +10,8 @@ import {
   ChevronRight,
   Loader2,
   PencilLine,
+  EyeOff,
+  Minus,
   Plus,
   Search,
   Store,
@@ -80,6 +82,7 @@ export function UnifiedFoodSearch({
   onAddRecipe,
   onSaveCatalog,
   onEditSaved,
+  onPortionChange,
 }: {
   savedMeals: SavedMeal[]
   recipes: Recipe[]
@@ -101,6 +104,7 @@ export function UnifiedFoodSearch({
   onAddSaved: (food: SavedMeal, portion: PortionSelection) => void
   onAddFrequent: (food: FrequentFoodSuggestion, portion: PortionSelection) => void
   onAddRecipe: (recipe: Recipe) => void
+  onPortionChange?: (open: boolean) => void
   onEditSaved?: (food: SavedMeal) => void
   onSaveCatalog?: (food: CatalogFoodResult) => Promise<boolean>
 }) {
@@ -118,6 +122,45 @@ export function UnifiedFoodSearch({
   const [library, setLibrary] = useState<FrequentFoodSuggestion[]>([])
   const requestRef = useRef(0)
   const frequentRequestRef = useRef(0)
+  const [suggestionRevision, setSuggestionRevision] = useState(0)
+  const [hiddenFoods, setHiddenFoods] = useState<string[]>([])
+  const [hiddenName, setHiddenName] = useState<string | null>(null)
+  const [suggestionBusy, setSuggestionBusy] = useState(false)
+  const [suggestionError, setSuggestionError] = useState<string | null>(null)
+  const [addedName, setAddedName] = useState<string | null>(null)
+
+  useEffect(() => { onPortionChange?.(selected != null) }, [selected, onPortionChange])
+  useEffect(() => () => onPortionChange?.(false), [onPortionChange])
+  useEffect(() => {
+    const refresh = () => setSuggestionRevision((value) => value + 1)
+    window.addEventListener("grid:food-suggestions-changed", refresh)
+    return () => window.removeEventListener("grid:food-suggestions-changed", refresh)
+  }, [])
+  useEffect(() => {
+    if (!addedName) return
+    const timer = window.setTimeout(() => setAddedName(null), 2200)
+    return () => window.clearTimeout(timer)
+  }, [addedName])
+
+  async function changeSuggestion(name: string, hidden: boolean) {
+    if (suggestionBusy) return
+    setSuggestionBusy(true)
+    setSuggestionError(null)
+    try {
+      const response = await apiFetch("/api/calories/frequent", {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, hidden }),
+      })
+      if (!response.ok) throw new Error("Could not update picks. Please try again.")
+      setHiddenName(hidden ? name : null)
+      window.dispatchEvent(new Event("grid:food-suggestions-changed"))
+    } catch { setSuggestionError("Could not update picks. Please try again.") }
+    finally { setSuggestionBusy(false) }
+  }
+
+  function hideAction(food: FrequentFoodSuggestion) {
+    return <button type="button" disabled={suggestionBusy} onClick={() => void changeSuggestion(food.name, true)} aria-label={`Hide ${food.name} from suggestions`} title="Hide from picks" className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground/50 hover:bg-white/[0.05] hover:text-foreground disabled:opacity-40"><EyeOff className="size-4" /></button>
+  }
+
 
   const activeSlot = asMealSlot(mealSlot)
   const slotLabel = activeSlot ? MEAL_SLOT_LABEL[activeSlot] : "This block"
@@ -135,6 +178,7 @@ export function UnifiedFoodSearch({
       .then(async (response) => {
         const data = await response.json()
         if (requestId !== frequentRequestRef.current) return
+        setHiddenFoods(response.ok && Array.isArray(data?.hiddenNames) ? data.hiddenNames : [])
         setPicks(response.ok && Array.isArray(data?.picks) ? data.picks : [])
         setRecent(response.ok && Array.isArray(data?.recent) ? data.recent : [])
         setLibrary(response.ok && Array.isArray(data?.library) ? data.library : [])
@@ -145,7 +189,7 @@ export function UnifiedFoodSearch({
         setRecent([])
         setLibrary([])
       })
-  }, [mealSlot])
+  }, [mealSlot, suggestionRevision])
 
   const searchCatalog = useCallback(async (value: string, barcode = false) => {
     const trimmed = value.trim()
@@ -318,6 +362,7 @@ export function UnifiedFoodSearch({
         : next.kind === "frequent"
           ? next.food.portionAmount || 1
           : next.food.servingAmount || 1
+    ;(document.activeElement as HTMLElement)?.blur()
     setSelected(next)
     setUnit(basisUnit)
     setAmount(String(basisAmount))
@@ -325,6 +370,8 @@ export function UnifiedFoodSearch({
 
   function confirmPortion() {
     if (!selected || multiplier == null || multiplier <= 0) return
+    ;(document.activeElement as HTMLElement)?.blur()
+    setAddedName(selected.kind === "catalog" ? selected.food.food_name : selected.food.name)
     const portion = { amount: numericAmount, unit, multiplier }
     if (selected.kind === "catalog") onAddCatalog(selected.food, portion)
     else if (selected.kind === "saved") onAddSaved(selected.food, portion)
@@ -334,6 +381,7 @@ export function UnifiedFoodSearch({
 
   /** The + button logs the food at its usual portion, with no extra screen. */
   function addNow(next: SelectedFood) {
+    setAddedName(next.kind === "catalog" ? next.food.food_name : next.food.name)
     if (next.kind === "catalog") {
       onAddCatalog(next.food, { amount: 1, unit: "serving", multiplier: 1 })
       return
@@ -382,18 +430,18 @@ export function UnifiedFoodSearch({
           ? `${selected.food.logCount} ${slotLabel.toLowerCase()} logs`
           : "Saved food"
     return (
-      <div className="mx-auto flex w-full max-w-2xl flex-col motion-safe:animate-fade-up">
+      <div className="food-portion-view mx-auto flex min-h-full w-full max-w-2xl flex-col">
         <button
           type="button"
-          onClick={() => setSelected(null)}
+          onClick={() => { (document.activeElement as HTMLElement)?.blur(); setSelected(null) }}
           className="mb-3 flex h-9 w-fit items-center gap-1 rounded-lg px-1.5 type-hud-micro text-muted-foreground/70 transition-colors hover:bg-white/[0.04] hover:text-foreground"
         >
           <ChevronLeft className="size-3.5" />
-          Back
+          Back to foods
         </button>
 
         <div className="flex items-center gap-3">
-          <FoodArtwork src={image} label={name} size="lg" />
+          <FoodArtwork src={image} label={name} />
           <div className="min-w-0 flex-1">
             <p className="text-base font-semibold leading-snug tracking-tight">{name}</p>
             {subtitle ? (
@@ -436,7 +484,9 @@ export function UnifiedFoodSearch({
           </div>
         ) : null}
 
-        <div className="mt-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-center">
+        <div className="mt-4 flex items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-3 py-3">
+          <button type="button" aria-label="Decrease portion" disabled={!Number.isFinite(numericAmount) || numericAmount <= 0.5} onClick={() => setAmount(String(Math.max(0.5, Math.round((numericAmount - 0.5) * 100) / 100)))} className="food-portion-step"><Minus className="size-5" /></button>
+          <div className="min-w-0 flex-1 text-center">
           <Input
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
@@ -446,9 +496,13 @@ export function UnifiedFoodSearch({
             inputMode="decimal"
             className="h-12 border-0 bg-transparent px-0 text-center font-heading text-4xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
             aria-label="Portion amount"
-            autoFocus
+            enterKeyHint="done"
+            onFocus={(event) => event.currentTarget.select()}
+            onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur() }}
           />
           <p className="type-hud-unit mt-0.5">{measurementUnitLabel(unit, numericAmount)}</p>
+          </div>
+          <button type="button" aria-label="Increase portion" onClick={() => setAmount(String(Math.round(((Number.isFinite(numericAmount) ? numericAmount : 0) + 0.5) * 100) / 100))} className="food-portion-step"><Plus className="size-5" /></button>
         </div>
 
         <div className="mt-3 grid grid-cols-4 divide-x divide-white/[0.07] rounded-xl border border-white/[0.07] py-3">
@@ -458,6 +512,7 @@ export function UnifiedFoodSearch({
           <NutritionNumber label="Carbs" value={scaled(selectedBasis.carbs)} suffix="g" />
         </div>
 
+        <div className="food-portion-action">
         <Button
           type="button"
           variant="glass"
@@ -468,6 +523,7 @@ export function UnifiedFoodSearch({
           <Plus className="size-4" />
           Add to {slotLabel.toLowerCase()}
         </Button>
+        </div>
       </div>
     )
   }
@@ -492,7 +548,15 @@ export function UnifiedFoodSearch({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="space-y-5 pb-2">
+      {suggestionError ? <p role="alert" className="mb-3 text-sm text-destructive">{suggestionError}</p> : null}
+      {hiddenName ? <div className="food-feedback mb-3 flex items-center gap-2 rounded-xl border border-white/10 p-3 text-xs"><span className="min-w-0 flex-1">Hidden from picks: {hiddenName}</span><button type="button" disabled={suggestionBusy} className="min-h-11 px-3 font-semibold text-primary" onClick={() => void changeSuggestion(hiddenName, false)}>Undo</button></div> : null}
+      {addedName ? <p role="status" className="food-feedback mb-3 flex items-center gap-2 text-sm text-primary"><Check className="size-4" /> {addedName} added to meal</p> : null}
+      <div key={mode} className="food-browse-view space-y-5 pb-2">
+        {showLibrary && hiddenFoods.length > 0 ? <details className="rounded-xl border border-white/[0.08] p-3">
+          <summary className="cursor-pointer py-2 text-sm text-muted-foreground">Hidden suggestions · {hiddenFoods.length}</summary>
+          <p className="mb-2 text-xs text-muted-foreground">These foods remain in your past logs.</p>
+          {hiddenFoods.map((name) => <div key={name} className="flex items-center gap-3 border-t border-white/[0.05] text-sm"><span className="min-w-0 flex-1 capitalize">{name}</span><button type="button" disabled={suggestionBusy} onClick={() => void changeSuggestion(name, false)} className="min-h-11 px-2 text-primary">Restore</button></div>)}
+        </details> : null}
         {showLibrary ? (
           <>
             {matchingSaved.length > 0 ? (
@@ -645,6 +709,7 @@ export function UnifiedFoodSearch({
                   image={hit.food.imageUrl}
                   onOpen={() => openPortion({ kind: "frequent", food: hit.food })}
                   onAdd={() => addNow({ kind: "frequent", food: hit.food })}
+                  accessory={hideAction(hit.food)}
                 />
               ),
             )}
@@ -670,6 +735,7 @@ export function UnifiedFoodSearch({
                 image={food.imageUrl}
                 onOpen={() => openPortion({ kind: "frequent", food })}
                 onAdd={() => addNow({ kind: "frequent", food })}
+                accessory={hideAction(food)}
               />
             ))}
           </ResultSection>
@@ -691,6 +757,7 @@ export function UnifiedFoodSearch({
                   image={food.imageUrl}
                   onOpen={() => openPortion({ kind: "frequent", food })}
                   onAdd={() => addNow({ kind: "frequent", food })}
+                accessory={hideAction(food)}
                 />
               ))}
           </ResultSection>

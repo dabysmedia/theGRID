@@ -1,3 +1,4 @@
+import { updateHiddenFoods } from "@/lib/calories/hidden-foods"
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { resolveUserId, UserError } from "@/lib/current-user"
@@ -237,8 +238,15 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get("id")
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 })
 
-    const { count } = await prisma.savedMeal.deleteMany({ where: { id, userId } })
-    if (!count) return NextResponse.json({ error: "Not found" }, { status: 404 })
+    const deleted = await prisma.$transaction(async (tx) => {
+      const meal = await tx.savedMeal.findFirst({ where: { id, userId } })
+      if (!meal) return false
+      const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { hiddenFoodNamesJson: true } })
+      await tx.user.update({ where: { id: userId }, data: { hiddenFoodNamesJson: updateHiddenFoods(user.hiddenFoodNamesJson, meal.name, true) } })
+      await tx.savedMeal.delete({ where: { id: meal.id } })
+      return true
+    })
+    if (!deleted) return NextResponse.json({ error: "Not found" }, { status: 404 })
     return NextResponse.json({ success: true })
   } catch (e) {
     if (e instanceof UserError) return NextResponse.json({ error: e.message }, { status: e.status })

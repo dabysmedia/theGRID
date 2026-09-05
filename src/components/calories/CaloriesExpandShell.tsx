@@ -95,6 +95,12 @@ export function CaloriesExpandShell({
 
   useEffect(() => loadSuggestions(), [loadSuggestions, reloadKey])
 
+  useEffect(() => {
+    const refresh = () => { loadSuggestions() }
+    window.addEventListener("grid:food-suggestions-changed", refresh)
+    return () => window.removeEventListener("grid:food-suggestions-changed", refresh)
+  }, [loadSuggestions])
+
   const dayTotals = useMemo(() => totalsForEntries(entries), [entries])
 
   function bumpHub() {

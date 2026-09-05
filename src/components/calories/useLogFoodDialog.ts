@@ -954,6 +954,7 @@ export function useLogFoodDialog({
       const id = pendingSavedDelete.id
       const res = await apiFetch(`/api/saved-meals?id=${id}`, { method: "DELETE" })
       if (res.ok) {
+        window.dispatchEvent(new Event("grid:food-suggestions-changed"))
         setSavedMeals((prev) => prev.filter((m) => m.id !== id))
         setEditingSavedMealId((cur) => (cur === id ? null : cur))
         // Keep the draft nutrition snapshot; deleting a library item must not

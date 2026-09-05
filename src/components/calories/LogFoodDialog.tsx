@@ -79,6 +79,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
   const { activeDate } = useActiveDate()
   const state = useLogFoodDialog(props)
   const [screen, setScreen] = useState<ComposerScreen>("search")
+  const [portionOpen, setPortionOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [bodyEl, setBodyEl] = useState<HTMLDivElement | null>(null)
   const [keyboardOpen, setKeyboardOpen] = useState(false)
@@ -95,6 +96,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
 
   function handleOpenChange(next: boolean) {
     if (!next) {
+      setPortionOpen(false)
       setScreen("search")
       setQuery("")
       setBarcodeScan(null)
@@ -173,6 +175,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
       }}
       onSaveCatalog={state.handleSaveSearchFood}
       onEditSaved={state.openEditSavedMeal}
+      onPortionChange={setPortionOpen}
     />
   ) : null
 
@@ -191,7 +194,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
         <header className="shrink-0 border-b border-white/[0.07] px-4 pb-0 pt-4">
           <DialogHeader className="space-y-0 pr-8 text-left">
             <DialogTitle className="flex flex-wrap items-center gap-2 font-heading text-base tracking-tight">
-              {editingSaved ? "Edit saved food" : editingEntry
+              {portionOpen ? "Food details" : editingSaved ? "Edit saved food" : editingEntry
                 ? "Edit food"
                 : editingMeal
                   ? `Edit ${state.editingMeal ? MEAL_SLOT_LABEL[state.editingMeal.mealSlot].toLowerCase() : "meal"}`
@@ -218,7 +221,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
             </DialogDescription>
           </DialogHeader>
 
-          {!editingEntry && !BUILDER_SCREENS.has(visibleScreen) ? (
+          {!portionOpen && !editingSaved && !editingEntry && !BUILDER_SCREENS.has(visibleScreen) ? (
             <nav
               className="-mx-1 mt-3 grid grid-cols-3 gap-0.5 px-1"
               aria-label="Food logging method"
@@ -255,7 +258,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
         ) : null}
 
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-          {browsing ? (
+          {browsing && !portionOpen ? (
             <div className="shrink-0 border-b border-white/[0.06]">
               <FoodSearchBar inputRef={searchInputRef} query={query}
                 mode={visibleScreen === "library" ? "library" : "search"}
@@ -304,7 +307,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
 
           </div>
 
-          {!editingSaved ? <DialogFooter
+          {!editingSaved && !portionOpen ? <DialogFooter
             keyboardOpen={keyboardOpen}
             state={state}
             editingEntry={editingEntry}
@@ -528,7 +531,8 @@ function MealTray({
       </div>
 
       {/* Capped so a long meal never swallows the results above it. */}
-      <ul id="food-meal-items" hidden={!showItems} className="max-h-[min(25dvh,13.5rem)] divide-y divide-white/[0.05] overflow-y-auto overscroll-contain">
+      <div className="food-tray-reveal" data-expanded={showItems} inert={!showItems}><div className="min-h-0 overflow-hidden">
+      <ul id="food-meal-items" className="max-h-[min(25dvh,13.5rem)] divide-y divide-white/[0.05] overflow-y-auto overscroll-contain">
         {items.map((item) => {
           const totals = draftMealItemTotals(item)
           const label = item.description || "Food"
@@ -621,6 +625,7 @@ function MealTray({
           )
         })}
       </ul>
+      </div></div>
 
       <div className="border-t border-white/[0.06] p-2">
         {buildingRecipe ? (

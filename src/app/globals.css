@@ -2834,3 +2834,27 @@ html {
     top: 50%;
   }
 }
+
+/* Food flow: restrained motion and large touch targets, matching the hub glass. */
+.food-portion-step {
+  display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; flex-shrink: 0;
+  border: 1px solid rgb(255 255 255 / 10%); border-radius: 14px;
+  background: rgb(255 255 255 / 3%);
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+.food-portion-step:active { transform: scale(.92); background: rgb(255 255 255 / 8%); }
+.food-portion-step:disabled { opacity: .3; }
+.food-portion-action { position: sticky; bottom: -1rem; margin-top: auto; padding-bottom: 1rem; background: var(--background); }
+.food-log-surface .food-portion-view input { font-size: 28px; }
+.food-tray-reveal { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 280ms cubic-bezier(.22,1,.36,1), opacity 200ms ease; }
+.food-tray-reveal[data-expanded="true"] { grid-template-rows: 1fr; opacity: 1; }
+@keyframes food-detail-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes food-browse-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: no-preference) {
+  .food-portion-view { animation: food-detail-in 260ms cubic-bezier(.22,1,.36,1) both; }
+  .food-browse-view, .food-feedback { animation: food-browse-in 220ms cubic-bezier(.22,1,.36,1) both; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .food-tray-reveal, .food-portion-step { transition: none; }
+}
