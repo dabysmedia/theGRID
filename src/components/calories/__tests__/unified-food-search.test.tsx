@@ -68,6 +68,12 @@ function render(over: Partial<Parameters<typeof UnifiedFoodSearch>[0]> = {}) {
 }
 
 describe("UnifiedFoodSearch", () => {
+  it("exposes library editing separately from adding a saved food", () => {
+    const html = render({ mode: "library", savedMeals: [savedMeal({ id: "s1", name: "Custom oats" })], onEditSaved: noop })
+    expect(html).toContain('aria-label="Edit Custom oats"')
+    expect(html).toContain('aria-label="Add Custom oats"')
+  })
+
   it("puts saved foods on a Favorites rail while idle", () => {
     const html = render({ savedMeals: [savedMeal({ id: "s1", name: "Overnight Oats" })] })
     expect(html).toContain("Favorites")

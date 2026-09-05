@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  PencilLine,
   Plus,
   Search,
   Store,
@@ -78,12 +79,13 @@ export function UnifiedFoodSearch({
   onAddFrequent,
   onAddRecipe,
   onSaveCatalog,
+  onEditSaved,
 }: {
   savedMeals: SavedMeal[]
   recipes: Recipe[]
   /** Timeline block the picked food will be logged into. */
   mealSlot: string | null
-  /** Search text, owned by the composer so the field can live in the footer. */
+  /** Search text, owned by the composer above the results. */
   query: string
   mode: FoodBrowseMode
   /**
@@ -99,6 +101,7 @@ export function UnifiedFoodSearch({
   onAddSaved: (food: SavedMeal, portion: PortionSelection) => void
   onAddFrequent: (food: FrequentFoodSuggestion, portion: PortionSelection) => void
   onAddRecipe: (recipe: Recipe) => void
+  onEditSaved?: (food: SavedMeal) => void
   onSaveCatalog?: (food: CatalogFoodResult) => Promise<boolean>
 }) {
   const [catalog, setCatalog] = useState<CatalogFoodResult[]>([])
@@ -506,6 +509,7 @@ export function UnifiedFoodSearch({
                     image={food.imageUrl}
                     onOpen={() => openPortion({ kind: "saved", food })}
                     onAdd={() => addNow({ kind: "saved", food })}
+                    accessory={onEditSaved ? <button type="button" onClick={() => onEditSaved(food)} aria-label={`Edit ${food.name}`} className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground/70 hover:bg-white/[0.06] hover:text-foreground"><PencilLine className="size-4" /></button> : null}
                   />
                 ))}
               </ResultSection>
@@ -627,6 +631,7 @@ export function UnifiedFoodSearch({
                   image={hit.food.imageUrl}
                   onOpen={() => openPortion({ kind: "saved", food: hit.food })}
                   onAdd={() => addNow({ kind: "saved", food: hit.food })}
+                    accessory={onEditSaved ? <button type="button" onClick={() => onEditSaved(hit.food)} aria-label={`Edit ${hit.food.name}`} className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground/70 hover:bg-white/[0.06] hover:text-foreground"><PencilLine className="size-4" /></button> : null}
                 />
               ) : (
                 <FoodRow
@@ -876,11 +881,11 @@ function FoodRow({
       <button
         type="button"
         onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-2.5 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 rounded-lg"
+        className="flex min-w-0 flex-1 items-center gap-3 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 rounded-lg"
       >
         <FoodArtwork src={image} label={name} recipe={recipe} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium leading-snug text-foreground/92">
+          <span className="block line-clamp-2 text-sm font-medium leading-snug text-foreground/92">
             {name}
           </span>
           <span className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[10px] tabular-nums">

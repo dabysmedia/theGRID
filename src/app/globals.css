@@ -2717,12 +2717,6 @@ html {
   --primary: oklch(0.704 0.191 22.216);
   --primary-foreground: oklch(0.985 0 0);
   --ring: oklch(0.704 0.191 22.216);
-  width: min(calc(100vw - 1.5rem), 34rem) !important;
-  max-width: min(calc(100vw - 1.5rem), 34rem) !important;
-  max-height: calc(
-    100dvh - max(0.75rem, env(safe-area-inset-top, 0px)) -
-      max(0.75rem, env(safe-area-inset-bottom, 0px))
-  ) !important;
 }
 
 .food-log-scroll {
@@ -2774,20 +2768,27 @@ html {
   background: rgb(239 68 68 / 8%);
 }
 
-/**
- * The composer's search bar rests at the bottom of the results area and lifts
- * only far enough to clear the on-screen keyboard, so focusing it never
- * rearranges the screen. `--keyboard-lift` is measured from visualViewport.
- */
-.food-search-dock {
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  z-index: 30;
-  transform: translateY(calc(var(--dock-travel, 0px) - var(--keyboard-lift, 0px)));
-  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
+/* Override the shared centered dialog only for the food composer. The visible
+   viewport includes iOS keyboard resizing and viewport panning. */
+@layer components {
+  [data-slot="dialog-content"].food-log-surface {
+    top: calc(var(--food-viewport-top, 0px) + max(0.5rem, env(safe-area-inset-top, 0px))) !important;
+    transform: translateX(-50%) !important;
+    width: min(calc(100vw - 1rem), 42rem) !important;
+    max-width: min(calc(100vw - 1rem), 42rem) !important;
+    height: calc(var(--food-viewport-height, 100dvh) - max(0.5rem, env(safe-area-inset-top, 0px)) - 0.5rem) !important;
+    max-height: 54rem !important;
+  }
 }
+
+.food-log-surface input, .food-log-surface select, .food-log-surface textarea {
+  font-size: 16px;
+}
+.food-log-surface[data-keyboard-open] header > [data-slot="dialog-header"] [data-slot="dialog-description"] {
+  display: none;
+}
+.food-log-surface[data-keyboard-open] header { padding-top: 0.75rem; }
+.food-log-surface[data-keyboard-open] header nav { margin-top: 0.25rem; }
 
 .food-log-surface .food-search-filters {
   border-color: var(--glass-border);
@@ -2831,9 +2832,5 @@ html {
   .barcode-scan-line {
     animation: none;
     top: 50%;
-  }
-
-  .food-search-dock {
-    transition: none;
   }
 }

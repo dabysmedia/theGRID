@@ -7,6 +7,8 @@ import {
   BookOpen,
   Camera,
   ChevronLeft,
+  ChevronDown,
+  Trash2,
   ChevronRight,
   ImagePlus,
   Minus,
@@ -56,7 +58,7 @@ type ComposerScreen = "search" | "library" | "manual" | "recipe"
 
 /**
  * Three places to get a food, and that is all. Scanning is a button in the
- * footer, photo estimation lives inside Quick add (it only ever prefills that
+ * search area, photo estimation lives inside Quick add (it only ever prefills that
  * form), and restaurant menus are a shelf in the Library.
  */
 const COMPOSER_TABS = [
@@ -71,8 +73,6 @@ const BROWSE_SCREENS = new Set<ComposerScreen>(["search", "library"])
 /** Screens that are building something rather than browsing. */
 const BUILDER_SCREENS = new Set<ComposerScreen>(["recipe"])
 
-/** Breathing room between the search bar and the top of the keyboard. */
-const KEYBOARD_GAP_PX = 8
 
 export function LogFoodDialog(props: LogFoodDialogProps) {
   const { open } = props
@@ -80,10 +80,8 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
   const state = useLogFoodDialog(props)
   const [screen, setScreen] = useState<ComposerScreen>("search")
   const [query, setQuery] = useState("")
-  // Callback refs, not object refs: the dialog's content mounts a commit after
-  // `open` flips, so an effect keyed on `open` alone would measure nothing.
   const [bodyEl, setBodyEl] = useState<HTMLDivElement | null>(null)
-  const [dockEl, setDockEl] = useState<HTMLDivElement | null>(null)
+  const [keyboardOpen, setKeyboardOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [barcodeScan, setBarcodeScan] = useState<{ code: string; id: number } | null>(null)
   const [scannerOpen, setScannerOpen] = useState(false)
@@ -91,6 +89,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
   const editingEntry = Boolean(state.editingEntry)
   const editingMeal = Boolean(state.editingMeal)
   const visibleScreen = editingEntry ? "manual" : screen
+  const editingSaved = Boolean(state.editingSavedMealId)
   const activeSlot =
     state.mealSlot ?? state.editingMeal?.mealSlot ?? props.initialMealSlot ?? null
 
@@ -100,12 +99,15 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
       setQuery("")
       setBarcodeScan(null)
       setPhotoOpen(false)
+      state.cancelEditSavedMeal()
+      state.setPendingSavedDelete(null)
       state.resetRecipeCreator()
     }
     props.onOpenChange(next)
   }
 
   function showScreen(next: ComposerScreen) {
+    state.cancelEditSavedMeal()
     setScreen(next)
     state.setLogFoodMode(next === "manual" ? "estimate" : "saved")
     if (next !== "manual") setPhotoOpen(false)
@@ -115,48 +117,30 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
     showScreen(id)
   }
 
-  const browsing = BROWSE_SCREENS.has(visibleScreen)
+  const browsing = BROWSE_SCREENS.has(visibleScreen) && !editingSaved
 
-  /**
-   * The bar rests at the bottom of the results area and lifts only far enough
-   * to clear the on-screen keyboard — it stays put on desktop, where there is
-   * no keyboard, so opening search never rearranges the screen.
-   */
+  // Resize the whole composer to the visible viewport, keeping every region
+  // in normal flow. iOS can pan the viewport as well as shrink it for a keyboard.
   useEffect(() => {
-    const body = bodyEl
-    const dock = dockEl
-    if (!body || !dock) return
-
-    const sync = () => {
-      const height = dock.offsetHeight
-      const travel = Math.max(0, body.clientHeight - height)
-      body.style.setProperty("--dock-height", `${height}px`)
-      body.style.setProperty("--dock-travel", `${travel}px`)
-
-      // visualViewport shrinks by the keyboard; anything below its bottom edge
-      // is covered.
-      const viewport = window.visualViewport
-      const viewportBottom = viewport
-        ? viewport.offsetTop + viewport.height
-        : window.innerHeight
-      const restingBottom = body.getBoundingClientRect().top + travel + height
-      const lift = Math.max(0, restingBottom - viewportBottom + KEYBOARD_GAP_PX)
-      body.style.setProperty("--keyboard-lift", `${lift}px`)
-    }
-
-    sync()
-    const observer = new ResizeObserver(sync)
-    observer.observe(body)
-    observer.observe(dock)
+    const surface = bodyEl?.closest<HTMLElement>(".food-log-surface")
+    if (!surface || !open) return
     const viewport = window.visualViewport
+    const sync = () => {
+      const height = viewport?.height ?? window.innerHeight
+      surface.style.setProperty("--food-viewport-height", `${height}px`)
+      surface.style.setProperty("--food-viewport-top", `${viewport?.offsetTop ?? 0}px`)
+      setKeyboardOpen(window.innerHeight - height > 120)
+    }
+    sync()
+    window.addEventListener("resize", sync)
     viewport?.addEventListener("resize", sync)
     viewport?.addEventListener("scroll", sync)
     return () => {
-      observer.disconnect()
+      window.removeEventListener("resize", sync)
       viewport?.removeEventListener("resize", sync)
       viewport?.removeEventListener("scroll", sync)
     }
-  }, [bodyEl, dockEl])
+  }, [bodyEl, open])
 
   const description = editingEntry && state.editingEntry
     ? `${formatDisplayDate(parseLocalDate(state.editingEntry.date.split("T")[0]))} · ${MEAL_SLOT_LABEL[resolveMealSlot(state.editingEntry)]}`
@@ -188,12 +172,15 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
         state.handleUseRecipe(recipe)
       }}
       onSaveCatalog={state.handleSaveSearchFood}
+      onEditSaved={state.openEditSavedMeal}
     />
   ) : null
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
+        initialFocus={false}
+        data-keyboard-open={keyboardOpen ? "true" : undefined}
         showCloseButton
         className={cn(
           "glass-frost food-log-surface flex h-[calc(100dvh-1.5rem)] max-h-[calc(100dvh-1.5rem)] w-[min(100%,calc(100vw-1.5rem))] max-w-none flex-col gap-0 overflow-hidden p-0",
@@ -204,7 +191,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
         <header className="shrink-0 border-b border-white/[0.07] px-4 pb-0 pt-4">
           <DialogHeader className="space-y-0 pr-8 text-left">
             <DialogTitle className="flex flex-wrap items-center gap-2 font-heading text-base tracking-tight">
-              {editingEntry
+              {editingSaved ? "Edit saved food" : editingEntry
                 ? "Edit food"
                 : editingMeal
                   ? `Edit ${state.editingMeal ? MEAL_SLOT_LABEL[state.editingMeal.mealSlot].toLowerCase() : "meal"}`
@@ -268,16 +255,19 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
         ) : null}
 
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          {browsing ? (
+            <div className="shrink-0 border-b border-white/[0.06]">
+              <FoodSearchBar inputRef={searchInputRef} query={query}
+                mode={visibleScreen === "library" ? "library" : "search"}
+                onQueryChange={setQuery} onScan={() => setScannerOpen(true)} />
+            </div>
+          ) : null}
           <div ref={setBodyEl} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           <main
             className="food-log-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
-            style={
-              browsing
-                ? { paddingBottom: "calc(var(--dock-height, 4rem) + 0.5rem)" }
-                : undefined
-            }
           >
             {browsing ? foodSearch : null}
+            {editingSaved ? <SavedFoodEditor state={state} /> : null}
 
             {visibleScreen === "manual" ? (
               <ManualEntryPanel
@@ -312,20 +302,10 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
             ) : null}
           </main>
 
-          {browsing ? (
-            <div ref={setDockEl} className="food-search-dock">
-              <FoodSearchBar
-                inputRef={searchInputRef}
-                query={query}
-                mode={visibleScreen === "library" ? "library" : "search"}
-                onQueryChange={setQuery}
-                onScan={() => setScannerOpen(true)}
-              />
-            </div>
-          ) : null}
           </div>
 
-          <DialogFooter
+          {!editingSaved ? <DialogFooter
+            keyboardOpen={keyboardOpen}
             state={state}
             editingEntry={editingEntry}
             editingMeal={editingMeal}
@@ -333,7 +313,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
             slotLabel={activeSlot ? MEAL_SLOT_LABEL[activeSlot] : "meal"}
             buildingRecipe={state.showRecipeCreator}
             onBackToRecipe={() => setScreen("recipe")}
-          />
+          /> : null}
         </div>
 
         {scannerOpen ? (
@@ -353,9 +333,7 @@ export function LogFoodDialog(props: LogFoodDialogProps) {
 }
 
 /**
- * The one search field in the composer. It lives in a dock that slides between
- * the bottom of the body and the top, so this renders the same element in both
- * places rather than swapping in a second copy.
+ * Search stays in normal flow above the independently scrolling results.
  */
 function FoodSearchBar({
   inputRef,
@@ -373,7 +351,7 @@ function FoodSearchBar({
   const placeholder = mode === "library" ? "Search your library" : "Search for a food"
 
   return (
-    <div className="flex items-center gap-2 bg-gradient-to-t from-background/92 to-transparent px-4 pb-3 pt-5">
+    <div className="flex items-center gap-2 px-4 py-3">
       <div className="relative min-w-0 flex-1">
         <Search
           className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground/50"
@@ -385,10 +363,15 @@ function FoodSearchBar({
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Escape") event.currentTarget.blur()
+            if (event.key === "Escape" || event.key === "Enter") {
+              event.preventDefault()
+              event.currentTarget.blur()
+            }
           }}
+          enterKeyHint="search"
+          autoComplete="off"
           placeholder={placeholder}
-          className="food-search-input h-11 rounded-full pl-10 pr-9 text-sm"
+          className="food-search-input h-11 rounded-xl pl-10 pr-9 text-base"
           aria-label={placeholder}
         />
         {query ? (
@@ -419,6 +402,7 @@ function FoodSearchBar({
 }
 
 function DialogFooter({
+  keyboardOpen,
   state,
   editingEntry,
   editingMeal,
@@ -427,6 +411,7 @@ function DialogFooter({
   buildingRecipe,
   onBackToRecipe,
 }: {
+  keyboardOpen: boolean
   state: DialogState
   editingEntry: boolean
   editingMeal: boolean
@@ -461,7 +446,7 @@ function DialogFooter({
   // The recipe builder carries its own Save button; everywhere else the footer
   // exists only to hold the meal tray.
   if (screen === "recipe") return null
-  if (draftCount === 0) return null
+  if (draftCount === 0 && !editingMeal) return null
 
   return (
     <div className="shrink-0 border-t border-border/30 bg-background/70 px-4 py-3 pb-[max(0.75rem,calc(0.5rem+env(safe-area-inset-bottom)))] backdrop-blur-md">
@@ -474,6 +459,7 @@ function DialogFooter({
       {/* The meal as it is being built, in full, right where it is assembled —
           no separate review screen to bounce through to see what is in it. */}
       <MealTray
+        keyboardOpen={keyboardOpen}
         state={state}
         slotLabel={slotLabel}
         buildingRecipe={buildingRecipe}
@@ -486,34 +472,41 @@ function DialogFooter({
 }
 
 /**
- * The draft meal, expanded in place at the bottom of the composer: every item
- * with its quantity and a way off the list, the running total, and the button
- * that commits it.
+ * A compact meal summary expands on demand; typing always leaves results room.
  */
 function MealTray({
+  keyboardOpen,
   state,
   slotLabel,
   buildingRecipe,
   editingMeal,
   onBackToRecipe,
 }: {
+  keyboardOpen: boolean
   state: DialogState
   slotLabel: string
   buildingRecipe: boolean
   editingMeal: boolean
   onBackToRecipe: () => void
 }) {
+  const [expanded, setExpanded] = useState(false)
+  const showItems = expanded && !keyboardOpen
   const items = state.draftMealItems
   const blocked = editingMeal ? state.vacationBlocksEditingEntry : state.vacationBlocksLog
 
   return (
     <div className="mb-2 overflow-hidden rounded-2xl border border-white/[0.09] bg-white/[0.022]">
-      <div className="flex items-center gap-2 border-b border-white/[0.06] px-3.5 py-2.5">
+      <div className="flex items-center gap-2 px-3.5">
+        <button type="button" aria-expanded={showItems} aria-controls="food-meal-items"
+          onClick={() => { if (keyboardOpen) (document.activeElement as HTMLElement)?.blur(); setExpanded(!showItems) }}
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left"
+          aria-label={showItems ? "Collapse meal" : "Review meal"}>
+        <ChevronDown className={cn("size-4 shrink-0 transition-transform", showItems && "rotate-180")} />
         <p className="flex min-w-0 flex-1 items-baseline gap-1.5">
           <span className="truncate text-[12px] font-semibold uppercase tracking-[0.1em] text-foreground/75">
             {buildingRecipe ? "Recipe" : slotLabel}
           </span>
-          <span className="shrink-0 text-[11px] font-medium text-muted-foreground/55">
+          <span aria-live="polite" className="shrink-0 text-[11px] font-medium text-muted-foreground/55">
             {items.length} {buildingRecipe ? "ingredient" : "item"}
             {items.length === 1 ? "" : "s"}
           </span>
@@ -524,17 +517,18 @@ function MealTray({
             cal
           </span>
         </span>
-        <button
+        </button>
+        {showItems ? <button
           type="button"
           onClick={() => state.setDraftMealItems([])}
           className="ml-0.5 flex h-9 shrink-0 items-center rounded-lg px-2.5 type-hud-micro text-muted-foreground/55 transition-colors hover:bg-white/[0.05] hover:text-foreground/80"
         >
           Clear
-        </button>
+        </button> : null}
       </div>
 
       {/* Capped so a long meal never swallows the results above it. */}
-      <ul className="max-h-[min(32vh,13.5rem)] divide-y divide-white/[0.05] overflow-y-auto overscroll-contain">
+      <ul id="food-meal-items" hidden={!showItems} className="max-h-[min(25dvh,13.5rem)] divide-y divide-white/[0.05] overflow-y-auto overscroll-contain">
         {items.map((item) => {
           const totals = draftMealItemTotals(item)
           const label = item.description || "Food"
@@ -657,6 +651,37 @@ function MealTray({
         )}
       </div>
     </div>
+  )
+}
+
+function SavedFoodEditor({ state }: { state: DialogState }) {
+  const food = state.savedMeals.find((meal) => meal.id === state.editingSavedMealId)
+  const fields = [
+    ["Name", state.editSavedName, state.setEditSavedName, "text"],
+    ["Calories", state.editSavedCal, state.setEditSavedCal, "number"],
+    ["Protein (g)", state.editSavedProtein, state.setEditSavedProtein, "number"],
+    ["Carbs (g)", state.editSavedCarbs, state.setEditSavedCarbs, "number"],
+    ["Fat (g)", state.editSavedFat, state.setEditSavedFat, "number"],
+  ] as const
+  return (
+    <form className="mx-auto max-w-lg space-y-5" onSubmit={(event) => { event.preventDefault(); void state.handleUpdateSavedMeal() }}>
+      <button type="button" onClick={state.cancelEditSavedMeal} className="flex min-h-11 items-center gap-1 text-sm text-muted-foreground"><ChevronLeft className="size-4" /> Back to foods</button>
+      <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
+        <p className="text-sm font-medium">Your food, your numbers</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Nutrition per {food ? `${food.servingAmount} ${food.servingUnit}` : "serving"}. Changes apply to future additions; your logged meals stay as they are.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        {fields.map(([label, value, setValue, type], index) => <label key={label} className={cn("space-y-2 text-xs text-muted-foreground", index === 0 && "col-span-2")}>
+          <span>{label}</span><Input aria-label={label} value={value} type={type} min={type === "number" ? 0 : undefined} step="any" required={index < 2} onChange={(event) => setValue(event.target.value)} className="h-12 rounded-xl" />
+        </label>)}
+      </div>
+      {state.editSavedError ? <p role="alert" className="text-sm text-destructive">{state.editSavedError}</p> : null}
+      <Button type="submit" variant="glass" className="h-12 w-full" disabled={state.savingSavedMealEdit || state.pendingSavedDeleteBusy}>{state.savingSavedMealEdit ? "Saving…" : "Save food"}</Button>
+      {state.pendingSavedDelete ? <div className="space-y-3 rounded-xl border border-destructive/25 bg-destructive/5 p-4">
+        <p className="text-sm">Delete “{state.pendingSavedDelete.name}” from your library? Previously logged meals will remain.</p>
+        <div className="flex gap-2"><Button type="button" variant="outline" className="h-11 flex-1" disabled={state.pendingSavedDeleteBusy} onClick={() => state.setPendingSavedDelete(null)}>Keep food</Button><Button type="button" variant="destructive" className="h-11 flex-1" disabled={state.pendingSavedDeleteBusy} onClick={() => void state.executePendingSavedDelete()}>{state.pendingSavedDeleteBusy ? "Deleting…" : "Delete food"}</Button></div>
+      </div> : <button type="button" disabled={state.savingSavedMealEdit} onClick={() => { if (food) state.requestDeleteSavedMeal(food.id, food.name) }} className="flex min-h-11 w-full items-center justify-center gap-2 text-sm text-destructive"><Trash2 className="size-4" /> Delete saved food</button>}
+    </form>
   )
 }
 

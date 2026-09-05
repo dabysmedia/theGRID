@@ -621,6 +621,7 @@ export function useLogFoodDialog({
 
   function cancelEditSavedMeal() {
     setEditingSavedMealId(null)
+    setPendingSavedDelete(null)
     setEditSavedError(null)
   }
 
@@ -663,6 +664,8 @@ export function useLogFoodDialog({
       }
       await fetchSavedMeals()
       cancelEditSavedMeal()
+    } catch {
+      setEditSavedError("Could not save food. Check your connection and try again.")
     } finally {
       setSavingSavedMealEdit(false)
     }
@@ -953,9 +956,17 @@ export function useLogFoodDialog({
       if (res.ok) {
         setSavedMeals((prev) => prev.filter((m) => m.id !== id))
         setEditingSavedMealId((cur) => (cur === id ? null : cur))
-        setDraftMealItems((prev) => prev.filter((i) => i.savedMealId !== id))
+        // Keep the draft nutrition snapshot; deleting a library item must not
+        // silently remove food the user is about to log.
+        setDraftMealItems((prev) => prev.map((i) => i.savedMealId === id ? { ...i, savedMealId: undefined } : i))
+      }
+      if (!res.ok) {
+        setEditSavedError("Could not delete food. Please try again.")
+        return
       }
       setPendingSavedDelete(null)
+    } catch {
+      setEditSavedError("Could not delete food. Check your connection and try again.")
     } finally {
       setPendingSavedDeleteBusy(false)
     }
