@@ -24,6 +24,8 @@ import {
   TRAINING_STYLE_DEFINITIONS,
   type TrainingStyle,
 } from "@/lib/workouts/training-style"
+import { MachineBrandMark } from "@/components/workouts/MachineBrandMark"
+import { machineLabel } from "@/lib/workouts/machine-brands"
 
 const OUTCOME_STYLES: Record<
   MovementSummary["outcome"],
@@ -174,6 +176,7 @@ export function MovementCompleteOverview({
     const previous = getComparableExerciseHistory(sessions, exercise.name, {
       excludeSessionId: sessionId,
       limit: 5,
+      machineId: exercise.machineId ?? null,
     })
       .reverse()
       .map((entry) => ({
@@ -190,6 +193,8 @@ export function MovementCompleteOverview({
     const difference = first != null && last != null ? last - first : null
     const unit = currentUsesLoad ? "lb" : "reps"
     const metric = currentUsesLoad ? "Top working weight" : "Total reps"
+    const scope = machineLabel(exercise.machineId, exercise.machineName)
+    const onScope = scope ? ` on ${scope}` : ""
     const direction =
       difference == null || points.length < 2
         ? "sparse"
@@ -200,13 +205,15 @@ export function MovementCompleteOverview({
             : "down"
     const summaryText =
       direction === "sparse"
-        ? `One logged session is not enough to show a ${metric.toLowerCase()} trend.`
+        ? `One logged session${onScope} is not enough to show a ${metric.toLowerCase()} trend.`
         : direction === "flat"
-          ? `${metric} is flat across the last ${points.length} logged sessions.`
-          : `${metric} is ${direction === "up" ? "up" : "down"} ${Math.abs(difference!)} ${unit} across the last ${points.length} logged sessions.`
+          ? `${metric} is flat across the last ${points.length} logged sessions${onScope}.`
+          : `${metric} is ${direction === "up" ? "up" : "down"} ${Math.abs(difference!)} ${unit} across the last ${points.length} logged sessions${onScope}.`
 
     return { points, metric, unit, direction, summaryText }
-  }, [exercise.name, sessionId, sessions, summary.bestSet?.weight, summary.totalReps])
+  }, [exercise.name, exercise.machineId, exercise.machineName, sessionId, sessions, summary.bestSet?.weight, summary.totalReps])
+
+  const machineName = machineLabel(exercise.machineId, exercise.machineName)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain py-2">
@@ -220,6 +227,16 @@ export function MovementCompleteOverview({
               Movement complete
             </p>
             <p className="truncate text-xs text-muted-foreground/65">{exercise.name}</p>
+            {exercise.machineId ? (
+              <div className="mt-1">
+                <MachineBrandMark
+                  machineId={exercise.machineId}
+                  machineName={exercise.machineName}
+                  size="sm"
+                  variant="chip"
+                />
+              </div>
+            ) : null}
           </div>
           <span
             className={cn(
@@ -269,6 +286,9 @@ export function MovementCompleteOverview({
               Recent trend
             </p>
             <p className="text-xs font-semibold text-foreground/90">{trend.metric}</p>
+            {machineName ? (
+              <p className="text-[10px] text-muted-foreground/55">on {machineName}</p>
+            ) : null}
           </div>
           <span className={cn(
             "text-[10px] font-semibold uppercase tracking-wider",

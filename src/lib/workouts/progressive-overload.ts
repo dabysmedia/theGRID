@@ -8,6 +8,8 @@
  * Canonical effort value is RIR (reps in reserve). RPE = 10 - RIR.
  */
 
+import { machineLabel, normalizeMachineKey } from "@/lib/workouts/machine-brands"
+
 /* ──────────────────────────────────────────────────────────
    Data shapes (structurally compatible with the workout page types)
    ────────────────────────────────────────────────────────── */
@@ -44,6 +46,15 @@ export interface PoExercise {
   primaryMuscles?: PoMuscle[]
   secondaryMuscles?: PoMuscle[]
   sets: PoSet[]
+  /**
+   * Manufacturer id when the movement was performed on a specific machine
+   * (see machine-brands.ts). Null/absent = no machine recorded. Loads are only
+   * comparable between exposures sharing the same machine, so history, PRs and
+   * recommendations all key off this alongside the exercise name.
+   */
+  machineId?: string | null
+  /** Display name for a custom (non-catalogue) machine. */
+  machineName?: string | null
 }
 
 export interface PoSession {
@@ -85,6 +96,7 @@ export type ReasonCode =
   | "NEW_BEST_DETECTED"
   | "REPEATED_BELOW_TARGET"
   | "LAST_LOAD_CARRIED"
+  | "MACHINE_TRANSFER_ESTIMATE"
 
 export type Confidence = "high" | "medium" | "low"
 
@@ -141,6 +153,7 @@ export const REASON_CODE_LABELS: Partial<Record<ReasonCode, string>> = {
   NEW_BEST_DETECTED: "That was a personal best",
   REPEATED_BELOW_TARGET: "You've come up short several sessions in a row",
   LAST_LOAD_CARRIED: "Picked up from the heaviest weight you finished on",
+  MACHINE_TRANSFER_ESTIMATE: "First time on this machine — estimated from your numbers on another one",
 }
 
 export interface ApplyPayload {
@@ -421,6 +434,9 @@ export interface Exposure {
   when: number
   exerciseName: string
   sets: PoSet[]
+  /** Machine this exposure was logged on; null = none recorded. */
+  machineId: string | null
+  machineName: string | null
   /** Most-used working weight (mode of recent sets); null for pure bodyweight work. */
   workingWeight: number | null
   topWeight: number | null
@@ -519,6 +535,8 @@ function buildExposure(session: PoSession, ex: PoExercise): Exposure | null {
     when: Number.isFinite(when) ? when : 0,
     exerciseName: ex.name,
     sets: kept,
+    machineId: ex.machineId ?? null,
+    machineName: ex.machineName?.trim() ? ex.machineName.trim() : null,
     workingWeight: modeWeight(kept),
     topWeight,
     totalReps: kept.reduce((sum, s) => sum + (s.reps ?? 0), 0),
@@ -533,14 +551,20 @@ function buildExposure(session: PoSession, ex: PoExercise): Exposure | null {
  * Recent valid exposures for one movement (newest first), matched by normalized
  * exercise name — the app has no stable cross-session exercise ids, so the
  * normalized name IS the stable key (the prefill column uses the same match).
+ *
+ * Pass `machineId` (including an explicit `null`) to scope history to one
+ * machine. Omit it entirely to search across every machine, which is what the
+ * agent export and cross-machine estimates want.
  */
 export function getComparableExerciseHistory(
   sessions: PoSession[],
   exerciseName: string,
-  opts?: { limit?: number; excludeSessionId?: string },
+  opts?: { limit?: number; excludeSessionId?: string; machineId?: string | null },
 ): Exposure[] {
   const key = normalizeExerciseKey(exerciseName)
   const limit = opts?.limit ?? 5
+  const machineScoped = opts != null && Object.prototype.hasOwnProperty.call(opts, "machineId")
+  const wantedMachine = machineScoped ? normalizeMachineKey(opts?.machineId) : ""
   const out: Exposure[] = []
   const completed = sessions
     .filter(
@@ -558,6 +582,9 @@ export function getComparableExerciseHistory(
     const exs = parsePoExercises(session.exercises)
     for (const ex of exs) {
       if (normalizeExerciseKey(ex.name) !== key) continue
+      if (machineScoped && normalizeMachineKey(ex.machineId, ex.machineName) !== wantedMachine) {
+        continue
+      }
       const exp = buildExposure(session, ex)
       if (exp) out.push(exp)
       break
@@ -575,6 +602,9 @@ export interface SimilarityInput {
   category?: string
   primaryMuscles?: PoMuscle[]
   secondaryMuscles?: PoMuscle[]
+  /** Machine the movement is being performed on (see machine-brands.ts). */
+  machineId?: string | null
+  machineName?: string | null
 }
 
 const STABILITY_BY_EQUIPMENT: Record<EquipmentKind, number> = {
@@ -635,12 +665,14 @@ export function calculateExerciseSimilarity(
 export const SIMILARITY_THRESHOLD = 0.55
 
 export interface RecommendationSource {
-  kind: "exact" | "similar" | "none"
+  kind: "exact" | "similar" | "machine-transfer" | "none"
   exposures: Exposure[]
   sourceExerciseName: string | null
   similarity: number | null
   /** Multiplier applied to the source load (conversion or conservative default). */
   loadRatio: number
+  /** Set for `machine-transfer`: the machine the estimate came from. */
+  sourceMachineLabel?: string | null
 }
 
 /**
@@ -667,6 +699,7 @@ export function selectRecommendationSource(
 ): RecommendationSource {
   const exact = getComparableExerciseHistory(sessions, exercise.name, {
     excludeSessionId: opts?.excludeSessionId,
+    machineId: exercise.machineId ?? null,
   })
   if (exact.length > 0) {
     return {
@@ -675,6 +708,32 @@ export function selectRecommendationSource(
       sourceExerciseName: null,
       similarity: null,
       loadRatio: 1,
+    }
+  }
+
+  /* Same movement, different machine: there is no comparable load history, but
+     the user's numbers elsewhere are a far better starting point than a blank
+     calibration. Kept as its own kind so a machine change never reads as a
+     strength regression — the real trend still starts fresh on this machine. */
+  if (exercise.machineId) {
+    const crossMachine = getComparableExerciseHistory(sessions, exercise.name, {
+      excludeSessionId: opts?.excludeSessionId,
+      limit: 5,
+    })
+    const targetMachine = normalizeMachineKey(exercise.machineId, exercise.machineName)
+    const others = crossMachine.filter(
+      (e) => normalizeMachineKey(e.machineId, e.machineName) !== targetMachine,
+    )
+    if (others.length > 0) {
+      const from = others[0]
+      return {
+        kind: "machine-transfer",
+        exposures: others,
+        sourceExerciseName: exercise.name,
+        similarity: null,
+        loadRatio: DEFAULT_TRANSFER_RATIO,
+        sourceMachineLabel: machineLabel(from.machineId, from.machineName),
+      }
     }
   }
 
@@ -911,6 +970,58 @@ export function calculateInitialPrescription(
 
   const latest = source.exposures[0]
   const basis = profile.loadBasis
+
+  /* ── Same movement, new machine ─────────────────── */
+  if (source.kind === "machine-transfer") {
+    reasons.push("MACHINE_TRANSFER_ESTIMATE", "FIRST_SET_CALIBRATION")
+    const srcLoad = latest.workingWeight ?? latest.topWeight
+    let estimate: number | null = null
+    if (srcLoad != null && srcLoad > 0 && profile.incrementLb > 0) {
+      estimate = roundToIncrement(srcLoad * source.loadRatio, profile.incrementLb, "down")
+      reasons.push("EQUIPMENT_INCREMENT_ROUNDED")
+    }
+    const calibRir = profile.calibrationRir
+    const origin = source.sourceMachineLabel
+    explanation.push(
+      `This is your first logged ${input.exercise.name} on this machine, so it has no history of its own yet.`,
+      `Your last ${input.exercise.name}${origin ? ` on ${origin}` : " on a different machine"}: ${describeExposure(latest, basis)} on ${latest.dateKey}.`,
+      `Different machines have different resistance profiles, so a lighter number here is not lost strength. As a starting point this is about ${Math.round(source.loadRatio * 100)}% of that, rounded down to the nearest ${profile.incrementLb} lb.`,
+      "Once you log a set, the coach tracks this machine's own trend from here — separately from your other machines.",
+    )
+    return {
+      kind: "initial",
+      status: "calibration",
+      action: "calibrate",
+      loadLb: estimate,
+      repMin: profile.repMin,
+      repMax: profile.repMax,
+      targetRir: calibRir,
+      delta: null,
+      headline:
+        estimate != null
+          ? `${fmtLb(estimate, basis)} × ${fmtRange(profile.repMin, profile.repMax)}`
+          : `Start light × ${fmtRange(profile.repMin, profile.repMax)}`,
+      detail: `${describeEffortTarget(calibRir)} · first time on this machine`,
+      basedOn: `Based on your ${input.exercise.name}${origin ? ` on ${origin}` : ""}: ${describeExposure(latest, basis)}`,
+      goal: "Set a baseline on this machine — it gets its own progression from here",
+      sourceLabel: origin
+        ? `New machine — estimated from your ${origin} numbers`
+        : "New machine — estimated from your other numbers",
+      confidence: "low",
+      reasonCodes: reasons,
+      explanation,
+      apply:
+        estimate != null
+          ? {
+              weight: estimate,
+              reps: profile.repMin,
+              label: `Use ${formatLoad(estimate)} lb next set`,
+            }
+          : null,
+      sourceSessionIds: source.exposures.map((e) => e.sessionId),
+      sourceExerciseKey: normalizeExerciseKey(input.exercise.name),
+    }
+  }
 
   /* ── Similar-movement fallback ──────────────────── */
   if (source.kind === "similar") {
@@ -1350,6 +1461,7 @@ export function planSessionSets(input: {
     getComparableExerciseHistory(input.sessions, input.exercise.name, {
       excludeSessionId: input.excludeSessionId,
       limit: 1,
+      machineId: input.exercise.machineId ?? null,
     })[0] ?? null
   const previousSets = previous?.sets ?? []
   const bodyweight = profile.loadBasis === "bodyweight" && rec.loadLb == null
@@ -1902,6 +2014,7 @@ export function compareCompletedSets(input: {
   const previous =
     getComparableExerciseHistory(input.sessions, input.exercise.name, {
       excludeSessionId: input.excludeSessionId,
+      machineId: input.exercise.machineId ?? null,
     })[0] ?? null
 
   return input.exercise.sets.filter(isValidWorkingSet).map((current) => {
@@ -1995,6 +2108,7 @@ export function summarizeMovementPerformance(input: {
 
   const history = getComparableExerciseHistory(input.sessions, input.exercise.name, {
     excludeSessionId: input.excludeSessionId,
+    machineId: input.exercise.machineId ?? null,
   })
   const prev = history[0] ?? null
   const setComparisons = compareCompletedSets(input)

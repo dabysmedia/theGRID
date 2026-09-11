@@ -13,6 +13,13 @@ export interface NormalizedWorkoutExercise {
   name: string
   notes: string
   sets: NormalizedWorkoutSet[]
+  /**
+   * Machine the movement is performed on (see src/lib/workouts/machine-brands.ts).
+   * `machineId` is a catalogue id or `custom:<name>`; `machineName` carries the
+   * typed label for custom machines. Null/absent = no machine recorded.
+   */
+  machineId?: string | null
+  machineName?: string | null
   [key: string]: unknown
 }
 

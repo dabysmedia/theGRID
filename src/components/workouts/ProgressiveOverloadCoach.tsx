@@ -486,11 +486,26 @@ function CoachWhyDialog({
 
   const history = useMemo(() => {
     const name = rec.sourceExerciseKey || exercise.name
+    /* Same movement → show only this machine's history. The exception is a
+       machine transfer, whose whole point is the other machine's numbers. A
+       similar-movement source is a different exercise, so it is never scoped. */
+    const sameMovement =
+      normalizeExerciseKey(name) === normalizeExerciseKey(exercise.name)
+    const machineScoped =
+      sameMovement && !rec.reasonCodes.includes("MACHINE_TRANSFER_ESTIMATE")
     return getComparableExerciseHistory(sessions, name, {
       excludeSessionId: sessionId,
       limit: 5,
+      ...(machineScoped ? { machineId: exercise.machineId ?? null } : {}),
     })
-  }, [sessions, exercise.name, rec.sourceExerciseKey, sessionId])
+  }, [
+    sessions,
+    exercise.name,
+    exercise.machineId,
+    rec.sourceExerciseKey,
+    rec.reasonCodes,
+    sessionId,
+  ])
 
   const plainReasons = rec.reasonCodes
     .map((code) => REASON_CODE_LABELS[code])

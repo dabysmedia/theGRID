@@ -42,6 +42,8 @@ import {
 import { cn } from "@/lib/utils"
 import { getTrackingPeriod } from "@/lib/work-cycle"
 import { PlateCalculatorDialog } from "@/components/workouts/PlateCalculatorDialog"
+import { MachineBrandMark } from "@/components/workouts/MachineBrandMark"
+import { MachinePickerDialog } from "@/components/workouts/MachinePickerDialog"
 import { FALLBACK_EXERCISES, type ApiExercise } from "@/lib/workouts/exercise-library"
 import {
   ProgressiveOverloadCoach,
@@ -63,6 +65,15 @@ import {
   getRecentSubstitutes,
   rememberSubstitution,
 } from "@/lib/workouts/exercise-substitutions"
+import {
+  exerciseMachineKey,
+  getRememberedMachine,
+  machineSelectionFromPick,
+  rememberMachineSelection,
+  supportsMachineSelection,
+  type MachineSelection,
+} from "@/lib/workouts/machine-selection"
+import { machineLabel } from "@/lib/workouts/machine-brands"
 import {
   aggregateExerciseFrequency,
   defaultFreeFormSets,
@@ -126,6 +137,14 @@ interface SessionExercise {
   templateExerciseId?: string
   /** Original template exercise name before any in-session swap. */
   originalName?: string
+  /**
+   * Machine variant this movement is being performed on (see machine-brands.ts).
+   * Part of the movement's identity for prefill, the Previous column and the
+   * progressive-overload history, so weights are never compared across machines.
+   */
+  machineId?: string | null
+  /** Label for a custom (non-catalogue) machine. */
+  machineName?: string | null
 }
 
 interface TemplateSetRow {
@@ -149,6 +168,9 @@ interface TemplateExercise {
   preferredSubstituteName?: string
   /** Recent substitutes for this slot (newest first). */
   recentSubstitutes?: string[]
+  /** Machine this slot is normally performed on (see machine-brands.ts). */
+  machineId?: string | null
+  machineName?: string | null
 }
 
 interface PickedExercise {
@@ -249,6 +271,8 @@ function migrateTemplateExercise(raw: TemplateExercise): TemplateExercise {
       primaryMuscles: ex.primaryMuscles,
       preferredSubstituteName: preferred,
       recentSubstitutes: recent,
+      machineId: ex.machineId ?? null,
+      machineName: ex.machineName ?? null,
       setRows: rows.map((r) => ({
         id: r.id || uid(),
         weight: r.weight != null && r.weight !== "" ? String(r.weight) : "",
@@ -271,6 +295,8 @@ function migrateTemplateExercise(raw: TemplateExercise): TemplateExercise {
     primaryMuscles: ex.primaryMuscles,
     preferredSubstituteName: preferred,
     recentSubstitutes: recent,
+    machineId: ex.machineId ?? null,
+    machineName: ex.machineName ?? null,
     setRows: Array.from({ length: n }, () => ({
       id: uid(),
       reps,
@@ -287,6 +313,8 @@ function templateExerciseToPersist(ex: TemplateExercise): TemplateExercise {
     primaryMuscles: ex.primaryMuscles,
     preferredSubstituteName: ex.preferredSubstituteName,
     recentSubstitutes: ex.recentSubstitutes,
+    machineId: ex.machineId ?? null,
+    machineName: ex.machineName ?? null,
     setRows: ex.setRows.map((r) => ({
       id: r.id,
       weight: r.weight,
@@ -357,11 +385,12 @@ function applyCoachPlan(
     sessionId: string
     trainingStyle: TrainingStyle
     prefs: ProgressionPrefs
-    prevMap: Map<string, ExerciseSet[]>
+    /** Most recent sets for a movement, scoped to its machine. */
+    prevSets: (exercise: SessionExercise) => ExerciseSet[] | undefined
     touched: Set<string>
   },
 ): { updated: SessionExercise[]; ghost: Set<string> } {
-  const { sessions, sessionId, trainingStyle, prefs, prevMap, touched } = options
+  const { sessions, sessionId, trainingStyle, prefs, prevSets, touched } = options
   const ghost = new Set<string>()
 
   const updated = list.map((ex) => {
@@ -376,7 +405,7 @@ function applyCoachPlan(
     /* Coach turned off for this movement: fall back to the plain copy of last
        session so the sheet is still pre-filled with something familiar. */
     if (coachOff) {
-      const prev = prevMap.get(ex.name.toLowerCase())
+      const prev = prevSets(ex)
       if (!prev) return ex
       return {
         ...ex,
@@ -397,6 +426,8 @@ function applyCoachPlan(
         category: ex.category,
         primaryMuscles: ex.primaryMuscles,
         secondaryMuscles: ex.secondaryMuscles,
+        machineId: ex.machineId ?? null,
+        machineName: ex.machineName ?? null,
       },
       sessions,
       setCount: ex.sets.length,
@@ -1078,6 +1109,7 @@ function RoutineEditor({
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
   const [showPicker, setShowPicker] = useState(false)
+  const [machinePickerExId, setMachinePickerExId] = useState<string | null>(null)
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null)
   const [coverUploading, setCoverUploading] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -1142,6 +1174,9 @@ function RoutineEditor({
         name: picked.name,
         notes: "",
         primaryMuscles: picked.primaryMuscles,
+        ...machineSelectionFromPick(
+          getRememberedMachine(picked.name) ?? { machineId: null, machineName: null },
+        ),
         setRows: [
           { id: uid(), reps: "8-12", weight: "" },
           { id: uid(), reps: "8-12", weight: "" },
@@ -1150,6 +1185,22 @@ function RoutineEditor({
       },
     ])
   }
+
+  function setTemplateMachine(exId: string, selection: MachineSelection) {
+    const next = machineSelectionFromPick(selection)
+    setExercises((prev) =>
+      prev.map((e) =>
+        e.id !== exId
+          ? e
+          : { ...e, machineId: next.machineId, machineName: next.machineName },
+      ),
+    )
+  }
+
+  const templateMachineExercise =
+    machinePickerExId != null
+      ? exercises.find((e) => e.id === machinePickerExId) ?? null
+      : null
 
   function removeExercise(id: string) {
     setExercises((prev) => prev.filter((e) => e.id !== id))
@@ -1467,6 +1518,42 @@ function RoutineEditor({
                         ))}
                       </div>
                     )}
+                    {supportsMachineSelection(ex) ? (
+                      <button
+                        type="button"
+                        onClick={() => setMachinePickerExId(ex.id)}
+                        className={cn(
+                          "mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2 text-[9px] font-bold uppercase tracking-wide transition-colors touch-manipulation active:scale-[0.98]",
+                          ex.machineId
+                            ? "border-primary/20 bg-primary/[0.07] text-foreground/85 hover:bg-primary/[0.12]"
+                            : "border-dashed border-border/35 text-muted-foreground/55 hover:border-primary/30 hover:text-primary/85",
+                        )}
+                        aria-label={
+                          ex.machineId
+                            ? `Change machine — currently ${machineLabel(ex.machineId, ex.machineName) ?? "selected"}`
+                            : `Choose a machine for ${ex.name}`
+                        }
+                      >
+                        {ex.machineId ? (
+                          <>
+                            <MachineBrandMark
+                              machineId={ex.machineId}
+                              machineName={ex.machineName}
+                              size="xs"
+                              variant="plate"
+                            />
+                            <span className="truncate">
+                              {machineLabel(ex.machineId, ex.machineName)}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="size-2.5" aria-hidden />
+                            <span>Machine</span>
+                          </>
+                        )}
+                      </button>
+                    ) : null}
                     <div className="mt-2 space-y-1">
                       <div className="grid grid-cols-[1.75rem_1fr_1fr_1.75rem] items-center gap-1 px-0.5">
                         <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/45 text-center">
@@ -1584,6 +1671,21 @@ function RoutineEditor({
         </DialogContent>
       </Dialog>
 
+      {templateMachineExercise ? (
+        <MachinePickerDialog
+          open
+          onClose={() => setMachinePickerExId(null)}
+          exerciseName={templateMachineExercise.name}
+          value={{
+            machineId: templateMachineExercise.machineId ?? null,
+            machineName: templateMachineExercise.machineName ?? null,
+          }}
+          onSelect={(selection) =>
+            setTemplateMachine(templateMachineExercise.id, selection)
+          }
+        />
+      ) : null}
+
       <ExercisePicker
         open={showPicker}
         onClose={() => setShowPicker(false)}
@@ -1690,6 +1792,7 @@ function ActiveWorkout({
     setId: string
     weight: number | null
   } | null>(null)
+  const [machinePickerExId, setMachinePickerExId] = useState<string | null>(null)
 
   useEffect(() => {
     const start = new Date(session.startedAt).getTime()
@@ -1782,9 +1885,15 @@ function ActiveWorkout({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onUpdate is stable enough; avoid refetch loops
   }, [session.id, session.bodyWeightLb, activeDate])
 
-  /** Most recent completed session wins per exercise name (for pre-fill + "Previous" column). */
-  const previousByExercise = useMemo(() => {
-    const map = new Map<string, ExerciseSet[]>()
+  /**
+   * Most recent completed session wins per movement. Indexed twice: by movement
+   * + machine (so switching machines shows that machine's own numbers and never
+   * mixes weight stacks) and by movement alone (so movements logged before
+   * machines existed, or without one, keep their original behaviour).
+   */
+  const previousIndex = useMemo(() => {
+    const byKey = new Map<string, ExerciseSet[]>()
+    const byName = new Map<string, ExerciseSet[]>()
     const completed = previousSessions
       .filter((s) => s.status === "completed" && s.id !== session.id)
       .sort((a, b) => {
@@ -1795,15 +1904,32 @@ function ActiveWorkout({
     for (const s of completed) {
       const exs = normalizeWorkoutSessionExercises<SessionExercise>(s.exercises)
       for (const ex of exs) {
-        const key = ex.name.toLowerCase()
-        if (!map.has(key)) {
-          /* Full set history (not only checkbox-completed) for progressive overload */
-          map.set(key, ex.sets)
-        }
+        const nameKey = ex.name.toLowerCase()
+        /* Full set history (not only checkbox-completed) for progressive overload */
+        if (!byName.has(nameKey)) byName.set(nameKey, ex.sets)
+        const machineKey = exerciseMachineKey(ex.name, ex.machineId, ex.machineName)
+        if (!byKey.has(machineKey)) byKey.set(machineKey, ex.sets)
       }
     }
-    return map
+    return { byKey, byName }
   }, [previousSessions, session.id])
+
+  const prevSetsFor = useMemo(() => {
+    return (ex: SessionExercise): ExerciseSet[] | undefined => {
+      const exact = previousIndex.byKey.get(
+        exerciseMachineKey(ex.name, ex.machineId, ex.machineName),
+      )
+      if (exact) return exact
+      /* A machine was chosen: only that machine's history is comparable. */
+      if (ex.machineId) return undefined
+      return (
+        previousIndex.byName.get(ex.name.toLowerCase()) ??
+        (ex.originalName
+          ? previousIndex.byName.get(ex.originalName.toLowerCase())
+          : undefined)
+      )
+    }
+  }, [previousIndex])
 
   /** Pre-filled from last session â€” muted until user edits weight/reps. */
   const [ghostSetIds, setGhostSetIds] = useState<Set<string>>(() => new Set())
@@ -1816,10 +1942,39 @@ function ActiveWorkout({
 
   const exerciseCount = exercises.length
   const setCountSig = exercises.reduce((n, ex) => n + ex.sets.length, 0)
+  /* Re-plan when a machine changes: the prefill for the new machine is not the
+     same as the old one's, and set counts alone would not notice. */
+  const machineSig = exercises
+    .map((ex) => `${ex.id}:${ex.machineId ?? ""}:${ex.machineName ?? ""}`)
+    .join("|")
+
+  /* Latched per session so an explicit "No specific machine" is never fought. */
+  const machineDefaultsRef = useRef<string | null>(null)
 
   // onUpdate omitted from deps: parent passes a new function each render; session.exercises omitted to avoid re-running on every keystroke.
   useEffect(() => {
-    const list = normalizeWorkoutSessionExercises<SessionExercise>(session.exercises)
+    const base = normalizeWorkoutSessionExercises<SessionExercise>(session.exercises)
+    /* Default each machine-capable movement to the machine last used for it, so
+       walking in the door on a different day already lands on your usual rig.
+       Done inside this effect (rather than its own) so the coach's prefill below
+       is planned for that machine instead of overwriting the choice. */
+    const shouldApplyDefaults =
+      machineDefaultsRef.current !== session.id && base.length > 0
+    if (shouldApplyDefaults) machineDefaultsRef.current = session.id
+    const list = shouldApplyDefaults
+      ? base.map((ex) => {
+          if (ex.machineId || ex.machineName) return ex
+          if (!supportsMachineSelection(ex)) return ex
+          const remembered = getRememberedMachine(ex.name)
+          if (!remembered?.machineId) return ex
+          return {
+            ...ex,
+            machineId: remembered.machineId,
+            machineName: remembered.machineName,
+          }
+        })
+      : base
+
     const { updated, ghost } = applyCoachPlan(list, {
       sessions: previousSessions as unknown as PoSession[],
       sessionId: session.id,
@@ -1827,25 +1982,31 @@ function ActiveWorkout({
       /* Read on the fly rather than from state: the coach writes preference
          changes straight to localStorage, and this effect re-runs after them. */
       prefs: loadProgressionPrefs(),
-      prevMap: previousByExercise,
+      prevSets: prevSetsFor,
       touched: touchedSetIdsRef.current,
     })
-    const changed = updated.some((ex, ei) =>
-      ex.sets.some(
-        (s, si) =>
-          s.weight !== list[ei].sets[si].weight ||
-          s.reps !== list[ei].sets[si].reps,
-      ),
+    const changed = updated.some(
+      (ex, ei) =>
+        ex.machineId !== base[ei].machineId ||
+        ex.machineName !== base[ei].machineName ||
+        ex.sets.some(
+          (s, si) =>
+            s.weight !== base[ei].sets[si].weight ||
+            s.reps !== base[ei].sets[si].reps,
+        ),
     )
     if (!changed) return
     setGhostSetIds((prev) => new Set([...prev, ...ghost]))
     onUpdate(updated)
-    // previousSessions omitted: previousByExercise is derived from it and memoized,
+    // previousSessions omitted: prevSetsFor is derived from it and memoized,
     // so depending on the raw array would re-plan on every parent render.
-  }, [session.id, previousByExercise, trainingStyle, exerciseCount, setCountSig])
+  }, [session.id, prevSetsFor, trainingStyle, exerciseCount, setCountSig, machineSig])
 
   function addExercise(picked: PickedExercise) {
     const setTarget = TRAINING_STYLE_DEFINITIONS[trainingStyle].workingSetTarget ?? 1
+    const machine = machineSelectionFromPick(
+      getRememberedMachine(picked.name) ?? { machineId: null, machineName: null },
+    )
     const updated: SessionExercise[] = [
       ...exercises,
       {
@@ -1855,6 +2016,8 @@ function ActiveWorkout({
         primaryMuscles: picked.primaryMuscles,
         secondaryMuscles: picked.secondaryMuscles,
         category: picked.category,
+        machineId: machine.machineId,
+        machineName: machine.machineName,
         sets: Array.from({ length: setTarget }, (_, index) => ({
             id: uid(),
             setNumber: index + 1,
@@ -1905,6 +2068,9 @@ function ActiveWorkout({
         primaryMuscles: r.primaryMuscles,
         secondaryMuscles: r.secondaryMuscles,
         category: r.category,
+        ...machineSelectionFromPick(
+          getRememberedMachine(r.name) ?? { machineId: null, machineName: null },
+        ),
         sets: defaultFreeFormSets(
           TRAINING_STYLE_DEFINITIONS[trainingStyle].workingSetTarget ?? 3,
         ).map((s) => ({ ...s, id: uid() })),
@@ -1941,6 +2107,9 @@ function ActiveWorkout({
         primaryMuscles: picked.primaryMuscles,
         secondaryMuscles: picked.secondaryMuscles,
         category: picked.category,
+        ...machineSelectionFromPick(
+          getRememberedMachine(picked.name) ?? { machineId: null, machineName: null },
+        ),
         sets,
         templateExerciseId: ex.templateExerciseId,
         originalName: ex.originalName || ex.name,
@@ -1963,6 +2132,53 @@ function ActiveWorkout({
         templateExerciseId: current?.templateExerciseId,
         fromName,
         toName: picked.name,
+      })
+    }
+    onUpdate(updated)
+  }
+
+  /**
+   * Attach a machine to a movement (or clear it). Switching machines wipes the
+   * un-logged rows so the coach can prefill the new machine's own weight — the
+   * old stack's numbers would be meaningless here. Completed sets are kept as
+   * logged, because they really were performed.
+   */
+  function setExerciseMachine(exId: string, selection: MachineSelection) {
+    const next = machineSelectionFromPick(selection)
+    const list = exercisesRef.current
+    const target = list.find((ex) => ex.id === exId)
+    if (!target) return
+    if (
+      (target.machineId ?? null) === next.machineId &&
+      (target.machineName ?? null) === next.machineName
+    ) {
+      return
+    }
+    rememberMachineSelection({
+      exerciseName: target.name,
+      machineId: next.machineId,
+      machineName: next.machineName,
+    })
+    const clearedIds = new Set<string>()
+    const updated = list.map((ex) => {
+      if (ex.id !== exId) return ex
+      return {
+        ...ex,
+        machineId: next.machineId,
+        machineName: next.machineName,
+        sets: ex.sets.map((s) => {
+          if (s.completed) return s
+          clearedIds.add(s.id)
+          return { ...s, weight: null, reps: null }
+        }),
+      }
+    })
+    for (const id of clearedIds) touchedSetIdsRef.current.delete(id)
+    if (clearedIds.size > 0) {
+      setGhostSetIds((prev) => {
+        const copy = new Set(prev)
+        for (const id of clearedIds) copy.delete(id)
+        return copy
       })
     }
     onUpdate(updated)
@@ -2319,6 +2535,36 @@ function ActiveWorkout({
     displayedExerciseId != null
       ? exercises.find((e) => e.id === displayedExerciseId) ?? null
       : null
+  const machinePickerExercise =
+    machinePickerExId != null
+      ? exercises.find((e) => e.id === machinePickerExId) ?? null
+      : null
+
+  /** Distinct machines this movement has been logged on, newest first. */
+  const recentMachinesFor = useMemo(() => {
+    return (name: string): string[] => {
+      const wanted = name.trim().toLowerCase()
+      const out: string[] = []
+      const seen = new Set<string>()
+      const completed = previousSessions
+        .filter((s) => s.status === "completed")
+        .sort(
+          (a, b) =>
+            new Date(b.finishedAt ?? b.startedAt).getTime() -
+            new Date(a.finishedAt ?? a.startedAt).getTime(),
+        )
+      for (const s of completed) {
+        for (const ex of normalizeWorkoutSessionExercises<SessionExercise>(s.exercises)) {
+          if (ex.name.trim().toLowerCase() !== wanted) continue
+          const id = ex.machineId
+          if (!id || seen.has(id)) continue
+          seen.add(id)
+          out.push(id)
+        }
+      }
+      return out
+    }
+  }, [previousSessions])
 
   useEffect(() => {
     if (cardTransitionTimerRef.current != null) {
@@ -2639,11 +2885,8 @@ function ActiveWorkout({
             ) : displayedExercise ? (
               (() => {
                 const ex = displayedExercise
-                const prev =
-                  previousByExercise.get(ex.name.toLowerCase()) ||
-                  (ex.originalName
-                    ? previousByExercise.get(ex.originalName.toLowerCase())
-                    : undefined)
+                const prev = prevSetsFor(ex)
+                const canPickMachine = supportsMachineSelection(ex)
                 const exComplete = isExerciseComplete(ex)
                 const hasPendingEffort = ex.sets.some(
                   (s) =>
@@ -2711,6 +2954,43 @@ function ActiveWorkout({
                                 </span>
                               ) : null}
                             </div>
+                            {canPickMachine ? (
+                              <button
+                                type="button"
+                                onClick={() => setMachinePickerExId(ex.id)}
+                                className={cn(
+                                  "mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 text-[10px] font-bold uppercase tracking-wide transition-colors touch-manipulation active:scale-[0.98]",
+                                  ex.machineId
+                                    ? "border-white/10 bg-white/[0.05] text-foreground/85 hover:bg-white/[0.09]"
+                                    : "border-dashed border-white/15 text-muted-foreground/55 hover:border-primary/35 hover:text-primary/85",
+                                )}
+                                aria-label={
+                                  ex.machineId
+                                    ? `Change machine — currently ${machineLabel(ex.machineId, ex.machineName) ?? "selected"}`
+                                    : `Choose a machine for ${ex.name}`
+                                }
+                                title={ex.machineId ? "Change machine" : "Choose a machine"}
+                              >
+                                {ex.machineId ? (
+                                  <>
+                                    <MachineBrandMark
+                                      machineId={ex.machineId}
+                                      machineName={ex.machineName}
+                                      size="xs"
+                                      variant="plate"
+                                    />
+                                    <span className="truncate">
+                                      {machineLabel(ex.machineId, ex.machineName)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus className="size-3" aria-hidden />
+                                    <span>Machine</span>
+                                  </>
+                                )}
+                              </button>
+                            ) : null}
                           </div>
                           <div className="flex shrink-0 gap-1">
                             {queue.canSkip && ex.id === queue.current?.id ? (
@@ -3196,6 +3476,20 @@ function ActiveWorkout({
         />
       ) : null}
 
+      {machinePickerExercise ? (
+        <MachinePickerDialog
+          open
+          onClose={() => setMachinePickerExId(null)}
+          exerciseName={machinePickerExercise.name}
+          value={{
+            machineId: machinePickerExercise.machineId ?? null,
+            machineName: machinePickerExercise.machineName ?? null,
+          }}
+          onSelect={(selection) => setExerciseMachine(machinePickerExercise.id, selection)}
+          recentMachineIds={recentMachinesFor(machinePickerExercise.name)}
+        />
+      ) : null}
+
       <ExercisePicker
         open={showPicker}
         onClose={() => {
@@ -3519,11 +3813,21 @@ function WorkoutsPageInner() {
             pref?.toName && pref.toName.toLowerCase() !== m.name.toLowerCase()
               ? pref.toName
               : m.name
+          /* No swap: the slot's own machine. Substituted: whatever you last used
+             for the replacement movement. */
+          const machine =
+            useName === m.name
+              ? { machineId: m.machineId ?? null, machineName: m.machineName ?? null }
+              : machineSelectionFromPick(
+                  getRememberedMachine(useName) ?? { machineId: null, machineName: null },
+                )
           return {
             id: uid(),
             name: useName,
             notes: m.notes,
             primaryMuscles: m.primaryMuscles,
+            machineId: machine.machineId,
+            machineName: machine.machineName,
             sets: sessionSetsFromTemplate(m, trainingStyle),
             templateExerciseId: m.id,
             originalName: m.name,
