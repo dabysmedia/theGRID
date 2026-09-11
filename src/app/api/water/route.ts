@@ -6,6 +6,7 @@ import {
 } from "@/lib/dateStorage"
 import { resolveUserId, UserError } from "@/lib/current-user"
 import { TRACKING_TARGET_DEFAULTS } from "@/lib/tracking-targets"
+import { WATER_LOG_MAX_OZ } from "@/lib/water"
 
 const DEFAULT_BOTTLE_OZ = 32
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -62,10 +63,10 @@ export async function POST(req: NextRequest) {
       !DATE_PATTERN.test(date) ||
       !Number.isFinite(amountOz) ||
       amountOz <= 0 ||
-      amountOz > 128
+      amountOz > WATER_LOG_MAX_OZ
     ) {
       return NextResponse.json(
-        { error: "Valid date and water amount between 0 and 128 oz required" },
+        { error: `Valid date and water amount between 0 and ${WATER_LOG_MAX_OZ} oz required` },
         { status: 400 },
       )
     }

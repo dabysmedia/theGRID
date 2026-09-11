@@ -1,7 +1,17 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Check, Droplets, Pencil, Plus, RotateCcw, X } from "lucide-react"
+import {
+  Check,
+  CupSoda,
+  Droplets,
+  GlassWater,
+  Pencil,
+  Plus,
+  RotateCcw,
+  X,
+  type LucideIcon,
+} from "lucide-react"
 import {
   Dialog,
   DialogClose,
@@ -18,10 +28,23 @@ import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
 import { apiFetch } from "@/lib/api-fetch"
 import { cn, formatDisplayDate, parseLocalDate } from "@/lib/utils"
+import {
+  WATER_LOG_MAX_OZ,
+  WATER_LOG_PRESETS,
+  waterPresetForAmount,
+  type WaterLogPresetId,
+} from "@/lib/water"
 
 const DEFAULT_BOTTLE_OZ = 32
 const DEFAULT_GOAL_OZ = 32
-const QUICK_AMOUNTS = [8, 16, 32] as const
+
+const PRESET_ICONS: Record<WaterLogPresetId, LucideIcon> = {
+  glass: GlassWater,
+  "can-zero-cal": CupSoda,
+  bottle: Droplets,
+  tumbler: GlassWater,
+  large: Droplets,
+}
 
 interface WaterEntry {
   id: string
@@ -94,6 +117,7 @@ export function WaterTracker() {
   const [editingGoal, setEditingGoal] = useState(false)
   const [goalBusy, setGoalBusy] = useState(false)
   const [customAmount, setCustomAmount] = useState("")
+  const [customOpen, setCustomOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -134,7 +158,7 @@ export function WaterTracker() {
   const bottles = totalOz / bottleOz
   const validCustom = useMemo(() => {
     const amount = Number(customAmount)
-    return Number.isFinite(amount) && amount > 0 && amount <= 128
+    return Number.isFinite(amount) && amount > 0 && amount <= WATER_LOG_MAX_OZ
   }, [customAmount])
   const validGoal = useMemo(() => {
     const amount = Number(goalInput)
@@ -152,6 +176,7 @@ export function WaterTracker() {
       })
       if (response.ok) {
         setCustomAmount("")
+        setCustomOpen(false)
         await loadWater()
         window.dispatchEvent(new CustomEvent("grid:log-saved", { detail: { category: "water" } }))
       }
@@ -207,6 +232,8 @@ export function WaterTracker() {
     if (!nextOpen) {
       setEditingGoal(false)
       setGoalInput(formatOunces(goalOz))
+      setCustomOpen(false)
+      setCustomAmount("")
     }
   }
 
@@ -277,7 +304,7 @@ export function WaterTracker() {
       <DialogContent
         showCloseButton={false}
         motionOrigin={motionOrigin}
-        className="water-tracker-dialog min-h-0 overflow-hidden p-0 sm:max-w-[31rem]"
+        className="water-tracker-dialog min-h-0 overflow-y-auto p-0 sm:max-w-[26rem]"
       >
         <DialogClose
           render={
@@ -304,27 +331,28 @@ export function WaterTracker() {
             Water tracker
           </DialogTitle>
           <DialogDescription>
-            {formatDisplayDate(parseLocalDate(activeDate))} · {bottleOz} oz bottle
+            {formatDisplayDate(parseLocalDate(activeDate))}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative z-10 grid gap-5 px-5 pb-5 sm:grid-cols-[0.9fr_1.1fr] sm:items-center">
+        <div className="relative z-10 space-y-4 px-5 pb-5">
           <div
             data-dialog-motion-part="primary"
-            className="relative flex min-h-[17rem] items-center justify-center overflow-hidden rounded-[1.75rem] border border-cyan-200/[0.10] bg-cyan-950/20"
+            className="relative flex items-center gap-3 overflow-hidden rounded-[1.35rem] border border-cyan-200/[0.10] bg-cyan-950/20 px-3 py-3"
           >
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(34,211,238,0.14),transparent_54%)]" />
-            <LiquidBottle ounces={totalOz} capacity={goalOz} animateFill />
-          </div>
-
-          <div className="space-y-4">
-            <div data-dialog-motion-part="content">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_40%,rgba(34,211,238,0.16),transparent_58%)]" />
+            <div className="relative flex h-[4.6rem] w-[2.6rem] shrink-0 items-center justify-center overflow-visible">
+              <div className="scale-[0.92]">
+                <LiquidBottle ounces={totalOz} capacity={goalOz} compact animateFill />
+              </div>
+            </div>
+            <div className="relative min-w-0 flex-1">
               <div className="flex items-end justify-between gap-3">
                 <div>
                   <p className="type-hud-micro text-cyan-100/55">Today</p>
                   <p
                     key={`${totalOz}-${goalOz}`}
-                    className="water-value-change mt-1 text-4xl font-bold tabular-nums tracking-tight text-foreground"
+                    className="water-value-change mt-0.5 text-3xl font-bold tabular-nums tracking-tight text-foreground"
                     aria-live="polite"
                   >
                     {formatOunces(totalOz)}
@@ -337,88 +365,111 @@ export function WaterTracker() {
                     : `${formatOunces(remainingOz)} oz left`}
                 </p>
               </div>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
                 <div
                   className="water-dialog-progress h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.55)] transition-[width] duration-700 ease-out"
                   style={{ width: `${percent}%` }}
                 />
               </div>
-              {editingGoal ? (
-                <form
-                  onSubmit={saveGoal}
-                  className="mt-3 flex items-center gap-2 rounded-xl border border-cyan-200/[0.10] bg-cyan-400/[0.04] p-2"
-                >
-                  <label className="min-w-0 flex-1">
-                    <span className="type-hud-micro block text-cyan-100/50">Daily goal</span>
-                    <span className="relative mt-1 block">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        min="1"
-                        max="512"
-                        step="0.1"
-                        value={goalInput}
-                        onChange={(event) => setGoalInput(event.target.value)}
-                        autoFocus
-                        className="h-9 w-full rounded-lg border border-white/[0.09] bg-black/15 px-3 pr-9 text-sm font-semibold tabular-nums outline-none focus:border-cyan-300/35"
-                        aria-label="Daily water goal in ounces"
-                      />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
-                        OZ
-                      </span>
-                    </span>
-                  </label>
-                  <Button
-                    type="submit"
-                    size="icon"
-                    disabled={!validGoal || goalBusy}
-                    className="mt-4 h-9 w-9 shrink-0 rounded-lg bg-cyan-400 text-cyan-950 hover:bg-cyan-300"
-                    aria-label="Save daily water goal"
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                </form>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setEditingGoal(true)}
-                  disabled={!user}
-                  className="mt-3 flex w-full items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2 text-left transition-colors hover:border-cyan-200/[0.14] hover:bg-cyan-400/[0.04] disabled:opacity-50"
-                >
-                  <span className="type-hud-micro text-muted-foreground/60">Daily goal</span>
-                  <span className="flex items-center gap-2 text-xs font-semibold tabular-nums text-cyan-100/80">
-                    {formatOunces(goalOz)} oz
-                    <Pencil className="h-3 w-3 text-cyan-200/50" aria-hidden />
-                  </span>
-                </button>
-              )}
             </div>
+          </div>
 
-            <div data-dialog-motion-part="controls" className="grid grid-cols-3 gap-2">
-              {QUICK_AMOUNTS.map((amount) => (
+          <div data-dialog-motion-part="content">
+            {editingGoal ? (
+              <form
+                onSubmit={saveGoal}
+                className="flex items-center gap-2 rounded-xl border border-cyan-200/[0.10] bg-cyan-400/[0.04] p-2"
+              >
+                <label className="min-w-0 flex-1">
+                  <span className="type-hud-micro block text-cyan-100/50">Daily goal</span>
+                  <span className="relative mt-1 block">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="1"
+                      max="512"
+                      step="0.1"
+                      value={goalInput}
+                      onChange={(event) => setGoalInput(event.target.value)}
+                      autoFocus
+                      className="h-9 w-full rounded-lg border border-white/[0.09] bg-black/15 px-3 pr-9 text-sm font-semibold tabular-nums outline-none focus:border-cyan-300/35"
+                      aria-label="Daily water goal in ounces"
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
+                      OZ
+                    </span>
+                  </span>
+                </label>
                 <Button
-                  key={amount}
+                  type="submit"
+                  size="icon"
+                  disabled={!validGoal || goalBusy}
+                  className="mt-4 h-9 w-9 shrink-0 rounded-lg bg-cyan-400 text-cyan-950 hover:bg-cyan-300"
+                  aria-label="Save daily water goal"
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditingGoal(true)}
+                disabled={!user}
+                className="flex w-full items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2 text-left transition-colors hover:border-cyan-200/[0.14] hover:bg-cyan-400/[0.04] disabled:opacity-50"
+              >
+                <span className="type-hud-micro text-muted-foreground/60">Daily goal</span>
+                <span className="flex items-center gap-2 text-xs font-semibold tabular-nums text-cyan-100/80">
+                  {formatOunces(goalOz)} oz
+                  <Pencil className="h-3 w-3 text-cyan-200/50" aria-hidden />
+                </span>
+              </button>
+            )}
+          </div>
+
+          <div data-dialog-motion-part="controls" className="grid grid-cols-2 gap-2">
+            {WATER_LOG_PRESETS.map((preset) => {
+              const Icon = PRESET_ICONS[preset.id]
+              return (
+                <button
+                  key={preset.id}
                   type="button"
-                  variant="outline"
                   disabled={busy || !user}
-                  onClick={() => void addWater(amount)}
+                  aria-label={`Log ${preset.label}, ${formatOunces(preset.amountOz)} ounces`}
+                  onClick={() => void addWater(preset.amountOz)}
                   className={cn(
-                    "h-12 rounded-xl border-cyan-200/[0.12] bg-cyan-400/[0.04] text-cyan-50 transition-[background-color,border-color,scale] active:scale-[0.96] hover:bg-cyan-400/[0.10]",
-                    amount === bottleOz && "border-cyan-300/25 bg-cyan-400/[0.08]",
+                    "flex min-h-[4.25rem] flex-col items-start justify-center gap-0.5 rounded-xl border border-cyan-200/[0.12] bg-cyan-400/[0.04] px-3 py-2 text-left text-cyan-50 transition-[background-color,border-color,transform] active:scale-[0.97] hover:bg-cyan-400/[0.10] disabled:opacity-50",
+                    preset.amountOz === bottleOz && "border-cyan-300/25 bg-cyan-400/[0.08]",
                   )}
                 >
-                  <span className="flex flex-col items-center leading-none">
-                    <span className="font-semibold">+{amount} oz</span>
-                    {amount === bottleOz ? (
-                      <span className="mt-1 text-[9px] uppercase tracking-wider text-cyan-200/55">
-                        bottle
-                      </span>
-                    ) : null}
+                  <span className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
+                    <Icon className="h-4 w-4 shrink-0 text-cyan-200/70" aria-hidden />
+                    {preset.label}
                   </span>
-                </Button>
-              ))}
-            </div>
+                  <span className="pl-[1.375rem] text-[11px] tabular-nums text-cyan-200/55">
+                    {formatOunces(preset.amountOz)} oz
+                  </span>
+                </button>
+              )
+            })}
+            <button
+              type="button"
+              aria-expanded={customOpen}
+              aria-label="Toggle custom water amount"
+              onClick={() => setCustomOpen((open) => !open)}
+              className={cn(
+                "flex min-h-[4.25rem] flex-col items-start justify-center gap-0.5 rounded-xl border border-cyan-200/[0.12] bg-cyan-400/[0.04] px-3 py-2 text-left text-cyan-50 transition-[background-color,border-color] hover:bg-cyan-400/[0.10]",
+                customOpen && "border-cyan-300/25 bg-cyan-400/[0.08]",
+              )}
+            >
+              <span className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
+                <Plus className="h-4 w-4 shrink-0 text-cyan-200/70" aria-hidden />
+                Custom
+              </span>
+              <span className="pl-[1.375rem] text-[11px] text-cyan-200/55">Any oz</span>
+            </button>
+          </div>
 
+          {customOpen ? (
             <form
               data-dialog-motion-part="actions"
               onSubmit={submitCustom}
@@ -430,11 +481,12 @@ export function WaterTracker() {
                   type="number"
                   inputMode="decimal"
                   min="0.1"
-                  max="128"
+                  max={WATER_LOG_MAX_OZ}
                   step="0.1"
                   value={customAmount}
                   onChange={(event) => setCustomAmount(event.target.value)}
-                  placeholder="Custom oz"
+                  placeholder="Ounces"
+                  autoFocus
                   className="h-11 w-full rounded-xl border border-white/[0.09] bg-black/15 px-3 pr-9 text-sm tabular-nums outline-none transition-colors placeholder:text-muted-foreground/45 focus:border-cyan-300/35"
                 />
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
@@ -451,19 +503,22 @@ export function WaterTracker() {
                 <Plus className="h-4 w-4" />
               </Button>
             </form>
+          ) : null}
 
-            <Button
-              data-dialog-motion-part="actions"
-              type="button"
-              variant="ghost"
-              disabled={!entries.length || busy}
-              onClick={() => void undoLast()}
-              className="w-full rounded-xl text-muted-foreground hover:text-foreground"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Undo last {entries[0] ? `(+${formatOunces(entries[0].amountOz)} oz)` : "log"}
-            </Button>
-          </div>
+          <Button
+            data-dialog-motion-part="actions"
+            type="button"
+            variant="ghost"
+            disabled={!entries.length || busy}
+            onClick={() => void undoLast()}
+            className="w-full rounded-xl text-muted-foreground hover:text-foreground"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Undo last{" "}
+            {entries[0]
+              ? `(${waterPresetForAmount(entries[0].amountOz)?.label ?? `+${formatOunces(entries[0].amountOz)} oz`})`
+              : "log"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
