@@ -437,16 +437,18 @@ export function WaterTracker() {
                   aria-label={`Log ${preset.label}, ${formatOunces(preset.amountOz)} ounces`}
                   onClick={() => void addWater(preset.amountOz)}
                   className={cn(
-                    "flex min-h-[4.25rem] flex-col items-start justify-center gap-0.5 rounded-xl border border-cyan-200/[0.12] bg-cyan-400/[0.04] px-3 py-2 text-left text-cyan-50 transition-[background-color,border-color,transform] active:scale-[0.97] hover:bg-cyan-400/[0.10] disabled:opacity-50",
+                    "flex min-h-[4.25rem] items-center gap-2 rounded-xl border border-cyan-200/[0.12] bg-cyan-400/[0.04] px-3 py-2 text-left text-cyan-50 transition-[background-color,border-color,transform] active:scale-[0.97] hover:bg-cyan-400/[0.10] disabled:opacity-50",
                     preset.amountOz === bottleOz && "border-cyan-300/25 bg-cyan-400/[0.08]",
                   )}
                 >
-                  <span className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
-                    <Icon className="h-4 w-4 shrink-0 text-cyan-200/70" aria-hidden />
-                    {preset.label}
-                  </span>
-                  <span className="pl-[1.375rem] text-[11px] tabular-nums text-cyan-200/55">
-                    {formatOunces(preset.amountOz)} oz
+                  <Icon className="h-4 w-4 shrink-0 text-cyan-200/70" aria-hidden />
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-semibold leading-snug sm:text-sm">
+                      {preset.label}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] tabular-nums text-cyan-200/55">
+                      {formatOunces(preset.amountOz)} oz
+                    </span>
                   </span>
                 </button>
               )
@@ -457,15 +459,17 @@ export function WaterTracker() {
               aria-label="Toggle custom water amount"
               onClick={() => setCustomOpen((open) => !open)}
               className={cn(
-                "flex min-h-[4.25rem] flex-col items-start justify-center gap-0.5 rounded-xl border border-cyan-200/[0.12] bg-cyan-400/[0.04] px-3 py-2 text-left text-cyan-50 transition-[background-color,border-color] hover:bg-cyan-400/[0.10]",
+                "flex min-h-[4.25rem] items-center gap-2 rounded-xl border border-cyan-200/[0.12] bg-cyan-400/[0.04] px-3 py-2 text-left text-cyan-50 transition-[background-color,border-color] hover:bg-cyan-400/[0.10]",
                 customOpen && "border-cyan-300/25 bg-cyan-400/[0.08]",
               )}
             >
-              <span className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
-                <Plus className="h-4 w-4 shrink-0 text-cyan-200/70" aria-hidden />
-                Custom
+              <Plus className="h-4 w-4 shrink-0 text-cyan-200/70" aria-hidden />
+              <span className="min-w-0">
+                <span className="block text-[13px] font-semibold leading-snug sm:text-sm">
+                  Custom
+                </span>
+                <span className="mt-0.5 block text-[11px] text-cyan-200/55">Any oz</span>
               </span>
-              <span className="pl-[1.375rem] text-[11px] text-cyan-200/55">Any oz</span>
             </button>
           </div>
 
