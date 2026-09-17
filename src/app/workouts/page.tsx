@@ -50,6 +50,7 @@ import {
   type SetEffortPatch,
 } from "@/components/workouts/ProgressiveOverloadCoach"
 import { MovementCompleteOverview } from "@/components/workouts/MovementCompleteOverview"
+import { SessionMuscleLoadWidget } from "@/components/workouts/SessionMuscleLoadWidget"
 import {
   normalizeExerciseKey,
   planSessionSets,
@@ -2818,6 +2819,16 @@ function ActiveWorkout({
               </div>
             ) : null}
           </div>
+
+          {exercises.length > 0 ? (
+            <div className="ml-[max(0.5rem,env(safe-area-inset-left))] mr-[max(0.5rem,env(safe-area-inset-right))] mt-2 shrink-0 sm:mx-3">
+              <SessionMuscleLoadWidget
+                exercises={exercises}
+                currentPrimaryMuscles={displayedExercise?.primaryMuscles}
+                currentSecondaryMuscles={displayedExercise?.secondaryMuscles}
+              />
+            </div>
+          ) : null}
 
           {/* One movement at a time â€” edge-to-edge on mobile */}
           <div
