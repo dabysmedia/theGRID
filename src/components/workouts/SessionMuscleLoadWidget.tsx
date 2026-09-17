@@ -174,7 +174,7 @@ export function SessionMuscleLoadWidget({
               <li key={row.muscle} className="flex">
                 <div
                   className={cn(
-                    "flex min-w-[4.35rem] flex-col justify-between rounded-xl border px-2 py-1.5",
+                    "flex min-w-[5.1rem] flex-col justify-between rounded-xl border px-2 py-1.5",
                     isCurrent
                       ? "border-primary/35 bg-primary/[0.08] ring-1 ring-primary/25"
                       : "border-white/[0.06] bg-black/20",
@@ -233,7 +233,7 @@ export function SessionMuscleLoadWidget({
       <HubCollapse open={expanded} durationMs={280}>
         <div
           id="session-muscle-load-detail"
-          className="space-y-1.5 border-t border-white/[0.06] px-3 py-2.5"
+          className="max-h-[30vh] space-y-1.5 overflow-y-auto border-t border-white/[0.06] px-3 py-2.5"
         >
           {rows.map((row) => {
             const isCurrent = currentNames.has(muscleKey(row.muscle))
