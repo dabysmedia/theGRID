@@ -37,11 +37,11 @@ const TRACK_ICONS: Record<TrackKey, LucideIcon> = {
 const WEEKDAY_MARKS = ["M", "", "W", "", "F", "", "S"] as const
 
 const INTENSITY_FILL = [
-  "oklch(0.28 0.01 250 / 35%)",
-  "oklch(0.55 0.12 110 / 38%)",
-  "oklch(0.68 0.16 110 / 62%)",
-  "oklch(0.78 0.17 110 / 82%)",
-  "oklch(0.84 0.18 110)",
+  "oklch(0.48 0.012 250 / 38%)",
+  "oklch(0.58 0.12 110 / 45%)",
+  "oklch(0.70 0.16 110 / 70%)",
+  "oklch(0.78 0.17 110 / 88%)",
+  "oklch(0.86 0.18 110)",
 ] as const
 
 function formatXp(n: number): string {
@@ -78,7 +78,7 @@ export function ProgressScreen({
   }
 
   return (
-    <div className="grid-progress-screen flex min-h-0 flex-1 flex-col gap-5 pb-3">
+    <div className="grid-progress-screen mx-auto flex w-full max-w-2xl min-h-0 flex-1 flex-col gap-5 pb-6">
       <LevelHero snapshot={snapshot} />
       <StatStrip snapshot={snapshot} />
       <TodayBoard snapshot={snapshot} />
@@ -317,13 +317,16 @@ function HeatmapCard({ snapshot }: { snapshot: ProgressSnapshot }) {
           {WEEKDAY_MARKS.map((label, i) => (
             <span
               key={`${label}-${i}`}
-              className="h-[11px] text-[8px] leading-[11px] text-muted-foreground/40"
+              className="h-[14px] text-[8px] leading-[14px] text-muted-foreground/40"
             >
               {label}
             </span>
           ))}
         </div>
-        <div className="grid min-w-0 flex-1 grid-flow-col grid-rows-7 gap-[3px] overflow-x-auto">
+        <div
+          className="grid min-w-0 flex-1 grid-flow-col grid-rows-7 gap-[3px]"
+          style={{ gridTemplateRows: "repeat(7, minmax(11px, 14px))" }}
+        >
           {weeks.map((week, wi) =>
             week.days.map((cell, di) => {
               const isSelected = active?.date === cell.date
@@ -339,8 +342,8 @@ function HeatmapCard({ snapshot }: { snapshot: ProgressSnapshot }) {
                       : `${cell.date}: future`
                   }
                   className={cn(
-                    "grid-progress-heat aspect-square min-h-[11px] w-full rounded-[3px] transition-[transform,box-shadow] duration-200",
-                    cell.inRange ? "hover:scale-125" : "opacity-25",
+                    "grid-progress-heat aspect-square w-full rounded-[3px] border border-white/[0.05] transition-[transform,box-shadow] duration-200",
+                    cell.inRange ? "hover:scale-125" : "opacity-40",
                     isSelected && "ring-1 ring-primary/80 ring-offset-1 ring-offset-transparent",
                   )}
                   style={{

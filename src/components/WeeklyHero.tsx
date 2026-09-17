@@ -691,13 +691,7 @@ export function WeeklyHero({
               key={progressOpen ? "progress-eyebrow" : "overview-eyebrow"}
               className="type-hud-eyebrow motion-safe:animate-fade-up motion-reduce:animate-none"
             >
-              {progressOpen
-                ? progressSnapshot
-                  ? progressSnapshot.streak.current > 0
-                    ? `${progressSnapshot.streak.current}-day streak`
-                    : progressSnapshot.level.name
-                  : "GRID score"
-                : dayLabel}
+              {dayLabel}
             </span>
             <button
               type="button"
@@ -772,6 +766,7 @@ export function WeeklyHero({
                 : undefined,
           )}
           aria-hidden={progressOpen}
+          inert={progressOpen || undefined}
         >
         {/* Rings — HubRingBay owns center-morph (see hub-expand-motion rule).
             Relative wrapper kept so CaloriesExpandShell can absolute-position chrome. */}
