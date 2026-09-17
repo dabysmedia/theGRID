@@ -4,6 +4,8 @@ export interface WorkoutSetLike {
   weight: number | null
   reps: number | null
   completed: boolean
+  /** Live sessions tag warmup / dropset / failure; weekly history may omit this. */
+  type?: string
 }
 
 export interface WorkoutMuscleTag {
@@ -30,6 +32,15 @@ export interface MuscleWeekStats {
   volumeLb: number
   sessions: number
   lastTrainedDate: string | null
+}
+
+/** Per-muscle load for the in-progress session (working sets only). */
+export interface MuscleSessionStats {
+  muscle: string
+  color: string
+  completedSets: number
+  plannedSets: number
+  volumeLb: number
 }
 
 /** Coarse library muscle names → SVG slugs (both sides when bilateral). */
@@ -111,6 +122,10 @@ function parseExercises(raw: string | WorkoutExerciseLike[]): WorkoutExerciseLik
   } catch {
     return []
   }
+}
+
+function isWorkingSet(set: WorkoutSetLike): boolean {
+  return (set.type ?? "working") !== "warmup"
 }
 
 function isSetCounted(set: WorkoutSetLike): boolean {
@@ -243,4 +258,130 @@ export function formatVolumeLb(n: number): string {
   if (n <= 0) return "—"
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k lb`
   return `${Math.round(n)} lb`
+}
+
+export function formatSetCount(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0"
+  const rounded = Math.round(n * 10) / 10
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
+}
+
+/** Segment keys for highlighting the movement currently on screen. */
+export function muscleNamesToSegmentKeys(names: Iterable<string>): string[] {
+  const keys = new Set<string>()
+  for (const name of names) {
+    for (const k of segmentKeysForSlugs(slugsForMuscle(name))) {
+      keys.add(k)
+    }
+  }
+  return [...keys]
+}
+
+type LiveMuscleAcc = {
+  label: string
+  color: string
+  completedSets: number
+  plannedSets: number
+  volumeLb: number
+}
+
+function addLiveMuscleLoad(
+  map: Map<string, LiveMuscleAcc>,
+  muscle: WorkoutMuscleTag,
+  completedDelta: number,
+  plannedDelta: number,
+  volumeDelta: number,
+  weight: number,
+) {
+  const name = muscle.name.trim()
+  if (!name) return
+  const key = normalizeMuscleKey(name)
+  const prev = map.get(key) ?? {
+    label: name,
+    color: muscle.color?.trim() || DEFAULT_MUSCLE_COLOR,
+    completedSets: 0,
+    plannedSets: 0,
+    volumeLb: 0,
+  }
+  prev.completedSets += completedDelta * weight
+  prev.plannedSets += plannedDelta * weight
+  prev.volumeLb += volumeDelta * weight
+  if (muscle.color?.trim()) prev.color = muscle.color.trim()
+  map.set(key, prev)
+}
+
+/**
+ * Live-session muscle load: counts only completed working sets (warmups omitted)
+ * and still reports planned working-set targets so the HUD can show 2 / 8.
+ */
+export function aggregateLiveMuscleStats(exercises: WorkoutExerciseLike[]): MuscleSessionStats[] {
+  const map = new Map<string, LiveMuscleAcc>()
+
+  for (const ex of exercises) {
+    const working = ex.sets.filter(isWorkingSet)
+    if (working.length === 0) continue
+
+    const completed = working.filter((s) => s.completed)
+    const plannedCount = working.length
+    const completedCount = completed.length
+    let vol = 0
+    for (const set of completed) vol += setVolume(set)
+
+    const primaries = ex.primaryMuscles?.filter((m) => m.name.trim()) ?? []
+    const secondaries = ex.secondaryMuscles?.filter((m) => m.name.trim()) ?? []
+
+    if (primaries.length === 0 && secondaries.length === 0) {
+      addLiveMuscleLoad(
+        map,
+        { name: "Other", color: DEFAULT_MUSCLE_COLOR },
+        completedCount,
+        plannedCount,
+        vol,
+        1,
+      )
+      continue
+    }
+
+    for (const m of primaries) {
+      addLiveMuscleLoad(map, m, completedCount, plannedCount, vol, 1)
+    }
+    for (const m of secondaries) {
+      addLiveMuscleLoad(map, m, completedCount, plannedCount, vol, 0.4)
+    }
+  }
+
+  const out: MuscleSessionStats[] = []
+  for (const row of map.values()) {
+    if (row.plannedSets <= 0 && row.completedSets <= 0) continue
+    out.push({
+      muscle: row.label,
+      color: row.color,
+      completedSets: Math.round(row.completedSets * 10) / 10,
+      plannedSets: Math.round(row.plannedSets * 10) / 10,
+      volumeLb: Math.round(row.volumeLb),
+    })
+  }
+
+  return out.sort(
+    (a, b) =>
+      b.completedSets - a.completedSets ||
+      b.plannedSets - a.plannedSets ||
+      a.muscle.localeCompare(b.muscle),
+  )
+}
+
+/** Map live completed-set counts onto the anatomy silhouette. */
+export function liveStatsToSegmentScores(stats: MuscleSessionStats[]): Record<string, number> {
+  return muscleStatsToSegmentScores(
+    stats
+      .filter((row) => row.completedSets > 0)
+      .map((row) => ({
+        muscle: row.muscle,
+        color: row.color,
+        sets: row.completedSets,
+        volumeLb: row.volumeLb,
+        sessions: 1,
+        lastTrainedDate: null,
+      })),
+  )
 }
