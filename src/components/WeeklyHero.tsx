@@ -7,6 +7,8 @@ import {
   Moon,
   ChevronRight,
 } from "lucide-react"
+import { ProgressScreen } from "@/components/progress/ProgressScreen"
+import { useGridProgress } from "@/components/progress/useGridProgress"
 import { DailyWeighIn } from "@/components/DailyWeighIn"
 import { DatePicker } from "@/components/DatePicker"
 import { StepsActivityBars } from "@/components/hub/StepsActivityBars"
@@ -316,6 +318,9 @@ interface WeeklyHeroProps {
    * distribute instrument sections (no default page scroll).
    */
   fillViewport?: boolean
+  /** GRID progression overlay that replaced the today/week toggle. */
+  progressOpen?: boolean
+  onProgressOpenChange?: (open: boolean) => void
   /** Per-profile feature flag. Disabled hides all peptide / protocol surfaces. */
   protocolEnabled?: boolean
   /** Peptides / workouts summary for the protocol/training instrument rail + expand panels. */
@@ -354,15 +359,6 @@ interface WeeklyHeroProps {
     recoveryScore: number | null
   }
 }
-
-/** Mean over days with logged data only (0 = no data for that day in dashboard aggregates). */
-function weekAvgFromLoggedDays(last7: number[]): number {
-  const logged = last7.filter((v) => v > 0)
-  if (!logged.length) return 0
-  return logged.reduce((s, v) => s + v, 0) / logged.length
-}
-
-type OverviewView = "today" | "week"
 
 function FadeSection({
   show,
@@ -468,9 +464,12 @@ export function WeeklyHero({
   protocolEnabled = true,
   peptideSummary,
   workoutSummary,
+  progressOpen: progressOpenProp,
+  onProgressOpenChange,
 }: WeeklyHeroProps) {
   const { activeDate, isToday } = useActiveDate()
-  const [viewMode, setViewMode] = useState<OverviewView>("today")
+  const { snapshot: progressSnapshot, loading: progressLoading } = useGridProgress()
+  const [progressLocal, setProgressLocal] = useState(false)
   const [expandedLocal, setExpandedLocal] = useState<HubExpandedPanel | null>(null)
   const [protocolMotionOrigin, setProtocolMotionOrigin] =
     useState<ProtocolMotionOrigin | null>(null)
@@ -478,13 +477,29 @@ export function WeeklyHero({
   const workoutRailGlyphRef = useRef<HTMLDivElement>(null)
   const protocolFocusGlyphRef = useRef<HTMLDivElement>(null)
   const expanded = expandedProp !== undefined ? expandedProp : expandedLocal
+  const progressOpen = progressOpenProp !== undefined ? progressOpenProp : progressLocal
   const setExpanded = (panel: HubExpandedPanel | null) => {
     onExpandedChange?.(panel)
     if (expandedProp === undefined) setExpandedLocal(panel)
   }
+  const setProgressOpen = (open: boolean) => {
+    onProgressOpenChange?.(open)
+    if (progressOpenProp === undefined) setProgressLocal(open)
+  }
+
+  const toggleProgress = () => {
+    if (!progressOpen) {
+      setProtocolMotionOrigin(null)
+      setExpanded(null)
+      setProgressOpen(true)
+      return
+    }
+    setProgressOpen(false)
+  }
 
   const toggleExpand = (panel: HubExpandedPanel) => {
     if (panel === "peptides" && !protocolEnabled) return
+    if (progressOpen) setProgressOpen(false)
     const closing = expanded === panel
     if (panel === "peptides" || panel === "workouts") {
       const source = closing
@@ -511,11 +526,6 @@ export function WeeklyHero({
   }
 
   const refDate = parseLocalDate(activeDate)
-  const dayOfWeek = refDate.getDay()
-  const weekStart = new Date(refDate)
-  weekStart.setDate(refDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-  const weekEnd = new Date(weekStart)
-  weekEnd.setDate(weekStart.getDate() + 6)
 
   // Collapse when the active day changes
   useLayoutEffect(() => {
@@ -523,10 +533,6 @@ export function WeeklyHero({
     setExpanded(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset on date change
   }, [activeDate])
-
-  const calAvg = weekAvgFromLoggedDays(data.calories.last7)
-  const stepsAvg = weekAvgFromLoggedDays(data.steps.last7)
-  const sleepAvg = Math.round(weekAvgFromLoggedDays(data.sleep.last7) * 10) / 10
 
   const calGoal = data.calories.goal ?? TRACKING_TARGET_DEFAULTS.calories
   const stepsGoal = data.steps.goal ?? TRACKING_TARGET_DEFAULTS.steps
@@ -540,18 +546,14 @@ export function WeeklyHero({
     : 0
   const sleepGoalDays = data.sleep.last7.filter((value) => value >= sleepGoal).length
 
-  const isWeekView = viewMode === "week"
-  const calValue = isWeekView ? calAvg : data.calories.todayValue
-  const stepsValue = isWeekView ? stepsAvg : data.steps.todayValue
-  const sleepValue = isWeekView ? sleepAvg : data.sleep.todayValue
-  const readinessValue = isWeekView
-    ? (data.readiness?.weekAvg ?? null)
-    : (data.readiness?.todayValue ?? null)
+  const calValue = data.calories.todayValue
+  const stepsValue = data.steps.todayValue
+  const sleepValue = data.sleep.todayValue
+  const readinessValue = data.readiness?.todayValue ?? null
   const hrvMs = data.readiness?.hrvMs ?? null
   const restingHeartRate = data.readiness?.restingHeartRate ?? null
 
   const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
-  const dateRange = `${monthNames[weekStart.getMonth()]} ${weekStart.getDate()} – ${monthNames[weekEnd.getMonth()]} ${weekEnd.getDate()}`
   const dayLabel = isToday
     ? "Today"
     : `${monthNames[refDate.getMonth()]} ${refDate.getDate()}`
@@ -678,30 +680,53 @@ export function WeeklyHero({
           <div className="flex items-center gap-2">
             <div className="status-dot" />
             <h2
-              key={viewMode}
+              key={progressOpen ? "progress" : "overview"}
               className="type-hud-title motion-safe:animate-fade-up motion-reduce:animate-none"
             >
-              {isWeekView ? "Weekly Overview" : "Daily Overview"}
+              {progressOpen ? "Progression" : "Daily Overview"}
             </h2>
           </div>
           <div className="flex items-center gap-1.5">
             <span
-              key={`${viewMode}-eyebrow`}
+              key={progressOpen ? "progress-eyebrow" : "overview-eyebrow"}
               className="type-hud-eyebrow motion-safe:animate-fade-up motion-reduce:animate-none"
             >
-              {isWeekView ? dateRange : dayLabel}
+              {progressOpen
+                ? progressSnapshot
+                  ? progressSnapshot.streak.current > 0
+                    ? `${progressSnapshot.streak.current}-day streak`
+                    : progressSnapshot.level.name
+                  : "GRID score"
+                : dayLabel}
             </span>
             <button
               type="button"
-              onClick={() => setViewMode((mode) => (mode === "today" ? "week" : "today"))}
-              aria-label={isWeekView ? "Show today's values" : "Show weekly values"}
+              onClick={toggleProgress}
+              aria-label={progressOpen ? "Back to daily overview" : "Show progression"}
+              aria-pressed={progressOpen}
               tabIndex={expanded != null ? -1 : undefined}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
+              className="flex h-7 min-w-7 items-center justify-center gap-0.5 rounded-lg px-1 text-muted-foreground transition-colors hover:bg-muted/20 hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
             >
+              <Flame
+                className={cn(
+                  "h-3.5 w-3.5 transition-colors duration-300",
+                  progressSnapshot?.streak.atRisk
+                    ? "text-orange-400 motion-safe:animate-pulse"
+                    : progressOpen || (progressSnapshot?.streak.current ?? 0) > 0
+                      ? "text-orange-300"
+                      : "text-muted-foreground",
+                )}
+                aria-hidden
+              />
+              {(progressSnapshot?.streak.current ?? 0) > 0 && (
+                <span className="text-[10px] font-semibold tabular-nums text-foreground/80">
+                  {progressSnapshot?.streak.current}
+                </span>
+              )}
               <ChevronRight
                 className={cn(
                   "h-3.5 w-3.5 transition-transform duration-300 ease-out",
-                  isWeekView && "rotate-180",
+                  progressOpen && "rotate-180",
                 )}
                 aria-hidden
               />
@@ -723,20 +748,31 @@ export function WeeklyHero({
       </div>
 
       <div
-        key={viewMode}
         className={cn(
-          "relative z-10 motion-safe:animate-fade-up motion-reduce:animate-none",
-          fillViewport && expanded != null &&
-            "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0",
-          fillViewport && expanded == null && "min-h-0 flex-1 overflow-hidden",
-          fillViewport && expanded != null && "-mx-3 px-3 lg:-mx-5 lg:px-5",
-          protocolFocused || weightFocused || expanded === "vitals"
-            ? "space-y-0"
-            : fillViewport && expanded == null
-            ? "flex min-h-0 flex-1 flex-col justify-between gap-[var(--hub-section-gap)] pb-1 space-y-0"
-            : "space-y-4",
+          "relative z-10",
+          fillViewport && "min-h-0 flex-1",
+          fillViewport && progressOpen && "flex flex-col",
+          fillViewport && expanded != null && !progressOpen &&
+            "overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0",
+          fillViewport && (expanded == null || progressOpen) && "overflow-hidden",
+          fillViewport && expanded != null && !progressOpen && "-mx-3 px-3 lg:-mx-5 lg:px-5",
         )}
       >
+        <div
+          className={cn(
+            progressOpen
+              ? "pointer-events-none invisible absolute inset-0 overflow-hidden"
+              : "relative motion-safe:animate-fade-up motion-reduce:animate-none",
+            !progressOpen && (protocolFocused || weightFocused || expanded === "vitals")
+              ? "space-y-0"
+              : !progressOpen && fillViewport && expanded == null
+              ? "flex h-full min-h-0 flex-1 flex-col justify-between gap-[var(--hub-section-gap)] pb-1 space-y-0"
+              : !progressOpen
+                ? "space-y-4"
+                : undefined,
+          )}
+          aria-hidden={progressOpen}
+        >
         {/* Rings — HubRingBay owns center-morph (see hub-expand-motion rule).
             Relative wrapper kept so CaloriesExpandShell can absolute-position chrome. */}
         <div className={cn("relative", fillViewport && "max-lg:shrink-0")}>
@@ -758,7 +794,7 @@ export function WeeklyHero({
                   value={calValue}
                   max={calGoal}
                   label="Calories"
-                  unit={isWeekView ? "avg" : "cal"}
+                  unit="cal"
                   color="#ef4444"
                   icon={<Flame className="h-4 w-4 text-[#ef4444]" />}
                   disabled={vacationBlocksCalories}
@@ -776,7 +812,7 @@ export function WeeklyHero({
                   value={stepsValue}
                   max={stepsGoal}
                   label="Steps"
-                  unit={isWeekView ? "avg" : "steps"}
+                  unit="steps"
                   color="#22c55e"
                   icon={<Footprints className="h-4 w-4 text-[#22c55e]" />}
                   onClick={() => toggleExpand("steps")}
@@ -790,7 +826,7 @@ export function WeeklyHero({
                   value={sleepValue}
                   max={sleepGoal}
                   label="Sleep"
-                  unit={isWeekView ? "hrs avg" : "hrs"}
+                  unit="hrs"
                   color="#6366f1"
                   icon={<Moon className="h-4 w-4 text-[#6366f1]" />}
                   onClick={() => toggleExpand("sleep")}
@@ -1056,7 +1092,6 @@ export function WeeklyHero({
             readiness={readinessValue}
             hrvMs={hrvMs}
             restingHeartRate={restingHeartRate}
-            isWeekView={isWeekView}
             expanded={expanded === "steps"}
             onStepsClick={() => toggleExpand("steps")}
             onReadinessClick={() => toggleExpand("vitals")}
@@ -1246,7 +1281,13 @@ export function WeeklyHero({
             </HubPresence>
           </div>
         </FadeSection>
+        </div>
 
+        {progressOpen ? (
+          <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:size-0 motion-safe:animate-fade-up motion-reduce:animate-none">
+            <ProgressScreen snapshot={progressSnapshot} loading={progressLoading} />
+          </div>
+        ) : null}
       </div>
     </div>
   )

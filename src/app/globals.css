@@ -1357,6 +1357,33 @@ html {
   100% { transform: scale(1); }
 }
 
+@keyframes grid-progress-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes grid-progress-heat-in {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes grid-progress-xp-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
 /* High-readiness mesh heart — soft instrument pulse (scale + node shimmer) */
 @keyframes mesh-heart-pulse {
   0%,
@@ -1650,6 +1677,23 @@ html {
     animation: draw-ring 0.92s cubic-bezier(0.22, 0.7, 0.18, 1) 90ms backwards;
   }
 
+  .grid-progress-card,
+  .grid-progress-chip,
+  .grid-progress-track,
+  .grid-progress-badge {
+    animation: grid-progress-card-in 0.72s cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
+  }
+
+  .grid-progress-heat {
+    animation: grid-progress-heat-in 0.48s cubic-bezier(0.22, 0.7, 0.18, 1) backwards;
+    transform-origin: center;
+  }
+
+  .grid-progress-xp-bar {
+    transform-origin: left center;
+    animation: grid-progress-xp-fill 0.9s cubic-bezier(0.22, 0.7, 0.18, 1) 80ms backwards;
+  }
+
   .hub-readiness-enter {
     animation: hub-readiness-enter 0.58s cubic-bezier(0.22, 0.7, 0.18, 1) both;
   }
@@ -1869,7 +1913,13 @@ html {
     .hub-detail-sequence > *,
     .journal-feed-enter > article,
     .journal-compose-enter > *,
-    .journal-photo-reveal {
+    .journal-photo-reveal,
+    .grid-progress-card,
+    .grid-progress-chip,
+    .grid-progress-track,
+    .grid-progress-badge,
+    .grid-progress-heat,
+    .grid-progress-xp-bar {
       opacity: 1;
       clip-path: none;
       transform: none;

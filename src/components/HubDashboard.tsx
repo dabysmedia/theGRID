@@ -184,6 +184,7 @@ export function HubDashboard() {
   const [loading, setLoading] = useState(true)
   const [injectionIntervalDays, setInjectionIntervalDays] = useState(7)
   const [hubExpanded, setHubExpanded] = useState<HubExpandedPanel | null>(null)
+  const [progressOpen, setProgressOpen] = useState(false)
 
   useEffect(() => {
     if (!user?.id) return
@@ -227,15 +228,16 @@ export function HubDashboard() {
   useEffect(() => {
     function onResetOverview() {
       setHubExpanded(null)
+      setProgressOpen(false)
     }
     window.addEventListener(HUB_RESET_OVERVIEW_EVENT, onResetOverview)
     return () => window.removeEventListener(HUB_RESET_OVERVIEW_EVENT, onResetOverview)
   }, [])
 
   useEffect(() => {
-    setHubPanelOpen(hubExpanded != null)
+    setHubPanelOpen(hubExpanded != null || progressOpen)
     return () => setHubPanelOpen(false)
-  }, [hubExpanded])
+  }, [hubExpanded, progressOpen])
 
   useEffect(() => {
     let cancelled = false
@@ -337,7 +339,12 @@ export function HubDashboard() {
           loading={loading}
           vacationBlocksCalories={vacationBlocksCalLog}
           expanded={hubExpanded}
-          onExpandedChange={setHubExpanded}
+          onExpandedChange={(panel) => {
+            setHubExpanded(panel)
+            if (panel != null) setProgressOpen(false)
+          }}
+          progressOpen={progressOpen}
+          onProgressOpenChange={setProgressOpen}
           fillViewport
           protocolEnabled={protocolEnabled}
           peptideSummary={{
