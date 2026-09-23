@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronDown,
   Trash2,
+  Check,
   ChevronRight,
   ImagePlus,
   Minus,
@@ -51,6 +52,7 @@ import {
   MEAL_SLOT_RANGE_LABEL,
   resolveMealSlot,
 } from "@/lib/calories/meal-slots"
+import { SAVED_FOOD_CATEGORIES } from "@/lib/calories/saved-food-category"
 
 export type LogFoodDialogProps = UseLogFoodDialogOptions
 type DialogState = ReturnType<typeof useLogFoodDialog>
@@ -687,6 +689,30 @@ function SavedFoodEditor({ state }: { state: DialogState }) {
           <span>{label}</span><Input aria-label={label} value={value} type={type} min={type === "number" ? 0 : undefined} step="any" required={index < 2} onChange={(event) => setValue(event.target.value)} className="h-12 rounded-xl" />
         </label>)}
       </div>
+      <div>
+        <p className="text-xs text-muted-foreground">Category</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {SAVED_FOOD_CATEGORIES.map((category) => {
+            const active = state.editSavedCategory === category.id
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => state.setEditSavedCategory(category.id)}
+                aria-pressed={active}
+                className={cn(
+                  "h-8 rounded-full border px-2.5 text-[11px] font-medium transition-colors",
+                  active
+                    ? "border-foreground/30 bg-white/[0.08] text-foreground"
+                    : "border-white/[0.08] text-muted-foreground/70 hover:border-white/[0.16] hover:text-foreground",
+                )}
+              >
+                {category.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
       {state.editSavedError ? <p role="alert" className="text-sm text-destructive">{state.editSavedError}</p> : null}
       <Button type="submit" variant="glass" className="h-12 w-full" disabled={state.savingSavedMealEdit || state.pendingSavedDeleteBusy}>{state.savingSavedMealEdit ? "Saving…" : "Save food"}</Button>
       {state.pendingSavedDelete ? <div className="space-y-3 rounded-xl border border-destructive/25 bg-destructive/5 p-4">
@@ -951,22 +977,35 @@ function ManualEntryPanel({
       </div>
 
       {!state.editingEntry ? (
-        <div className="flex gap-2">
-          {state.showSavePrompt && state.description ? (
+        <div className="space-y-2">
+          <p className="text-[11px] leading-relaxed text-muted-foreground/60">
+            Add to meal logs this once. Save food keeps it in your library.
+          </p>
+          <div className="flex gap-2">
             <Button
               type="button"
               variant="outline"
               className="h-12"
+              disabled={state.quickSaveBusy || state.quickFoodSaved}
               onClick={() => void state.handleSaveCurrentAsFrequent()}
             >
-              <Save className="size-4" />
-              Save food
+              {state.quickFoodSaved ? (
+                <Check className="size-4" />
+              ) : (
+                <Save className="size-4" />
+              )}
+              {state.quickSaveBusy ? "Saving…" : state.quickFoodSaved ? "Saved" : "Save food"}
             </Button>
+            <Button type="submit" variant="glass" className="h-12 flex-1" disabled={disabled}>
+              <Plus className="size-4" />
+              Add to meal
+            </Button>
+          </div>
+          {state.quickSaveError ? (
+            <p className="text-xs text-destructive" role="alert">
+              {state.quickSaveError}
+            </p>
           ) : null}
-          <Button type="submit" variant="glass" className="h-12 flex-1" disabled={disabled}>
-            <Plus className="size-4" />
-            Add to meal
-          </Button>
         </div>
       ) : null}
     </form>

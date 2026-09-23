@@ -27,6 +27,56 @@ function includesAny(value: string, terms: string[]): boolean {
   return terms.some((term) => value.includes(term))
 }
 
+function normalizeCategoryQuery(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+}
+
+/**
+ * A one-word query that names a library category ("shakes", "bars", "snacks").
+ * Longer queries stay on name search so "protein bar" still finds that food.
+ */
+export function categoryFromSearchQuery(query: string): SavedFoodCategory | null {
+  const normalized = normalizeCategoryQuery(query)
+  if (!normalized || normalized.includes(" ")) return null
+  for (const category of SAVED_FOOD_CATEGORIES) {
+    if (normalized === category.id || normalized === `${category.id}s`) return category.id
+    const labels = [category.label, category.singular].map(normalizeCategoryQuery)
+    if (
+      labels.some(
+        (label) =>
+          label === normalized ||
+          (normalized.length >= category.id.length && label.startsWith(normalized)),
+      )
+    ) {
+      return category.id
+    }
+  }
+  return null
+}
+
+export function groupBySavedFoodCategory<T>(
+  items: readonly T[],
+  categoryOf: (item: T) => SavedFoodCategory,
+): Array<{ id: SavedFoodCategory; label: string; items: T[] }> {
+  const buckets = new Map<SavedFoodCategory, T[]>()
+  for (const item of items) {
+    const id = categoryOf(item)
+    const bucket = buckets.get(id)
+    if (bucket) bucket.push(item)
+    else buckets.set(id, [item])
+  }
+  return SAVED_FOOD_CATEGORIES.flatMap((category) => {
+    const grouped = buckets.get(category.id)
+    return grouped && grouped.length > 0
+      ? [{ id: category.id, label: category.label, items: grouped }]
+      : []
+  })
+}
+
 export function inferSavedFoodCategory(input: {
   name: string
   mealType?: string | null
@@ -89,7 +139,25 @@ export function inferSavedFoodCategory(input: {
     return "shake"
   }
 
-  if (/\b(protein|granola|cereal|energy|snack)?\s*bar\b/.test(name)) return "bar"
+  if (/\b(protein|granola|cereal|energy|snack)?\s*bars?\b/.test(name)) return "bar"
+
+  if (
+    includesAny(name, [
+      "bowl",
+      "plate",
+      "sandwich",
+      "burger",
+      "pizza",
+      "burrito",
+      "wrap",
+      "salad",
+      "casserole",
+      "stir fry",
+      "stir-fry",
+    ])
+  ) {
+    return "meal"
+  }
 
   if (
     includesAny(name, [
@@ -139,6 +207,7 @@ export function inferSavedFoodCategory(input: {
   }
 
   if (
+    /\beggs?\b/.test(name) ||
     includesAny(name, [
       "olive oil",
       "cooking oil",
@@ -153,12 +222,32 @@ export function inferSavedFoodCategory(input: {
       "beans",
       "cheese",
       "yogurt",
+      "yoghurt",
       "oats",
+      "oatmeal",
       "banana",
       "apple",
       "avocado",
       "vegetable",
       "fruit",
+      "chicken",
+      "beef",
+      "turkey",
+      "steak",
+      "pork",
+      "salmon",
+      "tuna",
+      "shrimp",
+      "fish",
+      "milk",
+      "potato",
+      "broccoli",
+      "spinach",
+      "quinoa",
+      "pasta",
+      "protein powder",
+      "whey",
+      "casein",
     ])
   ) {
     return "ingredient"

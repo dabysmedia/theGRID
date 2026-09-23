@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { inferSavedFoodCategory } from "@/lib/calories/saved-food-category"
+import { inferSavedFoodCategory, categoryFromSearchQuery } from "@/lib/calories/saved-food-category"
 
 describe("inferSavedFoodCategory", () => {
   it("recognizes explicit food formats", () => {
@@ -18,5 +18,20 @@ describe("inferSavedFoodCategory", () => {
     expect(inferSavedFoodCategory({ name: "Picadillo", mealType: "lunch" })).toBe("meal")
     expect(inferSavedFoodCategory({ name: "Homemade plate", calories: 650 })).toBe("meal")
     expect(inferSavedFoodCategory({ name: "Mystery bite", mealType: "snack" })).toBe("snack")
+  })
+
+  it("sorts plain ingredients and prepared plates apart", () => {
+    expect(inferSavedFoodCategory({ name: "Chicken breast, cooked", calories: 187 })).toBe(
+      "ingredient",
+    )
+    expect(inferSavedFoodCategory({ name: "Protein powder", calories: 120 })).toBe("ingredient")
+    expect(inferSavedFoodCategory({ name: "Chicken rice bowl", calories: 640 })).toBe("meal")
+  })
+
+  it("treats a one-word category name as a category search", () => {
+    expect(categoryFromSearchQuery("shakes")).toBe("shake")
+    expect(categoryFromSearchQuery("bars")).toBe("bar")
+    expect(categoryFromSearchQuery("protein bar")).toBeNull()
+    expect(categoryFromSearchQuery("bare")).toBeNull()
   })
 })

@@ -32,7 +32,10 @@ import {
   resolveMealSlot,
   type MealSlot,
 } from "@/lib/calories/meal-slots"
-import type { SavedFoodCategory } from "@/lib/calories/saved-food-category"
+import {
+  inferSavedFoodCategory,
+  type SavedFoodCategory,
+} from "@/lib/calories/saved-food-category"
 import type { FrequentFoodSuggestion } from "@/lib/calories/frequent-foods"
 import type {
   CatalogFoodResult,
@@ -118,7 +121,10 @@ export function useLogFoodDialog({
   const [editSavedCategory, setEditSavedCategory] = useState<SavedFoodCategory>("meal")
   const [editSavedError, setEditSavedError] = useState<string | null>(null)
   const [savingSavedMealEdit, setSavingSavedMealEdit] = useState(false)
-  const [showSavePrompt, setShowSavePrompt] = useState(false)
+  const [quickSavedMealId, setQuickSavedMealId] = useState<string | null>(null)
+  const [quickSavedSignature, setQuickSavedSignature] = useState<string | null>(null)
+  const [quickSaveBusy, setQuickSaveBusy] = useState(false)
+  const [quickSaveError, setQuickSaveError] = useState<string | null>(null)
   const [saveMealError, setSaveMealError] = useState<string | null>(null)
   const [logFoodMode, setLogFoodMode] = useState<"saved" | "search" | "estimate">("saved")
   const [logFoodPhotoOpen, setLogFoodPhotoOpen] = useState(false)
@@ -228,7 +234,9 @@ export function useLogFoodDialog({
     setCarbs(editingEntry.carbs != null ? String(editingEntry.carbs) : "")
     setFat(editingEntry.fat != null ? String(editingEntry.fat) : "")
     setCurrentImageUrl(editingEntry.imageUrl)
-    setShowSavePrompt(false)
+    setQuickSavedMealId(null)
+    setQuickSavedSignature(null)
+    setQuickSaveError(null)
     setLogFoodMode("estimate")
     setShowEstimateMacros(
       editingEntry.protein != null || editingEntry.carbs != null || editingEntry.fat != null
@@ -254,6 +262,7 @@ export function useLogFoodDialog({
         portionUnit: isFoodMeasurementUnit(entry.portionUnit)
           ? entry.portionUnit
           : "serving",
+        oneOff: entry.oneOff === true,
       })),
     )
     setPostMealError(null)
@@ -331,6 +340,7 @@ export function useLogFoodDialog({
       recipeId: fields.recipeId,
       portionAmount: fields.portionAmount,
       portionUnit: fields.portionUnit,
+      oneOff: fields.oneOff,
     }
   }
 
@@ -406,7 +416,9 @@ export function useLogFoodDialog({
       setCarbs(prefill.carbs != null ? String(prefill.carbs) : "")
       setFat(prefill.fat != null ? String(prefill.fat) : "")
       setCurrentImageUrl(prefill.imageUrl)
-      setShowSavePrompt(true)
+      setQuickSavedMealId(null)
+      setQuickSavedSignature(null)
+      setQuickSaveError(null)
       setShowEstimateMacros(
         prefill.protein != null || prefill.carbs != null || prefill.fat != null
       )
@@ -422,6 +434,16 @@ export function useLogFoodDialog({
     setCalories(String(Math.round(base + n)))
   }
 
+  const currentQuickSignature = [
+    description.trim().toLowerCase(),
+    calories.trim(),
+    protein.trim(),
+    carbs.trim(),
+    fat.trim(),
+  ].join("|")
+  const quickFoodSaved =
+    quickSavedMealId != null && quickSavedSignature === currentQuickSignature
+
   function resetCurrentItemFields() {
     setDescription("")
     setCalories("")
@@ -429,7 +451,9 @@ export function useLogFoodDialog({
     setCarbs("")
     setFat("")
     setCurrentImageUrl(null)
-    setShowSavePrompt(false)
+    setQuickSavedMealId(null)
+    setQuickSavedSignature(null)
+    setQuickSaveError(null)
   }
 
   function addCurrentItemToMeal() {
@@ -451,8 +475,15 @@ export function useLogFoodDialog({
         unitCarbs: Number.isFinite(c) ? c : null,
         unitFat: Number.isFinite(f) ? f : null,
         imageUrl: currentImageUrl,
+        savedMealId: quickFoodSaved ? quickSavedMealId ?? undefined : undefined,
+        oneOff: !quickFoodSaved,
       })
     )
+    if (quickFoodSaved && quickSavedMealId) {
+      void apiFetch(`/api/saved-meals?id=${quickSavedMealId}`, { method: "PATCH" })
+        .then(() => fetchSavedMeals())
+        .catch(() => {})
+    }
     resetCurrentItemFields()
     setShowEstimateMacros(false)
     setLogFoodMode("saved")
@@ -699,6 +730,7 @@ export function useLogFoodDialog({
               ? Math.round(item.portionAmount * item.quantity * 100) / 100
               : item.quantity,
           portionUnit: item.portionUnit ?? "serving",
+          oneOff: item.oneOff === true,
         }
       })
       const response = await apiFetch("/api/calories", {
@@ -886,25 +918,86 @@ export function useLogFoodDialog({
   }
 
   async function handleSaveCurrentAsFrequent() {
-    if (!description.trim() || !calories.trim()) return
+    if (quickSaveBusy) return
+    const name = description.trim()
+    const cal = Math.round(parseFloat(calories))
+    if (!name || !Number.isFinite(cal) || cal <= 0) {
+      setQuickSaveError("Add a name and calories before saving.")
+      return
+    }
 
-    const tags = [LEGACY_MEAL_TYPE_FOR_SLOT[mealSlot ?? currentMealSlot()]]
-    await apiFetch("/api/saved-meals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: description.trim(),
+    setQuickSaveBusy(true)
+    setQuickSaveError(null)
+    try {
+      const tags = [LEGACY_MEAL_TYPE_FOR_SLOT[mealSlot ?? currentMealSlot()]]
+      const foodCategory = inferSavedFoodCategory({
+        name,
+        mealType: tags.join(","),
+        calories: cal,
+      })
+      const payload = {
+        name,
         mealTags: tags,
-        calories,
+        foodCategory,
+        calories: cal,
         protein: protein || null,
         carbs: carbs || null,
         fat: fat || null,
         imageUrl: currentImageUrl,
-      }),
-    })
+      }
 
-    fetchSavedMeals()
-    setShowSavePrompt(false)
+      if (quickSavedMealId) {
+        const res = await apiFetch(`/api/saved-meals?id=${quickSavedMealId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) {
+          setQuickSaveError("Could not update this saved food.")
+          return
+        }
+        const saved = (await res.json()) as SavedMeal
+        setSavedMeals((current) =>
+          current.map((meal) => (meal.id === saved.id ? { ...meal, ...saved } : meal)),
+        )
+        setQuickSavedSignature(currentQuickSignature)
+        return
+      }
+
+      const existing = savedMeals.find(
+        (meal) => meal.name.toLowerCase() === name.toLowerCase() && meal.calories === cal,
+      )
+      if (existing) {
+        setQuickSavedMealId(existing.id)
+        setQuickSavedSignature(currentQuickSignature)
+        return
+      }
+
+      const res = await apiFetch("/api/saved-meals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        let message = "Could not save food."
+        try {
+          const err = await res.json()
+          if (err && typeof err.error === "string") message = err.error
+        } catch {
+          /* ignore */
+        }
+        setQuickSaveError(message)
+        return
+      }
+      const saved = (await res.json()) as SavedMeal
+      setSavedMeals((current) => [saved, ...current.filter((meal) => meal.id !== saved.id)])
+      setQuickSavedMealId(saved.id)
+      setQuickSavedSignature(currentQuickSignature)
+    } catch {
+      setQuickSaveError("Could not save food. Check your connection and try again.")
+    } finally {
+      setQuickSaveBusy(false)
+    }
   }
 
   async function handleSaveSearchFood(food: CatalogFoodResult): Promise<boolean> {
@@ -1033,7 +1126,9 @@ export function useLogFoodDialog({
     setEditSavedCategory,
     editSavedError,
     savingSavedMealEdit,
-    showSavePrompt,
+    quickFoodSaved,
+    quickSaveBusy,
+    quickSaveError,
     saveMealError,
     setSaveMealError: setSaveMealError,
     logFoodMode,

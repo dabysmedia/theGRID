@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
           imageUrl: true,
           portionAmount: true,
           portionUnit: true,
+          oneOff: true,
           createdAt: true,
         },
         orderBy: { createdAt: "desc" },

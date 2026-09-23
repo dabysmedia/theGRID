@@ -69,6 +69,13 @@ describe("frequentFoodsForSlot", () => {
     })
   })
 
+  it("leaves one-time quick logs out of picks, recent, and the searchable library", () => {
+    const quick = [{ ...history[5], oneOff: true }]
+    expect(frequentFoodsForSlot(quick, "evening", 16, now)).toEqual([])
+    expect(recentFoods(quick, "evening", 12).map((food) => food.name)).toEqual([])
+    expect(loggedFoodLibrary(quick, "evening").map((food) => food.name)).toEqual([])
+  })
+
   it("rejects an unsupported block", () => {
     // @ts-expect-error — guarding the runtime path callers can still hit
     expect(frequentFoodsForSlot(history, "brunch", 16, now)).toEqual([])

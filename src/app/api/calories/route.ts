@@ -105,6 +105,7 @@ async function calorieEntryData(body: Record<string, unknown>, userId: string) {
     portionUnit: isFoodMeasurementUnit(body.portionUnit)
       ? body.portionUnit
       : null,
+    ...(typeof body.oneOff === "boolean" ? { oneOff: body.oneOff } : {}),
     userId,
   }
 }

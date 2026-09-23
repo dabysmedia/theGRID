@@ -114,6 +114,20 @@ describe("UnifiedFoodSearch", () => {
     expect(html).toContain('aria-label="Add Overnight Oats"')
   })
 
+  it("groups a mixed library under category headings", () => {
+    const html = render({
+      mode: "library",
+      savedMeals: [
+        savedMeal({ id: "s1", name: "Overnight Oats", foodCategory: "meal" }),
+        savedMeal({ id: "s2", name: "Core Power", foodCategory: "shake", calories: 170 }),
+      ],
+    })
+    expect(html).toContain("Meals &amp; plates")
+    expect(html).toContain("Shakes")
+    expect(html).toContain("Overnight Oats")
+    expect(html).toContain("Core Power")
+  })
+
   it("explains an empty library differently from an empty search", () => {
     expect(render({ mode: "library" })).toContain("Nothing saved yet")
     expect(render({ query: "zzzz" })).toContain("No foods found")

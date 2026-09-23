@@ -19,6 +19,8 @@ export interface FrequentFoodEntry {
   portionAmount: number | null
   portionUnit: string | null
   createdAt: Date
+  /** Quick-add rows the user chose not to keep. They stay out of suggestions. */
+  oneOff?: boolean
 }
 
 export type MealFoodSuggestionKind = "frequent" | "recent"
@@ -50,6 +52,11 @@ interface GroupedFood {
 
 function groupingKey(value: string): string {
   return normalizeFoodSearchText(value)
+}
+
+/** One-time quick logs count for the day and do not become library foods. */
+function reusableEntries(entries: readonly FrequentFoodEntry[]): FrequentFoodEntry[] {
+  return entries.filter((entry) => entry.oneOff !== true)
 }
 
 function recencyBoost(lastLoggedAt: number, now: number): number {
@@ -102,7 +109,7 @@ export function frequentFoodsForSlot(
   if (!isMealSlot(slot) || limit <= 0) return []
 
   const grouped = new Map<string, GroupedFood>()
-  for (const entry of entries) {
+  for (const entry of reusableEntries(entries)) {
     const name = entry.description?.trim().replace(/\s+/g, " ") ?? ""
     if (!name) continue
     const key = groupingKey(name)
@@ -177,7 +184,7 @@ function groupByFood(
   timeZone?: string | null,
 ): GroupedFood[] {
   const grouped = new Map<string, GroupedFood>()
-  for (const entry of entries) {
+  for (const entry of reusableEntries(entries)) {
     const name = entry.description?.trim().replace(/\s+/g, " ") ?? ""
     if (!name) continue
     const key = groupingKey(name)

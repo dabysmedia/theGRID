@@ -17,6 +17,8 @@ export interface CalorieEntry {
   imageUrl: string | null
   portionAmount: number | null
   portionUnit: string | null
+  /** Typed in Quick add and not saved to the library. */
+  oneOff?: boolean
 }
 
 export interface SavedMeal {
@@ -80,6 +82,8 @@ export interface DraftMealItem {
   recipeId?: string
   portionAmount?: number
   portionUnit?: import("@/lib/calories/measurements").FoodMeasurementUnit
+  /** True when this row should not become a reusable library food. */
+  oneOff?: boolean
 }
 
 export function draftMealItemTotals(item: DraftMealItem) {

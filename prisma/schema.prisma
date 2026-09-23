@@ -149,6 +149,8 @@ model CalorieEntry {
   /// Human-readable portion used when logging (for example 125 g or 4 oz).
   portionAmount Float?
   portionUnit   String?
+  /// Quick-add rows the user did not save. They still count for the day, and stay out of the food library.
+  oneOff        Boolean  @default(false)
   userId        String?
   user          User?    @relation(fields: [userId], references: [id])
   createdAt     DateTime @default(now())

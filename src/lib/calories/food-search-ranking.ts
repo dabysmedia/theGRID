@@ -59,6 +59,9 @@ const QUERY_ABBREVIATIONS: Record<string, string> = {
 const TOKEN_SYNONYMS: Record<string, string[]> = {
   yogurt: ["yoghurt"],
   yoghurt: ["yogurt"],
+  oats: ["oatmeal"],
+  oatmeal: ["oats"],
+  oat: ["oats", "oatmeal"],
   burger: ["hamburger"],
   hamburger: ["burger"],
   fries: ["fry", "french"],
@@ -308,7 +311,23 @@ export function rankAndMergeFoodSearchResults(
           Number(entry.food.protein != null) +
           Number(entry.food.carbs != null) +
           Number(entry.food.fat != null)
-        return entry.relevance + sourceBoost + nutritionBoost + Number(Boolean(entry.food.image_url))
+        const stapleBoost =
+          entry.food.source === "catalog" &&
+          (entry.food.food_type === "Staple food" || entry.food.brand_name === "Generic")
+            ? 22
+            : 0
+        const extraNameTokens = Math.max(
+          0,
+          searchTokens(entry.food.food_name).length - expandQueryTokens(query).length,
+        )
+        return (
+          entry.relevance +
+          sourceBoost +
+          stapleBoost +
+          nutritionBoost +
+          Number(Boolean(entry.food.image_url)) -
+          extraNameTokens * 8
+        )
       }
       return quality(right) - quality(left) || left.index - right.index
     })

@@ -44,6 +44,12 @@ import type {
   CatalogFoodResult,
   PortionSelection,
 } from "@/components/calories/food-search-types"
+import {
+  categoryFromSearchQuery,
+  groupBySavedFoodCategory,
+  inferSavedFoodCategory,
+  type SavedFoodCategory,
+} from "@/lib/calories/saved-food-category"
 
 export type { CatalogFoodResult, PortionSelection } from "@/components/calories/food-search-types"
 
@@ -68,6 +74,13 @@ const MACRO_COLOR = {
 
 function round1(value: number | null | undefined): number | null {
   return value == null ? null : Math.round(value * 10) / 10
+}
+
+function catalogCategoryOf(food: CatalogFoodResult): SavedFoodCategory {
+  return inferSavedFoodCategory({
+    name: [food.brand_name, food.food_name].filter(Boolean).join(" "),
+    calories: food.calories,
+  })
 }
 
 export function UnifiedFoodSearch({
@@ -132,6 +145,8 @@ export function UnifiedFoodSearch({
   const [suggestionBusy, setSuggestionBusy] = useState(false)
   const [suggestionError, setSuggestionError] = useState<string | null>(null)
   const [addedName, setAddedName] = useState<string | null>(null)
+  const [libraryCategory, setLibraryCategory] = useState<"all" | SavedFoodCategory>("all")
+  const [catalogCategory, setCatalogCategory] = useState<"all" | SavedFoodCategory>("all")
 
   useEffect(() => { onPortionChange?.(selected != null) }, [selected, onPortionChange])
   useEffect(() => () => onPortionChange?.(false), [onPortionChange])
@@ -145,6 +160,9 @@ export function UnifiedFoodSearch({
     const timer = window.setTimeout(() => setAddedName(null), 2200)
     return () => window.clearTimeout(timer)
   }, [addedName])
+  useEffect(() => {
+    setCatalogCategory("all")
+  }, [query])
 
   async function changeSuggestion(name: string, hidden: boolean) {
     if (suggestionBusy) return
@@ -246,12 +264,19 @@ export function UnifiedFoodSearch({
 
   const localQuery = query.trim()
   const matchingSaved = useMemo(() => {
+    const categoryQuery = categoryFromSearchQuery(localQuery)
     if (!localQuery) {
       return [...savedMeals].sort(
         (left, right) => right.useCount - left.useCount || left.name.localeCompare(right.name),
       )
     }
-    return rankByFoodSearch(savedMeals, localQuery, (food) => ({ name: food.name }), 20)
+    const ranked = rankByFoodSearch(savedMeals, localQuery, (food) => ({ name: food.name }), 20)
+    if (!categoryQuery) return ranked
+    const seen = new Set(ranked.map((food) => food.id))
+    const categorized = savedMeals.filter(
+      (food) => food.foodCategory === categoryQuery && !seen.has(food.id),
+    )
+    return [...ranked, ...categorized].slice(0, 24)
   }, [localQuery, savedMeals])
   const matchingRecipes = useMemo(() => {
     if (!localQuery) return recipes
@@ -278,11 +303,15 @@ export function UnifiedFoodSearch({
         localQuery,
       )
 
+    const categoryQuery = categoryFromSearchQuery(localQuery)
     const hits: LocalHit[] = []
     for (const food of savedMeals) {
       const relevance = score(food.name)
+      const categoryHit = categoryQuery != null && food.foodCategory === categoryQuery
       // Saved foods are deliberate picks, so they edge out a bare log.
-      if (relevance != null) hits.push({ kind: "saved", food, score: relevance + 25 })
+      if (relevance != null || categoryHit) {
+        hits.push({ kind: "saved", food, score: (relevance ?? 48) + 25 + (categoryHit ? 12 : 0) })
+      }
     }
     for (const food of library) {
       const relevance = score(food.name)
@@ -539,6 +568,21 @@ export function UnifiedFoodSearch({
 
   const restaurantCatalog = catalog.filter((food) => food.source === "restaurant")
   const generalCatalog = catalog.filter((food) => food.source !== "restaurant")
+  const catalogCategoryOptions = groupBySavedFoodCategory(generalCatalog, catalogCategoryOf)
+  const visibleCatalog =
+    catalogCategory === "all"
+      ? generalCatalog
+      : generalCatalog.filter((food) => catalogCategoryOf(food) === catalogCategory)
+  const catalogGroups = groupBySavedFoodCategory(visibleCatalog, catalogCategoryOf)
+  const savedCategoryOptions = groupBySavedFoodCategory(
+    matchingSaved,
+    (food) => food.foodCategory,
+  )
+  const visibleSaved =
+    libraryCategory === "all"
+      ? matchingSaved
+      : matchingSaved.filter((food) => food.foodCategory === libraryCategory)
+  const savedGroups = groupBySavedFoodCategory(visibleSaved, (food) => food.foodCategory)
   const favorites = !localQuery ? matchingSaved.slice(0, 8) : []
   const showLibrary = mode === "library"
   const showSearchShelves = mode === "search"
@@ -567,21 +611,41 @@ export function UnifiedFoodSearch({
         {showLibrary ? (
           <>
             {matchingSaved.length > 0 ? (
-              <ResultSection icon={Bookmark} title="Saved foods" caption={`${matchingSaved.length}`}>
-                {matchingSaved.map((food) => (
-                  <FoodRow
-                    key={food.id}
-                    name={food.name}
-                    calories={food.calories}
-                    protein={food.protein}
-                    fat={food.fat}
-                    carbs={food.carbs}
-                    portion={`${food.servingAmount} ${food.servingUnit}`}
-                    image={food.imageUrl}
-                    onOpen={() => openPortion({ kind: "saved", food })}
-                    onAdd={() => addNow({ kind: "saved", food })}
-                    accessory={onEditSaved ? <button type="button" onClick={() => onEditSaved(food)} aria-label={`Edit ${food.name}`} className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground/70 hover:bg-white/[0.06] hover:text-foreground"><PencilLine className="size-4" /></button> : null}
+              <ResultSection icon={Bookmark} title="Saved foods" caption={`${visibleSaved.length}`}>
+                {savedCategoryOptions.length > 1 ? (
+                  <CategoryChips
+                    value={libraryCategory}
+                    options={savedCategoryOptions.map((group) => ({
+                      id: group.id,
+                      label: group.label,
+                      count: group.items.length,
+                    }))}
+                    onChange={setLibraryCategory}
                   />
+                ) : null}
+                {savedGroups.map((group) => (
+                  <div key={group.id}>
+                    {libraryCategory === "all" && savedCategoryOptions.length > 1 ? (
+                      <p className="px-1 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/50">
+                        {group.label}
+                      </p>
+                    ) : null}
+                    {group.items.map((food) => (
+                      <FoodRow
+                        key={food.id}
+                        name={food.name}
+                        calories={food.calories}
+                        protein={food.protein}
+                        fat={food.fat}
+                        carbs={food.carbs}
+                        portion={`${food.servingAmount} ${food.servingUnit}`}
+                        image={food.imageUrl}
+                        onOpen={() => openPortion({ kind: "saved", food })}
+                        onAdd={() => addNow({ kind: "saved", food })}
+                        accessory={onEditSaved ? <button type="button" onClick={() => onEditSaved(food)} aria-label={`Edit ${food.name}`} className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground/70 hover:bg-white/[0.06] hover:text-foreground"><PencilLine className="size-4" /></button> : null}
+                      />
+                    ))}
+                  </div>
                 ))}
               </ResultSection>
             ) : null}
@@ -687,7 +751,7 @@ export function UnifiedFoodSearch({
           <ResultSection
             icon={Utensils}
             title="Your foods"
-            caption={`${yourFoods.length} from your history`}
+            caption={`${yourFoods.length} saved or logged`}
           >
             {yourFoods.map((hit) =>
               hit.kind === "saved" ? (
@@ -807,7 +871,7 @@ export function UnifiedFoodSearch({
           <ResultSection
             icon={Search}
             title="Food database"
-            caption={loading ? "Searching…" : `${generalCatalog.length} matches`}
+            caption={loading ? "Searching…" : `${visibleCatalog.length} matches`}
           >
             {loading && catalog.length === 0
               ? [0, 1, 2].map((item) => (
@@ -824,29 +888,49 @@ export function UnifiedFoodSearch({
                 ))
               : null}
             {error ? <p className="py-3 text-[11px] text-destructive">{error}</p> : null}
-            {generalCatalog.map((food) => (
-              <FoodRow
-                key={food.food_id}
-                name={food.food_name}
-                calories={food.calories}
-                protein={food.protein}
-                fat={food.fat}
-                carbs={food.carbs}
-                portion={[food.brand_name, food.serving_description].filter(Boolean).join(" · ")}
-                image={food.image_url}
-                onOpen={() => openPortion({ kind: "catalog", food })}
-                onAdd={() => addNow({ kind: "catalog", food })}
-                accessory={
-                  onSaveCatalog ? (
-                    <SaveCatalogButton
-                      food={food}
-                      saving={savingId === food.food_id}
-                      saved={savedIds.has(food.food_id)}
-                      onSave={saveCatalogFood}
-                    />
-                  ) : null
-                }
+            {catalogCategoryOptions.length > 1 ? (
+              <CategoryChips
+                value={catalogCategory}
+                options={catalogCategoryOptions.map((group) => ({
+                  id: group.id,
+                  label: group.label,
+                  count: group.items.length,
+                }))}
+                onChange={setCatalogCategory}
               />
+            ) : null}
+            {catalogGroups.map((group) => (
+              <div key={group.id}>
+                {catalogCategory === "all" && catalogCategoryOptions.length > 1 ? (
+                  <p className="px-1 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/50">
+                    {group.label}
+                  </p>
+                ) : null}
+                {group.items.map((food) => (
+                  <FoodRow
+                    key={food.food_id}
+                    name={food.food_name}
+                    calories={food.calories}
+                    protein={food.protein}
+                    fat={food.fat}
+                    carbs={food.carbs}
+                    portion={[food.brand_name, food.serving_description].filter(Boolean).join(" · ")}
+                    image={food.image_url}
+                    onOpen={() => openPortion({ kind: "catalog", food })}
+                    onAdd={() => addNow({ kind: "catalog", food })}
+                    accessory={
+                      onSaveCatalog ? (
+                        <SaveCatalogButton
+                          food={food}
+                          saving={savingId === food.food_id}
+                          saved={savedIds.has(food.food_id)}
+                          onSave={saveCatalogFood}
+                        />
+                      ) : null
+                    }
+                  />
+                ))}
+              </div>
             ))}
           </ResultSection>
         ) : null}
@@ -867,8 +951,8 @@ export function UnifiedFoodSearch({
               {localQuery
                 ? "Try a shorter name or a brand, or scan the barcode. Spelling does not need to be perfect."
                 : showLibrary
-                  ? "Save a food from search and it will show up here."
-                  : "Search below to add your first food — what you log starts showing up here."}
+                  ? "Save a food from Quick add or search and it will show up here."
+                  : "Search for a food, or save one from Quick add. Saved foods and repeats show up here."}
             </p>
           </div>
         ) : null}
@@ -881,6 +965,60 @@ function portionLabel(food: FrequentFoodSuggestion): string {
   const amount = food.portionAmount || 1
   const rounded = Math.round(amount * 100) / 100
   return `${rounded} ${food.portionUnit}`
+}
+
+function CategoryChips({
+  value,
+  options,
+  onChange,
+}: {
+  value: "all" | SavedFoodCategory
+  options: Array<{ id: SavedFoodCategory; label: string; count: number }>
+  onChange: (next: "all" | SavedFoodCategory) => void
+}) {
+  return (
+    <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <CategoryChip active={value === "all"} onClick={() => onChange("all")}>
+        All
+      </CategoryChip>
+      {options.map((option) => (
+        <CategoryChip
+          key={option.id}
+          active={value === option.id}
+          onClick={() => onChange(option.id)}
+        >
+          {option.label}
+          <span className="ml-1 tabular-nums text-muted-foreground/50">{option.count}</span>
+        </CategoryChip>
+      ))}
+    </div>
+  )
+}
+
+function CategoryChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex h-8 shrink-0 items-center rounded-full border px-2.5 text-[11px] font-medium transition-colors",
+        active
+          ? "border-foreground/30 bg-white/[0.08] text-foreground"
+          : "border-white/[0.08] text-muted-foreground/70 hover:border-white/[0.16] hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  )
 }
 
 function SectionHeading({

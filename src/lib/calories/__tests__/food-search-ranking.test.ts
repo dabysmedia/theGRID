@@ -75,6 +75,25 @@ describe("food search ranking", () => {
     )
     expect(ranked.map((item) => item.name)).toEqual(["Oatmeal"])
   })
+
+  it("matches oats to oatmeal and prefers a plain staple over a long product name", () => {
+    expect(foodSearchRelevance(food("Oatmeal, cooked", "Generic"), "oats")).not.toBeNull()
+    const ranked = rankAndMergeFoodSearchResults("banana", [
+      [food("Banana bread protein cookie crunch bar", "Kind")],
+      [
+        {
+          ...food("Banana", "Generic"),
+          food_id: "staple:banana",
+          food_type: "Staple food",
+          source: "catalog",
+          protein: 1,
+          carbs: 27,
+          fat: 0.4,
+        },
+      ],
+    ])
+    expect(ranked[0]?.food_name).toBe("Banana")
+  })
 })
 
 describe("prepared food catalog", () => {
