@@ -104,6 +104,7 @@ export function ProgressiveOverloadCoach({
   trainingStyle,
   setCount = exercise.sets.length,
   className,
+  inlineEffort = false,
   onApplyToNextSet,
   onAddOptionalSet,
   onSetEffort,
@@ -114,6 +115,8 @@ export function ProgressiveOverloadCoach({
   trainingStyle: TrainingStyle
   setCount?: number
   className?: string
+  /** The host rates effort inside the set row, so never interrupt with the dialog. */
+  inlineEffort?: boolean
   onApplyToNextSet: (weight: number | null, reps: number | null, onlyEmpty?: boolean) => void
   onAddOptionalSet: (weight: number | null, reps: number | null) => void
   onSetEffort: (setId: string, patch: SetEffortPatch) => void
@@ -151,6 +154,7 @@ export function ProgressiveOverloadCoach({
 
   /** Most recently completed hard set still awaiting an effort rating. */
   const pendingEffortSet = useMemo<PoSet | null>(() => {
+    if (inlineEffort) return null
     const candidates = exercise.sets.filter(
       (s) =>
         s.completed &&
@@ -159,7 +163,7 @@ export function ProgressiveOverloadCoach({
         !s.rirSkipped,
     )
     return candidates.length > 0 ? candidates[candidates.length - 1] : null
-  }, [exercise.sets])
+  }, [exercise.sets, inlineEffort])
 
   /* Auto-plug suggested weight/reps into the next open set — no Accept tap.
      Only live (post-set) recommendations do this: the session planner already

@@ -2908,3 +2908,74 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .food-tray-reveal, .food-portion-step { transition: none; }
 }
+
+/* Active workout: sheets, rest dock, set logging, recap and progress photo. */
+@keyframes aw-sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes aw-sheet-out { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@keyframes aw-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes aw-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes aw-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes aw-dock-swap { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes aw-set-logged {
+  0% { background-color: color-mix(in oklch, var(--primary) 26%, transparent); }
+  100% { background-color: color-mix(in oklch, var(--primary) 7%, transparent); }
+}
+@keyframes aw-check-pop { 0% { transform: scale(.6); } 55% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes aw-rest-urgent { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@keyframes aw-rest-done {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 55%, transparent); }
+  100% { box-shadow: 0 0 0 22px color-mix(in oklch, var(--primary) 0%, transparent); }
+}
+@keyframes aw-ring-draw { from { stroke-dashoffset: var(--aw-ring-length, 300); } to { stroke-dashoffset: 0; } }
+@keyframes aw-check-draw { from { stroke-dashoffset: 48; } to { stroke-dashoffset: 0; } }
+@keyframes aw-burst { 0% { opacity: .9; transform: scale(.4); } 100% { opacity: 0; transform: scale(1.9); } }
+@keyframes aw-scan { 0% { top: 6%; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { top: 94%; opacity: 0; } }
+@keyframes aw-shutter { 0% { opacity: 0; } 20% { opacity: .85; } 100% { opacity: 0; } }
+@keyframes aw-photo-reveal { from { opacity: 0; transform: scale(1.04); filter: blur(6px); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
+
+.aw-sheet[data-state="open"] { animation: aw-sheet-in 340ms cubic-bezier(.22,1,.36,1) backwards; }
+.aw-sheet[data-state="closing"] { animation: aw-sheet-out 240ms cubic-bezier(.4,0,1,1) both; }
+.aw-sheet-backdrop[data-state="open"] { animation: aw-fade-in 240ms ease both; }
+.aw-sheet-backdrop[data-state="closing"] { animation: aw-fade-out 220ms ease both; }
+.aw-rise { animation: aw-rise 520ms cubic-bezier(.22,1,.36,1) both; animation-delay: var(--aw-delay, 0ms); }
+.aw-dock-swap { animation: aw-dock-swap 300ms cubic-bezier(.22,1,.36,1) both; }
+.aw-set-logged { animation: aw-set-logged 900ms cubic-bezier(.22,1,.36,1) both; }
+.aw-check-pop { animation: aw-check-pop 420ms cubic-bezier(.22,1,.36,1) both; }
+.aw-rest-urgent { animation: aw-rest-urgent 1s ease-in-out infinite; }
+.aw-rest-done { animation: aw-rest-done 900ms ease-out 2; }
+.aw-ring-draw { stroke-dasharray: var(--aw-ring-length, 300); animation: aw-ring-draw 900ms cubic-bezier(.22,1,.36,1) 120ms both; }
+.aw-check-draw { stroke-dasharray: 48; animation: aw-check-draw 420ms cubic-bezier(.22,1,.36,1) 700ms both; }
+.aw-burst { animation: aw-burst 900ms cubic-bezier(.22,1,.36,1) 650ms both; }
+.aw-scan { position: absolute; left: 8%; right: 8%; height: 1px; animation: aw-scan 2.8s ease-in-out infinite; }
+.aw-shutter { animation: aw-shutter 420ms ease-out both; }
+.aw-photo-reveal { animation: aw-photo-reveal 560ms cubic-bezier(.22,1,.36,1) both; }
+
+@keyframes aw-row-swap { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
+.aw-row-swap { animation: aw-row-swap 260ms cubic-bezier(.22,1,.36,1) both; }
+.aw-row-swap.aw-set-logged {
+  animation:
+    aw-row-swap 260ms cubic-bezier(.22,1,.36,1) both,
+    aw-set-logged 900ms cubic-bezier(.22,1,.36,1) both;
+}
+
+/* Rest bar folds away to nothing between sets (0fr → 1fr keeps it measurable). */
+.aw-rest-dock {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 340ms cubic-bezier(.22,1,.36,1), opacity 220ms ease;
+}
+.aw-rest-dock[data-open] { grid-template-rows: 1fr; opacity: 1; }
+.aw-rest-dock:not([data-open]) { pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .aw-sheet, .aw-sheet-backdrop, .aw-rise, .aw-dock-swap, .aw-set-logged, .aw-check-pop,
+  .aw-rest-urgent, .aw-rest-done, .aw-ring-draw, .aw-check-draw, .aw-burst, .aw-scan,
+  .aw-shutter, .aw-photo-reveal, .aw-row-swap, .aw-row-swap.aw-set-logged {
+    animation: none;
+  }
+  .aw-rest-dock { transition: none; }
+  .aw-ring-draw, .aw-check-draw { stroke-dashoffset: 0; }
+  .aw-burst, .aw-scan,
+  .aw-sheet[data-state="closing"], .aw-sheet-backdrop[data-state="closing"] { display: none; }
+}

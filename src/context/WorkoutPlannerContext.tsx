@@ -10,16 +10,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react"
-import {
-  CalendarDays,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Dumbbell,
-  Plus,
-  RotateCcw,
-  Trash2,
-} from "lucide-react"
+import { CalendarDays, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react"
 import { format } from "date-fns"
 import { apiFetch } from "@/lib/api-fetch"
 import { addDaysYmd, localCalendarDayKey, stepsDayKey } from "@/lib/steps-day"
@@ -30,7 +21,12 @@ import { utcCalendarDayKeyFromIso } from "@/lib/dateStorage"
 import { useActiveDate } from "@/context/DateContext"
 import { useUser } from "@/context/UserContext"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import {
+  normalizeTrainingSplit,
+  TRAINING_SPLIT_DEFINITIONS,
+  trainingSplitFocuses,
+  type TrainingSplitFocus,
+} from "@/lib/workouts/training-split"
 import {
   Dialog,
   DialogContent,
@@ -66,44 +62,32 @@ interface WorkoutPlannerContextValue {
 
 const WorkoutPlannerContext = createContext<WorkoutPlannerContextValue | null>(null)
 
-function exerciseCount(raw: string): number {
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    return Array.isArray(parsed) ? parsed.length : 0
-  } catch {
-    return 0
-  }
+const ROTATION_DAYS = 8
+const SESSION_TARGET = 5
+const SESSION_MINIMUM = 4
+
+const FOCUS_SHORT: Record<string, string> = {
+  push: "Push",
+  pull: "Pull",
+  legs: "Legs",
+  upper: "Upper",
+  lower: "Lower",
+  full_body: "Full",
+  chest: "Chest",
+  back: "Back",
+  shoulders_arms: "Arms",
 }
 
-function compactWorkoutLabel(name: string): string {
-  const normalized = name.trim()
-  const lower = normalized.toLowerCase()
-  const known = [
-    ["full body", "Full body"],
-    ["upper", "Upper"],
-    ["lower", "Lower"],
-    ["push", "Push"],
-    ["pull", "Pull"],
-    ["legs", "Legs"],
-    ["leg", "Legs"],
-    ["rest", "Rest"],
-    ["mobility", "Mobility"],
-    ["cardio", "Cardio"],
-    ["run", "Run"],
-  ] as const
-  const match = known.find(([needle]) => lower.includes(needle))
-  if (match) return match[1]
-  if (normalized.length <= 10) return normalized
-  return `${normalized.slice(0, 9).trimEnd()}…`
+function sameName(a: string, b: string): boolean {
+  return a.trim().replace(/\s+/g, " ").toLowerCase() === b.trim().replace(/\s+/g, " ").toLowerCase()
 }
 
-function workoutTagTone(name: string): string {
-  const lower = name.toLowerCase()
-  if (/lower|leg|squat|deadlift/.test(lower)) return "bg-orange-400/10 text-orange-200/80"
-  if (/upper|push|pull|chest|back/.test(lower)) return "bg-sky-400/10 text-sky-200/80"
-  if (/rest|mobility|recovery/.test(lower)) return "bg-violet-400/10 text-violet-200/75"
-  if (/cardio|run|conditioning/.test(lower)) return "bg-rose-400/10 text-rose-200/75"
-  return "bg-primary/10 text-primary/85"
+function quotaCopy(count: number): string {
+  if (count >= SESSION_TARGET) return "Target met"
+  if (count >= SESSION_MINIMUM) return "Minimum met · one more reaches five"
+  if (count === 0) return "Four is the floor, five is the goal"
+  const untilMin = SESSION_MINIMUM - count
+  return untilMin === 1 ? "1 more to the minimum of four" : `${untilMin} more to the minimum of four`
 }
 
 export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
@@ -120,7 +104,6 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false)
   const [templatesLoaded, setTemplatesLoaded] = useState(false)
   const [savingKey, setSavingKey] = useState<string | null>(null)
-  const [customName, setCustomName] = useState("")
   const [error, setError] = useState("")
   const [motionOrigin, setMotionOrigin] = useState<DialogMotionOrigin>()
 
@@ -129,7 +112,7 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
       getTrackingPeriod(selectedDate, {
         enabled: true,
         anchorDate: user?.workCycleAnchorDate,
-        length: 8,
+        length: ROTATION_DAYS,
         patternJson: user?.workCyclePatternJson,
         goal: user?.workoutGoalPerCycle,
       }),
@@ -199,7 +182,6 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
       setCalendarToday(today)
       setMotionOrigin(getDialogMotionOrigin(origin ?? null))
       setSelectedDate(nextDate)
-      setCustomName("")
       setError("")
       setOpen(true)
     },
@@ -217,57 +199,11 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
 
   const moveRotation = useCallback(
     (direction: -1 | 1) => {
-      const next = addDaysYmd(rotation.startDate, direction * 8)
+      const next = addDaysYmd(rotation.startDate, direction * ROTATION_DAYS)
       selectDate(next)
     },
     [rotation.startDate, selectDate],
   )
-
-  const schedule = useCallback(
-    async (input: { templateId?: string; name?: string; busyKey: string }) => {
-      setSavingKey(input.busyKey)
-      setError("")
-      try {
-        const response = await apiFetch("/api/workout-plans", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            date: selectedDate,
-            ...(input.templateId ? { templateId: input.templateId } : {}),
-            ...(input.name ? { name: input.name } : {}),
-          }),
-        })
-        const data = (await response.json().catch(() => ({}))) as WorkoutPlan & { error?: string }
-        if (!response.ok) throw new Error(data.error ?? "Could not schedule workout.")
-        setPlans((current) => [...current, data])
-        setCustomName("")
-        window.dispatchEvent(new CustomEvent("grid:log-saved"))
-      } catch (saveError) {
-        setError(saveError instanceof Error ? saveError.message : "Could not schedule workout.")
-      } finally {
-        setSavingKey(null)
-      }
-    },
-    [selectedDate],
-  )
-
-  const removePlan = useCallback(async (plan: WorkoutPlan) => {
-    setSavingKey(plan.id)
-    setError("")
-    try {
-      const response = await apiFetch(`/api/workout-plans?id=${encodeURIComponent(plan.id)}`, {
-        method: "DELETE",
-      })
-      const data = (await response.json().catch(() => ({}))) as { error?: string }
-      if (!response.ok) throw new Error(data.error ?? "Could not remove workout.")
-      setPlans((current) => current.filter((item) => item.id !== plan.id))
-      window.dispatchEvent(new CustomEvent("grid:log-saved"))
-    } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "Could not remove workout.")
-    } finally {
-      setSavingKey(null)
-    }
-  }, [])
 
   const plansByDate = useMemo(() => {
     const grouped = new Map<string, WorkoutPlan[]>()
@@ -282,9 +218,60 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
   const selectedPlans = plansByDate.get(selectedDate) ?? []
   const isPast = selectedDate < calendarToday
   const selectedLabel = format(parseLocalDate(selectedDate), "EEEE, MMMM d")
-  const plannedCount = plans.length
-  const target = user?.workoutGoalPerCycle ?? 3
+  const split = normalizeTrainingSplit(user?.trainingSplit)
+  const focuses = trainingSplitFocuses(split)
+  const splitLabel = TRAINING_SPLIT_DEFINITIONS[split].label
+  const scheduledDays = rotation.dates.filter((date) => (plansByDate.get(date)?.length ?? 0) > 0).length
   const value = useMemo(() => ({ openPlanner }), [openPlanner])
+
+  const replaceDay = useCallback(
+    async (focus: TrainingSplitFocus | null) => {
+      if (selectedDate < calendarToday) return
+      setSavingKey(focus?.id ?? "clear")
+      setError("")
+      const existing = plansByDate.get(selectedDate) ?? []
+      const togglingOff =
+        focus != null &&
+        existing.length === 1 &&
+        sameName(existing[0]!.name, focus.label)
+      try {
+        for (const plan of existing) {
+          const response = await apiFetch(`/api/workout-plans?id=${encodeURIComponent(plan.id)}`, {
+            method: "DELETE",
+          })
+          const data = (await response.json().catch(() => ({}))) as { error?: string }
+          if (!response.ok) throw new Error(data.error ?? "Could not update this day.")
+        }
+        let created: WorkoutPlan | null = null
+        if (focus && !togglingOff) {
+          const named = templates.filter((template) => sameName(template.name, focus.label))
+          const response = await apiFetch("/api/workout-plans", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              date: selectedDate,
+              name: focus.label,
+              ...(named.length === 1 ? { templateId: named[0]!.id } : {}),
+            }),
+          })
+          const data = (await response.json().catch(() => ({}))) as WorkoutPlan & { error?: string }
+          if (!response.ok) throw new Error(data.error ?? "Could not schedule workout.")
+          created = data
+        }
+        setPlans((current) => {
+          const without = current.filter((plan) => utcCalendarDayKeyFromIso(plan.date) !== selectedDate)
+          return created ? [...without, created] : without
+        })
+        window.dispatchEvent(new CustomEvent("grid:log-saved"))
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : "Could not schedule workout.")
+        void loadPlans(rotation.startDate, rotation.endDate)
+      } finally {
+        setSavingKey(null)
+      }
+    },
+    [calendarToday, loadPlans, plansByDate, rotation.endDate, rotation.startDate, selectedDate, templates],
+  )
 
   return (
     <WorkoutPlannerContext value={value}>
@@ -313,7 +300,7 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                 Workout planner
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground/75">
-                Schedule training around your repeating eight-day rotation.
+                Five sessions this rotation. Four is the minimum.
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -334,8 +321,8 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                   className="space-y-3"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div data-dialog-planner-heading="" className="min-w-0">
-                      <h2 id="rotation-heading" className="text-sm font-semibold text-foreground">
+                    <div data-dialog-planner-heading="" className="shrink-0">
+                      <h2 id="rotation-heading" className="whitespace-nowrap text-sm font-semibold text-foreground">
                         Eight-day rotation
                       </h2>
                       <p className="mt-0.5 truncate text-[11px] text-muted-foreground/65">
@@ -379,12 +366,47 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                     </div>
                   </div>
 
+                  <div className="space-y-2" aria-live="polite">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="text-[13px] font-medium tabular-nums text-foreground/90">
+                        {scheduledDays} of {SESSION_TARGET}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground/70">{quotaCopy(scheduledDays)}</p>
+                    </div>
+                    <div className="flex gap-1.5" aria-hidden>
+                      {Array.from({ length: SESSION_TARGET }, (_, index) => (
+                        <span
+                          key={index}
+                          className={cn(
+                            "h-1 flex-1 rounded-full",
+                            index < scheduledDays ? "bg-primary" : "bg-white/10",
+                          )}
+                        />
+                      ))}
+                    </div>
+                    {completedCount > 0 ? (
+                      <p className="text-[11px] tabular-nums text-muted-foreground/55">
+                        {completedCount} completed
+                      </p>
+                    ) : null}
+                  </div>
+
                   <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8" role="group" aria-label="Choose a workout date">
                     {rotation.dates.map((date, index) => {
                       const datePlans = plansByDate.get(date) ?? []
                       const chosen = date === selectedDate
                       const past = date < calendarToday
                       const dateObject = parseLocalDate(date)
+                      const focusMatch = focuses.find((focus) =>
+                        datePlans.some((plan) => sameName(plan.name, focus.label)),
+                      )
+                      const dayLabel = focusMatch
+                        ? (FOCUS_SHORT[focusMatch.id] ?? focusMatch.label)
+                        : datePlans[0]?.name
+                          ? datePlans[0].name.length <= 10
+                            ? datePlans[0].name
+                            : `${datePlans[0].name.slice(0, 9)}…`
+                          : null
                       return (
                         <button
                           key={date}
@@ -392,13 +414,13 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                           type="button"
                           onClick={() => selectDate(date)}
                           aria-pressed={chosen}
-                          aria-label={`${format(dateObject, "EEEE, MMMM d")}, ${rotation.labels[index]}${datePlans.length ? `, ${datePlans.map((plan) => plan.name).join(", ")} planned` : ""}`}
+                          aria-label={`${format(dateObject, "EEEE, MMMM d")}, ${rotation.labels[index]}${dayLabel ? `, ${dayLabel}` : ", open"}`}
                           style={{ "--rotation-day-delay": `${340 + index * 72}ms` } as CSSProperties}
                           className={cn(
-                            "relative min-h-[5.75rem] touch-manipulation rounded-xl border px-1.5 py-2 text-center transition-[background-color,border-color,color,box-shadow,scale] duration-300 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                            "relative flex min-h-[5.75rem] touch-manipulation flex-col items-center rounded-xl border px-1.5 py-2 text-center transition-[background-color,border-color,color,scale] duration-300 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                             chosen
-                              ? "scale-[1.015] border-primary/55 bg-primary/13 text-primary shadow-[0_8px_24px_-16px_rgba(196,214,50,0.55)]"
-                              : "scale-100 border-border/30 bg-muted/10 text-muted-foreground hover:border-primary/25 hover:bg-primary/[0.05]",
+                              ? "border-primary/55 bg-primary/13 text-primary"
+                              : "border-border/30 bg-muted/10 text-muted-foreground hover:border-primary/25 hover:bg-primary/[0.05]",
                             past && !chosen && "opacity-55",
                           )}
                         >
@@ -411,210 +433,94 @@ export function WorkoutPlannerProvider({ children }: { children: ReactNode }) {
                           <span className="mt-1.5 inline-flex rounded-md border border-current/15 bg-current/[0.06] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
                             {rotation.labels[index]}
                           </span>
-                          {datePlans.length > 0 ? (
-                            <span
-                              data-dialog-day-plan=""
-                              className={cn(
-                                "mt-1 block w-full truncate rounded px-1 py-0.5 text-[7px] font-bold uppercase tracking-[0.06em]",
-                                workoutTagTone(datePlans[0].name),
-                              )}
-                              title={datePlans.map((plan) => plan.name).join(", ")}
-                            >
-                              {compactWorkoutLabel(datePlans[0].name)}
-                              {datePlans.length > 1 ? ` +${datePlans.length - 1}` : ""}
+                          {dayLabel ? (
+                            <span className="mt-1 block w-full truncate text-[9px] font-bold uppercase tracking-[0.06em] text-primary">
+                              {dayLabel}
                             </span>
                           ) : null}
-                          {datePlans.length > 1 ? (
-                            <span
-                              data-dialog-day-plan=""
-                              className="absolute right-1.5 top-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground"
-                            >
-                              {datePlans.length}
-                            </span>
+                          {date === calendarToday && !chosen ? (
+                            <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" aria-hidden />
                           ) : null}
                         </button>
                       )
                     })}
-                  </div>
-
-                  <div
-                    data-dialog-rotation-summary=""
-                    className="grid grid-cols-3 gap-2"
-                    aria-label="Rotation training summary"
-                  >
-                    <div
-                      data-dialog-rotation-stat="planned"
-                      style={{ "--rotation-stat-delay": "840ms" } as CSSProperties}
-                      className="rounded-xl border border-border/25 bg-muted/10 px-3 py-2"
-                    >
-                      <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/55">Planned</span>
-                      <span
-                        key={`planned-${plannedCount}`}
-                        className="planner-summary-value-change mt-0.5 block text-base font-semibold tabular-nums text-foreground"
-                      >
-                        {plannedCount}
-                      </span>
-                    </div>
-                    <div
-                      data-dialog-rotation-stat="complete"
-                      style={{ "--rotation-stat-delay": "950ms" } as CSSProperties}
-                      className="rounded-xl border border-border/25 bg-muted/10 px-3 py-2"
-                    >
-                      <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/55">Complete</span>
-                      <span
-                        key={`complete-${completedCount}`}
-                        className="planner-summary-value-change mt-0.5 block text-base font-semibold tabular-nums text-foreground"
-                      >
-                        {completedCount}
-                      </span>
-                    </div>
-                    <div
-                      data-dialog-rotation-stat="target"
-                      style={{ "--rotation-stat-delay": "1060ms" } as CSSProperties}
-                      className="rounded-xl border border-primary/20 bg-primary/[0.06] px-3 py-2"
-                    >
-                      <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/55">Target</span>
-                      <span
-                        key={`target-${target}-${user.workCycleEnabled ? "cycle" : "week"}`}
-                        className="planner-summary-value-change mt-0.5 block text-base font-semibold tabular-nums text-primary"
-                      >
-                        {target}<span className="text-[10px] font-normal text-muted-foreground/65"> / {user.workCycleEnabled ? "8d" : "wk"}</span>
-                      </span>
-                    </div>
                   </div>
                 </section>
 
                 <section
                   data-dialog-motion-part="content"
                   aria-labelledby="selected-day-heading"
-                  className="space-y-3 border-t border-border/20 pt-4"
+                  className="space-y-3 border-t border-white/[0.06] pt-4"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div key={selectedDate} className="planner-context-change">
-                      <h2 id="selected-day-heading" className="text-sm font-semibold text-foreground">
-                        {selectedLabel}
-                      </h2>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground/65">
-                        {rotation.phaseLabel} · cycle day {rotation.dayNumber}
-                      </p>
-                    </div>
-                    {selectedPlans.length > 0 ? (
-                      <span className="rounded-full border border-primary/20 bg-primary/[0.07] px-2 py-1 text-[9px] font-semibold uppercase tracking-wider text-primary">
-                        {selectedPlans.length} planned
-                      </span>
-                    ) : null}
+                  <div key={selectedDate} className="planner-context-change">
+                    <h2 id="selected-day-heading" className="text-sm font-semibold text-foreground">
+                      {selectedLabel}
+                    </h2>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground/65">
+                      {rotation.phaseLabel}
+                      {selectedPlans[0] ? ` · ${selectedPlans[0].name}` : " · nothing scheduled"}
+                    </p>
                   </div>
 
                   {loading ? (
-                    <p className="rounded-xl border border-border/25 bg-muted/10 px-3 py-4 text-center text-xs text-muted-foreground/60">
-                      Loading rotation…
+                    <p className="text-[12px] text-muted-foreground/55">Loading rotation…</p>
+                  ) : isPast ? (
+                    <p className="text-[12px] leading-relaxed text-muted-foreground/65">
+                      This day has passed.
                     </p>
-                  ) : selectedPlans.length > 0 ? (
-                    <div className="space-y-2">
-                      {selectedPlans.map((plan) => (
-                        <div key={plan.id} className="flex min-h-12 items-center gap-3 rounded-xl border border-primary/15 bg-primary/[0.045] px-3 py-2">
-                          <CheckCircle2 className="size-4 shrink-0 text-primary" aria-hidden />
-                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/90">{plan.name}</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            disabled={savingKey === plan.id}
-                            onClick={() => void removePlan(plan)}
-                            aria-label={`Remove ${plan.name} from ${selectedLabel}`}
-                            className="shrink-0 text-muted-foreground/55 hover:text-destructive"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
                   ) : (
-                    <p className="rounded-xl border border-dashed border-border/35 bg-muted/[0.06] px-3 py-4 text-center text-xs text-muted-foreground/60">
-                      No workout planned for this day yet.
-                    </p>
-                  )}
-                </section>
-
-                <section
-                  data-dialog-motion-part="controls"
-                  aria-labelledby="routine-heading"
-                  className="space-y-3 border-t border-border/20 pt-4"
-                >
-                  <div>
-                    <h2 id="routine-heading" className="text-sm font-semibold text-foreground">Add a workout</h2>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground/65">
-                      {isPast ? "Past days are view-only. Choose today or a future day to schedule." : `Choose a saved routine for ${selectedLabel}.`}
-                    </p>
-                  </div>
-
-                  {!isPast && templates.length > 0 ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {templates.map((template) => {
-                        const busy = savingKey === template.id
-                        return (
-                          <button
-                            key={template.id}
-                            type="button"
-                            disabled={savingKey != null}
-                            onClick={() => void schedule({ templateId: template.id, busyKey: template.id })}
-                            className="flex min-h-14 touch-manipulation items-center gap-3 rounded-xl border border-border/30 bg-muted/10 px-3 py-2 text-left transition-[background-color,border-color,scale] active:scale-[0.985] hover:border-primary/30 hover:bg-primary/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
-                          >
-                            <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/25 bg-background/30">
-                              {template.coverImageUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={template.coverImageUrl} alt="" className="size-full object-cover" />
-                              ) : (
-                                <Dumbbell className="size-4 text-muted-foreground/50" aria-hidden />
-                              )}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium text-foreground/90">{template.name}</span>
-                              <span className="mt-0.5 block text-[10px] text-muted-foreground/55">
-                                {exerciseCount(template.exercises)} exercises
-                              </span>
-                            </span>
-                            <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/[0.07] text-primary">
-                              {busy ? <span className="text-xs">…</span> : <Plus className="size-3.5" aria-hidden />}
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  ) : null}
-
-                  {!isPast && templatesLoaded && templates.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground/60">No saved routines yet. Add a custom workout below.</p>
-                  ) : null}
-
-                  {!isPast ? (
-                    <form
-                      className="flex gap-2"
-                      onSubmit={(event) => {
-                        event.preventDefault()
-                        const name = customName.trim()
-                        if (name) void schedule({ name, busyKey: "custom" })
-                      }}
-                    >
-                      <Input
-                        value={customName}
-                        onChange={(event) => setCustomName(event.target.value)}
-                        maxLength={120}
-                        placeholder="Or name a custom workout"
-                        aria-label="Custom workout name"
-                        className="h-11 min-w-0 flex-1"
-                      />
-                      <Button
-                        type="submit"
-                        variant="glass"
-                        className="h-11 shrink-0 gap-1.5"
-                        disabled={!customName.trim() || savingKey != null}
+                    <div className="space-y-3" data-dialog-motion-part="controls">
+                      <div>
+                        <h3 id="routine-heading" className="type-hud-subsection">
+                          What are you hitting?
+                        </h3>
+                        <p className="mt-1 text-[11px] text-muted-foreground/60">{splitLabel}</p>
+                      </div>
+                      <div
+                        className={cn(
+                          "grid gap-2",
+                          focuses.length === 1 ? "grid-cols-1" : "grid-cols-2",
+                        )}
+                        role="group"
+                        aria-labelledby="routine-heading"
                       >
-                        <Plus className="size-4" />
-                        Plan
-                      </Button>
-                    </form>
-                  ) : null}
+                        {focuses.map((focus, index) => {
+                          const active = selectedPlans.some((plan) => sameName(plan.name, focus.label))
+                          return (
+                            <button
+                              key={focus.id}
+                              type="button"
+                              disabled={savingKey != null}
+                              aria-pressed={active}
+                              onClick={() => void replaceDay(focus)}
+                              className={cn(
+                                "min-h-14 touch-manipulation rounded-2xl px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50",
+                                focuses.length > 1 && focuses.length % 2 === 1 && index === focuses.length - 1 && "col-span-2",
+                                active
+                                  ? "bg-primary/15 text-primary"
+                                  : "bg-white/[0.04] text-foreground hover:bg-white/[0.07]",
+                              )}
+                            >
+                              <span className="block text-sm font-semibold">{focus.label}</span>
+                              <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/65">
+                                {focus.hint}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {selectedPlans.length > 0 ? (
+                        <button
+                          type="button"
+                          disabled={savingKey != null}
+                          onClick={() => void replaceDay(null)}
+                          className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/55 transition-colors hover:text-foreground disabled:opacity-50"
+                        >
+                          Clear this day
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
                 </section>
 
                 {error ? (

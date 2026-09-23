@@ -1,51 +1,36 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { apiFetch } from "@/lib/api-fetch"
-
-const noStore: RequestInit = { cache: "no-store" }
+import { useUser } from "@/context/UserContext"
 
 /**
- * If an active workout session exists, force navigation to `/workouts`
- * from any other route so the user cannot leave until finish/discard.
+ * A started workout lives until it is finished or discarded: any other route
+ * bounces back to `/workouts` while an active session exists.
  */
-export function ActiveWorkoutGuard({ children }: { children: React.ReactNode }) {
+export function ActiveWorkoutGuard() {
   const pathname = usePathname()
   const router = useRouter()
-  const checkingRef = useRef(false)
+  const { user } = useUser()
+  const userId = user?.id ?? null
 
   useEffect(() => {
-    if (pathname === "/workouts") return
-    if (checkingRef.current) return
-    checkingRef.current = true
-
+    if (!userId || pathname === "/workouts") return
     let cancelled = false
-    void apiFetch(`/api/workout-sessions?_=${Date.now()}`, noStore)
+    void apiFetch(`/api/workout-sessions?status=active&_=${Date.now()}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((rows: unknown) => {
-        if (cancelled) return
-        if (!Array.isArray(rows)) return
-        const hasActive = rows.some((s) => {
-          if (!s || typeof s !== "object") return false
-          const status = String((s as { status?: unknown }).status ?? "")
-            .trim()
-            .toLowerCase()
-          return status === "active"
-        })
-        if (hasActive) router.replace("/workouts")
+        if (cancelled || !Array.isArray(rows) || rows.length === 0) return
+        router.replace("/workouts")
       })
       .catch(() => {
-        /* ignore — do not block navigation on fetch failure */
+        /* never block navigation on a failed check */
       })
-      .finally(() => {
-        checkingRef.current = false
-      })
-
     return () => {
       cancelled = true
     }
-  }, [pathname, router])
+  }, [pathname, router, userId])
 
-  return <>{children}</>
+  return null
 }
