@@ -501,7 +501,7 @@ export function DailyWeighIn({
           type="button"
           onClick={onActivate}
           aria-label="Expand weight trend"
-          className="group -mx-0.5 flex min-h-11 w-[calc(100%+0.25rem)] touch-manipulation items-center justify-between gap-2 rounded-sm px-0.5 text-left transition-colors hover:bg-white/[0.03] active:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25"
+          className="group flex min-h-11 w-full touch-manipulation items-center justify-between gap-2 text-left transition-colors hover:bg-white/[0.03] active:bg-white/[0.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/25"
         >
           <div className="min-w-0 shrink-0 space-y-0.5">
             <p className={cn(titleClass, "transition-colors group-hover:text-foreground/90")}>

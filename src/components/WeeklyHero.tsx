@@ -1256,14 +1256,7 @@ export function WeeklyHero({
 
         {/* Weigh-in stays the coda — always last in the overview stack */}
         <FadeSection show={showWeighIn} className={fillViewport ? "shrink-0" : undefined}>
-          <div
-            className={cn(
-              "relative z-10 space-y-3 rounded-2xl border px-0.5 py-0.5 transition-[background-color,border-color] duration-[520ms] motion-reduce:transition-none",
-              expanded === "weight"
-                ? "border-white/[0.08] bg-white/[0.02]"
-                : "border-transparent bg-transparent",
-            )}
-          >
+          <div className="relative z-10">
             <DailyWeighIn
               embedded
               weightTrend={data.weightTrend}
@@ -1271,7 +1264,11 @@ export function WeeklyHero({
               showProgressCheckIn={expanded !== "weight"}
               onActivate={expanded === "weight" ? undefined : () => toggleExpand("weight")}
             />
-            <HubPresence open={expanded === "weight"} durationMs={HUB_MOTION_MS}>
+            <HubPresence
+              open={expanded === "weight"}
+              durationMs={HUB_MOTION_MS}
+              className="mt-4"
+            >
               <HubWeightExpand />
             </HubPresence>
           </div>

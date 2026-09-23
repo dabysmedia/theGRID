@@ -80,7 +80,7 @@ import {
 import { HeartRateDayChart } from "@/components/vitals/HeartRateDayChart"
 import { HrvTrendScrubChart } from "@/components/vitals/HrvTrendScrubChart"
 import { zoneStyle, type HeartRateZoneThreshold } from "@/lib/heart-rate-zones"
-import { cn } from "@/lib/utils"
+import { cn, parseLocalDate } from "@/lib/utils"
 import { CATEGORY_THEME } from "@/lib/category-theme"
 import type { WeightTrendInsight, WeightTrendPoint } from "@/lib/weight-trend"
 import type { WeightAnalytics } from "@/lib/weight-projection"
@@ -290,10 +290,11 @@ export function HubWeightExpand() {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
   const [logOpen, setLogOpen] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
-  const [rangeDays, setRangeDays] = useState<number | null>(30)
+  const [rangeDays, setRangeDays] = useState<number | null>(7)
   const [showProjection, setShowProjection] = useState(true)
   const [goalDraft, setGoalDraft] = useState<string | null>(null)
   const [savingGoal, setSavingGoal] = useState(false)
+  const [startValue, setStartValue] = useState<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -315,12 +316,14 @@ export function HubWeightExpand() {
         setAnalytics((data?.analytics as WeightAnalytics | undefined) ?? null)
         setGoalId(typeof data?.goalId === "string" ? data.goalId : null)
         setUnit(typeof data?.unit === "string" ? data.unit : "lbs")
+        setStartValue(typeof data?.startValue === "number" ? data.startValue : null)
         setStatus("ready")
       } catch {
         if (!cancelled) {
           setPoints(null)
           setInsight(null)
           setAnalytics(null)
+          setStartValue(null)
           setStatus("error")
         }
       }
@@ -350,9 +353,11 @@ export function HubWeightExpand() {
         : ""
 
   const rangeOptions: { label: string; days: number | null }[] = [
-    { label: "7d", days: 7 },
-    { label: "30d", days: 30 },
-    { label: "90d", days: 90 },
+    { label: "7D", days: 7 },
+    { label: "30D", days: 30 },
+    { label: "90D", days: 90 },
+    { label: "6M", days: 180 },
+    { label: "1Y", days: 365 },
     { label: "All", days: null },
   ]
 
@@ -393,87 +398,60 @@ export function HubWeightExpand() {
     }
   }
 
+  let lowDateLabel: string | null = null
+  if (insight?.recordLowDate) {
+    try {
+      lowDateLabel = format(parseLocalDate(insight.recordLowDate), "MMM d, yyyy")
+    } catch {
+      lowDateLabel = null
+    }
+  }
+  const rateLabel = primaryRate
+    ? `${primaryRate.lbPerWeek > 0 ? "+" : primaryRate.lbPerWeek < 0 ? "−" : ""}${Math.abs(primaryRate.lbPerWeek)} ${unit}/week`
+    : null
+
+  const projectionOn = showProjection && analytics?.projection != null
+
   return (
-    <div className="hub-detail-sequence space-y-3 px-0.5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <p className="type-hud-subsection">Weight trend</p>
-          <p className="mt-1 type-hud-caption normal-case tracking-normal text-muted-foreground/70">
-            7-weigh-in average · trajectory, expenditure & projection
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
+    <div className="hub-detail-sequence space-y-4">
+      <div>
+        <div className="flex items-center gap-1" role="tablist" aria-label="Weight chart range">
           {rangeOptions.map((option) => {
             const active = option.days === rangeDays
             return (
               <button
                 key={option.label}
                 type="button"
+                role="tab"
+                aria-selected={active}
                 onClick={() => setRangeDays(option.days)}
                 className={cn(
-                  "inline-flex items-center rounded-lg px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition-all duration-150",
-                  active
-                    ? "bg-background/80 text-foreground shadow-sm ring-1 ring-teal-400/40"
-                    : "glass-subtle text-muted-foreground/70 hover:bg-glass-highlight/25 hover:text-foreground",
+                  "relative px-1.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors",
+                  active ? "text-foreground" : "text-muted-foreground/45 hover:text-foreground/80",
                 )}
               >
                 {option.label}
+                {active && (
+                  <span
+                    className="absolute inset-x-1.5 -bottom-0.5 h-px bg-teal-300/80"
+                    aria-hidden
+                  />
+                )}
               </button>
             )
           })}
         </div>
       </div>
 
-      {status === "ready" && trendWeight != null && (
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] px-3 py-2.5">
-            <p className="text-[9px] uppercase tracking-wider text-muted-foreground/75">
-              Trend weight
-            </p>
-            <p
-              className="mt-0.5 text-lg font-bold leading-none tabular-nums"
-              style={{ color: CATEGORY_THEME.weight.color }}
-            >
-              {trendWeight}
-              <span className="ml-1 text-[10px] font-medium text-muted-foreground">{unit}</span>
-            </p>
-          </div>
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] px-3 py-2.5">
-            <p className="text-[9px] uppercase tracking-wider text-muted-foreground/75">
-              Current rate
-            </p>
-            <p className={cn("mt-0.5 text-lg font-bold leading-none tabular-nums", rateTone)}>
-              {primaryRate
-                ? `${primaryRate.lbPerWeek > 0 ? "+" : primaryRate.lbPerWeek < 0 ? "−" : ""}${Math.abs(primaryRate.lbPerWeek)}`
-                : "—"}
-              {primaryRate && (
-                <span className="ml-1 text-[10px] font-medium text-muted-foreground">/wk</span>
-              )}
-            </p>
-          </div>
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] px-3 py-2.5">
-            <p className="text-[9px] uppercase tracking-wider text-muted-foreground/75">
-              All-time low
-            </p>
-            <p
-              className="mt-0.5 text-lg font-bold leading-none tabular-nums"
-              style={{ color: CATEGORY_THEME.weight.color }}
-            >
-              {insight?.recordLow ?? "—"}
-            </p>
-          </div>
-        </div>
-      )}
-
       {status === "loading" ? (
         <p className="type-hud-caption text-muted-foreground/55">Loading trend…</p>
       ) : status === "error" ? (
-        <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-[12px] text-muted-foreground/70">
-          Couldn’t load weight trend. Try logging a weigh-in, then reopen.
+        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/70">
+          Couldn’t load the weight trend. Log a weigh-in, then reopen this panel.
         </p>
       ) : !hasSeries || insight == null ? (
-        <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-[12px] leading-relaxed text-muted-foreground/70">
-          Log a few weigh-ins to unlock the average trend and all-time low.
+        <p className="type-hud-caption normal-case tracking-normal text-muted-foreground/70">
+          Log a few weigh-ins to unlock the trend, rate of change, and projection.
         </p>
       ) : (
         <>
@@ -489,27 +467,68 @@ export function HubWeightExpand() {
             embedded
             showTitle={false}
             animate
+            size="hero"
             className="min-w-0"
           />
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-3 gap-x-4">
+            <div className="min-w-0">
+              <p className="type-hud-micro text-muted-foreground/55">Trend</p>
+              <p
+                className="mt-1 font-heading text-2xl leading-none tabular-nums"
+                style={{ color: CATEGORY_THEME.weight.color }}
+              >
+                {trendWeight ?? "—"}
+              </p>
+              <p className={cn("mt-1.5 text-[11px] tabular-nums", rateTone)}>
+                {rateLabel ?? "No rate yet"}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="type-hud-micro text-muted-foreground/55">Latest</p>
+              <p className="mt-1 font-heading text-2xl leading-none tabular-nums text-foreground">
+                {latestRaw?.raw ?? "—"}
+              </p>
+              <p className="mt-1.5 text-[11px] text-muted-foreground/60">
+                {latestRaw ? format(parseLocalDate(latestRaw.date), "MMM d") : "No weigh-in"}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="type-hud-micro text-muted-foreground/55">
+                {insight.recordLowIsLatest ? "New low" : "Low"}
+              </p>
+              <p
+                className="mt-1 font-heading text-2xl leading-none tabular-nums"
+                style={{ color: CATEGORY_THEME.weight.color }}
+              >
+                {insight.recordLow ?? "—"}
+              </p>
+              <p className="mt-1.5 truncate text-[11px] text-muted-foreground/60">
+                {lowDateLabel ?? "All-time"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <button
               type="button"
               onClick={() => setShowProjection((on) => !on)}
               disabled={analytics?.projection == null}
+              aria-pressed={projectionOn}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors disabled:opacity-40",
-                showProjection && analytics?.projection != null
-                  ? "border-teal-400/35 bg-teal-400/[0.08] text-teal-100/90"
-                  : "border-white/10 bg-white/[0.03] text-muted-foreground/70 hover:text-foreground",
+                "inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors disabled:opacity-40",
+                projectionOn ? "text-teal-100" : "text-muted-foreground/55 hover:text-foreground",
               )}
             >
-              <TrendingDown className="size-3" aria-hidden />
+              <TrendingDown className="size-3.5" aria-hidden />
               Projection
+              <span className="font-medium normal-case tracking-normal text-muted-foreground/50">
+                {projectionOn ? "on" : "off"}
+              </span>
             </button>
 
             {goalDraft != null ? (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <input
                   type="number"
                   inputMode="decimal"
@@ -521,21 +540,21 @@ export function HubWeightExpand() {
                     if (e.key === "Enter") void saveGoal()
                     if (e.key === "Escape") setGoalDraft(null)
                   }}
-                  className="h-8 w-24 rounded-lg border border-white/12 bg-white/[0.04] px-2 text-[12px] tabular-nums text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/30"
+                  className="h-8 w-24 border-b border-white/20 bg-transparent px-0.5 text-[13px] tabular-nums text-foreground focus-visible:border-teal-300/60 focus-visible:outline-none"
                   aria-label={`Goal weight in ${unit}`}
                 />
                 <button
                   type="button"
                   onClick={() => void saveGoal()}
                   disabled={savingGoal}
-                  className="inline-flex h-8 items-center rounded-lg border border-teal-400/35 bg-teal-400/[0.08] px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-teal-100/90 disabled:opacity-50"
+                  className="text-[11px] font-semibold uppercase tracking-[0.1em] text-teal-100 disabled:opacity-50"
                 >
                   Save
                 </button>
                 <button
                   type="button"
                   onClick={() => setGoalDraft(null)}
-                  className="inline-flex h-8 items-center rounded-lg px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60 hover:text-foreground"
+                  className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/55 hover:text-foreground"
                 >
                   Cancel
                 </button>
@@ -545,22 +564,28 @@ export function HubWeightExpand() {
                 type="button"
                 onClick={() => setGoalDraft(goalTarget != null ? String(goalTarget) : "")}
                 disabled={goalId == null}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70 transition-colors hover:text-foreground disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 text-[12px] tabular-nums text-foreground/80 transition-colors hover:text-foreground disabled:opacity-40"
               >
-                <Pencil className="size-3" aria-hidden />
+                <Pencil className="size-3 text-muted-foreground/55" aria-hidden />
                 {goalTarget != null ? `Goal ${goalTarget} ${unit}` : "Set goal weight"}
               </button>
             )}
           </div>
 
-          {analytics && <WeightTrajectoryPanel analytics={analytics} unit={unit} />}
+          {analytics && (
+            <WeightTrajectoryPanel
+              analytics={analytics}
+              unit={unit}
+              startValue={startValue}
+            />
+          )}
         </>
       )}
 
       <button
         type="button"
         onClick={() => setLogOpen(true)}
-        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-emerald-400/30 hover:bg-emerald-400/[0.06] hover:text-emerald-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/30 sm:w-auto sm:px-4"
+        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] type-hud-micro text-muted-foreground/90 transition-colors hover:border-teal-300/30 hover:bg-teal-400/[0.06] hover:text-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/30"
       >
         <Plus className="h-3.5 w-3.5" aria-hidden />
         Log weight
