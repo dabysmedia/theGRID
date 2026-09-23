@@ -29,7 +29,7 @@ export function AgentSnapshotView({
           </span>
         </h1>
         <p className="text-[11px] leading-snug text-muted-foreground/75 sm:text-xs">
-          Complete read-only health &amp; fitness snapshot for{" "}
+          Complete health &amp; fitness snapshot for{" "}
           <strong className="text-foreground">
             {rollup.range.from} → {rollup.range.to}
           </strong>
@@ -37,7 +37,9 @@ export function AgentSnapshotView({
           Timezone {rollup.timezone}; today is {rollup.todayKey}. Every metric theGRID tracks is
           included: nutrition, steps, runs, cardio, strength workouts, sleep, vitals, heart rate,
           bodyweight, water, habits, journal, recovery, alcohol, bowel, peptides, treatments, goals
-          and injuries.
+          and injuries. This page is the read export. Agents that need to change data
+          use the token-gated command API linked below, and name which profile they
+          are writing.
         </p>
       </header>
 
@@ -94,6 +96,14 @@ export function AgentSnapshotView({
               {base}/llms.txt
             </a>{" "}
             <span className="text-muted-foreground/70">— index of this surface</span>
+          </li>
+          <li>
+            <a href={`${base}/api/agent/act`} className="text-primary hover:underline">
+              {base}/api/agent/act
+            </a>{" "}
+            <span className="text-muted-foreground/70">
+              — command card; POST the same URL with a bearer token to read or write a profile
+            </span>
           </li>
         </ul>
       </div>

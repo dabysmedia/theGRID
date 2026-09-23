@@ -14,7 +14,11 @@ function buildLlmsTxt(origin: string): string {
 > Tactical health & fitness tracker.
 
 The public data export is disabled on this instance. Machine access requires
-\`Authorization: Bearer <AGENT_API_TOKEN>\` against ${base}/api/agent/carlos.
+\`Authorization: Bearer <AGENT_API_TOKEN>\`.
+
+- Read a window: ${base}/api/agent/carlos
+- Read and write one profile: POST ${base}/api/agent/act
+- Command list: GET ${base}/api/agent/act
 `
   }
 
@@ -34,9 +38,12 @@ The public data export is disabled on this instance. Machine access requires
 - **Today, plain text:** ${base}/api/agent/text/today
 - **Today, HTML:** ${base}/agents
 - **Today, JSON:** ${base}/api/agent/json/today
+- **Read and write (token required):** POST ${base}/api/agent/act
+- **Command list:** GET ${base}/api/agent/act
 
 Plain text is the recommended format for language models: one self-describing
-document per window, with the full log inline.
+document per window, with the full log inline. To change data, use the command
+API instead of these dumps — one short JSON batch can target a profile by name.
 
 ## Windows
 
@@ -103,12 +110,30 @@ Every snapshot is complete for its window and covers everything the app tracks:
 - Windows are inclusive of both endpoints.
 - Data is live; responses carry a 60-second cache.
 
+## Write
+
+\`POST ${base}/api/agent/act\` with \`Authorization: Bearer <AGENT_API_TOKEN>\`
+reads and writes a chosen profile. \`GET ${base}/api/agent/act\` is the command
+card (no token, no profile data): food search, custom foods, recipes, food-log
+add/update/move/delete, and the same daily logs a person can change in the app.
+
+\`user\` is the profile name or id, so an agent can tell profiles apart. The
+response echoes \`user.id\` and \`user.name\`. Example:
+
+\`\`\`json
+{"user":"Carlos","ops":[{"op":"day"},{"op":"food.search","q":"oikos","n":3},{"op":"log.add","date":"today","slot":"morning","name":"Oikos","kcal":90,"p":15}]}
+\`\`\`
+
+Writes are never public. The token must be at least 32 characters. Synced
+Google Health rows can come back on the next sync; cardio deletions are kept.
+
 ## Access
 
 The public windows above are unauthenticated on purpose so agents can read them.
 A browser with an active profile session sees that profile instead. The operator
 can disable the entire public surface with \`AGENT_PUBLIC_EXPORT=0\`, after which
-machine access needs \`Authorization: Bearer <AGENT_API_TOKEN>\`.
+machine reads need \`Authorization: Bearer <AGENT_API_TOKEN>\`. Writes always
+need that token, whether or not the public export is on.
 `
 }
 
